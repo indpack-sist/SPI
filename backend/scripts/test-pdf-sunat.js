@@ -17,7 +17,7 @@ const emisor = {
   direccion: 'AV. EL SOL LT. 4 B MZ. LL-1', urbanizacion: 'COO. LAS VERTIENTES',
   telefono: '01-312 7858', email: 'informes@indpackperu.com'
 };
-const cliente = { razon_social: 'OCULAB S.A.C.', ruc: '20562860984', tipo_documento: 'RUC', direccion: 'AV. ARGENTINA 1234 - LIMA' };
+const cliente = { razon_social: 'OCULAB S.A.C.', ruc: '20562860984', tipo_documento: 'RUC', direccion: 'AV. ARGENTINA 1234 - CERCADO DE LIMA - LIMA - LIMA' };
 const detalle = [
   { codigo: 'PROD-001', nombre: 'CAJA DE CARTON 30x30x30 CORRUGADO', cantidad: 100, precio_unitario: 1.40, unidad: 'NIU', descuento_porcentaje: 0 },
   { codigo: 'PROD-002', nombre: 'CINTA DE EMBALAJE TRANSPARENTE 48mm', cantidad: 20, precio_unitario: 3.50, unidad: 'NIU', descuento_porcentaje: 10 }
@@ -55,6 +55,7 @@ async function main() {
       tipo_venta: 'Credito', dias_credito: 30, fecha_vencimiento: '23/09/2026',
       observaciones: 'GUIA DE REMISION REMITENTE: TE01-45. Entregar en almacén central.',
       orden_compra: '260810058',
+      direccion_entrega: 'AV. INDUSTRIAL 500 - LURÍN - LIMA - LIMA',
       sunat_digest_value: digestPara('FE01-1'), sunat_estado: 'ACEPTADO', docAfectado: null
     }, emisor, cliente, detalle, qrBuffer: qrFactura
   });

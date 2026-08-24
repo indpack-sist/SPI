@@ -831,7 +831,7 @@ export async function generarPdfComprobante(req, res, next) {
     const [[f]] = await pool.query(
       "SELECT f.*, DATE_FORMAT(f.fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt, " +
       "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(ov.fecha_vencimiento, '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
-      "ov.observaciones, ov.orden_compra_cliente " +
+      "ov.observaciones, ov.orden_compra_cliente, ov.direccion_entrega " +
       "FROM facturas_venta f LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = f.id_orden_venta " +
       "WHERE f.id_factura = ?",
       [idFactura]);
@@ -867,17 +867,21 @@ export async function generarPdfComprobante(req, res, next) {
         fecha_emision: f.fecha_emision_fmt, moneda: f.moneda,
         tipo_venta: f.tipo_venta, dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
         observaciones: f.observaciones, orden_compra: f.orden_compra_cliente,
+        direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
       },
       emisor, cliente, detalle, qrBuffer
     });
 
-    // Subida best-effort a Cloudinary (no crítica).
-    try {
-      const url = await subirRaw(pdf, `sunat/pdf/${f.sunat_nombre_xml || `${f.serie}-${f.numero}`}.pdf`);
-      await pool.query('UPDATE facturas_venta SET url_pdf = ? WHERE id_factura = ?', [url, idFactura]);
-    } catch (e) { console.warn('[SUNAT] subir PDF comprobante falló:', e.message); }
+    // Subida best-effort a Cloudinary (no crítica). SUNAT_PDF_SKIP_UPLOAD=1 la desactiva
+    // (modo solo-lectura para validar el endpoint sin escribir en producción).
+    if (process.env.SUNAT_PDF_SKIP_UPLOAD !== '1') {
+      try {
+        const url = await subirRaw(pdf, `sunat/pdf/${f.sunat_nombre_xml || `${f.serie}-${f.numero}`}.pdf`);
+        await pool.query('UPDATE facturas_venta SET url_pdf = ? WHERE id_factura = ?', [url, idFactura]);
+      } catch (e) { console.warn('[SUNAT] subir PDF comprobante falló:', e.message); }
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${f.serie}-${f.numero}.pdf"`);
@@ -926,10 +930,12 @@ export async function generarPdfGuia(req, res, next) {
       emisor, cliente, detalle, conductor, qrBuffer
     });
 
-    try {
-      const url = await subirRaw(pdf, `sunat/pdf/${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}.pdf`);
-      await pool.query('UPDATE guias_remision SET url_pdf = COALESCE(?, url_pdf) WHERE id_guia = ?', [url, idGuia]);
-    } catch (e) { console.warn('[SUNAT] subir PDF GRE falló:', e.message); }
+    if (process.env.SUNAT_PDF_SKIP_UPLOAD !== '1') {
+      try {
+        const url = await subirRaw(pdf, `sunat/pdf/${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}.pdf`);
+        await pool.query('UPDATE guias_remision SET url_pdf = COALESCE(?, url_pdf) WHERE id_guia = ?', [url, idGuia]);
+      } catch (e) { console.warn('[SUNAT] subir PDF GRE falló:', e.message); }
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${g.serie_sunat}-${g.numero_sunat}.pdf"`);

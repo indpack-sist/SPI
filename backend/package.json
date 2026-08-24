@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test:firma": "node scripts/test-firma.js"
+    "test:firma": "node scripts/test-firma.js",
+    "test:gre": "node scripts/test-gre-xml.js",
+    "test:pdf": "node scripts/test-pdf-sunat.js"
   },
   "keywords": [
     "inventario",

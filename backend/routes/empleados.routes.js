@@ -9,6 +9,7 @@ import {
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
+  reemplazarEmpleado,
   getClientesAsignados,
   updateClientesAsignados
 } from '../controllers/empleados.controller.js';
@@ -24,6 +25,7 @@ router.get('/:id/clientes-asignados', getClientesAsignados);
 router.put('/:id/clientes-asignados', updateClientesAsignados);
 router.get('/:id', getEmpleadoById);
 router.post('/', createEmpleado);
+router.post('/:id/reemplazar', reemplazarEmpleado);
 router.put('/:id', updateEmpleado);
 router.delete('/:id', deleteEmpleado);
 

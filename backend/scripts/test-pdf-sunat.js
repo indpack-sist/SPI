@@ -1,0 +1,107 @@
+// scripts/test-pdf-sunat.js  —  Smoke test OFFLINE de la Fase 13 (representación impresa).
+// Renderiza factura (01), nota de crédito (07) y GRE (09) a PDF real y valida el buffer.
+// No toca BD: prueba los generadores + el QR PNG. Escribe a sunat-output/ (gitignored).
+import { promises as fs } from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { qrPng } from '../services/sunat/qr.service.js';
+import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
+import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const outDir = path.join(__dirname, '../sunat-output');
+
+const emisor = {
+  razon_social: 'INDPACK S.A.C.', ruc: '20550932297',
+  direccion: 'AV. EL SOL LT. 4 B MZ. LL-1', urbanizacion: 'COO. LAS VERTIENTES',
+  telefono: '01-312 7858', email: 'informes@indpackperu.com'
+};
+const cliente = { razon_social: 'OCULAB S.A.C.', ruc: '20562860984', tipo_documento: 'RUC', direccion: 'AV. ARGENTINA 1234 - LIMA' };
+const detalle = [
+  { codigo: 'PROD-001', nombre: 'CAJA DE CARTON 30x30x30 CORRUGADO', cantidad: 100, precio_unitario: 1.40, unidad: 'NIU', descuento_porcentaje: 0 },
+  { codigo: 'PROD-002', nombre: 'CINTA DE EMBALAJE TRANSPARENTE 48mm', cantidad: 20, precio_unitario: 3.50, unidad: 'NIU', descuento_porcentaje: 10 }
+];
+
+// ── Origen del hash (valor resumen) ──────────────────────────────────────────
+// El hash REAL de una factura vive en facturas_venta.sunat_digest_value (lo escribe firmarXml
+// en la emisión). Este script es OFFLINE y no tiene cert ni BD, así que NO puede firmar ni leer
+// el valor aceptado en Beta. Prioridad:
+//   1) REAL_DIGEST=<valor>  → usa el digest real que pegues (p.ej. el de FE01-1 aceptada).
+//   2) sin él → SHA-512 base64 de contenido local, ETIQUETADO como SIMULADO (no de factura aceptada).
+// Nunca se usa un placeholder decodificable a texto.
+const DIGEST_REAL = process.env.REAL_DIGEST || null;
+const digestSimulado = (semilla) => crypto.createHash('sha512').update(String(semilla)).digest('base64');
+const digestPara = (semilla) => DIGEST_REAL || digestSimulado(semilla);
+
+let pass = 0, fail = 0;
+const check = (n, cond, extra = '') => { const ok = !!cond; ok ? pass++ : fail++; console.log(`  ${ok ? '✅' : '❌'} ${n}${extra ? '  —  ' + extra : ''}`); };
+const esPdf = (buf) => Buffer.isBuffer(buf) && buf.slice(0, 5).toString() === '%PDF-';
+
+async function main() {
+  await fs.mkdir(outDir, { recursive: true });
+  console.log('\n=== FASE 13 — Smoke test de representación impresa (offline) ===\n');
+  console.log(DIGEST_REAL
+    ? `  Hash impreso: REAL (provisto por REAL_DIGEST, ${DIGEST_REAL.length} chars)\n`
+    : '  ⚠️  Hash impreso: SIMULADO (SHA-512 local) — NO es de una factura aceptada.\n' +
+      '     Para el hash real: REAL_DIGEST=<sunat_digest_value> npm run test:pdf\n');
+
+  // 1) Factura 01 ACEPTADA
+  const qrFactura = await qrPng('20550932297|01|FE01|1|25.20|165.20|2026-08-24|6|20562860984|');
+  const pdfFactura = await generarComprobanteSunatPDF({
+    comprobante: {
+      codigo_tipo_sunat: '01', serie: 'FE01', numero: 1, fecha_emision: '2026-08-24',
+      moneda: 'PEN', subtotal: 203.00, igv: 36.54, total: 239.54,
+      sunat_digest_value: digestPara('FE01-1'), sunat_estado: 'ACEPTADO', docAfectado: null
+    }, emisor, cliente, detalle, qrBuffer: qrFactura
+  });
+  check('Factura (01) genera PDF válido', esPdf(pdfFactura), `${pdfFactura.length} bytes`);
+  await fs.writeFile(path.join(outDir, 'test-FE01-1.pdf'), pdfFactura);
+
+  // 2) Nota de Crédito 07 con documento afectado + motivo
+  const qrNota = await qrPng('20550932297|07|FC01|1|9.00|59.00|2026-08-24|6|20562860984|');
+  const pdfNota = await generarComprobanteSunatPDF({
+    comprobante: {
+      codigo_tipo_sunat: '07', serie: 'FC01', numero: 1, fecha_emision: '2026-08-24',
+      moneda: 'PEN', subtotal: 50.00, igv: 9.00, total: 59.00,
+      sunat_digest_value: digestPara('FC01-1'), sunat_estado: 'ACEPTADO',
+      docAfectado: { comprobante: 'FE01-2', motivo: '07 - DEVOLUCION POR ITEM' }
+    }, emisor, cliente, detalle, qrBuffer: qrNota
+  });
+  check('Nota de Crédito (07) genera PDF válido', esPdf(pdfNota), `${pdfNota.length} bytes`);
+  await fs.writeFile(path.join(outDir, 'test-FC01-1.pdf'), pdfNota);
+
+  // 3) Factura BAJA → marca de agua ANULADO
+  const pdfBaja = await generarComprobanteSunatPDF({
+    comprobante: {
+      codigo_tipo_sunat: '01', serie: 'FE01', numero: 3, fecha_emision: '2026-08-24',
+      moneda: 'PEN', subtotal: 100, igv: 18, total: 118,
+      sunat_digest_value: digestPara('FE01-3'), sunat_estado: 'BAJA', docAfectado: null
+    }, emisor, cliente, detalle, qrBuffer: qrFactura
+  });
+  check('Factura BAJA genera PDF válido (marca ANULADO)', esPdf(pdfBaja), `${pdfBaja.length} bytes`);
+  await fs.writeFile(path.join(outDir, 'test-FE01-3-anulado.pdf'), pdfBaja);
+
+  // 4) GRE 09 con QR-URL de SUNAT
+  const qrGre = await qrPng('https://ww1.sunat.gob.pe/ol-ti-itconsultaunificadalibre/consultaUnificadaLibre/consulta?...');
+  const pdfGre = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 1, fecha_emision: '2026-08-24', fecha_traslado: '2026-08-24',
+      motivo_traslado_cod: '01', peso_bruto_kg: 100.50,
+      ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VILLA EL SALVADOR',
+      ubigeo_llegada: '150101', direccion_llegada: 'AV. ARGENTINA 1234 - LIMA',
+      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-1'), placa: 'ABC-123'
+    },
+    emisor, cliente,
+    detalle: [{ codigo: 'PROD-001', nombre: 'CAJA DE CARTON 30x30x30', cantidad: 100, codigo_unidad_sunat: 'NIU' }],
+    conductor: { nombre_completo: 'MAX ALEX SANANCINO', dni: '75336849', licencia_conducir: 'Q75336849' },
+    qrBuffer: qrGre
+  });
+  check('GRE (09) genera PDF válido (QR = URL SUNAT)', esPdf(pdfGre), `${pdfGre.length} bytes`);
+  await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
+
+  console.log(`\n  PDFs escritos en: ${outDir}`);
+  console.log(`\n=== RESUMEN: ${pass} PASS · ${fail} FAIL ===\n`);
+  if (fail > 0) process.exit(1);
+}
+main().catch((e) => { console.error(e); process.exit(1); });

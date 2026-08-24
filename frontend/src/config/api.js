@@ -114,6 +114,7 @@ export const empleadosAPI = {
   validarEmail: (email) => api.get(`/empleados/validar-email/${encodeURIComponent(email)}`),
   create: (data) => api.post('/empleados', data),
   update: (id, data) => api.put(`/empleados/${id}`, data),
+  reemplazar: (id, data) => api.post(`/empleados/${id}/reemplazar`, data),
   delete: (id) => api.delete(`/empleados/${id}`),
   getClientesAsignados: (id) => api.get(`/empleados/${id}/clientes-asignados`),
   updateClientesAsignados: (id, data) => api.put(`/empleados/${id}/clientes-asignados`, data),

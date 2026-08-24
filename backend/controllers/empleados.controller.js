@@ -1,4 +1,4 @@
-import { executeQuery } from '../config/database.js';
+import { executeQuery, withTransaction } from '../config/database.js';
 import { validarDNI } from '../services/api-validation.service.js';
 import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
 
@@ -370,6 +370,135 @@ export async function deleteEmpleado(req, res) {
   }
 }
 const ROLES_CARTERA = ['Comercial', 'Ventas'];
+
+/**
+ * Reemplaza a un empleado que se retira por una persona nueva SIN alterar el
+ * historial del saliente.
+ *
+ * Los registros históricos (órdenes, cotizaciones, movimientos, etc.) guardan el
+ * id_empleado y muestran el nombre por JOIN, por lo que editar la misma fila
+ * reescribiría el nombre en todo el historial. En su lugar, este flujo:
+ *   1) Desactiva al saliente y libera su email (lo renombra), conservando su
+ *      nombre y por tanto su historial intacto.
+ *   2) Crea una fila nueva (nuevo id_empleado) para la persona que ingresa,
+ *      reutilizando el mismo correo de acceso.
+ *   3) Opcionalmente transfiere la cartera de clientes del saliente al nuevo.
+ * Todo dentro de una transacción.
+ */
+export async function reemplazarEmpleado(req, res) {
+  try {
+    if (req.user?.rol !== 'Administrador') {
+      return res.status(403).json({ error: 'Solo el administrador puede reemplazar empleados' });
+    }
+
+    const { id } = req.params;
+    const { dni, nombre_completo, email, password, cargo, rol, transferir_cartera } = req.body;
+
+    if (!nombre_completo || !password || !rol) {
+      return res.status(400).json({ error: 'nombre_completo, password y rol son requeridos' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    const salienteResult = await executeQuery(
+      'SELECT * FROM empleados WHERE id_empleado = ?',
+      [id]
+    );
+    if (!salienteResult.success) return res.status(500).json({ error: salienteResult.error });
+    if (salienteResult.data.length === 0) {
+      return res.status(404).json({ error: 'Empleado a reemplazar no encontrado' });
+    }
+    const saliente = salienteResult.data[0];
+
+    // El nuevo empleado reutiliza el correo del saliente salvo que se indique otro.
+    const nuevoEmail = (email && email.trim()) ? email.trim() : saliente.email;
+    if (!nuevoEmail) {
+      return res.status(400).json({ error: 'Debe indicar un email para el nuevo empleado' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(nuevoEmail)) {
+      return res.status(400).json({ error: 'Formato de email inválido' });
+    }
+
+    // El correo no puede pertenecer a OTRO empleado distinto del saliente.
+    const emailConflict = await executeQuery(
+      'SELECT nombre_completo FROM empleados WHERE email = ? AND id_empleado != ?',
+      [nuevoEmail, id]
+    );
+    if (!emailConflict.success) return res.status(500).json({ error: emailConflict.error });
+    if (emailConflict.data.length > 0) {
+      return res.status(400).json({ error: `El email ya pertenece a otro empleado: ${emailConflict.data[0].nombre_completo}` });
+    }
+
+    if (dni) {
+      if (dni === saliente.dni) {
+        return res.status(400).json({ error: 'El DNI del reemplazo no puede ser el mismo del empleado saliente' });
+      }
+      const dniConflict = await executeQuery(
+        'SELECT nombre_completo FROM empleados WHERE dni = ? AND id_empleado != ?',
+        [dni, id]
+      );
+      if (!dniConflict.success) return res.status(500).json({ error: dniConflict.error });
+      if (dniConflict.data.length > 0) {
+        return res.status(400).json({ error: `El DNI ya pertenece a otro empleado: ${dniConflict.data[0].nombre_completo}` });
+      }
+    }
+
+    const nuevoId = await withTransaction(async (conn) => {
+      // 1) Liberar el email y desactivar al saliente. Se renombra el correo para
+      //    esquivar el UNIQUE KEY; el login ya filtra por estado='Activo'.
+      const emailArchivado = saliente.email
+        ? `BAJA${saliente.id_empleado}_${saliente.email}`.slice(0, 100)
+        : null;
+      await conn.execute(
+        'UPDATE empleados SET estado = "Inactivo", email = ?, restringir_clientes = 0 WHERE id_empleado = ?',
+        [emailArchivado, saliente.id_empleado]
+      );
+
+      // 2) Crear la fila del empleado entrante.
+      const [ins] = await conn.execute(
+        'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, "Activo")',
+        [dni || null, nombre_completo, nuevoEmail, password, cargo || rol, rol]
+      );
+      const idNuevo = ins.insertId;
+
+      // 3) Transferir la cartera de clientes del saliente (si se solicitó).
+      if (transferir_cartera) {
+        const [asignados] = await conn.execute(
+          'SELECT id_cliente FROM empleado_clientes_asignados WHERE id_empleado = ?',
+          [saliente.id_empleado]
+        );
+        if (asignados.length > 0) {
+          const placeholders = asignados.map(() => '(?, ?, ?)').join(', ');
+          const params = [];
+          asignados.forEach(a => params.push(idNuevo, a.id_cliente, req.user.id_empleado));
+          await conn.execute(
+            `INSERT INTO empleado_clientes_asignados (id_empleado, id_cliente, asignado_por) VALUES ${placeholders}`,
+            params
+          );
+        }
+        await conn.execute(
+          'UPDATE empleados SET restringir_clientes = ? WHERE id_empleado = ?',
+          [saliente.restringir_clientes, idNuevo]
+        );
+      }
+
+      return idNuevo;
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Reemplazo registrado. El empleado saliente quedó inactivo y su historial se conserva.',
+      data: { id_empleado: nuevoId, nombre_completo, email: nuevoEmail }
+    });
+  } catch (error) {
+    console.error('Error al reemplazar empleado:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
 
 export async function getClientesAsignados(req, res) {
   try {

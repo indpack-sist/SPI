@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Eye, EyeOff, Mail, Users, Lock, Unlock } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Eye, EyeOff, Mail, Users, Lock, Unlock, UserPlus } from 'lucide-react';
 import { empleadosAPI, clientesAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Pagination from '../../components/UI/Pagination';
@@ -23,6 +23,21 @@ function Empleados() {
   const [emailValidado, setEmailValidado] = useState(null);
   const [datosRENIEC, setDatosRENIEC] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Reemplazo de empleado (persona nueva reutilizando el correo del saliente)
+  const [reemplazoOpen, setReemplazoOpen] = useState(false);
+  const [saliente, setSaliente] = useState(null);
+  const [reemplazoSaving, setReemplazoSaving] = useState(false);
+  const [showReemplazoPass, setShowReemplazoPass] = useState(false);
+  const [reemplazoData, setReemplazoData] = useState({
+    dni: '',
+    nombre_completo: '',
+    email: '',
+    password: '',
+    cargo: '',
+    rol: 'Operario',
+    transferir_cartera: false
+  });
 
   // Cartera de clientes asignados (roles Comercial / Ventas)
   const ROLES_CARTERA = ['Comercial', 'Ventas'];
@@ -246,6 +261,59 @@ function Empleados() {
     }
   };
 
+  const abrirReemplazo = (empleado) => {
+    setSaliente(empleado);
+    setReemplazoData({
+      dni: '',
+      nombre_completo: '',
+      email: empleado.email || '',
+      password: '',
+      cargo: '',
+      rol: empleado.rol,
+      transferir_cartera: ROLES_CARTERA.includes(empleado.rol)
+    });
+    setError(null);
+    setSuccess(null);
+    setShowReemplazoPass(false);
+    setReemplazoOpen(true);
+  };
+
+  const cerrarReemplazo = () => {
+    setReemplazoOpen(false);
+    setSaliente(null);
+    setShowReemplazoPass(false);
+  };
+
+  const handleReemplazar = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!reemplazoData.nombre_completo.trim()) {
+      setError('El nombre del nuevo empleado es requerido');
+      return;
+    }
+    if (!reemplazoData.password || reemplazoData.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    setReemplazoSaving(true);
+    try {
+      await empleadosAPI.reemplazar(saliente.id_empleado, reemplazoData);
+      setSuccess(
+        `Reemplazo registrado: "${saliente.nombre_completo}" quedó inactivo (su historial se conserva) ` +
+        `y se creó a "${reemplazoData.nombre_completo}" con el mismo correo de acceso.`
+      );
+      cerrarReemplazo();
+      cargarEmpleados();
+    } catch (err) {
+      setError(err.error || 'Error al reemplazar empleado');
+    } finally {
+      setReemplazoSaving(false);
+    }
+  };
+
   const abrirCartera = async (empleado) => {
     setCarteraEmpleado(empleado);
     setCarteraModalOpen(true);
@@ -405,7 +473,7 @@ function Empleados() {
     {
       header: 'Acciones',
       accessor: 'id_empleado',
-      width: '160px',
+      width: '200px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
@@ -424,6 +492,14 @@ function Empleados() {
             title="Editar"
           >
             <Edit size={14} />
+          </button>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={() => abrirReemplazo(row)}
+            title="Reemplazar (ingresa otra persona con este correo, conservando el historial)"
+            disabled={row.estado === 'Inactivo'}
+          >
+            <UserPlus size={14} />
           </button>
           <button
             className="btn btn-sm btn-danger"
@@ -513,7 +589,8 @@ function Empleados() {
                     className="form-input"
                     value={formData.dni}
                     onChange={(e) => {
-                      setFormData({ ...formData, dni: e.target.value });
+                      // Al cambiar el DNI se re-exige validar (o re-confirmar sin validar).
+                      setFormData({ ...formData, dni: e.target.value, validar_dni: true });
                       setDniValidado(null);
                       setDatosRENIEC(null);
                     }}
@@ -550,12 +627,23 @@ function Empleados() {
                 )}
                 
                 {dniValidado === false && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-danger">
-                    <AlertCircle size={16} />
-                    DNI no válido
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2 text-sm text-danger">
+                      <AlertCircle size={16} />
+                      No se pudo validar el DNI con RENIEC (sin resultados)
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm mt-2 p-2 rounded" style={{ background: 'var(--bg-secondary, #fff8e1)' }}>
+                      <input
+                        type="checkbox"
+                        checked={!formData.validar_dni}
+                        onChange={(e) => setFormData({ ...formData, validar_dni: !e.target.checked })}
+                        style={{ width: '16px', height: '16px' }}
+                      />
+                      Registrar este empleado de todas formas (sin validar el DNI)
+                    </label>
                   </div>
                 )}
-                
+
                 <small className="text-muted">
                   Opcional. Si ingresa un DNI, puede validarlo con RENIEC.
                 </small>
@@ -898,6 +986,176 @@ function Empleados() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={reemplazoOpen}
+        onClose={cerrarReemplazo}
+        title={`Reemplazar empleado${saliente ? ' — ' + saliente.nombre_completo : ''}`}
+        size="lg"
+      >
+        <form onSubmit={handleReemplazar}>
+          <div className="alert alert-warning mb-3">
+            <strong>El empleado saliente se conserva.</strong>
+            <p className="text-sm mt-1">
+              {saliente?.nombre_completo} quedará <strong>Inactivo</strong> y todo su historial
+              (órdenes, cotizaciones, movimientos) seguirá mostrando su nombre. Se creará una
+              persona nueva que iniciará sesión con el mismo correo.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Columna Izquierda — datos de la persona nueva */}
+            <div>
+              <div className="form-group">
+                <label className="form-label">DNI</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={reemplazoData.dni}
+                  onChange={(e) => setReemplazoData({ ...reemplazoData, dni: e.target.value })}
+                  placeholder="12345678"
+                  maxLength={8}
+                />
+                <small className="text-muted">Opcional. DNI de la persona que ingresa.</small>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Nombre Completo *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={reemplazoData.nombre_completo}
+                  onChange={(e) => setReemplazoData({ ...reemplazoData, nombre_completo: e.target.value })}
+                  required
+                  placeholder="Ej: María López García"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Cargo</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={reemplazoData.cargo}
+                  onChange={(e) => setReemplazoData({ ...reemplazoData, cargo: e.target.value })}
+                  placeholder="Ej: Ejecutivo Comercial"
+                />
+                <small className="text-muted">Opcional. Si se deja vacío se usa el rol.</small>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Rol *</label>
+                <select
+                  className="form-select"
+                  value={reemplazoData.rol}
+                  onChange={(e) => setReemplazoData({ ...reemplazoData, rol: e.target.value })}
+                  required
+                >
+                  <optgroup label="Administración y Calidad">
+                    <option value="Administrador">Administrador</option>
+                    <option value="Calidad">Calidad</option>
+                    <option value="Administrativo">Administrativo</option>
+                  </optgroup>
+                  <optgroup label="Finanzas">
+                    <option value="Cobranzas">Cobranzas</option>
+                  </optgroup>
+                  <optgroup label="Ventas y Comercial">
+                    <option value="Ventas">Ventas</option>
+                    <option value="Comercial">Comercial</option>
+                  </optgroup>
+                  <optgroup label="Producción">
+                    <option value="Supervisor">Supervisor de Producción</option>
+                    <option value="Operario">Operario de Producción</option>
+                    <option value="Produccion">Jefe de Producción</option>
+                  </optgroup>
+                  <optgroup label="Almacén y Logística">
+                    <option value="Almacenero">Almacenero</option>
+                    <option value="Logistica">Coordinador de Logística</option>
+                  </optgroup>
+                  <optgroup label="Transporte">
+                    <option value="Conductor">Conductor</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+
+            {/* Columna Derecha — acceso */}
+            <div>
+              <div className="alert alert-info mb-3">
+                <strong>Datos de Acceso al Sistema</strong>
+                <p className="text-sm mt-1">El correo se hereda del empleado saliente (puede cambiarlo).</p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Email *</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail
+                    size={18}
+                    style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}
+                  />
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={reemplazoData.email}
+                    onChange={(e) => setReemplazoData({ ...reemplazoData, email: e.target.value })}
+                    required
+                    placeholder="correo@empresa.com"
+                    style={{ paddingLeft: '2.5rem' }}
+                  />
+                </div>
+                <small className="text-muted">Con este correo iniciará sesión la persona nueva.</small>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Contraseña *</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showReemplazoPass ? 'text' : 'password'}
+                    className="form-input"
+                    value={reemplazoData.password}
+                    onChange={(e) => setReemplazoData({ ...reemplazoData, password: e.target.value })}
+                    required
+                    placeholder="Mínimo 6 caracteres"
+                    style={{ paddingRight: '2.5rem' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowReemplazoPass(!showReemplazoPass)}
+                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                  >
+                    {showReemplazoPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {ROLES_CARTERA.includes(saliente?.rol) && (
+                <div className="form-group">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={reemplazoData.transferir_cartera}
+                      onChange={(e) => setReemplazoData({ ...reemplazoData, transferir_cartera: e.target.checked })}
+                      className="form-checkbox"
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <span className="text-sm font-medium">Transferir la cartera de clientes del saliente</span>
+                  </label>
+                  <small className="text-muted">
+                    Copia los clientes asignados y la restricción del empleado que se retira.
+                  </small>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end mt-4">
+            <button type="button" className="btn btn-outline" onClick={cerrarReemplazo}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={reemplazoSaving}>
+              {reemplazoSaving ? <><Loader size={16} className="animate-spin" /> Procesando...</> : 'Registrar reemplazo'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

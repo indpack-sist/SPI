@@ -29,6 +29,10 @@ router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('factura
 // GRE Remitente (09) por API REST — Fase 10.
 router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirGuiaRemision);
 router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
+// Fase 12: dejar sin efecto una GRE aceptada (traslado no iniciado; Admin puede forzar).
+router.post('/guias/:id/sin-efecto', verificarToken, verificarPermiso('facturacion'), c.dejarSinEfectoGuia);
+// Fase 12: reemplazar una GRE aceptada por una nueva corregida (emite la nueva vía SUNAT).
+router.post('/guias/:id/reemplazar', verificarToken, verificarPermiso('facturacion'), c.reemplazarGuia);
 // Diagnóstico aislado del token OAuth GRE (Fase 10).
 router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
 

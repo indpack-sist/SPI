@@ -129,6 +129,23 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       doc.font('Helvetica-Bold').text('Valor resumen (hash):', 145, yPie + 30);
       doc.font('Helvetica').text(g.sunat_digest_value || '-', 145, yPie + 40, { width: 410 });
 
+      // ── Marca de agua Fase 12: guía sin efecto / reemplazada ──
+      const wm = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
+        : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : null;
+      if (wm) {
+        doc.save().rotate(-30, { origin: [297, 400] })
+          .fontSize(70).fillColor('#D32F2F').opacity(0.22)
+          .text(wm, 60, 380, { align: 'center', width: 480 }).opacity(1).restore();
+        if (g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref) {
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
+            .text(`Reemplazada por la guía ${g.reemplazo_ref}`, 145, yPie + 54, { width: 410 });
+        }
+        if (g.sunat_estado === 'ANULADA' && g.motivo_anulacion) {
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
+            .text(`Sin efecto — motivo: ${g.motivo_anulacion}`, 145, yPie + 54, { width: 410 });
+        }
+      }
+
       doc.end();
     } catch (e) { reject(e); }
   });

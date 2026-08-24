@@ -77,7 +77,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.font('Helvetica-Bold').text('Dirección:', 40, y + 36);
       doc.font('Helvetica').text((cliente.direccion || '-').replace(/[\r\n]+/g, ' '), 110, y + 36, { width: 440 });
       doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 50);
-      doc.font('Helvetica').text(String(c.fecha_emision || '').slice(0, 10), 110, y + 50);
+      doc.font('Helvetica').text(String(c.fecha_emision || '-'), 110, y + 50);
       doc.font('Helvetica-Bold').text('Moneda:', 320, y + 50);
       doc.font('Helvetica').text(String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 380, y + 50);
 
@@ -106,7 +106,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       doc.font('Helvetica').fontSize(8);
       for (const it of detalle) {
-        const desc = it.descripcion || `[${it.codigo || '-'}] ${it.nombre || ''}`;
+        // El código ya tiene su propia columna: la descripción lleva solo el nombre del producto.
+        const desc = it.descripcion || it.nombre || it.codigo || '-';
         const cant = Number(it.cantidad || 0);
         const pu = Number(it.precio_unitario || 0);
         const totalLinea = cant * pu * (1 - Number(it.descuento_porcentaje || 0) / 100);

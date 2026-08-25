@@ -1224,6 +1224,8 @@ const abrirPdfSunat = async (path) => {
 };
 
 export const sunatAPI = {
+  // Vista previa de emisión (solo lectura): totales/desglose calculados por el backend (fuente única).
+  previewComprobante: (id_orden_venta) => api.post('/sunat/comprobantes/preview', { id_orden_venta }),
   // Comprobantes: factura (01), notas de crédito/débito (07/08) y comunicación de baja (RA).
   emitirFactura: (id_orden_venta) => api.post('/sunat/comprobantes/emitir', { id_orden_venta }),
   emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items }) =>

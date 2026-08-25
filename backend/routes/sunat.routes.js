@@ -27,6 +27,9 @@ router.get('/ping', c.ping);
 // Protegido: requiere token + permiso 'facturacion' (Administrador / Administrativo).
 router.get('/health', verificarToken, verificarPermiso('facturacion'), c.health);
 
+// Vista previa de emisión (solo lectura): totales/desglose con el MISMO cálculo del UBL builder.
+router.post('/comprobantes/preview', verificarToken, verificarPermiso('facturacion'), c.previewComprobante);
+
 // Emisión de comprobantes (Fase 6: solo Factura 01).
 router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirComprobante);
 

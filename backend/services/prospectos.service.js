@@ -409,9 +409,13 @@ export async function recalcularScore(idProspecto, sunat = {}) {
     es_habido: sunat.es_habido,
   });
 
+  // Guardia no-decreciente: enriquecer solo AGREGA señales, así que el score
+  // nunca debe bajar por recalcular. Cubre el caso borde de un prospecto SUNAT
+  // que tenía bono de "HABIDO" en el alta y aquí no se re-pasa la vigencia.
+  const nuevoScore = Math.max(Number(p.score) || 0, scoring.score);
   await executeQuery(
     'UPDATE prospectos SET score = ?, sector = COALESCE(sector, ?), score_detalle = ? WHERE id_prospecto = ?',
-    [scoring.score, scoring.sector, JSON.stringify({ señales: scoring.señales, por_que_contactar: scoring.por_que_contactar }), idProspecto]
+    [nuevoScore, scoring.sector, JSON.stringify({ señales: scoring.señales, por_que_contactar: scoring.por_que_contactar }), idProspecto]
   );
-  return scoring.score;
+  return nuevoScore;
 }

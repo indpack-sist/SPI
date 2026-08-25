@@ -4,6 +4,7 @@ import {
   recalcularScore,
   normalizarTelefono,
   normalizarEmail,
+  getFechaPeru,
 } from './prospectos.service.js';
 import { esEmpresaServicios } from './prospectos.service.js';
 import { buscarBasico, detallar } from './scraper-places.service.js';
@@ -250,8 +251,8 @@ async function enriquecerDesdeWeb(idProspecto, url) {
 
   // Trazabilidad + recálculo de score con lo nuevo.
   await executeQuery(
-    'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw) VALUES (?, "web", ?, ?)',
-    [idProspecto, data.base, JSON.stringify({ emails: data.emails, telefonos: data.telefonos, redes: data.redes })]
+    'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw, fecha_scraping) VALUES (?, "web", ?, ?, ?)',
+    [idProspecto, data.base, JSON.stringify({ emails: data.emails, telefonos: data.telefonos, redes: data.redes }), getFechaPeru()]
   );
   const score = await recalcularScore(idProspecto);
 

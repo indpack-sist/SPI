@@ -513,8 +513,8 @@ export async function cambiarEstado(req, res) {
     // para los demás desde este momento).
     let sql, params;
     if (!prev.id_gestor) {
-      sql = 'UPDATE prospectos SET estado_workflow = ?, id_gestor = ?, fecha_gestion = NOW() WHERE id_prospecto = ?';
-      params = [estado, yo || null, id];
+      sql = 'UPDATE prospectos SET estado_workflow = ?, id_gestor = ?, fecha_gestion = ? WHERE id_prospecto = ?';
+      params = [estado, yo || null, getFechaPeru(), id];
     } else {
       sql = 'UPDATE prospectos SET estado_workflow = ? WHERE id_prospecto = ?';
       params = [estado, id];

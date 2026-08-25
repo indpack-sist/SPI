@@ -5,6 +5,21 @@ import { executeQuery } from '../config/database.js';
 // (gratis, sin IA) y detección de duplicados contra clientes.
 // ============================================================
 
+// Hora actual de Perú (America/Lima) como 'YYYY-MM-DD HH:mm:ss'. Se inserta
+// explícitamente porque el default CURRENT_TIMESTAMP de MySQL usa la zona del
+// servidor (UTC), lo que dejaba las fechas de captura 5 horas adelantadas.
+export function getFechaPeru() {
+  const now = new Date();
+  const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  const year = peruDate.getFullYear();
+  const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+  const day = String(peruDate.getDate()).padStart(2, '0');
+  const hours = String(peruDate.getHours()).padStart(2, '0');
+  const minutes = String(peruDate.getMinutes()).padStart(2, '0');
+  const seconds = String(peruDate.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // Sectores que compran empaque terminado. Cada patrón aporta un
 // "sector legible" y un bono de encaje al score. Se detecta por
 // palabras clave en la razón social / nombre comercial mientras no
@@ -312,8 +327,8 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
     `INSERT INTO prospectos
       (segmento, tipo_documento, documento, razon_social, nombre_comercial, sector, ciiu,
        departamento, provincia, distrito, direccion, web, origen, origen_query, score, score_detalle,
-       flag_duplicado, id_cliente_match, id_empleado_asignado, logo_url, foto_referencia, place_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       flag_duplicado, id_cliente_match, id_empleado_asignado, logo_url, foto_referencia, place_id, fecha_captura)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       datos.segmento || 'Formal',
       datos.tipo_documento || null,
@@ -337,6 +352,7 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
       datos.logo_url || null,
       datos.foto_referencia || null,
       datos.place_id || null,
+      getFechaPeru(),
     ]
   );
   if (!ins.success) return { success: false, error: ins.error };
@@ -356,8 +372,8 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
 
   if (datos.datos_raw) {
     await executeQuery(
-      'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw) VALUES (?,?,?,?)',
-      [idProspecto, datos.origen || 'manual', datos.url || null, JSON.stringify(datos.datos_raw)]
+      'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw, fecha_scraping) VALUES (?,?,?,?,?)',
+      [idProspecto, datos.origen || 'manual', datos.url || null, JSON.stringify(datos.datos_raw), getFechaPeru()]
     );
   }
 

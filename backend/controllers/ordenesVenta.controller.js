@@ -541,7 +541,8 @@ export async function createOrdenVenta(req, res) {
       observaciones,
       id_comercial,
       detalle,
-      estado_verificacion_oc
+      estado_verificacion_oc,
+      es_exportacion
     } = req.body;
 
     if (typeof detalle === 'string') {
@@ -658,8 +659,13 @@ export async function createOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    const impuesto = esNotaVenta ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
-    const total = esNotaVenta ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
+    // Exportación (SUNAT 0200): IGV 0%, se calcula igual que una Nota de Venta. La emisión SEE deriva
+    // la afectación de es_exportacion; aquí solo cuadramos los totales de la OV con ese 0%.
+    const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
+    const sinIgv = esNotaVenta || esExport;
+    if (esExport) porcentaje = 0;
+    const impuesto = sinIgv ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
+    const total = sinIgv ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -718,8 +724,8 @@ export async function createOrdenVenta(req, res) {
         transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
         contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
         subtotal, igv, total, estado, estado_verificacion, stock_reservado,
-        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc
-      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?)
+        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion
+      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?)
     `, [
       numeroOrden, id_cliente, id_cotizacion || null,
       fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
@@ -731,7 +737,8 @@ export async function createOrdenVenta(req, res) {
       subtotal, impuesto, total,
       estado_verificacion_oc || 'Sin verificar',
       estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
-      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null
+      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null,
+      esExport ? 1 : 0
     ]);
 
     if (!result.success) {
@@ -820,7 +827,8 @@ export async function updateOrdenVenta(req, res) {
       observaciones,
       id_comercial,
       detalle,
-      estado_verificacion_oc
+      estado_verificacion_oc,
+      es_exportacion
     } = req.body;
 
     if (typeof detalle === 'string') {
@@ -978,8 +986,13 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    const impuesto = esNotaVenta ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
-    const total = esNotaVenta ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
+    // Exportación (SUNAT 0200): IGV 0%, se calcula igual que una Nota de Venta. La emisión SEE deriva
+    // la afectación de es_exportacion; aquí solo cuadramos los totales de la OV con ese 0%.
+    const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
+    const sinIgv = esNotaVenta || esExport;
+    if (esExport) porcentaje = 0;
+    const impuesto = sinIgv ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
+    const total = sinIgv ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -1065,7 +1078,8 @@ export async function updateOrdenVenta(req, res) {
         total_comision = ?, porcentaje_comision_promedio = ?,
         estado_verificacion_oc = ?,
         verificado_oc_por = ?,
-        fecha_verificacion_oc = ?
+        fecha_verificacion_oc = ?,
+        es_exportacion = ?
       WHERE id_orden_venta = ?
     `, [
       id_cliente, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
@@ -1079,6 +1093,7 @@ export async function updateOrdenVenta(req, res) {
       nuevoEstadoVerifOC,
       nuevoEstadoVerifOC === 'Verificado' ? idUsuarioActual : null,
       nuevoEstadoVerifOC === 'Verificado' ? getFechaPeru() : null,
+      esExport ? 1 : 0,
       id
     ]);
 

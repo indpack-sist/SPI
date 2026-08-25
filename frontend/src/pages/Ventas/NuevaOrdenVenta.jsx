@@ -96,6 +96,7 @@ function NuevaOrdenVenta() {
     tipo_cambio: 1.0000,
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
+    es_exportacion: 0,
     prioridad: 'Media',
     tipo_venta: 'Contado', 
     dias_credito: 0,       
@@ -181,7 +182,7 @@ function NuevaOrdenVenta() {
 
   useEffect(() => { cargarCatalogos(); }, []);
   useEffect(() => { if (modoEdicion) { cargarOrden(); } }, [id]);
-  useEffect(() => { calcularTotales(); }, [detalle, formCabecera.porcentaje_impuesto]);
+  useEffect(() => { calcularTotales(); }, [detalle, formCabecera.porcentaje_impuesto, formCabecera.es_exportacion]);
 
   useEffect(() => {
     if (formCabecera.tipo_venta === 'Contado') {
@@ -279,7 +280,8 @@ useEffect(() => {
           moneda: orden.moneda,
           tipo_cambio: orden.tipo_cambio,
           tipo_impuesto: configImpuesto.codigo,
-          porcentaje_impuesto: configImpuesto.porcentaje,
+          porcentaje_impuesto: orden.es_exportacion ? 0 : configImpuesto.porcentaje,
+          es_exportacion: orden.es_exportacion ? 1 : 0,
           prioridad: orden.prioridad,
           tipo_venta: orden.tipo_venta || 'Contado',
           dias_credito: orden.dias_credito || 0,
@@ -628,7 +630,9 @@ useEffect(() => {
       const peso = parseFloat(item.peso_unitario || 0);
       if (peso > 0) pesoTotal += item.cantidad * peso;
     });
-    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
+    // Exportación fuerza IGV 0% (SUNAT 0200), independiente del tipo_impuesto seleccionado.
+    const esExport = Number(formCabecera.es_exportacion) === 1;
+    const porcentaje = esExport ? 0 : (parseFloat(formCabecera.porcentaje_impuesto) || 0);
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
     setTotales({ subtotal, impuesto, total, pesoTotal });
@@ -643,6 +647,19 @@ useEffect(() => {
         porcentaje_impuesto: tipoImpuesto.porcentaje
       }));
     }
+  };
+
+  // Exportación (SUNAT 0200, IGV 0%). Es un flag propio (es_exportacion), no un tipo_impuesto:
+  // al marcarlo fuerza el porcentaje a 0 y bloquea el selector; al desmarcarlo restaura el % del tipo.
+  const handleExportacionChange = (checked) => {
+    setFormCabecera(prev => {
+      const cfg = TIPOS_IMPUESTO.find(t => t.codigo === prev.tipo_impuesto);
+      return {
+        ...prev,
+        es_exportacion: checked ? 1 : 0,
+        porcentaje_impuesto: checked ? 0 : (cfg?.porcentaje ?? 18)
+      };
+    });
   };
 
   const handleGuardarDireccion = async () => {
@@ -1591,6 +1608,7 @@ useEffect(() => {
                         className="form-select"
                         value={formCabecera.tipo_impuesto}
                         onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                        disabled={Number(formCabecera.es_exportacion) === 1}
                       >
                         {TIPOS_IMPUESTO.map(tipo => (
                           <option key={tipo.codigo} value={tipo.codigo}>
@@ -1602,6 +1620,16 @@ useEffect(() => {
                   </span>
                   <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                 </div>
+
+                {/* Factura de exportación (SUNAT 0200, IGV 0%). Fuerza el impuesto a 0 y bloquea el tipo. */}
+                <label className="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Number(formCabecera.es_exportacion) === 1}
+                    onChange={(e) => handleExportacionChange(e.target.checked)}
+                  />
+                  <span>Factura de exportación <span className="text-muted">(IGV 0%)</span></span>
+                </label>
                 <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2 text-primary">
                   <span>TOTAL:</span>
                   <span>{formatearMoneda(totales.total)}</span>

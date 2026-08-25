@@ -19,12 +19,22 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
   // Correcciones opcionales del reemplazo (prellenadas al abrir el modal). Solo se envían las que cambian.
   const [correcciones, setCorrecciones] = useState({});
 
-  const estado = guia?.sunat_estado || null;               // null = sin emitir
+  const estado = guia?.sunat_estado || null;               // null = sin emitir (estado SUNAT)
+  const estadoNegocio = guia?.estado || null;              // Emitida/En Tránsito/Entregada/Anulada
   const tieneComprobante = !!(guia?.serie_sunat && guia?.numero_sunat);
   const comprobante = tieneComprobante ? `${guia.serie_sunat}-${guia.numero_sunat}` : null;
 
+  // Datos derivados para la vista previa de la GRE (lo que se enviará a SUNAT).
+  const lineas = guia?.detalle || [];
+  const hoy = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmtPeso = (v) => `${Number(v || 0).toFixed(2)} kg`;
+  const fmtCant = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parseFloat(v || 0));
+
   // Máquina de estados (sunat_estado de guias_remision).
-  const puedeEmitir = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
+  // La GRE ampara el traslado → debe emitirse ANTES del despacho: solo con la guía 'Emitida'.
+  const trasladoNoIniciado = estadoNegocio === 'Emitida';
+  const sinEmitirSunat = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
+  const puedeEmitir = trasladoNoIniciado && sinEmitirSunat;
   const enviado = estado === 'ENVIADO';
   const aceptado = estado === 'ACEPTADO';
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
@@ -163,26 +173,110 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
       {puedeEmitir && faltantes.length > 0 && (
         <p className="text-xs text-warning">Antes de emitir, completa: {faltantes.join(', ')}.</p>
       )}
-      {!estado && faltantes.length === 0 && (
+      {!estado && trasladoNoIniciado && faltantes.length === 0 && (
         <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
       )}
+      {/* Traslado ya iniciado sin una GRE válida: la GRE debía emitirse antes del despacho. */}
+      {sinEmitirSunat && !trasladoNoIniciado && (
+        <p className="text-xs text-warning">
+          El traslado ya inició (guía "{estadoNegocio}"): la GRE electrónica debía emitirse antes del despacho.
+        </p>
+      )}
 
-      {/* Modal: emitir GRE */}
-      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Emitir Guía de Remisión Electrónica (09)" size="sm">
+      {/* Modal: vista previa completa de la GRE antes de enviar a SUNAT */}
+      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Vista previa — Guía de Remisión Electrónica (09)" size="xl">
         <div className="space-y-3 text-sm">
-          <p className="text-muted">Se emitirá la GRE Remitente a SUNAT a partir de esta guía.</p>
-          <div className="bg-gray-50 rounded p-3 space-y-1">
-            <div className="flex justify-between"><span className="text-muted">Guía:</span><span className="font-mono">{guia?.numero_guia}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Cliente:</span><span className="font-medium">{guia?.cliente}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Partida → Llegada:</span><span className="font-mono">{guia?.ubigeo_partida || '?'} → {guia?.ubigeo_llegada || '?'}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Peso bruto:</span><span>{Number(guia?.peso_bruto_kg || 0).toFixed(2)} kg</span></div>
+          <p className="text-muted text-xs">Revisa los datos antes de enviar. Esto es lo que se generará en el DespatchAdvice (UBL 2.1) y se declarará a SUNAT.</p>
+
+          {/* Cabecera */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Documento</div>
+              <div className="font-semibold">GRE Remitente (09)</div>
+              <div className="font-mono text-xs">Serie TE01</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Fecha de emisión</div>
+              <div className="font-semibold">{hoy}</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Fecha de traslado</div>
+              <div className="font-semibold">{guia?.fecha_traslado ? new Date(guia.fecha_traslado).toLocaleDateString('es-PE') : '-'}</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Guía interna</div>
+              <div className="font-mono text-xs">{guia?.numero_guia}</div>
+            </div>
           </div>
+
+          {/* Destinatario */}
+          <div className="border border-gray-200 rounded p-3">
+            <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+              <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
+            </div>
+          </div>
+
+          {/* Datos del traslado */}
+          <div className="border border-gray-200 rounded p-3">
+            <div className="text-[10px] text-muted uppercase mb-1">Traslado</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+              <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{guia?.motivo_traslado || '-'}{guia?.motivo_traslado_cod ? ` (${guia.motivo_traslado_cod})` : ''}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">Modalidad:</span><span className="text-right">{guia?.modalidad_transporte || '-'}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">Peso bruto:</span><span>{fmtPeso(guia?.peso_bruto_kg)}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">Bultos:</span><span>{guia?.numero_bultos ?? '-'}</span></div>
+            </div>
+          </div>
+
+          {/* Punto de partida / llegada */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="border border-gray-200 rounded p-3">
+              <div className="text-[10px] text-muted uppercase mb-1">Punto de partida</div>
+              <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
+              <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
+            </div>
+            <div className="border border-gray-200 rounded p-3">
+              <div className="text-[10px] text-muted uppercase mb-1">Punto de llegada</div>
+              <div className="text-xs">{guia?.direccion_llegada || guia?.punto_llegada || '-'}</div>
+              <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_llegada || '—'}</span></div>
+            </div>
+          </div>
+
+          {/* Bienes transportados */}
+          <div className="border border-gray-200 rounded overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-100 text-muted">
+                <tr>
+                  <th className="text-left p-2">Código</th>
+                  <th className="text-left p-2">Descripción</th>
+                  <th className="text-center p-2">Und</th>
+                  <th className="text-right p-2">Cant.</th>
+                  <th className="text-right p-2">Peso total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineas.length === 0 ? (
+                  <tr><td colSpan={5} className="p-3 text-center text-muted">La guía no tiene detalle.</td></tr>
+                ) : lineas.map((it, i) => (
+                  <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
+                    <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
+                    <td className="p-2">{it.producto || it.descripcion}</td>
+                    <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                    <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
+                    <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {faltantes.length > 0 && (
             <Alert type="warning" message={`Faltan datos obligatorios: ${faltantes.join(', ')}.`} />
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Emitir a SUNAT'}</button>
+            <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Confirmar y emitir a SUNAT'}</button>
           </div>
         </div>
       </Modal>

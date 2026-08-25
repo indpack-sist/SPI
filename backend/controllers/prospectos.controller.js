@@ -408,6 +408,9 @@ export async function ingestaLista(req, res) {
         if (!ins.success) { resumen.errores.push({ ruc, error: ins.error }); continue; }
         if (ins.duplicado_prospecto) { resumen.ya_prospecto++; detalle.push({ ruc, estado: 'ya_prospecto' }); continue; }
 
+        // Encolar enriquecimiento automático: buscará la web sola y traerá contactos reales
+        await encolarJob('web_scrape', { id_prospecto: ins.id_prospecto }, req.user?.id_empleado);
+
         if (ins.flag === 'Ya_cliente') resumen.ya_cliente++;
         resumen.creados++;
         detalle.push({ ruc, estado: ins.flag === 'Ya_cliente' ? 'creado_ya_cliente' : 'creado', score: ins.score });
@@ -878,10 +881,79 @@ export async function enriquecerProspecto(req, res) {
     if (r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
 
     const web = url || r.data[0].web;
-    if (!web) return res.status(400).json({ error: 'El prospecto no tiene una web registrada. Agrega la URL para enriquecerlo.' });
-
-    const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), url: web }, req.user?.id_empleado);
+    // Quitamos el check de if (!web) porque ahora el worker sabe descubrirla
+    const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), url: web || null }, req.user?.id_empleado);
     res.status(201).json({ success: true, message: 'Enriquecimiento encolado', id_job: idJob });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Enriquecimiento MASIVO: encola un job de enriquecimiento por cada prospecto
+// que cumpla el filtro. NO borra ni pisa nada (el worker solo AGREGA contactos
+// e info faltante). Pensado para poblar de contactos una base ya descubierta.
+//
+// El worker resuelve la web en orden barato→caro: web ya guardada (gratis) →
+// descubrimiento por Places (cuota). Por eso conviene saber cuántos NO tienen
+// web antes de correrlo con `solo_con_web=false` (ahí está el costo de Places).
+//
+// Filtros (body): solo_con_web, solo_sin_contacto (default true), min_score, limite.
+// ------------------------------------------------------------
+export async function enriquecerMasivo(req, res) {
+  try {
+    const { solo_con_web, solo_sin_contacto = true, min_score, limite } = req.body || {};
+    const params = [];
+    let where = " WHERE p.excluido = 0 AND p.estado_workflow <> 'Descartado'";
+
+    if (solo_con_web) where += " AND p.web IS NOT NULL AND p.web <> ''";
+
+    // Salta los que ya tienen algún teléfono/correo (ahorra trabajo del worker).
+    if (solo_sin_contacto) {
+      where += ` AND NOT EXISTS (SELECT 1 FROM prospecto_contactos pc
+        WHERE pc.id_prospecto = p.id_prospecto
+          AND pc.tipo IN ('Email','Telefono','Celular','Whatsapp'))`;
+    }
+
+    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+      where += ' AND p.score >= ?'; params.push(Number(min_score));
+    }
+
+    // Idempotencia: no re-encolar prospectos que ya tienen un enriquecimiento
+    // pendiente o en curso (evita duplicar la cola si se dispara dos veces).
+    where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
+      WHERE j.tipo = 'web_scrape' AND j.estado IN ('pendiente','procesando')
+        AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto)`;
+
+    // Cuántos candidatos entran (para el aviso de respuesta).
+    const cnt = await executeQuery(`SELECT COUNT(*) AS n FROM prospectos p${where}`, params);
+    if (!cnt.success) return res.status(500).json({ error: cnt.error });
+    const candidatos = cnt.data[0].n;
+    if (candidatos === 0) {
+      return res.json({ success: true, encolados: 0, candidatos: 0, message: 'No hay prospectos por enriquecer con esos filtros.' });
+    }
+
+    // Un solo INSERT...SELECT: encola un job por prospecto aunque sean miles.
+    // Prioridad 8 (baja): los descubrimientos activos siguen yendo primero.
+    // Mayor score primero, para que los mejores leads se enriquezcan antes.
+    const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
+    const ins = await executeQuery(
+      `INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita, prioridad)
+       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto), ?, 8
+       FROM prospectos p${where}
+       ORDER BY p.score DESC, p.id_prospecto ASC${limClause}`,
+      [req.user?.id_empleado || null, ...params]
+    );
+    if (!ins.success) return res.status(500).json({ error: ins.error });
+
+    notificarJob(); // despierta al worker para que empiece de inmediato
+    const encolados = ins.data.affectedRows ?? candidatos;
+    res.status(201).json({
+      success: true,
+      encolados,
+      candidatos,
+      message: `Se encolaron ${encolados} enriquecimientos. Se irán procesando en segundo plano; míralos en Actividad.`,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

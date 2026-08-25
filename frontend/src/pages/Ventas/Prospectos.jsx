@@ -175,6 +175,7 @@ export default function Prospectos() {
   const [descubrirOpen, setDescubrirOpen] = useState(false);
   const [descubrirData, setDescubrirData] = useState({ query: '', zonasSel: ['Lima'], otras: '', segmento: 'Formal', limite: 20, todos: true });
   const [descubrirLoading, setDescubrirLoading] = useState(false);
+  const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
 
   // Panel de actividad (jobs)
   const [jobs, setJobs] = useState([]);
@@ -424,11 +425,36 @@ export default function Prospectos() {
   const enriquecer = async (id, web) => {
     try {
       await prospectosAPI.enriquecer(id, web ? { web } : {});
-      notify('Enriquecimiento encolado (lectura de la web del prospecto).');
+      notify(web
+        ? 'Enriquecimiento encolado (lectura de la web del prospecto).'
+        : 'Búsqueda encolada: se buscará la web y sus contactos automáticamente.');
       setJobsOpen(true);
       refreshJobs();
     } catch (err) {
       setError(err.error || 'No se pudo enriquecer el prospecto');
+    }
+  };
+
+  // Enriquecimiento MASIVO: busca web + contactos para todas las empresas que
+  // aún no tienen contacto. No borra nada (solo agrega). Las que no tengan web
+  // usarán Google Places (consume cuota), por eso se confirma antes.
+  const enriquecerTodo = async () => {
+    if (!window.confirm(
+      'Se buscarán web y contactos para TODAS las empresas que aún no tienen contacto.\n\n' +
+      '• No se borra ni se pisa nada (solo se agrega información).\n' +
+      '• Las que no tienen web usarán Google Places, que consume cuota (costo).\n' +
+      '• Se procesan en segundo plano; puede tardar horas.\n\n¿Continuar?'
+    )) return;
+    try {
+      setEnriqMasivoLoading(true);
+      const res = await prospectosAPI.enriquecerMasivo({ solo_sin_contacto: true });
+      notify(res.data.message || `Se encolaron ${res.data.encolados} enriquecimientos.`);
+      setJobsOpen(true);
+      refreshJobs();
+    } catch (err) {
+      setError(err.error || 'No se pudo iniciar el enriquecimiento masivo');
+    } finally {
+      setEnriqMasivoLoading(false);
     }
   };
 
@@ -605,6 +631,14 @@ export default function Prospectos() {
           </button>
           <button className="btn btn-outline" onClick={() => setDescubrirOpen(true)}>
             <Compass size={16} /> Descubrir
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={enriquecerTodo}
+            disabled={enriqMasivoLoading}
+            title="Buscar web y contactos para todas las empresas sin contacto (usa Google Places; no borra nada)"
+          >
+            {enriqMasivoLoading ? <Loader size={16} className="pros-spin" /> : <Zap size={16} />} Enriquecer todo
           </button>
           <button className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
             <FileSpreadsheet size={16} /> Excel
@@ -814,9 +848,13 @@ export default function Prospectos() {
                             {buscandoRuc === p.id_prospecto ? <Loader size={15} className="pros-spin" /> : <Search size={15} />}
                           </button>
                         )}
-                        {p.web && (
-                          <button className="btn btn-ghost btn-sm" title="Enriquecer desde su web" onClick={() => enriquecer(p.id_prospecto, p.web)}><Zap size={15} /></button>
-                        )}
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          title={p.web ? "Enriquecer desde su web" : "Buscar datos de contacto (web y redes)"}
+                          onClick={() => enriquecer(p.id_prospecto, p.web)}
+                        >
+                          <Zap size={15} />
+                        </button>
                         {vista === 'excluidos' ? (
                           <button className="btn btn-outline btn-sm" title="Cancelar exclusión" onClick={() => excluir(p.id_prospecto, false)}><RotateCcw size={15} /></button>
                         ) : (
@@ -1034,9 +1072,13 @@ export default function Prospectos() {
 
             <div className="pros-panel-foot">
               <button className="btn btn-danger btn-sm" disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => descartar(detalle.id_prospecto)}><Trash2 size={15} /> Descartar</button>
-              {detalle.web && (
-                <button className="btn btn-outline btn-sm" onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}><Zap size={15} /> Enriquecer</button>
-              )}
+              <button
+                className="btn btn-outline btn-sm"
+                title={detalle.web ? "Enriquecer desde su web" : "Buscar datos de contacto (web y redes)"}
+                onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}
+              >
+                <Zap size={15} /> {detalle.web ? "Enriquecer" : "Buscar datos"}
+              </button>
               {vista === 'excluidos' ? (
                 <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>
               ) : (
@@ -1055,7 +1097,7 @@ export default function Prospectos() {
       {/* ---------- Modal ingesta ---------- */}
       <Modal isOpen={ingestaOpen} onClose={() => setIngestaOpen(false)} title="Ingresar empresas por RUC" size="md">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
-          Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se validan y enriquecen con SUNAT, se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
+          Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se validan con SUNAT y <b>se buscan sus datos de contacto automáticamente</b> (web, correos, teléfonos y redes), se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
         </p>
         <label className="form-label">RUCs</label>
         <textarea

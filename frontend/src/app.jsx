@@ -68,6 +68,7 @@ import HistorialTipoCambio from './pages/Finanzas/HistorialTipoCambio';
 import ReportesSIRE from './pages/Reportes/ReportesSIRE';
 import ReporteProductoDespachos from './pages/Reportes/ReporteProductoDespachos';
 import ReporteDeudasClientes from './pages/Reportes/ReporteDeudasClientes';
+import MonitorSunat from './pages/Reportes/MonitorSunat';
 
 function App() {
   return (
@@ -533,13 +534,23 @@ function App() {
                         } 
                       />
 
-                      <Route 
-                        path="/reportes/sire" 
+                      <Route
+                        path="/reportes/sire"
                         element={
                           <ProtectedRouteWithPermiso modulo="reportes">
                             <ReportesSIRE />
                           </ProtectedRouteWithPermiso>
-                        } 
+                        }
+                      />
+
+                      {/* Monitor SUNAT (Fase 15): soporte diario de la emisión electrónica. */}
+                      <Route
+                        path="/reportes/monitor-sunat"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="facturacion">
+                            <MonitorSunat />
+                          </ProtectedRouteWithPermiso>
+                        }
                       />
 
                       <Route path="*" element={<RedirectToFirstAvailable />} />

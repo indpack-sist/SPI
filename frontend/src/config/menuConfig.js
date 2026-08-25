@@ -66,6 +66,8 @@ export const menuConfig = [
           { path: '/ventas/reportes', label: 'Reporte de Ventas', modulo: 'reportes' },
           { path: '/ventas/reporte-despachos', label: 'Despachos por Prod', modulo: 'reportes' },
           { path: '/ventas/reporte-deudas', label: 'Cuentas x Cobrar', modulo: 'reportes' },
+          // Monitor SUNAT (Fase 15): soporte de la emisión electrónica. Solo roles con permiso 'facturacion'.
+          { path: '/reportes/monitor-sunat', label: 'Monitor SUNAT', modulo: 'facturacion' },
         ]
       },
     ]

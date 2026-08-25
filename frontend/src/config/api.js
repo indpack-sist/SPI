@@ -1239,6 +1239,9 @@ export const sunatAPI = {
   reemplazarGuia: (id, correcciones = {}) => api.post(`/sunat/guias/${id}/reemplazar`, { correcciones }),
   verPdfGuia: (id) => abrirPdfSunat(`/sunat/guias/${id}/pdf`),
 
+  // Monitor SUNAT (Fase 15): conteo por estado, tickets abiertos, rechazos y errores del log.
+  monitor: () => api.get('/sunat/monitor'),
+
   // Estado del módulo (BETA/PROD).
   ping: () => api.get('/sunat/ping'),
 };

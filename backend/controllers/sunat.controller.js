@@ -76,6 +76,9 @@ export async function emitirComprobante(req, res, next) {
       const [[ov]] = await conn.query(
         'SELECT * FROM ordenes_venta WHERE id_orden_venta = ? FOR UPDATE', [id_orden_venta]);
       if (!ov) throw new AppError('Orden de venta no existe', 404);
+      if (String(ov.tipo_comprobante || '').trim() !== 'Factura') {
+        throw new AppError('La orden no es de tipo Factura; las Notas de Venta (inafecto) no se emiten a SUNAT', 422);
+      }
       if (ov.facturado_sunat) throw new AppError('La OV ya fue facturada', 409);
       if (ov.estado_verificacion !== 'Aprobada') throw new AppError('La OV debe estar Aprobada para facturar', 422);
 

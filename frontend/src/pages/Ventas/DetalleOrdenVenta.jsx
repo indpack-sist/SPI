@@ -2835,8 +2835,10 @@ function DetalleOrdenVenta() {
         </div>
         )}
 
-        {/* Facturación Electrónica (SEE) nativa — Fase 14. Coexiste con el panel manual de arriba. */}
-        {tienePermiso('facturacion') && (
+        {/* Facturación Electrónica (SEE) nativa — Fase 14. Coexiste con el panel manual de arriba.
+            Solo para órdenes de tipo Factura: las Notas de Venta (inafecto) NO se emiten a SUNAT
+            (mismo criterio que el gating manual, ver tipo_comprobante === 'Factura' arriba). */}
+        {tienePermiso('facturacion') && orden.tipo_comprobante === 'Factura' && (
             <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} />
         )}
 

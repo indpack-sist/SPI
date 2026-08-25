@@ -32,7 +32,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
 
   const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
   const fmt = (v) => `${simbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
+  const fmtCant = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parseFloat(v || 0));
   const esCredito = String(orden?.tipo_venta || '').toLowerCase().startsWith('cr');
+
+  // Datos derivados para la vista previa del comprobante (lo que se enviará a SUNAT).
+  const esExportacion = Number(orden?.es_exportacion) === 1;
+  // Exportación (0200) fuerza 0%; también exonerado/inafecto. La emisión SEE deriva esto de es_exportacion.
+  const pctIgv = (esExportacion || ['INAFECTO', 'EXONERADO'].includes(String(orden?.tipo_impuesto || '').toUpperCase().trim()))
+    ? 0 : parseFloat(orden?.porcentaje_impuesto || 18);
+  const lineas = orden?.detalle || [];
+  const hoy = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   // Comprobantes electrónicos (nativos): tienen sunat_estado. Los manuales quedan en su panel.
   const comprobantes = (facturas || []).filter((f) => f.sunat_estado);
@@ -134,21 +143,106 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
         </div>
       )}
 
-      {/* Modal: emitir factura (preview + confirmar) */}
-      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Emitir factura electrónica (SEE)" size="sm">
+      {/* Modal: vista previa completa de la factura antes de enviar a SUNAT */}
+      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Vista previa — Factura electrónica (SEE)" size="xl">
         <div className="space-y-3 text-sm">
-          <p className="text-muted">Se emitirá la factura a SUNAT a partir de esta orden de venta.</p>
-          <div className="bg-gray-50 rounded p-3 space-y-1">
-            <div className="flex justify-between"><span className="text-muted">Cliente:</span><span className="font-medium">{orden?.cliente}</span></div>
-            <div className="flex justify-between"><span className="text-muted">RUC:</span><span className="font-mono">{orden?.ruc_cliente || '-'}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Forma de pago:</span><span>{esCredito ? `Crédito${orden?.dias_credito ? ` a ${orden.dias_credito} días` : ''}` : 'Contado'}</span></div>
-            <div className="flex justify-between"><span className="text-muted">Subtotal:</span><span>{fmt(orden?.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-muted">IGV:</span><span>{fmt(orden?.igv)}</span></div>
-            <div className="flex justify-between font-bold border-t border-gray-200 pt-1"><span>Total:</span><span>{fmt(orden?.total)}</span></div>
+          <p className="text-muted text-xs">Revisa los datos antes de enviar. Esto es lo que se generará en el comprobante electrónico (UBL 2.1) y se declarará a SUNAT.</p>
+
+          {/* Cabecera del comprobante */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Comprobante</div>
+              <div className="font-semibold">Factura electrónica (01)</div>
+              <div className="font-mono text-xs">Serie FE01</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Fecha de emisión</div>
+              <div className="font-semibold">{hoy}</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Moneda</div>
+              <div className="font-semibold">{orden?.moneda === 'USD' ? 'Dólares (USD)' : 'Soles (PEN)'}</div>
+            </div>
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-[10px] text-muted uppercase">Tipo de operación</div>
+              <div className="font-semibold">{esExportacion ? 'Exportación (0200)' : 'Venta interna (0101)'}</div>
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
+
+          {/* Adquiriente / cliente */}
+          <div className="border border-gray-200 rounded p-3">
+            <div className="text-[10px] text-muted uppercase mb-1">Adquiriente / Cliente</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+              <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{orden?.cliente || '-'}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{orden?.ruc_cliente || '-'}</span></div>
+              <div className="flex justify-between gap-2 md:col-span-2"><span className="text-muted">Dirección fiscal:</span><span className="text-right">{orden?.direccion_cliente || orden?.direccion_entrega || '-'}</span></div>
+              {orden?.direccion_entrega && orden.direccion_entrega !== orden?.direccion_cliente && (
+                <div className="flex justify-between gap-2 md:col-span-2"><span className="text-muted">Dirección de entrega:</span><span className="text-right">{orden.direccion_entrega}</span></div>
+              )}
+            </div>
+          </div>
+
+          {/* Forma de pago */}
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs bg-gray-50 rounded p-2">
+            <span><span className="text-muted">Forma de pago:</span> <strong>{esCredito ? `Crédito${orden?.dias_credito ? ` a ${orden.dias_credito} días` : ''}` : 'Contado'}</strong></span>
+            {esCredito && orden?.fecha_vencimiento && (
+              <span><span className="text-muted">Vence:</span> <strong>{new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE')}</strong></span>
+            )}
+            <span><span className="text-muted">Ítems:</span> <strong>{lineas.length}</strong></span>
+          </div>
+
+          {/* Detalle de productos (líneas del comprobante) */}
+          <div className="border border-gray-200 rounded overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-100 text-muted">
+                <tr>
+                  <th className="text-left p-2">Código</th>
+                  <th className="text-left p-2">Descripción</th>
+                  <th className="text-center p-2">Und</th>
+                  <th className="text-right p-2">Cant.</th>
+                  <th className="text-right p-2 whitespace-nowrap">P. Unit. (sin IGV)</th>
+                  <th className="text-right p-2">Valor venta</th>
+                  <th className="text-right p-2">IGV</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineas.length === 0 ? (
+                  <tr><td colSpan={7} className="p-3 text-center text-muted">La orden no tiene líneas de detalle.</td></tr>
+                ) : lineas.map((it, i) => {
+                  const cant = parseFloat(it.cantidad || 0);
+                  const pu = parseFloat(it.precio_unitario || 0);
+                  const valor = cant * pu;
+                  const igvLinea = valor * (pctIgv / 100);
+                  return (
+                    <tr key={it.id_detalle_orden || it.id_producto || i} className="border-t border-gray-100">
+                      <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
+                      <td className="p-2">{it.producto}</td>
+                      <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                      <td className="p-2 text-right">{fmtCant(cant)}</td>
+                      <td className="p-2 text-right">{fmt(pu)}</td>
+                      <td className="p-2 text-right">{fmt(valor)}</td>
+                      <td className="p-2 text-right">{fmt(igvLinea)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totales */}
+          <div className="flex justify-end">
+            <div className="w-full md:w-72 space-y-1">
+              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'Op. exportación:' : (pctIgv === 0 ? 'Op. no gravada:' : 'Op. gravada:')}</span><span>{fmt(orden?.subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'IGV exportación (0%):' : `IGV (${pctIgv}%):`}</span><span>{fmt(orden?.igv)}</span></div>
+              <div className="flex justify-between font-bold border-t border-gray-200 pt-1 text-base"><span>Importe total:</span><span>{fmt(orden?.total)}</span></div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted italic">Vista previa referencial: los importes finales pueden variar en centavos por el redondeo oficial de SUNAT al firmar el comprobante.</p>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Emitir a SUNAT'}</button>
+            <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Confirmar y emitir a SUNAT'}</button>
           </div>
         </div>
       </Modal>

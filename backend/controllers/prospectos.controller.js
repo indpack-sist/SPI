@@ -15,6 +15,21 @@ import { notificarJob } from '../services/scraping-worker.js';
 
 const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'Descartado'];
 
+// Hora actual de Perú (America/Lima) como 'YYYY-MM-DD HH:mm:ss'. Se inserta
+// explícitamente porque el default CURRENT_TIMESTAMP de MySQL usa la zona del
+// servidor (UTC), lo que dejaba el historial 5 horas adelantado.
+function getFechaPeru() {
+  const now = new Date();
+  const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  const year = peruDate.getFullYear();
+  const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+  const day = String(peruDate.getDate()).padStart(2, '0');
+  const hours = String(peruDate.getHours()).padStart(2, '0');
+  const minutes = String(peruDate.getMinutes()).padStart(2, '0');
+  const seconds = String(peruDate.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 const POR_PAGINA = 50; // tamaño de página del sistema (también unidad de "hoja" en el export)
 
 // Avisa a todos los clientes que están viendo el módulo de Prospección que algo
@@ -442,9 +457,9 @@ export async function updateProspecto(req, res) {
 // Registra una entrada en el historial del prospecto (quién, cuándo, qué).
 async function registrarHistorial(idProspecto, idEmpleado, accion, anterior, nuevo) {
   await executeQuery(
-    `INSERT INTO prospecto_historial (id_prospecto, id_empleado, accion, valor_anterior, valor_nuevo)
-     VALUES (?,?,?,?,?)`,
-    [idProspecto, idEmpleado || null, accion, anterior ?? null, nuevo ?? null]
+    `INSERT INTO prospecto_historial (id_prospecto, id_empleado, accion, valor_anterior, valor_nuevo, fecha)
+     VALUES (?,?,?,?,?,?)`,
+    [idProspecto, idEmpleado || null, accion, anterior ?? null, nuevo ?? null, getFechaPeru()]
   );
 }
 

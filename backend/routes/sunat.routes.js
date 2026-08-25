@@ -8,6 +8,19 @@ import * as c from '../controllers/sunat.controller.js';
 
 const router = Router();
 
+// Emite 'sunat:cambio' por Socket.IO tras una mutación SUNAT exitosa (respuesta 2xx/3xx), para que
+// el Monitor SUNAT se refresque en vivo sin botón. Centralizado aquí para no tocar cada handler;
+// usa res 'finish' y se salta en respuestas de error. (El job de reintentos emite por su cuenta.)
+function emitirCambioSunat(req, res, next) {
+  res.on('finish', () => {
+    if (res.statusCode < 400) {
+      try { req.app.get('socketio')?.emit('sunat:cambio', { origen: 'accion', ruta: req.path }); }
+      catch { /* noop */ }
+    }
+  });
+  next();
+}
+
 // Público: no expone datos sensibles, solo el modo (BETA/PROD).
 router.get('/ping', c.ping);
 
@@ -15,24 +28,24 @@ router.get('/ping', c.ping);
 router.get('/health', verificarToken, verificarPermiso('facturacion'), c.health);
 
 // Emisión de comprobantes (Fase 6: solo Factura 01).
-router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirComprobante);
+router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirComprobante);
 
 // Notas de Crédito (07) y Débito (08) sobre una factura aceptada (Fase 7).
-router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirNota);
+router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirNota);
 
 // Comunicación de Baja (RA) sobre factura/nota aceptada, ≤7 días (Fase 8).
-router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'), c.darDeBajaFactura);
+router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.darDeBajaFactura);
 
 // Consulta/reconciliación de estado (BD + getStatusCdr en PROD) — Fase 9.
 router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstado);
 
 // GRE Remitente (09) por API REST — Fase 10.
-router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirGuiaRemision);
+router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirGuiaRemision);
 router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
 // Fase 12: dejar sin efecto una GRE aceptada (traslado no iniciado; Admin puede forzar).
-router.post('/guias/:id/sin-efecto', verificarToken, verificarPermiso('facturacion'), c.dejarSinEfectoGuia);
+router.post('/guias/:id/sin-efecto', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.dejarSinEfectoGuia);
 // Fase 12: reemplazar una GRE aceptada por una nueva corregida (emite la nueva vía SUNAT).
-router.post('/guias/:id/reemplazar', verificarToken, verificarPermiso('facturacion'), c.reemplazarGuia);
+router.post('/guias/:id/reemplazar', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.reemplazarGuia);
 // Diagnóstico aislado del token OAuth GRE (Fase 10).
 router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
 

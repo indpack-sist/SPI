@@ -212,11 +212,20 @@ async function marcarIntentoBaja(b, contador) {
   }
 }
 
+// ¿El tick cambió algún estado (cerró un ticket o agotó reintentos)? Sirve para decidir si vale la
+// pena empujar un evento socket al Monitor en vivo (no emitir en ticks que no cambiaron nada).
+function huboCambios(resumen) {
+  const suma = (o) => (o?.cerrados || 0) + (o?.errores || 0);
+  return suma(resumen.gre) + suma(resumen.ra) + suma(resumen.factura) > 0;
+}
+
 /**
  * Punto de entrada del job. Idempotente y seguro para correr en paralelo con la operación normal.
+ * @param {import('socket.io').Server|null} io  Instancia Socket.IO opcional; si el tick cambió algo,
+ *        emite 'sunat:cambio' para que el Monitor SUNAT se refresque en vivo (sin botón).
  * @returns {Promise<object>} resumen de lo revisado/cerrado por origen.
  */
-export async function ejecutarReintentosSunat() {
+export async function ejecutarReintentosSunat(io = null) {
   const resumen = {
     mode: sunatConfig.mode,
     gre: { revisados: 0, cerrados: 0, pendientes: 0, errores: 0 },
@@ -229,18 +238,22 @@ export async function ejecutarReintentosSunat() {
   try { await reconciliarFacturas(resumen); } catch (e) { console.error('[SUNAT][REINTENTOS] FACTURA:', e.message); }
   resumen.duracionMs = Date.now() - t0;
   console.log('[SUNAT][REINTENTOS] tick', JSON.stringify(resumen));
+  if (io && huboCambios(resumen)) {
+    try { io.emit('sunat:cambio', { origen: 'job', resumen }); } catch { /* noop */ }
+  }
   return resumen;
 }
 
 // Registro opcional del cron en proceso (gateado por env). Llamar una vez desde server.js.
-export function registrarCronReintentos() {
+// `io` (opcional) se propaga al tick para emitir 'sunat:cambio' y refrescar el Monitor en vivo.
+export function registrarCronReintentos(io = null) {
   if (String(process.env.SUNAT_CRON_ENABLED).toLowerCase() !== 'true') {
     console.log('[SUNAT][REINTENTOS] node-cron deshabilitado (SUNAT_CRON_ENABLED != true); usar POST /api/sunat/jobs/tick');
     return null;
   }
   // Import perezoso: node-cron solo se carga si se habilita.
   return import('node-cron').then(({ default: cron }) => {
-    const tarea = cron.schedule('*/5 * * * *', () => { ejecutarReintentosSunat().catch(e => console.error('[SUNAT][REINTENTOS] cron:', e.message)); },
+    const tarea = cron.schedule('*/5 * * * *', () => { ejecutarReintentosSunat(io).catch(e => console.error('[SUNAT][REINTENTOS] cron:', e.message)); },
       { timezone: 'America/Lima' });
     console.log('[SUNAT][REINTENTOS] node-cron activo (cada 5 min, America/Lima)');
     return tarea;

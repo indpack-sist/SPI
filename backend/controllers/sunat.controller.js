@@ -838,7 +838,7 @@ export async function jobTick(req, res, next) {
     if (!token || req.get('x-jobs-token') !== token) {
       return res.status(401).json({ ok: false, error: 'token de job inválido o no configurado' });
     }
-    const resumen = await ejecutarReintentosSunat();
+    const resumen = await ejecutarReintentosSunat(req.app.get('socketio'));
     res.json({ ok: true, resumen });
   } catch (e) { next(e); }
 }
@@ -857,8 +857,12 @@ export async function monitorSunat(req, res, next) {
               sunat_estado AS estado, sunat_response_code AS codigo, sunat_response_desc AS detalle
          FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
         ORDER BY id_factura DESC LIMIT 10`);
+    // fecha_ms: epoch en milisegundos vía UNIX_TIMESTAMP (independiente de la zona de sesión y
+    // del `timezone` del pool). Evita que mysql2 reinterprete el TIMESTAMP UTC como -05:00 y lo
+    // desfase +5h. El frontend lo formatea con timeZone America/Lima.
     const [erroresLog] = await pool.query(
-      `SELECT origen, referencia_id, evento, http_status, detalle, fecha
+      `SELECT origen, referencia_id, evento, http_status, detalle,
+              UNIX_TIMESTAMP(fecha) * 1000 AS fecha_ms
          FROM sunat_log WHERE exito = 0 ORDER BY id_log DESC LIMIT 20`);
     const abiertos = (rows) => rows.filter(r => r.estado === 'ENVIADO').reduce((s, r) => s + Number(r.n), 0);
     res.json({

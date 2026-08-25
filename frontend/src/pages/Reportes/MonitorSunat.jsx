@@ -2,11 +2,12 @@
 // Panel de soporte diario del módulo SEE: conteo por estado (comprobantes, guías, bajas),
 // tickets abiertos (ENVIADO sin CDR), últimos rechazos y errores del sunat_log.
 // Consume GET /api/sunat/monitor (solo lectura, gated por permiso 'facturacion').
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import {
   Activity, RefreshCw, AlertTriangle, FileText, Truck, Ban,
-  Ticket, ServerCrash, ExternalLink, ShieldCheck
+  Ticket, ServerCrash, ExternalLink, ShieldCheck, Wifi, WifiOff
 } from 'lucide-react';
 import { sunatAPI } from '../../config/api';
 import BadgeEstadoSunat from '../../components/Ventas/sunat/BadgeEstadoSunat';
@@ -72,24 +73,76 @@ export default function MonitorSunat() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [ultimaCarga, setUltimaCarga] = useState(null);
+  const [enVivo, setEnVivo] = useState(false);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent`: refresco de fondo (polling / socket) que no muestra el spinner grande ni parpadea.
+  const cargar = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = await sunatAPI.monitor();
       setData(res.data);
+      setError(null);
       setUltimaCarga(new Date());
     } catch (e) {
+      // En refrescos silenciosos no borramos los datos ya visibles; solo marcamos el error.
       setError(e?.error || e?.message || 'No se pudo cargar el monitor SUNAT.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
+  // Carga inicial.
   useEffect(() => { cargar(); }, [cargar]);
 
-  const fmtFecha = (f) => (f ? new Date(f).toLocaleString('es-PE') : '—');
+  // Ref al último `cargar` para que el efecto de "en vivo" se suscriba UNA sola vez.
+  const cargarRef = useRef(cargar);
+  useEffect(() => { cargarRef.current = cargar; }, [cargar]);
+
+  // Actualización EN VIVO (sin botón), en tres capas para máxima robustez:
+  //  1) Socket.IO: el backend emite 'sunat:cambio' al emitir/anular comprobantes/guías y cuando el
+  //     job de reintentos cierra un ticket en background → refresco casi instantáneo.
+  //  2) Polling silencioso de respaldo cada 15 s (solo con la pestaña visible), por si se cae el socket.
+  //  3) Refetch inmediato al volver a la pestaña.
+  useEffect(() => {
+    const SOCKET_URL = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:3000';
+    const socket = io(SOCKET_URL, {
+      withCredentials: true,
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+    });
+
+    // Coalesce ráfagas de eventos en un solo refresco.
+    let debounce = null;
+    const refrescar = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => cargarRef.current?.({ silent: true }), 500);
+    };
+
+    socket.on('connect', () => setEnVivo(true));
+    socket.on('disconnect', () => setEnVivo(false));
+    socket.on('sunat:cambio', refrescar);
+
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === 'visible') cargarRef.current?.({ silent: true });
+    }, 15000);
+
+    const onVisible = () => { if (document.visibilityState === 'visible') cargarRef.current?.({ silent: true }); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearTimeout(debounce);
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', onVisible);
+      socket.off('sunat:cambio', refrescar);
+      socket.disconnect();
+    };
+  }, []);
+
+  // Formatea siempre en hora de Perú (America/Lima), independiente de la zona del navegador.
+  const fmtFecha = (f) => (f == null ? '—' : new Date(f).toLocaleString('es-PE', { timeZone: 'America/Lima' }));
   const totalAbiertos = data
     ? Number(data.ticketsAbiertos?.comprobantes || 0) + Number(data.ticketsAbiertos?.guias || 0) + Number(data.ticketsAbiertos?.bajas || 0)
     : 0;
@@ -112,9 +165,19 @@ export default function MonitorSunat() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Indicador de conexión en vivo: verde pulsante si el socket está conectado. */}
+          <span
+            className={`badge ${enVivo ? 'badge-success' : 'badge-secondary'} text-[10px]`}
+            title={enVivo ? 'Actualización en vivo activa' : 'Sin conexión en vivo; refrescando por intervalos'}
+          >
+            {enVivo ? <Wifi size={11} /> : <WifiOff size={11} />}
+            {enVivo ? 'En vivo' : 'Reconectando…'}
+            {enVivo && <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse ml-1" />}
+          </span>
           {ultimaCarga && <span className="text-[11px] text-muted">Actualizado: {fmtFecha(ultimaCarga)}</span>}
-          <button className="btn btn-primary btn-sm" onClick={cargar} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin mr-1' : 'mr-1'} /> Actualizar
+          {/* El refresco es automático; este botón es solo un forzado manual opcional. */}
+          <button className="btn btn-outline btn-sm" onClick={() => cargar()} disabled={loading} title="Refrescar ahora">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -224,7 +287,7 @@ export default function MonitorSunat() {
                     ) : (
                       data.erroresLog.map((l, i) => (
                         <tr key={i}>
-                          <td className="text-xs whitespace-nowrap">{fmtFecha(l.fecha)}</td>
+                          <td className="text-xs whitespace-nowrap">{fmtFecha(l.fecha_ms ?? l.fecha)}</td>
                           <td className="text-xs font-bold">{l.origen}</td>
                           <td className="font-mono text-xs">{l.referencia_id ?? '—'}</td>
                           <td className="text-xs">{l.evento}</td>

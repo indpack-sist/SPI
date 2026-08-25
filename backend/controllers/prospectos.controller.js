@@ -904,7 +904,9 @@ export async function enriquecerMasivo(req, res) {
   try {
     const { solo_con_web, solo_sin_contacto = true, min_score, limite } = req.body || {};
     const params = [];
-    let where = " WHERE p.excluido = 0 AND p.estado_workflow <> 'Descartado'";
+    // Excluye descartados y ya convertidos: a un cliente convertido no le
+    // aporta re-enriquecer el prospecto (y su ficha de cliente nunca se toca).
+    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')";
 
     if (solo_con_web) where += " AND p.web IS NOT NULL AND p.web <> ''";
 

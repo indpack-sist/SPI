@@ -43,6 +43,7 @@ import archivosRoutes from './routes/archivos.routes.js';
 import reportesRoutes from './routes/reportesventas.routes.js';
 import tipoCambioRoutes from './routes/tipoCambioRoutes.js';
 import sunatRoutes from './routes/sunat.routes.js';
+import { registrarCronReintentos } from './jobs/sunat-reintentos.job.js';
 dotenv.config();
 
 // Orígenes permitidos para CORS (HTTP + WebSocket). Se define una sola vez
@@ -269,6 +270,9 @@ httpServer.listen(PORT, () => {
       console.log('✓ BASE DE DATOS: CONECTADA CORRECTAMENTE');
       // Worker de prospección (cola scraping_jobs). Requiere la BD lista.
       startWorker(io);
+      // Fase 15: cron de reintentos SUNAT en proceso (solo si SUNAT_CRON_ENABLED=true; si no, se
+      // usa el endpoint POST /api/sunat/jobs/tick desde un scheduler externo).
+      registrarCronReintentos();
     } else {
       console.error('⚠️ ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
     }

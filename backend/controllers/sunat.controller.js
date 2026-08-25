@@ -21,6 +21,7 @@ import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSu
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
 import { subirRaw } from '../services/cloudinary.service.js';
+import { ejecutarReintentosSunat } from '../jobs/sunat-reintentos.job.js';
 import AppError from '../utils/AppError.js';
 
 // Tipos de comprobante dentro de alcance (catálogo 01). Boletas (03) y otros: fuera de alcance.
@@ -825,5 +826,50 @@ export async function generarPdfGuia(req, res, next) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${g.serie_sunat}-${g.numero_sunat}.pdf"`);
     res.send(pdf);
+  } catch (e) { next(e); }
+}
+
+// POST /api/sunat/jobs/tick — FASE 15: dispara la reconciliación de reintentos. Protegido por un
+// TOKEN INTERNO (header x-jobs-token), NO por JWT: pensado para un scheduler externo (Render Cron,
+// cron-job.org, GitHub Actions). Si SUNAT_JOBS_TOKEN no está seteado, el endpoint queda cerrado.
+export async function jobTick(req, res, next) {
+  try {
+    const token = process.env.SUNAT_JOBS_TOKEN;
+    if (!token || req.get('x-jobs-token') !== token) {
+      return res.status(401).json({ ok: false, error: 'token de job inválido o no configurado' });
+    }
+    const resumen = await ejecutarReintentosSunat();
+    res.json({ ok: true, resumen });
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/monitor — FASE 15: datos del panel "Monitor SUNAT" (solo lectura, gated facturacion).
+export async function monitorSunat(req, res, next) {
+  try {
+    const [comprobantes] = await pool.query(
+      "SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE sunat_estado IS NOT NULL GROUP BY sunat_estado");
+    const [guias] = await pool.query(
+      "SELECT sunat_estado AS estado, COUNT(*) AS n FROM guias_remision GROUP BY sunat_estado");
+    const [bajas] = await pool.query(
+      "SELECT estado, COUNT(*) AS n FROM sunat_bajas GROUP BY estado");
+    const [ultimosRechazos] = await pool.query(
+      `SELECT 'FACTURA' AS origen, id_factura AS id, CONCAT(serie,'-',numero) AS comprobante,
+              sunat_estado AS estado, sunat_response_code AS codigo, sunat_response_desc AS detalle
+         FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
+        ORDER BY id_factura DESC LIMIT 10`);
+    const [erroresLog] = await pool.query(
+      `SELECT origen, referencia_id, evento, http_status, detalle, fecha
+         FROM sunat_log WHERE exito = 0 ORDER BY id_log DESC LIMIT 20`);
+    const abiertos = (rows) => rows.filter(r => r.estado === 'ENVIADO').reduce((s, r) => s + Number(r.n), 0);
+    res.json({
+      mode: sunatConfig.mode,
+      comprobantes, guias, bajas,
+      ticketsAbiertos: {
+        comprobantes: abiertos(comprobantes),
+        guias: abiertos(guias),
+        bajas: abiertos(bajas)
+      },
+      ultimosRechazos, erroresLog
+    });
   } catch (e) { next(e); }
 }

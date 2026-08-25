@@ -22,6 +22,7 @@ import {
   descubrirEmpresas,
   descubrirTodo,
   enriquecerProspecto,
+  enriquecerMasivo,
   buscarRucProspecto,
   excluirProspecto,
 } from '../controllers/prospectos.controller.js';
@@ -41,6 +42,7 @@ router.post('/ingesta-lista', ingestaLista);
 router.post('/descubrir', descubrirEmpresas);
 router.post('/descubrir-todo', descubrirTodo);
 router.post('/jobs', crearJob);
+router.post('/enriquecer-masivo', enriquecerMasivo);
 router.post('/:id/enriquecer', enriquecerProspecto);
 router.post('/:id/buscar-ruc', buscarRucProspecto);
 

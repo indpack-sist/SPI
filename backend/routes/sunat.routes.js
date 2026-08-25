@@ -40,4 +40,10 @@ router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c
 router.get('/comprobantes/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfComprobante);
 router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfGuia);
 
+// Fase 15: cola de reintentos / monitor. /jobs/tick se protege por TOKEN INTERNO (header
+// x-jobs-token) dentro del handler, para un scheduler externo → sin verificarToken aquí.
+router.post('/jobs/tick', c.jobTick);
+// Monitor SUNAT (solo lectura) para el panel de Reportes.
+router.get('/monitor', verificarToken, verificarPermiso('facturacion'), c.monitorSunat);
+
 export default router;

@@ -272,7 +272,7 @@ httpServer.listen(PORT, () => {
       startWorker(io);
       // Fase 15: cron de reintentos SUNAT en proceso (solo si SUNAT_CRON_ENABLED=true; si no, se
       // usa el endpoint POST /api/sunat/jobs/tick desde un scheduler externo).
-      registrarCronReintentos();
+      registrarCronReintentos(io);
     } else {
       console.error('⚠️ ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
     }

@@ -121,6 +121,9 @@ export async function reemplazarGuiaRemision(idGuia, { correcciones = {}, idEmpl
     }
 
     // Numeración interna: mismo patrón que createGuiaRemision (T001-00000000, siguiente secuencia).
+    // TODO(Fase 16): DEUDA HEREDADA — derivar el número por MAX(id_guia) + regex de dígitos finales es
+    // frágil: si el último numero_guia no termina en 'T001-XXXXXXXX' cae a 1 y colisiona (UNIQUE), y no
+    // hay lock de secuencia (posible carrera). Endurecer antes de PROD (correlativo atómico dedicado).
     const [[ult]] = await conn.query('SELECT numero_guia FROM guias_remision ORDER BY id_guia DESC LIMIT 1');
     const m = ult?.numero_guia?.match(/(\d+)$/);
     const nuevoNumeroGuia = `T001-${String((m ? parseInt(m[1]) : 0) + 1).padStart(8, '0')}`;

@@ -1191,12 +1191,53 @@ export const archivosAPI = {
     const token = localStorage.getItem('token');
     // Aseguramos que apunte a /archivos/pdf-proxy que es lo que definimos en server.js
     const baseUrl = `${API_URL}/archivos/pdf-proxy`;
-    
+
     const params = new URLSearchParams({
       url: urlCloudinary,
       token: token || '' // Enviamos el token para que el middleware verificarToken no nos bloquee
     });
-    
+
     return `${baseUrl}?${params.toString()}`;
   }
+};
+
+// ── SUNAT (SEE nativo) — Fase 14 ──────────────────────────────────────────────
+// Emisión electrónica nativa: facturas (01), notas (07/08), baja (RA) y GRE Remitente (09).
+// Requiere permiso 'facturacion'. Coexiste con el flujo manual existente hasta el corte a PROD.
+
+// Abre en una pestaña nueva un PDF (blob) del backend, enviando el token en el header.
+const abrirPdfSunat = async (path) => {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  });
+  if (!response.ok) {
+    let msg = 'No se pudo generar el PDF';
+    try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
+    throw new Error(msg);
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+};
+
+export const sunatAPI = {
+  // Comprobantes: factura (01), notas de crédito/débito (07/08) y comunicación de baja (RA).
+  emitirFactura: (id_orden_venta) => api.post('/sunat/comprobantes/emitir', { id_orden_venta }),
+  emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items }) =>
+    api.post('/sunat/comprobantes/notas/emitir', { id_factura_ref, tipo, motivo_codigo, items }),
+  darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),
+  estadoComprobante: (id) => api.get(`/sunat/comprobantes/${id}/estado`),
+  verPdfComprobante: (id) => abrirPdfSunat(`/sunat/comprobantes/${id}/pdf`),
+
+  // Guías de remisión (GRE Remitente 09) + Fase 12 (sin efecto / reemplazo).
+  emitirGuia: (id) => api.post(`/sunat/guias/${id}/emitir`),
+  estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
+  dejarSinEfectoGuia: (id, motivo) => api.post(`/sunat/guias/${id}/sin-efecto`, { motivo }),
+  reemplazarGuia: (id, correcciones = {}) => api.post(`/sunat/guias/${id}/reemplazar`, { correcciones }),
+  verPdfGuia: (id) => abrirPdfSunat(`/sunat/guias/${id}/pdf`),
+
+  // Estado del módulo (BETA/PROD).
+  ping: () => api.get('/sunat/ping'),
 };

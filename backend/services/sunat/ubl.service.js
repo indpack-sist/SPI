@@ -33,26 +33,24 @@ export function schemeIdDocumento(tipoDoc) {
 }
 
 /**
- * Construye el XML de una Factura (01) a partir de la OV, su detalle, el cliente y empresa_config.
- * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
+ * FUENTE ÚNICA DE CÁLCULO del comprobante (base/IGV/total + desglose por línea).
+ * La usan TANTO el constructor UBL (emisión real) como el endpoint de vista previa, para que la
+ * previsualización del frontend muestre EXACTAMENTE lo que se firma y envía a SUNAT (misma
+ * afectación por línea, mismo redondeo half-up por línea, misma agrupación).
+ *
+ * Reglas: afectación por línea (esExport fuerza '40'); descuento plegado en el precio unitario;
+ * `valorVenta` e `igv` de la línea redondeados a 2 decimales; totales = round2(Σ líneas ya redondeadas).
+ * NO valida `codigo_unidad_sunat` (eso es requisito del XML, no del cálculo) → sirve para previsualizar
+ * aunque falte la unidad; el constructor XML sí lo exige.
+ *
+ * @returns {{ moneda, esExport, lineas:Array, grupos:Object, subtotal:number, igv:number, total:number, montoEnLetras:string }}
  */
-export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha }) {
-  if (!detalle || !detalle.length) {
-    const err = new Error('La orden de venta no tiene líneas para facturar');
-    err.statusCode = 422; err.isOperational = true; throw err;
-  }
+export function calcularComprobante({ ov, detalle }) {
   const moneda = ov.moneda || 'PEN';
   const esExport = Number(ov.es_exportacion) === 1;
-  const idComprobante = `${serie}-${numero}`;
+  const grupos = {}; // afectación -> { base, igv, cfg }
 
-  // ── Líneas ────────────────────────────────────────────────────────────────
-  const grupos = {}; // afectación -> { base, igv }
-  const lineasXml = detalle.map((d, i) => {
-    const unidad = d.codigo_unidad_sunat;
-    if (!unidad) {
-      const err = new Error(`El producto "${d.codigo || d.id_producto}" no tiene codigo_unidad_sunat; complétalo antes de facturar`);
-      err.statusCode = 422; err.isOperational = true; throw err;
-    }
+  const lineas = (detalle || []).map((d, i) => {
     const afect = esExport ? '40' : String(d.codigo_afectacion_igv || '10');
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
@@ -67,42 +65,83 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
     grupos[afect].base += lineExt;
     grupos[afect].igv += igvLine;
 
+    return {
+      numero: i + 1,
+      codigo: d.codigo || d.id_producto,
+      descripcion: d.nombre || d.descripcion || d.codigo,
+      unidad: d.codigo_unidad_sunat || null,
+      cantidad,
+      afectacion: afect,
+      afectacionNombre: cfg.name,
+      porcentajeIgv: cfg.percent,
+      gravado: cfg.gravado,
+      descuentoPorcentaje: desc,
+      valorUnitario: netUnit,            // sin IGV
+      precioUnitarioConIgv: precioConIgvUnit,
+      valorVenta: lineExt,               // base de la línea (2 dec)
+      igv: igvLine,                      // IGV de la línea (2 dec)
+      cfg
+    };
+  });
+
+  const subtotal = round2(Object.values(grupos).reduce((s, g) => s + g.base, 0));
+  const igv = round2(Object.values(grupos).reduce((s, g) => s + g.igv, 0));
+  const total = round2(subtotal + igv);
+
+  return { moneda, esExport, lineas, grupos, subtotal, igv, total, montoEnLetras: numeroALetras(total, moneda) };
+}
+
+/**
+ * Construye el XML de una Factura (01) a partir de la OV, su detalle, el cliente y empresa_config.
+ * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
+ */
+export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha }) {
+  if (!detalle || !detalle.length) {
+    const err = new Error('La orden de venta no tiene líneas para facturar');
+    err.statusCode = 422; err.isOperational = true; throw err;
+  }
+  const moneda = ov.moneda || 'PEN';
+  const esExport = Number(ov.es_exportacion) === 1;
+  const idComprobante = `${serie}-${numero}`;
+
+  // ── Líneas + totales (cálculo compartido con la vista previa) ───────────────
+  const { lineas, grupos, subtotal: totalBase, igv: totalIgv, total: totalPagar } = calcularComprobante({ ov, detalle });
+  const lineasXml = lineas.map((L) => {
+    if (!L.unidad) {
+      const err = new Error(`El producto "${L.codigo}" no tiene codigo_unidad_sunat; complétalo antes de facturar`);
+      err.statusCode = 422; err.isOperational = true; throw err;
+    }
     return `  <cac:InvoiceLine>
-    <cbc:ID>${i + 1}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="${unidad}">${cantidad}</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="${moneda}">${m2(lineExt)}</cbc:LineExtensionAmount>
+    <cbc:ID>${L.numero}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="${L.unidad}">${L.cantidad}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="${moneda}">${m2(L.valorVenta)}</cbc:LineExtensionAmount>
     <cac:PricingReference>
       <cac:AlternativeConditionPrice>
-        <cbc:PriceAmount currencyID="${moneda}">${u6(precioConIgvUnit)}</cbc:PriceAmount>
+        <cbc:PriceAmount currencyID="${moneda}">${u6(L.precioUnitarioConIgv)}</cbc:PriceAmount>
         <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
       </cac:AlternativeConditionPrice>
     </cac:PricingReference>
     <cac:TaxTotal>
-      <cbc:TaxAmount currencyID="${moneda}">${m2(igvLine)}</cbc:TaxAmount>
+      <cbc:TaxAmount currencyID="${moneda}">${m2(L.igv)}</cbc:TaxAmount>
       <cac:TaxSubtotal>
-        <cbc:TaxableAmount currencyID="${moneda}">${m2(lineExt)}</cbc:TaxableAmount>
-        <cbc:TaxAmount currencyID="${moneda}">${m2(igvLine)}</cbc:TaxAmount>
+        <cbc:TaxableAmount currencyID="${moneda}">${m2(L.valorVenta)}</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="${moneda}">${m2(L.igv)}</cbc:TaxAmount>
         <cac:TaxCategory>
-          <cbc:Percent>${cfg.percent.toFixed(2)}</cbc:Percent>
-          <cbc:TaxExemptionReasonCode>${afect}</cbc:TaxExemptionReasonCode>
+          <cbc:Percent>${L.cfg.percent.toFixed(2)}</cbc:Percent>
+          <cbc:TaxExemptionReasonCode>${L.afectacion}</cbc:TaxExemptionReasonCode>
           <cac:TaxScheme>
-            <cbc:ID>${cfg.scheme}</cbc:ID><cbc:Name>${cfg.name}</cbc:Name><cbc:TaxTypeCode>${cfg.typeCode}</cbc:TaxTypeCode>
+            <cbc:ID>${L.cfg.scheme}</cbc:ID><cbc:Name>${L.cfg.name}</cbc:Name><cbc:TaxTypeCode>${L.cfg.typeCode}</cbc:TaxTypeCode>
           </cac:TaxScheme>
         </cac:TaxCategory>
       </cac:TaxSubtotal>
     </cac:TaxTotal>
     <cac:Item>
-      <cbc:Description>${cdata(d.nombre || d.descripcion || d.codigo)}</cbc:Description>
-      <cac:SellersItemIdentification><cbc:ID>${cdata(d.codigo || d.id_producto)}</cbc:ID></cac:SellersItemIdentification>
+      <cbc:Description>${cdata(L.descripcion)}</cbc:Description>
+      <cac:SellersItemIdentification><cbc:ID>${cdata(L.codigo)}</cbc:ID></cac:SellersItemIdentification>
     </cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="${moneda}">${u6(netUnit)}</cbc:PriceAmount></cac:Price>
+    <cac:Price><cbc:PriceAmount currencyID="${moneda}">${u6(L.valorUnitario)}</cbc:PriceAmount></cac:Price>
   </cac:InvoiceLine>`;
   }).join('\n');
-
-  // ── Totales (recalculados desde líneas) ─────────────────────────────────────
-  const totalBase = round2(Object.values(grupos).reduce((s, g) => s + g.base, 0));
-  const totalIgv = round2(Object.values(grupos).reduce((s, g) => s + g.igv, 0));
-  const totalPagar = round2(totalBase + totalIgv);
 
   const taxSubtotalsHeader = Object.entries(grupos).map(([afect, g]) => {
     const cfg = g.cfg;

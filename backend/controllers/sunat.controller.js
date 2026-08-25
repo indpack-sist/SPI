@@ -3,7 +3,7 @@
 import { sunatConfig } from '../config/sunat.js';
 import { pool, withTransaction } from '../config/database.js';
 import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
-import { construirInvoiceXML } from '../services/sunat/ubl.service.js';
+import { construirInvoiceXML, calcularComprobante } from '../services/sunat/ubl.service.js';
 import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
@@ -198,6 +198,51 @@ export async function emitirComprobante(req, res, next) {
       ok: aceptado, estado: estadoFinal, idFactura, serie, numero,
       comprobante: `${serie}-${numero}`, responseCode: cdr.responseCode,
       descripcion, totales, xmlUrl, cdrUrl
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /api/sunat/comprobantes/preview  { id_orden_venta }
+// Vista previa de emisión: usa el MISMO cálculo (calcularComprobante) que el UBL builder, para que el
+// frontend muestre EXACTAMENTE lo que se firmará y enviará. Solo lectura: no numera, no inserta, no envía.
+export async function previewComprobante(req, res, next) {
+  try {
+    const { id_orden_venta } = req.body;
+    if (!id_orden_venta) throw new AppError('Falta id_orden_venta', 400);
+
+    const [[ov]] = await pool.query('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id_orden_venta]);
+    if (!ov) throw new AppError('Orden de venta no existe', 404);
+
+    const [detalle] = await pool.query(
+      'SELECT d.*, p.codigo, p.nombre, p.codigo_unidad_sunat ' +
+      'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
+      'WHERE d.id_orden_venta = ?', [id_orden_venta]);
+
+    const calc = calcularComprobante({ ov, detalle });
+
+    // Avisos que NO bloquean la previsualización, pero sí la emisión real (mismos checks que emitirComprobante).
+    const avisos = [];
+    if (String(ov.tipo_comprobante || '').trim() !== 'Factura') {
+      avisos.push('La orden no es de tipo Factura (una Nota de Venta / inafecto no se emite a SUNAT).');
+    }
+    if (ov.facturado_sunat) avisos.push('La orden ya fue facturada.');
+    if (ov.estado_verificacion !== 'Aprobada') avisos.push('La orden debe estar Aprobada para emitir.');
+    const sinUnidad = calc.lineas.filter((l) => !l.unidad).map((l) => l.codigo);
+    if (sinUnidad.length) avisos.push(`Productos sin codigo_unidad_sunat: ${sinUnidad.join(', ')}.`);
+
+    res.json({
+      ok: true,
+      mode: sunatConfig.mode,
+      serie: 'FE01',
+      moneda: calc.moneda,
+      esExport: calc.esExport,
+      // Se omite `cfg` (detalle interno del catálogo) del payload.
+      lineas: calc.lineas.map(({ cfg, ...l }) => l),
+      subtotal: calc.subtotal,
+      igv: calc.igv,
+      total: calc.total,
+      montoEnLetras: calc.montoEnLetras,
+      avisos
     });
   } catch (e) { next(e); }
 }

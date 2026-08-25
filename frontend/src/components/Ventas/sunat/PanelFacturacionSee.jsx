@@ -2,7 +2,7 @@
 // Card independiente de Facturación Electrónica (SEE) nativa para el detalle de una OV.
 // Coexiste con el panel de facturación manual (no lo reemplaza). Gatear su render con
 // tienePermiso('facturacion') desde el contenedor. Toda la lógica SEE de comprobantes vive aquí.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Zap, FileText, RefreshCw, FileMinus, Ban } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
@@ -29,6 +29,10 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
   const [notaTipo, setNotaTipo] = useState('07');
   const [notaMotivo, setNotaMotivo] = useState('01');
   const [bajaMotivo, setBajaMotivo] = useState('');
+  // Vista previa calculada por el backend (misma lógica que el UBL builder → lo que se firma).
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
 
   const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
   const fmt = (v) => `${simbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
@@ -37,9 +41,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
 
   // Datos derivados para la vista previa del comprobante (lo que se enviará a SUNAT).
   const esExportacion = Number(orden?.es_exportacion) === 1;
-  // Exportación (0200) fuerza 0%; también exonerado/inafecto. La emisión SEE deriva esto de es_exportacion.
-  const pctIgv = (esExportacion || ['INAFECTO', 'EXONERADO'].includes(String(orden?.tipo_impuesto || '').toUpperCase().trim()))
-    ? 0 : parseFloat(orden?.porcentaje_impuesto || 18);
   const lineas = orden?.detalle || [];
   const hoy = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -85,6 +86,18 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
     await tras(() => sunatAPI.darDeBaja(modalBaja.factura.id_factura, bajaMotivo.trim()), 'Comunicación de baja enviada.');
     setModalBaja(null); setBajaMotivo('');
   };
+
+  // Al abrir el modal de emisión, pide al backend la vista previa (fuente única de cálculo).
+  useEffect(() => {
+    if (!modalEmitir || !orden?.id_orden_venta) return undefined;
+    let cancel = false;
+    setPreviewLoading(true); setPreviewError(null); setPreview(null);
+    sunatAPI.previewComprobante(orden.id_orden_venta)
+      .then((r) => { if (!cancel) setPreview(r.data); })
+      .catch((e) => { if (!cancel) setPreviewError(errorMsg(e)); })
+      .finally(() => { if (!cancel) setPreviewLoading(false); });
+    return () => { cancel = true; };
+  }, [modalEmitir, orden?.id_orden_venta]);
 
   return (
     <div className="card p-3 space-y-3">
@@ -188,10 +201,14 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
             {esCredito && orden?.fecha_vencimiento && (
               <span><span className="text-muted">Vence:</span> <strong>{new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE')}</strong></span>
             )}
-            <span><span className="text-muted">Ítems:</span> <strong>{lineas.length}</strong></span>
+            <span><span className="text-muted">Ítems:</span> <strong>{preview?.lineas?.length ?? lineas.length}</strong></span>
           </div>
 
-          {/* Detalle de productos (líneas del comprobante) */}
+          {/* Avisos del backend (no bloquean la vista previa, sí la emisión real). */}
+          {previewError && <Alert type="error" message={previewError} onClose={() => setPreviewError(null)} />}
+          {preview?.avisos?.length > 0 && <Alert type="warning" message={preview.avisos.join(' ')} />}
+
+          {/* Detalle de productos (líneas del comprobante) — calculado por el backend (fuente única) */}
           <div className="border border-gray-200 rounded overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-gray-100 text-muted">
@@ -206,39 +223,38 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
                 </tr>
               </thead>
               <tbody>
-                {lineas.length === 0 ? (
+                {previewLoading ? (
+                  <tr><td colSpan={7} className="p-3 text-center text-muted"><RefreshCw size={14} className="inline animate-spin mr-1" /> Calculando comprobante…</td></tr>
+                ) : !preview?.lineas?.length ? (
                   <tr><td colSpan={7} className="p-3 text-center text-muted">La orden no tiene líneas de detalle.</td></tr>
-                ) : lineas.map((it, i) => {
-                  const cant = parseFloat(it.cantidad || 0);
-                  const pu = parseFloat(it.precio_unitario || 0);
-                  const valor = cant * pu;
-                  const igvLinea = valor * (pctIgv / 100);
-                  return (
-                    <tr key={it.id_detalle_orden || it.id_producto || i} className="border-t border-gray-100">
-                      <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
-                      <td className="p-2">{it.producto}</td>
-                      <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
-                      <td className="p-2 text-right">{fmtCant(cant)}</td>
-                      <td className="p-2 text-right">{fmt(pu)}</td>
-                      <td className="p-2 text-right">{fmt(valor)}</td>
-                      <td className="p-2 text-right">{fmt(igvLinea)}</td>
-                    </tr>
-                  );
-                })}
+                ) : preview.lineas.map((l) => (
+                  <tr key={l.numero} className="border-t border-gray-100">
+                    <td className="p-2 font-mono">{l.codigo || '-'}</td>
+                    <td className="p-2">{l.descripcion}</td>
+                    <td className="p-2 text-center">{l.unidad || '—'}</td>
+                    <td className="p-2 text-right">{fmtCant(l.cantidad)}</td>
+                    <td className="p-2 text-right">{fmt(l.valorUnitario)}</td>
+                    <td className="p-2 text-right">{fmt(l.valorVenta)}</td>
+                    <td className="p-2 text-right">{fmt(l.igv)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {/* Totales */}
+          {/* Totales (calculados por el backend — idénticos a lo que se firma) */}
           <div className="flex justify-end">
             <div className="w-full md:w-72 space-y-1">
-              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'Op. exportación:' : (pctIgv === 0 ? 'Op. no gravada:' : 'Op. gravada:')}</span><span>{fmt(orden?.subtotal)}</span></div>
-              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'IGV exportación (0%):' : `IGV (${pctIgv}%):`}</span><span>{fmt(orden?.igv)}</span></div>
-              <div className="flex justify-between font-bold border-t border-gray-200 pt-1 text-base"><span>Importe total:</span><span>{fmt(orden?.total)}</span></div>
+              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'Op. exportación:' : (preview && preview.igv === 0 ? 'Op. no gravada:' : 'Op. gravada:')}</span><span>{fmt(preview?.subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-muted">{esExportacion ? 'IGV exportación (0%):' : 'IGV (18%):'}</span><span>{fmt(preview?.igv)}</span></div>
+              <div className="flex justify-between font-bold border-t border-gray-200 pt-1 text-base"><span>Importe total:</span><span>{fmt(preview?.total)}</span></div>
             </div>
           </div>
 
-          <p className="text-[11px] text-muted italic">Vista previa referencial: los importes finales pueden variar en centavos por el redondeo oficial de SUNAT al firmar el comprobante.</p>
+          {preview?.montoEnLetras && (
+            <p className="text-[11px] text-muted"><span className="uppercase font-semibold">Son:</span> {preview.montoEnLetras}</p>
+          )}
+          <p className="text-[11px] text-muted italic">Los importes los calcula el servidor con la MISMA lógica (afectación por línea, redondeo half-up) que se usa al firmar el UBL, así que coinciden con lo que se declara. SUNAT aún podría observar por reglas de formato.</p>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>

@@ -9,12 +9,15 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
 import { guiasRemisionAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 function DetalleGuiaRemision() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+  const { tienePermiso } = usePermisos();
+
   const [guia, setGuia] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -337,6 +340,11 @@ function DetalleGuiaRemision() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {/* Guía de Remisión Electrónica (SEE · GRE 09) — Fase 14. Coexiste con el flujo manual. */}
+      {tienePermiso('facturacion') && (
+        <PanelGuiaRemisionSee guia={guia} onRefresh={() => cargarDatos(true)} />
+      )}
 
       <div className={`card border-2 ${estadoConfig.color} ${estadoConfig.bgColor} mb-4`}>
         <div className="card-body">

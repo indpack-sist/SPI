@@ -14,6 +14,7 @@ import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
+import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -2832,6 +2833,11 @@ function DetalleOrdenVenta() {
                 </div>
             </div>
         </div>
+        )}
+
+        {/* Facturación Electrónica (SEE) nativa — Fase 14. Coexiste con el panel manual de arriba. */}
+        {tienePermiso('facturacion') && (
+            <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} />
         )}
 
         {/* Documentos Adicionales */}

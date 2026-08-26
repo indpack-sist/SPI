@@ -283,7 +283,11 @@ function DetalleGuiaRemision() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6 sticky top-0 bg-white z-10 pb-4 border-b">
         <div className="flex items-center gap-4">
-          <button className="btn btn-outline" onClick={() => navigate('/ventas/guias-remision')}>
+          <button
+            className="btn btn-outline"
+            title="Volver a donde estabas"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/ventas/guias-remision'))}
+          >
             <ArrowLeft size={20} />
           </button>
           <div>

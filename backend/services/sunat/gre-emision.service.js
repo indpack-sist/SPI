@@ -90,6 +90,11 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null) {
     const [[g]] = await conn.query('SELECT * FROM guias_remision WHERE id_guia = ? FOR UPDATE', [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     if (g.sunat_estado === 'ACEPTADO') throw new AppError('La guía ya fue aceptada por SUNAT', 409);
+    // Regla de negocio: la GRE se emite una vez que la orden ya fue despachada.
+    const [[ov]] = await conn.query('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [g.id_orden_venta]);
+    if (!ov || ov.estado !== 'Despachada') {
+      throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
+    }
     if (!g.ubigeo_partida || !g.ubigeo_llegada) throw new AppError('Faltan ubigeos de partida/llegada (6 dígitos)', 422);
     if (!(Number(g.peso_bruto_kg) > 0)) throw new AppError('peso_bruto_kg debe ser > 0', 422);
     if (!g.motivo_traslado_cod) throw new AppError('Falta motivo_traslado_cod (catálogo 20)', 422);

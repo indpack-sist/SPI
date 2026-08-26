@@ -1563,6 +1563,11 @@ function DetalleOrdenVenta() {
   // se enlaza a la existente (evita GRE duplicadas; el backend también lo bloquea).
   const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
 
+  // La GRE Remitente (09) es transporte privado con conductor + placa propios: solo aplica
+  // cuando la orden se entrega con vehículo de la empresa. Con transporte de terceros o
+  // recojo en tienda no corresponde emitir esta guía, así que se oculta toda la sección.
+  const esVehiculoEmpresa = orden?.tipo_entrega === 'Vehiculo Empresa';
+
   const puedeReservarStock = () => {
     if (!orden) return false;
     if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
@@ -2124,7 +2129,7 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          {!guiaActiva && puedeDespachar() && (
+          {!guiaActiva && puedeDespachar() && esVehiculoEmpresa && (
              <button
                className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
@@ -2876,7 +2881,7 @@ function DetalleOrdenVenta() {
         {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,
             embebida en el detalle de la OV: emitir, ver estado SUNAT y descargar el PDF aquí mismo.
             La card completa aparece cuando ya existe la guía; si no, se ofrece crearla. */}
-        {tienePermiso('facturacion') && (
+        {tienePermiso('facturacion') && esVehiculoEmpresa && (
             guiaDetalleSee ? (
                 <div>
                     <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} />

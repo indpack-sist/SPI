@@ -20,6 +20,38 @@ export const AFECTACION = {
   '40': { scheme: '9995', name: 'EXP', typeCode: 'FRE', percent: 0, gravado: false }
 };
 
+// ── Afectación IGV por operación ─────────────────────────────────────────────
+// Mapea el tratamiento tributario declarado a nivel de ORDEN (ordenes_venta.tipo_impuesto)
+// al código de afectación IGV del catálogo 07. El negocio maneja UN tratamiento por
+// comprobante; la exportación se resuelve aparte por el flag es_exportacion. Se aceptan las
+// variantes de texto que conviven en el sistema (largas 'EXONERADO'/'INAFECTO' y cortas
+// 'EXO'/'INA', además del propio código 07 por si algún día se guarda directo).
+const TIPO_IMPUESTO_AFECTACION = {
+  IGV: '10', GRAVADO: '10', GRAVADA: '10', '10': '10',
+  EXO: '20', EXONERADO: '20', EXONERADA: '20', '20': '20',
+  INA: '30', INAFECTO: '30', INAFECTA: '30', '30': '30',
+  EXP: '40', EXPORT: '40', EXPORTACION: '40', '40': '40'
+};
+
+// Afectación derivada del tratamiento de la orden. Ante un valor desconocido cae a gravado
+// '10' (comportamiento previo → cero regresión para el flujo gravado 18%).
+export function afectacionDesdeOrden(tipoImpuesto) {
+  return TIPO_IMPUESTO_AFECTACION[String(tipoImpuesto ?? '').toUpperCase().trim()] || '10';
+}
+
+// Afectación resuelta de UNA línea, en orden de prioridad:
+//  1) exportación (es_exportacion=1) manda → '40';
+//  2) override explícito por línea (codigo_afectacion_igv poblado y distinto del default '10');
+//  3) el tratamiento declarado en la orden (tipo_impuesto).
+// Cierra la deuda "afectacion-igv-no-poblada": antes se usaba '10' fijo ignorando tipo_impuesto,
+// por lo que una orden EXONERADA/INAFECTA se habría emitido como GRAVADA 18% (mala declaración).
+export function afectacionLinea(ov, d) {
+  if (Number(ov?.es_exportacion) === 1) return '40';
+  const linea = String(d?.codigo_afectacion_igv ?? '').trim();
+  if (linea && linea !== '10') return linea;
+  return afectacionDesdeOrden(ov?.tipo_impuesto);
+}
+
 // Catálogo 06 (documento de identidad del cliente).
 export function schemeIdDocumento(tipoDoc) {
   switch (String(tipoDoc || '').toUpperCase()) {
@@ -51,7 +83,7 @@ export function calcularComprobante({ ov, detalle }) {
   const grupos = {}; // afectación -> { base, igv, cfg }
 
   const lineas = (detalle || []).map((d, i) => {
-    const afect = esExport ? '40' : String(d.codigo_afectacion_igv || '10');
+    const afect = afectacionLinea(ov, d);
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);

@@ -14,16 +14,13 @@
 // Backoff SEGURO (nunca martillea): elegibilidad por antigüedad desde sunat_fecha_envio, creciente
 // con el nº de intentos (2, 7, 22, 52, 112, 232 min). Tope 6 intentos → ERROR + alerta (log).
 // Toda acción escribe en sunat_log. Contingencia: un fault NO bloquea la logística; solo el RECHAZO.
-import { pool, withTransaction } from '../config/database.js';
+import { pool } from '../config/database.js';
 import { sunatConfig } from '../config/sunat.js';
 import { getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { consultarGuia } from '../services/sunat/gre.service.js';
 import { cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
-import { parsearCdr } from '../services/sunat/cdr.service.js';
+import { cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
-import { subirRaw } from '../services/cloudinary.service.js';
-import { ahoraLima } from '../services/sunat/fecha.service.js';
-import { copiaLocal } from '../services/sunat/util.service.js';
 
 const MAX_INTENTOS = 6;
 // Minutos mínimos desde sunat_fecha_envio para el intento nº k (índice = intentos ya hechos).
@@ -90,36 +87,11 @@ async function reconciliarBajas(resumen) {
     }
     if (st.statusCode === '98') { await marcarIntentoBaja(b, resumen.ra); continue; }
 
-    const cdr = st.cdrZip ? parsearCdr(st.cdrZip) : null;
-    const aceptado = st.statusCode === '0' && cdr?.responseCode === '0';
-    const descripcion = (cdr?.description || `statusCode ${st.statusCode}`) +
-      (cdr?.notas?.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
-    let cdrUrl = null;
-    if (st.cdrZip) {
-      const nombre = `${sunatConfig.ruc}-${b.identificador}`;
-      try { cdrUrl = await subirRaw(st.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
-      catch (e) { console.warn('[SUNAT] subir CDR baja (job) falló:', e.message); }
-      await copiaLocal(`R-${nombre}.zip`, st.cdrZip);
-    }
-    await withTransaction(async (conn) => {
-      await conn.query(
-        `UPDATE sunat_bajas SET estado = ?, response_code = ?, response_desc = ?, cdr_url = ? WHERE id_baja = ?`,
-        [aceptado ? 'ACEPTADO' : 'RECHAZADO', cdr?.responseCode ?? String(st.statusCode),
-         descripcion.slice(0, 4000), cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, b.id_baja]);
-      if (aceptado && b.id_factura) {
-        await conn.query(
-          `UPDATE facturas_venta SET sunat_estado = 'BAJA', estado = 'Anulada', id_baja = ? WHERE id_factura = ?`,
-          [b.id_baja, b.id_factura]);
-        if (b.codigo_tipo_sunat === '01' && b.id_orden_venta) {
-          await conn.query(
-            `UPDATE ordenes_venta SET facturado_sunat = 0, fecha_facturacion_sunat = NULL,
-               numero_comprobante_sunat = NULL, id_facturador = NULL WHERE id_orden_venta = ?`,
-            [b.id_orden_venta]);
-        }
-      }
-    });
-    await registrarSunatLog({ origen: 'BAJA', referenciaId: b.id_baja, evento: 'reintentoGetStatus',
-      exito: aceptado, httpStatus: 200, detalle: `${st.statusCode} ${descripcion}`.slice(0, 4000), duracionMs: Date.now() - t0 });
+    // Cierre en el helper compartido (mismo camino que el poll inline de darDeBajaFactura).
+    await cerrarBajaDesdeStatus(st, {
+      idBaja: b.id_baja, identificador: b.identificador, idFactura: b.id_factura,
+      codigoTipo: b.codigo_tipo_sunat, idOrdenVenta: b.id_orden_venta,
+      evento: 'reintentoGetStatus', duracionMs: Date.now() - t0 });
     resumen.ra.cerrados++;
   }
 }
@@ -135,7 +107,6 @@ async function reconciliarFacturas(resumen) {
   for (const f of filas) {
     if (!debido(f.sunat_intentos, f.sunat_fecha_envio)) continue;
     resumen.factura.revisados++;
-    const nombre = `${sunatConfig.ruc}-${f.codigo_tipo_sunat}-${f.serie}-${f.numero}`;
     const t0 = Date.now();
     let st;
     try {
@@ -146,36 +117,17 @@ async function reconciliarFacturas(resumen) {
       await marcarIntento('facturas_venta', 'id_factura', { id_factura: f.id_factura, sunat_intentos: f.sunat_intentos }, resumen.factura, 'FACTURA', false);
       continue;
     }
-    // 0001 aceptado · 0002 rechazado · 0003 baja · 0004 no existe · 0098 en proceso
+    // 0001 aceptado · 0002 rechazado · 0003 baja · 0004 no existe · 0098 en proceso.
+    // 0004/0098 no son finales: la factura sigue ENVIADO y se cuenta como intento.
     if (st.statusCode === '0098' || st.statusCode === '0004') {
       await marcarIntento('facturas_venta', 'id_factura', { id_factura: f.id_factura, sunat_intentos: f.sunat_intentos }, resumen.factura, 'FACTURA', false);
       continue;
     }
-    const cdr = st.cdrZip ? parsearCdr(st.cdrZip) : null;
-    const aceptado = st.statusCode === '0001';
-    const estadoFinal = aceptado ? 'ACEPTADO' : (st.statusCode === '0003' ? 'BAJA' : 'RECHAZADO');
-    const descripcion = (cdr?.description || st.statusMessage || `statusCode ${st.statusCode}`) +
-      (cdr?.notas?.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
-    let cdrUrl = null;
-    if (st.cdrZip) {
-      try { cdrUrl = await subirRaw(st.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
-      catch (e) { console.warn('[SUNAT] subir CDR factura (job) falló:', e.message); }
-    }
-    await withTransaction(async (conn) => {
-      await conn.query(
-        `UPDATE facturas_venta SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
-           cdr_url = COALESCE(?, cdr_url) WHERE id_factura = ?`,
-        [estadoFinal, cdr?.responseCode ?? st.statusCode, descripcion.slice(0, 4000),
-         cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, f.id_factura]);
-      if (aceptado && f.codigo_tipo_sunat === '01' && f.id_orden_venta) {
-        await conn.query(
-          `UPDATE ordenes_venta SET facturado_sunat = 1, fecha_facturacion_sunat = ?,
-             numero_comprobante_sunat = ? WHERE id_orden_venta = ?`,
-          [ahoraLima(), `${f.serie}-${f.numero}`, f.id_orden_venta]);
-      }
-    });
-    await registrarSunatLog({ origen: 'FACTURA', referenciaId: f.id_factura, evento: 'reintentoGetStatusCdr',
-      exito: aceptado, httpStatus: 200, detalle: `${st.statusCode} ${descripcion}`.slice(0, 4000), duracionMs: Date.now() - t0 });
+    // Cierre en el helper compartido (mismo camino que verificarEstado del controller).
+    await cerrarFacturaDesdeStatusCdr(st, {
+      idFactura: f.id_factura, codigoTipo: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
+      idOrdenVenta: f.id_orden_venta, evento: 'reintentoGetStatusCdr', origen: 'FACTURA',
+      duracionMs: Date.now() - t0 });
     resumen.factura.cerrados++;
   }
 }

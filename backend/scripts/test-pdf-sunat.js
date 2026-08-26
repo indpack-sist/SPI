@@ -5,9 +5,13 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { PDFParse } from 'pdf-parse';
 import { qrPng } from '../services/sunat/qr.service.js';
 import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
+
+// Extrae el texto de un PDF (para asertar rótulos impresos).
+const textoDe = async (buf) => (await new PDFParse({ data: buf }).getText()).text;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '../sunat-output');
@@ -103,6 +107,30 @@ async function main() {
   });
   check('GRE (09) genera PDF válido (QR = URL SUNAT)', esPdf(pdfGre), `${pdfGre.length} bytes`);
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
+
+  // 5) Rótulo de operación por afectación (catálogo 07) — sin incongruencias con el importe.
+  //    Gravada muestra "IGV (18%)"; exonerada/inafecta/exportación NO (IGV = 0), y cada una
+  //    rotula su propia operación. Cierra la deuda afectacion-igv-no-poblada en la impresión.
+  const detalleAfect = [{ codigo: 'P1', nombre: 'PRODUCTO', cantidad: 10, precio_unitario: 100, unidad: 'NIU', descuento_porcentaje: 0 }];
+  const casosAfect = [
+    { afect: '10', label: 'OP. GRAVADA',      igv: 180, conPct: true  },
+    { afect: '20', label: 'OP. EXONERADA',    igv: 0,   conPct: false },
+    { afect: '30', label: 'OP. INAFECTA',     igv: 0,   conPct: false },
+    { afect: '40', label: 'OP. EXPORTACIÓN',  igv: 0,   conPct: false }
+  ];
+  for (const ca of casosAfect) {
+    const pdf = await generarComprobanteSunatPDF({
+      comprobante: {
+        codigo_tipo_sunat: '01', serie: 'FE01', numero: 5, fecha_emision: '26/08/2026',
+        moneda: 'PEN', subtotal: 1000, igv: ca.igv, total: 1000 + ca.igv, afectacion: ca.afect,
+        sunat_digest_value: digestPara(`AF-${ca.afect}`), sunat_estado: 'ACEPTADO', docAfectado: null
+      }, emisor, cliente, detalle: detalleAfect, qrBuffer: null
+    });
+    const txt = await textoDe(pdf);
+    const rotulaOk = txt.includes(ca.label);
+    const pctOk = ca.conPct ? txt.includes('IGV (18%)') : !txt.includes('IGV (18%)');
+    check(`Afectación ${ca.afect} rotula "${ca.label}" y ${ca.conPct ? 'muestra' : 'oculta'} "(18%)"`, rotulaOk && pctOk);
+  }
 
   console.log(`\n  PDFs escritos en: ${outDir}`);
   console.log(`\n=== RESUMEN: ${pass} PASS · ${fail} FAIL ===\n`);

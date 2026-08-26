@@ -20,6 +20,8 @@ function NuevaGuiaRemision() {
   const [orden, setOrden] = useState(null);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   const [validacionProductos, setValidacionProductos] = useState({});
+  const [conductores, setConductores] = useState([]);
+  const [vehiculos, setVehiculos] = useState([]);
   
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
@@ -35,7 +37,9 @@ function NuevaGuiaRemision() {
     ciudad_llegada: '',
     peso_bruto_kg: 0,
     numero_bultos: 0,
-    observaciones: ''
+    observaciones: '',
+    id_conductor: '',
+    id_vehiculo: ''
   });
   
   const [detalle, setDetalle] = useState([]);
@@ -45,6 +49,22 @@ function NuevaGuiaRemision() {
       cargarOrden(idOrden);
     }
   }, [idOrden]);
+
+  // Catálogos para la GRE electrónica (transporte privado): conductor + vehículo de la flota.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [rc, rv] = await Promise.all([
+          ordenesVentaAPI.getConductores(),
+          ordenesVentaAPI.getVehiculos()
+        ]);
+        if (rc.data?.success) setConductores(rc.data.data || []);
+        if (rv.data?.success) setVehiculos(rv.data.data || []);
+      } catch (err) {
+        console.error('Error al cargar conductores/vehículos:', err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     calcularTotales();
@@ -263,6 +283,8 @@ function NuevaGuiaRemision() {
         peso_bruto_kg: parseFloat(formData.peso_bruto_kg),
         numero_bultos: parseInt(formData.numero_bultos) || 0,
         observaciones: formData.observaciones,
+        id_conductor: formData.id_conductor ? parseInt(formData.id_conductor) : null,
+        id_vehiculo: formData.id_vehiculo ? parseInt(formData.id_vehiculo) : null,
         detalle: detalleValido.map(item => ({
           id_detalle_orden: item.id_detalle_orden,
           id_producto: item.id_producto,
@@ -441,7 +463,42 @@ function NuevaGuiaRemision() {
                   min="0"
                 />
               </div>
+
+              <div className="form-group">
+                <label className="form-label">Conductor</label>
+                <select
+                  className="form-select"
+                  value={formData.id_conductor}
+                  onChange={(e) => setFormData({ ...formData, id_conductor: e.target.value })}
+                >
+                  <option value="">— Seleccionar conductor —</option>
+                  {conductores.map((c) => (
+                    <option key={c.id_empleado} value={c.id_empleado}>
+                      {c.nombre_completo} (DNI {c.dni})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Vehículo (placa)</label>
+                <select
+                  className="form-select"
+                  value={formData.id_vehiculo}
+                  onChange={(e) => setFormData({ ...formData, id_vehiculo: e.target.value })}
+                >
+                  <option value="">— Seleccionar vehículo —</option>
+                  {vehiculos.map((v) => (
+                    <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                      {v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+            <p className="text-xs text-muted mt-2">
+              Conductor y vehículo son obligatorios para emitir la Guía de Remisión electrónica (GRE) en transporte privado.
+            </p>
           </div>
         </div>
 

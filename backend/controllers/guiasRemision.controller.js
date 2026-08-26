@@ -178,8 +178,20 @@ export async function createGuiaRemision(req, res) {
       peso_bruto_kg,
       numero_bultos,
       observaciones,
+      id_conductor,
+      id_vehiculo,
+      motivo_traslado_cod,
       detalle
     } = req.body;
+
+    // Catálogo 20 (SUNAT): derivar el código de motivo desde el motivo de negocio si no viene explícito.
+    // Requerido para emitir la GRE electrónica (gre-emision valida motivo_traslado_cod).
+    const MOTIVO_TRASLADO_COD = {
+      'Venta': '01',
+      'Traslado entre Almacenes': '04',
+      'Devolución': '13' // 13 = Otros
+    };
+    const motivoCod = motivo_traslado_cod || MOTIVO_TRASLADO_COD[motivo_traslado] || '01';
     
     if (!id_orden_venta) {
       return res.status(400).json({
@@ -312,8 +324,11 @@ export async function createGuiaRemision(req, res) {
         peso_bruto_kg,
         numero_bultos,
         observaciones,
+        id_conductor,
+        id_vehiculo,
+        motivo_traslado_cod,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
@@ -332,7 +347,10 @@ export async function createGuiaRemision(req, res) {
       ciudad_llegada,
       parseFloat(peso_bruto_kg) || 0,
       parseInt(numero_bultos) || 0,
-      observaciones
+      observaciones,
+      id_conductor || null,
+      id_vehiculo || null,
+      motivoCod
     ]);
     
     if (!result.success) {

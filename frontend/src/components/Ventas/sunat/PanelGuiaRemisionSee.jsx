@@ -47,6 +47,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
     if (!(Number(guia?.peso_bruto_kg) > 0)) faltantes.push('peso bruto > 0');
     if (!guia?.motivo_traslado_cod) faltantes.push('código de motivo de traslado (catálogo 20)');
     if (!guia?.id_conductor) faltantes.push('conductor (transporte privado)');
+    if (!guia?.id_vehiculo) faltantes.push('vehículo/placa de la flota (transporte privado)');
   }
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';

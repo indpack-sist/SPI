@@ -15,6 +15,7 @@ import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
+import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -58,6 +59,8 @@ function DetalleOrdenVenta() {
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [guiasRemision, setGuiasRemision] = useState([]);
+  // Detalle completo de la GRE activa de la orden (para la card SEE embebida en el detalle de la OV).
+  const [guiaDetalleSee, setGuiaDetalleSee] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -416,7 +419,17 @@ function DetalleOrdenVenta() {
       if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
       if (facturasAnuladasRes?.data?.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
       if (documentosRes?.data?.success) setDocumentosAdicionales(documentosRes.data.data || []);
-      if (guiasRes?.data?.success) setGuiasRemision(guiasRes.data.data || []);
+
+      // Guías de la orden + detalle completo de la activa (para la card SEE embebida).
+      const guiasData = guiasRes?.data?.success ? (guiasRes.data.data || []) : [];
+      setGuiasRemision(guiasData);
+      const activa = guiasData.find(g => g.estado !== 'Anulada');
+      if (activa) {
+        const detRes = await guiasRemisionAPI.getById(activa.id_guia).catch(() => null);
+        setGuiaDetalleSee(detRes?.data?.success ? detRes.data.data : null);
+      } else {
+        setGuiaDetalleSee(null);
+      }
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
         const emitidas = (fData.facturas || []).filter(f => f.estado === 'Emitida');
@@ -2111,15 +2124,7 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          {guiaActiva ? (
-             <button
-               className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-               onClick={() => navigate(`/ventas/guias-remision/${guiaActiva.id_guia}`)}
-               title={`Esta orden ya tiene la guía ${guiaActiva.numero_guia} (${guiaActiva.estado}). Anúlela para crear otra.`}
-             >
-               <FileText size={20} /> Ver Guía {guiaActiva.numero_guia}
-             </button>
-          ) : puedeDespachar() && (
+          {!guiaActiva && puedeDespachar() && (
              <button
                className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
@@ -2866,6 +2871,37 @@ function DetalleOrdenVenta() {
             (mismo criterio que el gating manual, ver tipo_comprobante === 'Factura' arriba). */}
         {tienePermiso('facturacion') && orden.tipo_comprobante === 'Factura' && (
             <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} />
+        )}
+
+        {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,
+            embebida en el detalle de la OV: emitir, ver estado SUNAT y descargar el PDF aquí mismo.
+            La card completa aparece cuando ya existe la guía; si no, se ofrece crearla. */}
+        {tienePermiso('facturacion') && (
+            guiaDetalleSee ? (
+                <div>
+                    <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} />
+                    <button
+                        className="btn btn-link btn-xs text-muted -mt-2 mb-4"
+                        onClick={() => navigate(`/ventas/guias-remision/${guiaDetalleSee.id_guia}`)}
+                    >
+                        Ver guía completa (despacho / entrega) →
+                    </button>
+                </div>
+            ) : puedeDespachar() && (
+                <div className="card p-3 space-y-3 mb-4">
+                    <h3 className="flex items-center gap-2 font-semibold text-sm">
+                        <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
+                        <span className="badge badge-warning text-[10px]">BETA</span>
+                    </h3>
+                    <p className="text-xs text-muted">Aún no se ha creado la guía de remisión de esta orden.</p>
+                    <button
+                        className="btn btn-sm btn-primary self-start"
+                        onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
+                    >
+                        <FileText size={14} className="mr-1" /> Crear guía
+                    </button>
+                </div>
+            )
         )}
 
         {/* Documentos Adicionales */}

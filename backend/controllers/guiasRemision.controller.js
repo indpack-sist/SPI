@@ -250,6 +250,16 @@ export async function createGuiaRemision(req, res) {
     // asignado en la orden de venta (la OV ya los captura a su nivel).
     const idConductorFinal = id_conductor || orden.id_conductor || null;
     const idVehiculoFinal = id_vehiculo || orden.id_vehiculo || null;
+
+    // Punto de partida por defecto = dirección fiscal de la empresa (empresa_config). El origen
+    // real de un traslado por venta es el domicilio fiscal; si el request llega sin dirección/ubigeo
+    // de partida se toman los fiscales (antes quedaba vacío o con el literal 'Almacén Central').
+    const empresaResult = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const empresaCfg = (empresaResult.success && empresaResult.data[0]) || {};
+    const direccionPartidaFinal = (direccion_partida && String(direccion_partida).trim())
+      || empresaCfg.direccion || 'Almacén Central';
+    const ubigeoPartidaFinal = (ubigeo_partida && String(ubigeo_partida).trim())
+      || empresaCfg.ubigeo || null;
     
     // Validar cada producto del detalle
     for (const item of detalle) {
@@ -346,13 +356,13 @@ export async function createGuiaRemision(req, res) {
       orden.id_cliente,
       fecha_emision || new Date().toISOString().split('T')[0],
       fecha_traslado || new Date().toISOString().split('T')[0],
-      direccion_partida || 'Almacén Central',
+      direccionPartidaFinal,
       direccion_llegada,
       tipo_traslado || 'Privado',
       motivo_traslado || 'Venta',
       modalidad_transporte || 'Transporte Privado',
-      direccion_partida,
-      ubigeo_partida,
+      direccionPartidaFinal,
+      ubigeoPartidaFinal,
       direccion_llegada,
       ubigeo_llegada,
       ciudad_llegada,

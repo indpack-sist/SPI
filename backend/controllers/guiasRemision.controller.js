@@ -3,8 +3,8 @@ import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.
 
 export async function getAllGuiasRemision(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin } = req.query;
-    
+    const { estado, fecha_inicio, fecha_fin, id_orden_venta } = req.query;
+
     let sql = `
       SELECT 
         gr.id_guia,
@@ -33,7 +33,12 @@ export async function getAllGuiasRemision(req, res) {
       sql += ` AND gr.estado = ?`;
       params.push(estado);
     }
-    
+
+    if (id_orden_venta) {
+      sql += ` AND gr.id_orden_venta = ?`;
+      params.push(id_orden_venta);
+    }
+
     if (fecha_inicio) {
       sql += ` AND DATE(gr.fecha_emision) >= ?`;
       params.push(fecha_inicio);
@@ -243,6 +248,25 @@ export async function createGuiaRemision(req, res) {
       return res.status(400).json({
         success: false,
         error: `No se pueden crear guías para órdenes en estado "${orden.estado}".`
+      });
+    }
+
+    // Regla: una GRE activa por orden. Una guía cubre el despacho de la orden, así que
+    // no se permite crear otra mientras exista una guía vigente (no anulada). Esto evita
+    // duplicados accidentales al volver a entrar a la orden y, en PROD (Fase 16), impide
+    // emitir dos GRE reales para el mismo despacho. Para rehacerla, anule la existente.
+    const guiaExistenteResult = await executeQuery(
+      `SELECT id_guia, numero_guia, estado FROM guias_remision
+       WHERE id_orden_venta = ? AND estado <> 'Anulada'
+       ORDER BY id_guia DESC LIMIT 1`,
+      [id_orden_venta]
+    );
+    if (guiaExistenteResult.success && guiaExistenteResult.data.length > 0) {
+      const g = guiaExistenteResult.data[0];
+      return res.status(409).json({
+        success: false,
+        error: `Esta orden ya tiene una guía de remisión (${g.numero_guia}, estado "${g.estado}"). Anúlela antes de crear otra.`,
+        id_guia_existente: g.id_guia
       });
     }
 

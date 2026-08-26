@@ -952,7 +952,8 @@ export const guiasRemisionAPI = {
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    
+    if (filtros.id_orden_venta) params.append('id_orden_venta', filtros.id_orden_venta);
+
     return api.get(`/guias-remision?${params.toString()}`);
   },
 

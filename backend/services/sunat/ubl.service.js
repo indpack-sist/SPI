@@ -218,6 +218,16 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 
+  // ── OC del cliente + observaciones ──────────────────────────────────────────
+  // SUNAT no tiene un campo propio de "orden de compra": el estándar la lleva en
+  // cac:OrderReference/cbc:ID (así SÍ queda en el XML/CDR, no solo en el PDF). Las
+  // observaciones libres van como cbc:Note adicional, aparte del Note reservado al monto
+  // en letras (languageLocaleID="1000").
+  const ocCliente = trunc(ov.orden_compra_cliente, 30);
+  const observaciones = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
+  const notaObservaciones = observaciones ? `\n  <cbc:Note>${cdata(observaciones)}</cbc:Note>` : '';
+  const orderReference = ocCliente ? `\n  <cac:OrderReference><cbc:ID>${cdata(ocCliente)}</cbc:ID></cac:OrderReference>` : '';
+
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -232,8 +242,8 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   <cbc:IssueDate>${fecha.emision}</cbc:IssueDate>
   <cbc:IssueTime>${fecha.hora}</cbc:IssueTime>${dueDateLine}
   <cbc:InvoiceTypeCode listID="${tipoOperacion}">01</cbc:InvoiceTypeCode>
-  <cbc:Note languageLocaleID="1000">${cdata(numeroALetras(totalPagar, moneda))}</cbc:Note>
-  <cbc:DocumentCurrencyCode>${moneda}</cbc:DocumentCurrencyCode>
+  <cbc:Note languageLocaleID="1000">${cdata(numeroALetras(totalPagar, moneda))}</cbc:Note>${notaObservaciones}
+  <cbc:DocumentCurrencyCode>${moneda}</cbc:DocumentCurrencyCode>${orderReference}
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>

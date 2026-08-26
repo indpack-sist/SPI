@@ -262,7 +262,15 @@ function NuevaGuiaRemision() {
       setError('La fecha de traslado es obligatoria');
       return;
     }
-    
+
+    // La GRE electrónica en transporte privado exige conductor + vehículo (placa de la flota).
+    // Como ahora se emite en un solo paso, lo validamos aquí para no crear una guía inemitible.
+    const esPrivado = String(formData.modalidad_transporte).toLowerCase().includes('privado');
+    if (esPrivado && (!formData.id_conductor || !formData.id_vehiculo)) {
+      setError('Para emitir la GRE en transporte privado debes seleccionar conductor y vehículo (placa).');
+      return;
+    }
+
     // Validar formulario
     if (!validarFormulario()) {
       return;
@@ -301,16 +309,22 @@ function NuevaGuiaRemision() {
       };
       
       const response = await guiasRemisionAPI.create(payload);
-      
-      if (response.data.success) {
-        setSuccess(`Guía creada exitosamente: ${response.data.data.numero_guia}`);
-        setTimeout(() => {
-          navigate(`/ventas/guias-remision/${response.data.data.id_guia}`);
-        }, 1500);
-      } else {
+
+      if (!response.data.success) {
         setError(response.data.error || 'Error al crear guía de remisión');
+        return;
       }
-      
+
+      const { numero_guia } = response.data.data;
+
+      // La emisión a SUNAT se hace desde la card SEE del detalle de la orden (igual que la
+      // factura): al volver a la OV aparece "Guía de Remisión Electrónica" con el botón
+      // "Emitir GRE" → confirmación → estado y PDF. Aquí solo se crea la guía.
+      setSuccess(`Guía ${numero_guia} creada. Emítela a SUNAT desde el detalle de la orden.`);
+      setTimeout(() => {
+        navigate(`/ventas/ordenes/${formData.id_orden_venta}`);
+      }, 1500);
+
     } catch (err) {
       console.error('Error al crear guía:', err);
       // El backend ahora devuelve mensajes de error más específicos
@@ -766,7 +780,7 @@ function NuevaGuiaRemision() {
             disabled={loading || productosDisponibles.length === 0}
           >
             <Save size={20} />
-            {loading ? 'Guardando...' : 'Crear Guía de Remisión'}
+            {loading ? 'Guardando…' : 'Crear Guía de Remisión'}
           </button>
         </div>
       </form>

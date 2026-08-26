@@ -170,7 +170,7 @@ app.use('/api/calidad/incidencias', verificarToken, verificarPermiso('incidencia
 
 app.use('/api/cotizaciones', verificarToken, verificarPermiso('cotizaciones'), cotizacionesRoutes);
 app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), ordenesVentaRoutes);
-app.use('/api/guias-remision', verificarToken, verificarPermiso('guiasRemision'), guiasRemisionRoutes);
+app.use('/api/guias-remision', verificarToken, verificarPermiso('ordenesVenta'), guiasRemisionRoutes);
 app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTransportista'), guiasTransportistaRoutes);
 app.use('/api/listas-precios', verificarToken, verificarPermiso('listasPrecios'), listasPreciosRoutes);
 

@@ -30,8 +30,8 @@ function NuevaGuiaRemision() {
     tipo_traslado: 'Privado',
     motivo_traslado: 'Venta',
     modalidad_transporte: 'Transporte Privado',
-    direccion_partida: 'Almacén Central',
-    ubigeo_partida: '150101',
+    direccion_partida: '',
+    ubigeo_partida: '',
     direccion_llegada: '',
     ubigeo_llegada: '',
     ciudad_llegada: '',
@@ -523,8 +523,9 @@ function NuevaGuiaRemision() {
                   className="form-input"
                   value={formData.direccion_partida}
                   onChange={(e) => setFormData({ ...formData, direccion_partida: e.target.value })}
-                  placeholder="Almacén Central"
+                  placeholder="Vacío = se usará tu dirección fiscal"
                 />
+                <small className="text-gray-500">Si lo dejas vacío se tomará la dirección fiscal de la empresa.</small>
               </div>
               
               <div className="form-group">
@@ -534,7 +535,7 @@ function NuevaGuiaRemision() {
                   className="form-input"
                   value={formData.ubigeo_partida}
                   onChange={(e) => setFormData({ ...formData, ubigeo_partida: e.target.value })}
-                  placeholder="150101"
+                  placeholder="Vacío = ubigeo fiscal"
                   maxLength="6"
                 />
               </div>

@@ -81,8 +81,10 @@ function NuevaGuiaRemision() {
         const ordenData = response.data.data;
         setOrden(ordenData);
         
-        if (ordenData.estado !== 'Confirmada' && ordenData.estado !== 'En Preparación') {
-          setError(`Solo se pueden crear guías para órdenes Confirmadas o En Preparación. Estado actual: ${ordenData.estado}`);
+        // Una guía es un documento de despacho: se permite en cualquier estado activo
+        // de la OV, bloqueando solo canceladas o ya entregadas (alineado con el backend).
+        if (ordenData.estado === 'Cancelada' || ordenData.estado === 'Entregada') {
+          setError(`No se pueden crear guías para órdenes en estado "${ordenData.estado}".`);
           return;
         }
         
@@ -129,7 +131,10 @@ function NuevaGuiaRemision() {
           id_orden_venta: id,
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || '',
-          ubigeo_llegada: ordenData.ubigeo_llegada || ''
+          ubigeo_llegada: ordenData.ubigeo_llegada || '',
+          // Heredar el transporte asignado en la OV (editable como override en los selects).
+          id_conductor: ordenData.id_conductor ? String(ordenData.id_conductor) : '',
+          id_vehiculo: ordenData.id_vehiculo ? String(ordenData.id_vehiculo) : ''
         }));
       } else {
         setError('Orden no encontrada');

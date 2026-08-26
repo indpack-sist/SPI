@@ -35,7 +35,6 @@ const OPERACION_LABEL = {
 };
 
 const n2 = (v) => Number(v || 0).toFixed(2);
-const trunc = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
 
 /**
  * @param {object} p
@@ -77,49 +76,67 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.fontSize(11).text(tipoNombre, 385, 68, { align: 'center', width: 172 });
       doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, 90, { align: 'center', width: 172 });
 
-      // ── Datos del cliente ──
-      // Doble dirección: fiscal (del padrón del cliente) y de entrega (de la OV, ship-to).
-      // Las filas de dirección (34/47) ocupan todo el ancho; la columna derecha usa filas
-      // cortas (8/21/60) para no colisionar.
+      // ── Datos del cliente (layout de flujo dinámico anti-desborde) ──
+      // Cada campo mide su propio alto real y el siguiente arranca debajo, de modo que los
+      // valores largos (razón social, direcciones) envuelven sin taparse entre sí. Dos
+      // columnas estrictamente separadas: izquierda (cliente/RUC/direcciones) x40–313,
+      // derecha (condición comercial/fecha/moneda) x325–560; la observación va full-width
+      // al final, bajo ambas columnas.
       let y = 140;
-      const boxH = 90;
-      doc.roundedRect(33, y, 529, boxH, 3).stroke('#000');
-      doc.fontSize(8).fillColor('#000');
+      const boxTop = y;
+      const boxPad = 8;
+
+      // Dibuja "Etiqueta: valor" con el valor envuelto dentro de vw. Devuelve la Y tras la fila.
+      const campo = (label, valor, lx, vx, vw, atY) => {
+        const v = valor == null || valor === ''
+          ? '-'
+          : (String(valor).replace(/[\r\n]+/g, ' ').trim() || '-');
+        doc.fontSize(8).fillColor('#000');
+        doc.font('Helvetica-Bold').text(label, lx, atY, { width: vx - lx - 3, lineBreak: false });
+        doc.font('Helvetica').text(v, vx, atY, { width: vw });
+        const h = doc.heightOfString(v, { width: vw });
+        return atY + Math.max(h, 11) + 3;
+      };
+
       const dirFiscal = String(cliente.direccion || '-').replace(/[\r\n]+/g, ' ').trim() || '-';
       const dirEnt = String(c.direccion_entrega || '').replace(/[\r\n]+/g, ' ').trim();
       const dirEntrega = dirEnt && dirEnt !== dirFiscal ? dirEnt : '(la misma que la fiscal)';
+      const rucLabel = String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC:' : 'Doc:';
 
-      doc.font('Helvetica-Bold').text('Cliente:', 40, y + 8);
-      doc.font('Helvetica').text(cliente.razon_social || '-', 110, y + 8, { width: 200 });
-      doc.font('Helvetica-Bold').text(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC:' : 'Doc:', 40, y + 21);
-      doc.font('Helvetica').text(cliente.ruc || '-', 110, y + 21);
-      doc.font('Helvetica-Bold').text('Dir. fiscal:', 40, y + 34);
-      doc.font('Helvetica').text(trunc(dirFiscal, 105), 110, y + 34, { width: 450 });
-      doc.font('Helvetica-Bold').text('Dir. entrega:', 40, y + 47);
-      doc.font('Helvetica').text(trunc(dirEntrega, 105), 110, y + 47, { width: 450 });
-      doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 60);
-      doc.font('Helvetica').text(String(c.fecha_emision || '-'), 110, y + 60);
+      // Columna izquierda
+      let yl = boxTop + boxPad;
+      yl = campo('Cliente:', cliente.razon_social, 40, 108, 205, yl);
+      yl = campo(rucLabel, cliente.ruc, 40, 108, 205, yl);
+      yl = campo('Dir. fiscal:', dirFiscal, 40, 108, 205, yl);
+      yl = campo('Dir. entrega:', dirEntrega, 40, 108, 205, yl);
 
-      // Condición comercial (misma fuente que el cac:PaymentTerms del XML): Contado / Crédito.
+      // Columna derecha — condición comercial (misma fuente que el cac:PaymentTerms del XML).
       const esCredito = String(c.tipo_venta || '').toLowerCase().startsWith('cr');
       const diasCredito = Number(c.dias_credito) || 0;
       const formaPago = esCredito
         ? (diasCredito > 0 ? `CRÉDITO A ${diasCredito} DÍAS` : 'CRÉDITO')
         : 'CONTADO';
-      doc.font('Helvetica-Bold').text('Forma de pago:', 320, y + 8);
-      doc.font('Helvetica').text(formaPago, 400, y + 8, { width: 160 });
-      if (esCredito) {
-        doc.font('Helvetica-Bold').text('Vencimiento:', 320, y + 21);
-        doc.font('Helvetica').text(c.fecha_vencimiento || '-', 400, y + 21);
-      }
-      doc.font('Helvetica-Bold').text('Moneda:', 320, y + 60);
-      doc.font('Helvetica').text(String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 400, y + 60);
-      // Observación (ordenes_venta.observaciones) — full width, una línea (se recorta si es larga).
-      doc.font('Helvetica-Bold').text('Observación:', 40, y + 74);
-      const obs = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
-      doc.font('Helvetica').text(obs ? trunc(obs, 120) : '-', 110, y + 74, { width: 450 });
+      let yr = boxTop + boxPad;
+      yr = campo('Forma de pago:', formaPago, 325, 410, 150, yr);
+      if (esCredito) yr = campo('Vencimiento:', c.fecha_vencimiento, 325, 410, 150, yr);
+      yr = campo('Fecha emisión:', c.fecha_emision, 325, 410, 150, yr);
+      yr = campo('Moneda:', String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 325, 410, 150, yr);
 
-      y += boxH + 8;
+      // Observación full-width bajo ambas columnas. La orden de compra se ANEXA aquí porque
+      // la factura electrónica SUNAT no tiene un campo propio de orden de compra.
+      const obsPartes = [];
+      const obsBase = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      if (obsBase) obsPartes.push(obsBase);
+      if (c.orden_compra) obsPartes.push(`Orden de compra: ${String(c.orden_compra).trim()}`);
+      const obs = obsPartes.join(' | ');
+      let yo = Math.max(yl, yr) + 2;
+      yo = campo('Observación:', obs, 40, 108, 452, yo);
+
+      // La altura del recuadro se calcula tras medir todo, y el borde se dibuja al final.
+      const boxH = (yo + 4) - boxTop;
+      doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
+
+      y = boxTop + boxH + 8;
 
       // ── Notas: documento afectado + motivo ──
       if (c.docAfectado) {
@@ -179,13 +196,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal(gravado ? 'IGV (18%)' : 'IGV', c.igv);
       filaTotal('IMPORTE TOTAL', c.total, true);
 
-      // ── SON en letras + Orden de compra (lado izquierdo, a la altura de los totales) ──
+      // ── SON en letras (lado izquierdo, a la altura de los totales) ──
+      // La orden de compra ya no se imprime aquí: se anexa al campo Observación (la factura
+      // electrónica SUNAT no tiene campo propio de orden de compra).
       doc.fontSize(8).font('Helvetica').fillColor('#000');
       doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio, { width: 330 });
-      if (c.orden_compra) {
-        doc.font('Helvetica-Bold').text('Orden de compra:', 40, yTotalesInicio + 16);
-        doc.font('Helvetica').text(String(c.orden_compra), 130, yTotalesInicio + 16, { width: 230 });
-      }
 
       y += 6;
 
@@ -208,14 +223,14 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += hCred + 6;
       }
 
-      // ── Pie legal: QR + hash + leyenda ──
+      // ── Pie legal: QR + leyenda ──
+      // El "Valor resumen (hash/digestValue)" NO se imprime: las facturas reales no lo muestran
+      // (el digest sigue en el XML firmado y en el CDR; solo se omite de la representación impresa).
       const yPie = Math.max(y, 700);
       if (qrBuffer) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
       doc.fontSize(7).font('Helvetica').fillColor('#000');
-      doc.text('Representación impresa del Comprobante de Pago Electrónico.', 145, yPie + 6, { width: 400 });
-      doc.font('Helvetica-Bold').text('Valor resumen (hash):', 145, yPie + 24);
-      doc.font('Helvetica').text(c.sunat_digest_value || '-', 145, yPie + 34, { width: 410 });
-      doc.font('Helvetica').fillColor('#555').text('Autorizado mediante Resolución de Intendencia. Consulte su validez en www.sunat.gob.pe', 145, yPie + 52, { width: 410 });
+      doc.text('Representación impresa del Comprobante de Pago Electrónico.', 145, yPie + 6, { width: 410 });
+      doc.font('Helvetica').fillColor('#555').text('Autorizado mediante Resolución de Intendencia. Consulte su validez en www.sunat.gob.pe', 145, yPie + 22, { width: 410 });
 
       if (anulado) {
         doc.save().rotate(-30, { origin: [297, 400] })

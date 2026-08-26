@@ -218,33 +218,21 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += hCred + 6;
       }
 
-      // ── Observaciones — ocupa el espacio libre entre los totales y el pie (QR) ──
-      // La OC va en la primera línea y las observaciones libres debajo (ambas también viajan a
-      // SUNAT en el XML). El recuadro CRECE hasta rozar el pie cuando hay espacio disponible; si
-      // el detalle ya empujó el contenido cerca del pie, se mantiene compacto (todo en una hoja).
-      {
-        const footerTop = 700;            // el QR arranca aquí
-        const obsTop = y;
-        const labelH = 13;
-        const partes = [];
-        if (c.orden_compra) partes.push(`Orden de compra: ${String(c.orden_compra).trim()}`);
-        const obsTxt = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
-        if (obsTxt) partes.push(obsTxt);
-        const contenido = partes.length ? partes.join('\n') : '-';
-
-        doc.fontSize(8).font('Helvetica');
-        const hContenido = doc.heightOfString(contenido, { width: 515, lineGap: 2 });
-        const needed = labelH + hContenido + 12;
-        // Si hay sitio hasta el pie, la caja se estira para llenarlo; si no, queda compacta.
-        const obsBottom = (obsTop + Math.max(needed, 45)) <= (footerTop - 10)
-          ? footerTop - 10
-          : obsTop + needed;
-        const obsH = obsBottom - obsTop;
-
-        doc.roundedRect(33, obsTop, 529, obsH, 3).stroke('#000');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Observaciones', 40, obsTop + 6);
-        doc.font('Helvetica').text(contenido, 40, obsTop + 6 + labelH, { width: 515, lineGap: 2 });
-        y = obsBottom + 8;
+      // ── OC + Observaciones — texto plano pegado a la izquierda, SIN recuadro ni bordes ──
+      // Fluye justo debajo de los totales, así que se desplaza solo cuando el detalle tiene muchos
+      // ítems (los totales bajan y estas líneas bajan con ellos). La OC va arriba y las
+      // observaciones libres debajo. Ambas también viajan a SUNAT en el XML.
+      doc.fontSize(8).fillColor('#000');
+      if (c.orden_compra) {
+        doc.font('Helvetica-Bold').text('Orden de compra: ', 40, y, { continued: true, width: 515 })
+           .font('Helvetica').text(String(c.orden_compra).trim());
+        y = doc.y + 2;
+      }
+      const obsTxt = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      if (obsTxt) {
+        doc.font('Helvetica-Bold').text('Observaciones: ', 40, y, { continued: true, width: 515 })
+           .font('Helvetica').text(obsTxt);
+        y = doc.y + 2;
       }
 
       // ── Pie legal: QR + leyenda ──

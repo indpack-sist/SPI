@@ -2,7 +2,7 @@
 // FASE 7: Nota de Crédito (07 / CreditNote) y Nota de Débito (08 / DebitNote).
 // Reusa la firma, el zip, el envío (sendBill) y el CDR de la Fase 6 sin cambios.
 import { numeroALetras } from '../../utils/numeroALetras.js';
-import { round2, m2, u6, cdata, trunc, AFECTACION, schemeIdDocumento } from './ubl.service.js';
+import { round2, m2, u6, cdata, trunc, AFECTACION, afectacionLinea, schemeIdDocumento } from './ubl.service.js';
 
 // Catálogo 09 (motivos de Nota de Crédito).
 const MOTIVOS_NC = {
@@ -91,7 +91,7 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
       const err = new Error(`El ítem "${d.codigo || d.descripcion || d.id_producto}" no tiene codigo_unidad_sunat`);
       err.statusCode = 422; err.isOperational = true; throw err;
     }
-    const afect = esExport ? '40' : String(d.codigo_afectacion_igv || '10');
+    const afect = afectacionLinea(ov, d);
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);

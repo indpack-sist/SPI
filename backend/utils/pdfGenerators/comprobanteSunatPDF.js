@@ -25,13 +25,23 @@ export const NOMBRE_TIPO = {
   '08': 'NOTA DE DÉBITO ELECTRÓNICA'
 };
 
+// Rótulo de la operación por afectación IGV (catálogo 07): así el total de la base se muestra
+// como Gravada / Exonerada / Inafecta / Exportación, sin incongruencias con el importe (0 si no grava).
+const OPERACION_LABEL = {
+  '10': 'OP. GRAVADA',
+  '20': 'OP. EXONERADA',
+  '30': 'OP. INAFECTA',
+  '40': 'OP. EXPORTACIÓN'
+};
+
 const n2 = (v) => Number(v || 0).toFixed(2);
 const trunc = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
 
 /**
  * @param {object} p
  * @param {object} p.comprobante  { codigo_tipo_sunat, serie, numero, fecha_emision, moneda,
- *                                   subtotal, igv, total, sunat_digest_value, sunat_estado,
+ *                                   subtotal, igv, total, afectacion?: '10'|'20'|'30'|'40',
+ *                                   sunat_digest_value, sunat_estado,
  *                                   docAfectado?: { comprobante, motivo } }
  * @param {object} p.emisor       empresa_config { razon_social, ruc, direccion, urbanizacion, telefono, email }
  * @param {object} p.cliente      { razon_social, ruc, tipo_documento, direccion }
@@ -163,8 +173,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += 19;
       };
       const yTotalesInicio = y;
-      filaTotal('OP. GRAVADA', c.subtotal);
-      filaTotal('IGV (18%)', c.igv);
+      const afect = String(c.afectacion || '10');
+      const gravado = afect === '10';
+      filaTotal(OPERACION_LABEL[afect] || 'OP. GRAVADA', c.subtotal);
+      filaTotal(gravado ? 'IGV (18%)' : 'IGV', c.igv);
       filaTotal('IMPORTE TOTAL', c.total, true);
 
       // ── SON en letras + Orden de compra (lado izquierdo, a la altura de los totales) ──

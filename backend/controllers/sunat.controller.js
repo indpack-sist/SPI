@@ -3,7 +3,7 @@
 import { sunatConfig } from '../config/sunat.js';
 import { pool, withTransaction } from '../config/database.js';
 import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
-import { construirInvoiceXML, calcularComprobante } from '../services/sunat/ubl.service.js';
+import { construirInvoiceXML, calcularComprobante, afectacionLinea } from '../services/sunat/ubl.service.js';
 import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
@@ -21,6 +21,7 @@ import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSu
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
 import { subirRaw } from '../services/cloudinary.service.js';
+import { marcarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
 import { ejecutarReintentosSunat } from '../jobs/sunat-reintentos.job.js';
 import AppError from '../utils/AppError.js';
 
@@ -183,10 +184,8 @@ export async function emitirComprobante(req, res, next) {
          cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, idFactura]);
 
       if (aceptado) {
-        await conn.query(
-          `UPDATE ordenes_venta SET facturado_sunat = 1, fecha_facturacion_sunat = ?,
-             numero_comprobante_sunat = ?, id_facturador = ? WHERE id_orden_venta = ?`,
-          [emisionDateTime, `${serie}-${numero}`, idEmpleado, id_orden_venta]);
+        await marcarOrdenFacturada(conn, { idOrdenVenta: id_orden_venta, serie, numero,
+          idEmpleado, fecha: emisionDateTime });
       }
     });
 
@@ -499,48 +498,16 @@ export async function darDeBajaFactura(req, res, next) {
       }
       if (st.statusCode === '98') continue; // aún en proceso
 
-      const cdr = st.cdrZip ? parsearCdr(st.cdrZip) : null;
-      const aceptado = st.statusCode === '0' && cdr?.responseCode === '0';
-      const descripcion = (cdr?.description || `statusCode ${st.statusCode}`) +
-        (cdr?.notas?.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
-      let cdrUrl = null;
-      if (st.cdrZip) {
-        try { cdrUrl = await subirRaw(st.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
-        catch (e) { console.warn('[SUNAT] subir CDR baja falló:', e.message); }
-        await copiaLocal(`R-${nombre}.zip`, st.cdrZip);
-      }
-
-      await withTransaction(async (conn) => {
-        await conn.query(
-          `UPDATE sunat_bajas SET estado = ?, response_code = ?, response_desc = ?, cdr_url = ? WHERE id_baja = ?`,
-          [aceptado ? 'ACEPTADO' : 'RECHAZADO', cdr?.responseCode ?? String(st.statusCode),
-           descripcion.slice(0, 4000), cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, idBaja]);
-        if (aceptado) {
-          await conn.query(
-            `UPDATE facturas_venta SET sunat_estado = 'BAJA', estado = 'Anulada', id_baja = ? WHERE id_factura = ?`,
-            [idBaja, id_factura]);
-          // Al anularse una FACTURA (01), liberar su OV para poder re-facturar sobre la misma
-          // (caso error de digitación: cliente/dirección mal, cantidad correcta). El stock NO
-          // se toca aquí a propósito (los ajustes de inventario son un proceso de negocio aparte).
-          // En una NOTA (07/08) la factura original sigue vigente → la OV NO se libera.
-          if (factura.codigo_tipo_sunat === '01' && factura.id_orden_venta) {
-            await conn.query(
-              `UPDATE ordenes_venta SET facturado_sunat = 0, fecha_facturacion_sunat = NULL,
-                 numero_comprobante_sunat = NULL, id_facturador = NULL WHERE id_orden_venta = ?`,
-              [factura.id_orden_venta]);
-          }
-        }
-      });
-
-      await registrarSunatLog({ origen: 'BAJA', referenciaId: idBaja, evento: 'getStatus',
-        exito: aceptado, httpStatus: 200, detalle: `${st.statusCode} ${descripcion}`.slice(0, 4000),
-        duracionMs: Date.now() - t0 });
+      // Cierre en el helper compartido (mismo camino que el job de reintentos).
+      const r = await cerrarBajaDesdeStatus(st, {
+        idBaja, identificador, idFactura: id_factura, codigoTipo: factura.codigo_tipo_sunat,
+        idOrdenVenta: factura.id_orden_venta, evento: 'getStatus', duracionMs: Date.now() - t0 });
 
       return res.json({
-        ok: aceptado, estado: aceptado ? 'ACEPTADO' : 'RECHAZADO', idBaja, identificador,
-        ticket, statusCode: st.statusCode, responseCode: cdr?.responseCode ?? null,
-        descripcion, cdrUrl,
-        nota: aceptado
+        ok: r.aceptado, estado: r.estado, idBaja, identificador,
+        ticket, statusCode: st.statusCode, responseCode: r.responseCode,
+        descripcion: r.descripcion, cdrUrl: r.cdrUrl,
+        nota: r.aceptado
           ? (factura.codigo_tipo_sunat === '01'
               ? 'Factura marcada BAJA/Anulada y OV liberada para re-facturar. Ajuste de stock NO automático (proceso de negocio aparte).'
               : 'Nota marcada BAJA/Anulada. La factura original sigue vigente; la OV no se libera.')
@@ -565,7 +532,7 @@ export async function verificarEstado(req, res, next) {
   try {
     if (!id) throw new AppError('id de comprobante inválido', 400);
     const [[f]] = await pool.query(
-      `SELECT id_factura, numero_factura, serie, numero, codigo_tipo_sunat,
+      `SELECT id_factura, numero_factura, serie, numero, codigo_tipo_sunat, id_orden_venta,
               sunat_estado, sunat_response_code, sunat_response_desc, cdr_url, xml_url
          FROM facturas_venta WHERE id_factura = ?`, [id]);
     if (!f) throw new AppError('Comprobante no existe', 404);
@@ -599,33 +566,30 @@ export async function verificarEstado(req, res, next) {
         exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
       throw e;
     }
-    // Catálogo getStatusCdr → estado interno. 0004 (no existe) / 0098 (en proceso): sigue ENVIADO.
-    const MAPA = { '0001': 'ACEPTADO', '0002': 'RECHAZADO', '0003': 'BAJA' };
-    const nuevoEstado = MAPA[cdrResp.statusCode] || 'ENVIADO';
-    let cdr = null, cdrUrl = extraerUrl(f.cdr_url);
-    if (cdrResp.cdrZip) {
-      cdr = parsearCdr(cdrResp.cdrZip);
-      const nombre = `${sunatConfig.ruc}-${f.codigo_tipo_sunat}-${f.serie}-${f.numero}`;
-      try { cdrUrl = await subirRaw(cdrResp.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
-      catch (e) { console.warn('[SUNAT] subir CDR (consulta) falló:', e.message); }
+    // 0004 (no existe) / 0098 (en proceso) NO son finales: la factura sigue ENVIADO, no se reconcilia.
+    if (!['0001', '0002', '0003'].includes(cdrResp.statusCode)) {
+      await registrarSunatLog({ origen: 'CONSULTA', referenciaId: id, evento: 'getStatusCdr',
+        exito: false, httpStatus: 200,
+        detalle: `${cdrResp.statusCode} ${cdrResp.statusMessage}`.slice(0, 4000), duracionMs: Date.now() - t0 });
+      return res.json({
+        idFactura: id, comprobante: f.numero_factura, tipo: f.codigo_tipo_sunat,
+        consultaEnVivo: true, statusCode: cdrResp.statusCode, statusMessage: cdrResp.statusMessage,
+        sunatEstado: 'ENVIADO', responseCode: null,
+        xmlUrl: extraerUrl(f.xml_url), cdrUrl: extraerUrl(f.cdr_url)
+      });
     }
-    if (nuevoEstado !== 'ENVIADO') {
-      await pool.query(
-        `UPDATE facturas_venta SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
-           cdr_url = COALESCE(?, cdr_url) WHERE id_factura = ?`,
-        [nuevoEstado, cdr?.responseCode ?? cdrResp.statusCode,
-         (cdr?.description || cdrResp.statusMessage || '').slice(0, 4000),
-         cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, id]);
-    }
-    await registrarSunatLog({ origen: 'CONSULTA', referenciaId: id, evento: 'getStatusCdr',
-      exito: nuevoEstado !== 'ENVIADO', httpStatus: 200,
-      detalle: `${cdrResp.statusCode} ${cdrResp.statusMessage}`.slice(0, 4000), duracionMs: Date.now() - t0 });
+
+    // Estado final → cierre en el helper compartido (persiste factura + marca OV como en el job).
+    const r = await cerrarFacturaDesdeStatusCdr(cdrResp, {
+      idFactura: id, codigoTipo: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
+      idOrdenVenta: f.id_orden_venta, idEmpleado: req.user?.id_empleado || null,
+      evento: 'getStatusCdr', origen: 'CONSULTA', duracionMs: Date.now() - t0 });
 
     return res.json({
       idFactura: id, comprobante: f.numero_factura, tipo: f.codigo_tipo_sunat,
       consultaEnVivo: true, statusCode: cdrResp.statusCode, statusMessage: cdrResp.statusMessage,
-      sunatEstado: nuevoEstado, responseCode: cdr?.responseCode ?? null,
-      xmlUrl: extraerUrl(f.xml_url), cdrUrl
+      sunatEstado: r.estado, responseCode: r.responseCode,
+      xmlUrl: extraerUrl(f.xml_url), cdrUrl: r.cdrUrl
     });
   } catch (e) { next(e); }
 }
@@ -752,7 +716,7 @@ export async function generarPdfComprobante(req, res, next) {
     const [[f]] = await pool.query(
       "SELECT f.*, DATE_FORMAT(f.fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt, " +
       "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(ov.fecha_vencimiento, '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
-      "ov.observaciones, ov.orden_compra_cliente, ov.direccion_entrega " +
+      "ov.observaciones, ov.orden_compra_cliente, ov.direccion_entrega, ov.tipo_impuesto, ov.es_exportacion " +
       "FROM facturas_venta f LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = f.id_orden_venta " +
       "WHERE f.id_factura = ?",
       [idFactura]);
@@ -781,6 +745,11 @@ export async function generarPdfComprobante(req, res, next) {
       };
     }
 
+    // Afectación del comprobante (catálogo 07) derivada del MISMO tratamiento que se emitió
+    // (ov.tipo_impuesto / es_exportacion), para rotular la operación en el PDF sin ambigüedad:
+    // Gravada / Exonerada / Inafecta / Exportación (no un "IGV 18%" fijo).
+    const afectacion = afectacionLinea({ tipo_impuesto: f.tipo_impuesto, es_exportacion: f.es_exportacion }, {});
+
     const qrBuffer = f.sunat_qr_data ? await qrPng(f.sunat_qr_data) : null;
     const pdf = await generarComprobanteSunatPDF({
       comprobante: {
@@ -789,7 +758,7 @@ export async function generarPdfComprobante(req, res, next) {
         tipo_venta: f.tipo_venta, dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
         observaciones: f.observaciones, orden_compra: f.orden_compra_cliente,
         direccion_entrega: f.direccion_entrega,
-        subtotal: f.subtotal, igv: f.igv, total: f.total,
+        subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
       },
       emisor, cliente, detalle, qrBuffer

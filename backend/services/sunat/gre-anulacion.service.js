@@ -10,6 +10,7 @@
 import { withTransaction } from '../../config/database.js';
 import { registrarSunatLog } from './log.service.js';
 import { emitirGuiaGre } from './gre-emision.service.js';
+import { obtenerCorrelativo } from './numeracion.service.js';
 import { ahoraLima } from './fecha.service.js';
 import AppError from '../../utils/AppError.js';
 
@@ -120,13 +121,11 @@ export async function reemplazarGuiaRemision(idGuia, { correcciones = {}, idEmpl
       }
     }
 
-    // Numeración interna: mismo patrón que createGuiaRemision (T001-00000000, siguiente secuencia).
-    // TODO(Fase 16): DEUDA HEREDADA — derivar el número por MAX(id_guia) + regex de dígitos finales es
-    // frágil: si el último numero_guia no termina en 'T001-XXXXXXXX' cae a 1 y colisiona (UNIQUE), y no
-    // hay lock de secuencia (posible carrera). Endurecer antes de PROD (correlativo atómico dedicado).
-    const [[ult]] = await conn.query('SELECT numero_guia FROM guias_remision ORDER BY id_guia DESC LIMIT 1');
-    const m = ult?.numero_guia?.match(/(\d+)$/);
-    const nuevoNumeroGuia = `T001-${String((m ? parseInt(m[1]) : 0) + 1).padStart(8, '0')}`;
+    // Numeración interna: correlativo atómico dedicado (fila 'GR'/'T001' en series_correlativos),
+    // mismo patrón que createGuiaRemision. Ya estamos dentro de la TX de reemplazo, así que usamos
+    // obtenerCorrelativo(conn, ...): el UPDATE toma el row-lock de la serie hasta el commit.
+    const numeroSecuencia = await obtenerCorrelativo(conn, 'GR', 'T001');
+    const nuevoNumeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
 
     // fecha_traslado como string (evita corrimiento de zona del driver al re-insertar el Date).
     const [[ftRow]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);

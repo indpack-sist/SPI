@@ -1,4 +1,5 @@
 import { executeQuery } from '../config/database.js';
+import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.js';
 
 export async function getAllGuiasRemision(req, res) {
   try {
@@ -283,22 +284,11 @@ export async function createGuiaRemision(req, res) {
       }
     }
     
-    // Generar número de guía
-    const ultimaResult = await executeQuery(`
-      SELECT numero_guia 
-      FROM guias_remision 
-      ORDER BY id_guia DESC 
-      LIMIT 1
-    `);
-    
-    let numeroSecuencia = 1;
-    if (ultimaResult.success && ultimaResult.data.length > 0) {
-      const match = ultimaResult.data[0].numero_guia.match(/(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
-      }
-    }
-    
+    // Generar número de guía con correlativo atómico dedicado (fila 'GR'/'T001' en
+    // series_correlativos). Reemplaza el antiguo MAX(id_guia)+regex, que era frágil:
+    // colisionaba con el UNIQUE si el último numero_guia no terminaba en dígitos y no
+    // tenía lock de secuencia (carrera bajo concurrencia).
+    const numeroSecuencia = await obtenerCorrelativoAtomico('GR', 'T001');
     const numeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
     
     // Crear la guía

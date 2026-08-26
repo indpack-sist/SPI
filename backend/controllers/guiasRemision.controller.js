@@ -214,31 +214,42 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
-    // Obtener información de la orden
+    // Obtener información de la orden (incluye el transporte asignado a nivel de OV
+    // para que la guía lo herede si el request no envía conductor/vehículo).
     const ordenResult = await executeQuery(`
-      SELECT 
+      SELECT
         ov.id_cliente,
         ov.estado,
-        ov.direccion_entrega
+        ov.direccion_entrega,
+        ov.id_conductor,
+        ov.id_vehiculo
       FROM ordenes_venta ov
       WHERE ov.id_orden_venta = ?
     `, [id_orden_venta]);
-    
+
     if (!ordenResult.success || ordenResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Orden de venta no encontrada'
       });
     }
-    
+
     const orden = ordenResult.data[0];
-    
-    if (orden.estado !== 'Confirmada' && orden.estado !== 'En Preparación') {
+
+    // Una guía de remisión es un documento de despacho: se permite en cualquier
+    // estado activo de la OV, bloqueando solo las órdenes canceladas o ya entregadas
+    // (mismo criterio que registrarDespacho en ordenesVenta.controller.js).
+    if (orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return res.status(400).json({
         success: false,
-        error: `Solo se pueden crear guías para órdenes Confirmadas o En Preparación. Estado actual: ${orden.estado}`
+        error: `No se pueden crear guías para órdenes en estado "${orden.estado}".`
       });
     }
+
+    // Herencia de transporte: si el request no especifica conductor/vehículo, usar el
+    // asignado en la orden de venta (la OV ya los captura a su nivel).
+    const idConductorFinal = id_conductor || orden.id_conductor || null;
+    const idVehiculoFinal = id_vehiculo || orden.id_vehiculo || null;
     
     // Validar cada producto del detalle
     for (const item of detalle) {
@@ -348,8 +359,8 @@ export async function createGuiaRemision(req, res) {
       parseFloat(peso_bruto_kg) || 0,
       parseInt(numero_bultos) || 0,
       observaciones,
-      id_conductor || null,
-      id_vehiculo || null,
+      idConductorFinal,
+      idVehiculoFinal,
       motivoCod
     ]);
     

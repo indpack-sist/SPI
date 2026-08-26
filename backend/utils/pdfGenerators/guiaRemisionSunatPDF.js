@@ -15,8 +15,6 @@ function logoBuffer() {
   return _logo;
 }
 
-const trunc = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
-
 const MOTIVOS_TRASLADO = {
   '01': 'VENTA', '02': 'COMPRA', '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
   '08': 'IMPORTACION', '09': 'EXPORTACION', '13': 'OTROS',
@@ -58,43 +56,53 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       doc.fontSize(9).text('REMITENTE ELECTRÓNICA', 385, 82, { align: 'center', width: 172 });
       doc.fontSize(12).text(`${g.serie_sunat}-${g.numero_sunat}`, 385, 94, { align: 'center', width: 172 });
 
-      // ── Destinatario + datos generales ──
+      // Helper: "Etiqueta: valor" con el valor envuelto dentro de vw. Devuelve la Y tras la fila.
+      // Mismo layout de flujo dinámico que el comprobante: evita que valores largos (razón social,
+      // direcciones) se taparen entre sí como pasaba con las posiciones Y fijas.
+      const campo = (label, valor, lx, vx, vw, atY) => {
+        const v = valor == null || valor === ''
+          ? '-'
+          : (String(valor).replace(/[\r\n]+/g, ' ').trim() || '-');
+        doc.fontSize(8).fillColor('#000');
+        doc.font('Helvetica-Bold').text(label, lx, atY, { width: vx - lx - 3, lineBreak: false });
+        doc.font('Helvetica').text(v, vx, atY, { width: vw });
+        const h = doc.heightOfString(v, { width: vw });
+        return atY + Math.max(h, 11) + 3;
+      };
+
+      // ── Destinatario + datos generales (flujo dinámico anti-desborde) ──
       // Doble dirección: la fiscal del destinatario va aquí; la de entrega es el "Punto de llegada".
+      // Izquierda (destinatario/RUC/dir.fiscal) x40–311 · derecha (fechas) x322–560.
       let y = 122;
-      doc.roundedRect(33, y, 529, 60, 3).stroke('#000');
-      doc.fontSize(8).fillColor('#000');
-      doc.font('Helvetica-Bold').text('Destinatario:', 40, y + 8);
-      doc.font('Helvetica').text(cliente.razon_social || '-', 120, y + 8, { width: 430 });
-      doc.font('Helvetica-Bold').text('RUC/Doc:', 40, y + 21);
-      doc.font('Helvetica').text(cliente.ruc || '-', 120, y + 21);
-      doc.font('Helvetica-Bold').text('Dir. fiscal:', 40, y + 34);
-      doc.font('Helvetica').text(trunc(String(cliente.direccion || '-').replace(/[\r\n]+/g, ' ').trim() || '-', 105), 120, y + 34, { width: 435 });
-      doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 47);
-      doc.font('Helvetica').text(String(g.fecha_emision || '-'), 120, y + 47);
-      doc.font('Helvetica-Bold').text('Inicio traslado:', 320, y + 47);
-      doc.font('Helvetica').text(String(g.fecha_traslado || '-'), 400, y + 47);
+      const boxDestTop = y;
+      const pad = 8;
+      let yl = boxDestTop + pad;
+      yl = campo('Destinatario:', cliente.razon_social, 40, 118, 193, yl);
+      yl = campo('RUC/Doc:', cliente.ruc, 40, 118, 193, yl);
+      yl = campo('Dir. fiscal:', cliente.direccion, 40, 118, 193, yl);
+      let yr = boxDestTop + pad;
+      yr = campo('Fecha emisión:', g.fecha_emision, 322, 410, 150, yr);
+      yr = campo('Inicio traslado:', g.fecha_traslado, 322, 410, 150, yr);
+      const boxDestH = (Math.max(yl, yr) + 4) - boxDestTop;
+      doc.roundedRect(33, boxDestTop, 529, boxDestH, 3).stroke('#000');
+      y = boxDestTop + boxDestH + 8;
 
-      y += 68;
-
-      // ── Datos del traslado ──
-      doc.roundedRect(33, y, 529, 76, 3).stroke('#000');
+      // ── Datos del traslado (flujo dinámico, full-width) ──
+      const boxTrasTop = y;
       const motivo = MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO';
-      doc.font('Helvetica-Bold').text('Motivo de traslado:', 40, y + 8);
-      doc.font('Helvetica').text(`${g.motivo_traslado_cod} - ${motivo}`, 155, y + 8, { width: 400 });
-      doc.font('Helvetica-Bold').text('Peso bruto total:', 40, y + 22);
-      doc.font('Helvetica').text(`${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 155, y + 22);
-      doc.font('Helvetica-Bold').text('Punto de partida:', 40, y + 36);
-      doc.font('Helvetica').text(`[${g.ubigeo_partida}] ${(g.direccion_partida || '-').replace(/[\r\n]+/g, ' ')}`, 155, y + 36, { width: 400 });
-      doc.font('Helvetica-Bold').text('Punto de llegada:', 40, y + 50);
-      doc.font('Helvetica').text(`[${g.ubigeo_llegada}] ${(g.direccion_llegada || '-').replace(/[\r\n]+/g, ' ')}`, 155, y + 50, { width: 400 });
+      let yt = boxTrasTop + pad;
+      yt = campo('Motivo de traslado:', `${g.motivo_traslado_cod} - ${motivo}`, 40, 155, 405, yt);
+      yt = campo('Peso bruto total:', `${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 40, 155, 405, yt);
+      yt = campo('Punto de partida:', `[${g.ubigeo_partida}] ${g.direccion_partida || '-'}`, 40, 155, 405, yt);
+      yt = campo('Punto de llegada:', `[${g.ubigeo_llegada}] ${g.direccion_llegada || '-'}`, 40, 155, 405, yt);
       if (conductor) {
-        doc.font('Helvetica-Bold').text('Conductor / Placa:', 40, y + 64);
-        doc.font('Helvetica').text(
+        yt = campo('Conductor / Placa:',
           `${conductor.nombre_completo || '-'} (DNI ${conductor.dni || '-'}, Lic. ${conductor.licencia_conducir || '-'})  ·  Placa ${g.placa || '-'}`,
-          155, y + 64, { width: 400 });
+          40, 155, 405, yt);
       }
-
-      y += 84;
+      const boxTrasH = (yt + 4) - boxTrasTop;
+      doc.roundedRect(33, boxTrasTop, 529, boxTrasH, 3).stroke('#000');
+      y = boxTrasTop + boxTrasH + 8;
 
       // ── Tabla de bienes (sin montos) ──
       doc.rect(33, y, 529, 18).fill('#CCCCCC');
@@ -120,14 +128,14 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       }
       doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
 
-      // ── Pie legal: QR (URL SUNAT) + hash + leyenda ──
+      // ── Pie legal: QR (URL SUNAT) + leyenda ──
+      // El "Valor resumen (hash)" NO se imprime (consistente con la factura; el digest sigue en el
+      // XML firmado y el CDR). Las representaciones impresas reales no lo muestran.
       const yPie = Math.max(y + 12, 700);
       if (qrBuffer) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
       doc.fontSize(7).font('Helvetica').fillColor('#000');
-      doc.text('Representación impresa de la Guía de Remisión Electrónica.', 145, yPie + 6, { width: 400 });
-      doc.text('El QR contiene la URL de consulta pública de SUNAT.', 145, yPie + 16, { width: 400 });
-      doc.font('Helvetica-Bold').text('Valor resumen (hash):', 145, yPie + 30);
-      doc.font('Helvetica').text(g.sunat_digest_value || '-', 145, yPie + 40, { width: 410 });
+      doc.text('Representación impresa de la Guía de Remisión Electrónica.', 145, yPie + 6, { width: 410 });
+      doc.text('El QR contiene la URL de consulta pública de SUNAT.', 145, yPie + 16, { width: 410 });
 
       // ── Marca de agua Fase 12: guía sin efecto / reemplazada ──
       const wm = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
@@ -138,11 +146,11 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
           .text(wm, 60, 380, { align: 'center', width: 480 }).opacity(1).restore();
         if (g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref) {
           doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
-            .text(`Reemplazada por la guía ${g.reemplazo_ref}`, 145, yPie + 54, { width: 410 });
+            .text(`Reemplazada por la guía ${g.reemplazo_ref}`, 145, yPie + 30, { width: 410 });
         }
         if (g.sunat_estado === 'ANULADA' && g.motivo_anulacion) {
           doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
-            .text(`Sin efecto — motivo: ${g.motivo_anulacion}`, 145, yPie + 54, { width: 410 });
+            .text(`Sin efecto — motivo: ${g.motivo_anulacion}`, 145, yPie + 30, { width: 410 });
         }
       }
 

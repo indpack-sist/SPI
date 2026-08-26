@@ -2094,13 +2094,24 @@ function DetalleOrdenVenta() {
           )}
 
           {puedeDespachar() && (
-             <button 
-               className="btn btn-primary shadow-lg shadow-primary/20" 
+             <button
+               className="btn btn-primary shadow-lg shadow-primary/20"
                onClick={handleAbrirDespacho}
                disabled={procesando}
                title="Registrar Despacho Parcial o Total"
              >
                <Truck size={20} /> Registrar Despacho
+             </button>
+          )}
+
+          {puedeDespachar() && (
+             <button
+               className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+               onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
+               disabled={procesando}
+               title="Crear Guía de Remisión (GRE) para esta orden"
+             >
+               <FileText size={20} /> Crear Guía de Remisión
              </button>
           )}
 

@@ -31,10 +31,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
   const fmtCant = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parseFloat(v || 0));
 
   // Máquina de estados (sunat_estado de guias_remision).
-  // La GRE ampara el traslado → debe emitirse ANTES del despacho: solo con la guía 'Emitida'.
-  const trasladoNoIniciado = estadoNegocio === 'Emitida';
+  // Regla de negocio: la GRE se emite una vez que la ORDEN ya está "Despachada".
+  const guiaVigente = !!estadoNegocio && estadoNegocio !== 'Anulada';
   const sinEmitirSunat = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
-  const puedeEmitir = trasladoNoIniciado && sinEmitirSunat;
+  const ordenDespachada = guia?.estado_orden === 'Despachada';
+  const puedeEmitir = guiaVigente && sinEmitirSunat && ordenDespachada;
   const enviado = estado === 'ENVIADO';
   const aceptado = estado === 'ACEPTADO';
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
@@ -174,14 +175,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
       {puedeEmitir && faltantes.length > 0 && (
         <p className="text-xs text-warning">Antes de emitir, completa: {faltantes.join(', ')}.</p>
       )}
-      {!estado && trasladoNoIniciado && faltantes.length === 0 && (
-        <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
-      )}
-      {/* Traslado ya iniciado sin una GRE válida: la GRE debía emitirse antes del despacho. */}
-      {sinEmitirSunat && !trasladoNoIniciado && (
+      {/* La emisión requiere que la orden ya esté despachada. */}
+      {guiaVigente && sinEmitirSunat && !ordenDespachada && (
         <p className="text-xs text-warning">
-          El traslado ya inició (guía "{estadoNegocio}"): la GRE electrónica debía emitirse antes del despacho.
+          Para emitir la GRE, la orden de venta debe estar en estado "Despachada"{guia?.estado_orden ? ` (actualmente: ${guia.estado_orden})` : ''}.
         </p>
+      )}
+      {!estado && guiaVigente && ordenDespachada && faltantes.length === 0 && (
+        <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
       )}
 
       {/* Modal: vista previa completa de la GRE antes de enviar a SUNAT */}

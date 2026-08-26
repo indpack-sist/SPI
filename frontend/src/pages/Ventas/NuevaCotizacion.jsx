@@ -1468,7 +1468,7 @@ setFormCabecera(prev => ({
   className="form-input text-right"
   value={item.cantidad}
   onChange={(e) => {
-    const val = e.target.value;
+    const val = e.target.value.replace(',', '.');
     if (val === '' || /^\d*\.?\d*$/.test(val)) handleCantidadChange(index, val);
   }}
   
@@ -1523,7 +1523,7 @@ setFormCabecera(prev => ({
   className="form-input text-right bg-blue-50"
   value={item.precio_venta}
   onChange={(e) => {
-    const val = e.target.value;
+    const val = e.target.value.replace(',', '.');
     if (val === '' || /^\d*\.?\d*$/.test(val)) handlePrecioVentaChange(index, val);
   }}
   placeholder="0.000"

@@ -1135,7 +1135,7 @@ useEffect(() => {
   className="form-input text-right p-1 h-8"
   value={item.cantidad}
   onChange={(e) => {
-    const val = e.target.value;
+    const val = e.target.value.replace(',', '.');
     if (val === '' || /^\d*\.?\d*$/.test(val)) handleCantidadChange(index, val);
   }}
 />
@@ -1170,7 +1170,7 @@ useEffect(() => {
   className="form-input text-right p-1 h-8 bg-blue-50"
   value={item.precio_venta}
   onChange={(e) => {
-    const val = e.target.value;
+    const val = e.target.value.replace(',', '.');
     if (val === '' || /^\d*\.?\d*$/.test(val)) handlePrecioVentaChange(index, val);
   }}
   placeholder="0.000"

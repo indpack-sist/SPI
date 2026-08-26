@@ -15,7 +15,7 @@ import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
-import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -57,6 +57,7 @@ function DetalleOrdenVenta() {
   
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
+  const [guiasRemision, setGuiasRemision] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -387,7 +388,7 @@ function DetalleOrdenVenta() {
       // endpoint financiero responde 403; así la página no se rompe.
       const vacio = (data) => Promise.resolve({ data: { success: true, data } });
 
-      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes, facturasRes] = await Promise.all([
+      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes, facturasRes, guiasRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
         verFinanzas ? ordenesVentaAPI.getPagos(id).catch(() => vacio([])) : vacio([]),
         verFinanzas ? ordenesVentaAPI.getResumenPagos(id).catch(() => vacio(null)) : vacio(null),
@@ -395,7 +396,8 @@ function DetalleOrdenVenta() {
         verFinanzas ? cuentasPagoAPI.getAll({ estado: 'Activo' }).catch(() => vacio([])) : vacio([]),
         verFinanzas ? ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } })) : vacio([]),
         ordenesVentaAPI.getDocumentosAdicionales(id).catch(() => ({ data: { success: true, data: [] } })),
-        verFinanzas ? ordenesVentaAPI.getFacturas(id).catch(() => ({ data: { success: true, data: { facturas: [], resumen: null } } })) : vacio({ facturas: [], resumen: null })
+        verFinanzas ? ordenesVentaAPI.getFacturas(id).catch(() => ({ data: { success: true, data: { facturas: [], resumen: null } } })) : vacio({ facturas: [], resumen: null }),
+        guiasRemisionAPI.getAll({ id_orden_venta: id }).catch(() => ({ data: { success: true, data: [] } }))
       ]);
 
       if (ordenRes.data.success) {
@@ -414,6 +416,7 @@ function DetalleOrdenVenta() {
       if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
       if (facturasAnuladasRes?.data?.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
       if (documentosRes?.data?.success) setDocumentosAdicionales(documentosRes.data.data || []);
+      if (guiasRes?.data?.success) setGuiasRemision(guiasRes.data.data || []);
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
         const emitidas = (fData.facturas || []).filter(f => f.estado === 'Emitida');
@@ -1543,6 +1546,10 @@ function DetalleOrdenVenta() {
     return pendientes;
   };
 
+  // Regla: una GRE activa (no anulada) por orden. Si ya existe, en vez de "Crear Guía"
+  // se enlaza a la existente (evita GRE duplicadas; el backend también lo bloquea).
+  const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
+
   const puedeReservarStock = () => {
     if (!orden) return false;
     if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
@@ -2104,7 +2111,15 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          {puedeDespachar() && (
+          {guiaActiva ? (
+             <button
+               className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+               onClick={() => navigate(`/ventas/guias-remision/${guiaActiva.id_guia}`)}
+               title={`Esta orden ya tiene la guía ${guiaActiva.numero_guia} (${guiaActiva.estado}). Anúlela para crear otra.`}
+             >
+               <FileText size={20} /> Ver Guía {guiaActiva.numero_guia}
+             </button>
+          ) : puedeDespachar() && (
              <button
                className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}

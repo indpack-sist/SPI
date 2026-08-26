@@ -656,7 +656,13 @@ if (moneda !== 'PEN') {
       }
     }
 
-    await executeTransaction(queries);
+    const txResult = await executeTransaction(queries);
+    if (!txResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: txResult.error || 'Error al actualizar la cotizacion'
+      });
+    }
 
     res.json({
       success: true,

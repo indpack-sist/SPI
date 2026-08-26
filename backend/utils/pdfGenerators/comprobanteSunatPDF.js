@@ -122,18 +122,13 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       yr = campo('Fecha emisión:', c.fecha_emision, 325, 410, 150, yr);
       yr = campo('Moneda:', String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 325, 410, 150, yr);
 
-      // Observación full-width bajo ambas columnas. La orden de compra se ANEXA aquí porque
-      // la factura electrónica SUNAT no tiene un campo propio de orden de compra.
-      const obsPartes = [];
-      const obsBase = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
-      if (obsBase) obsPartes.push(obsBase);
-      if (c.orden_compra) obsPartes.push(`Orden de compra: ${String(c.orden_compra).trim()}`);
-      const obs = obsPartes.join(' | ');
-      let yo = Math.max(yl, yr) + 2;
-      yo = campo('Observación:', obs, 40, 108, 452, yo);
+      // La OC y las observaciones YA NO van en este recuadro: se imprimen abajo, en el espacio
+      // libre entre los totales y el QR (ver bloque "Observaciones"). Aquí solo se cierra el alto
+      // del recuadro de datos según la columna más larga.
+      const yo = Math.max(yl, yr);
 
       // La altura del recuadro se calcula tras medir todo, y el borde se dibuja al final.
-      const boxH = (yo + 4) - boxTop;
+      const boxH = (yo + boxPad) - boxTop;
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
 
       y = boxTop + boxH + 8;
@@ -197,8 +192,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('IMPORTE TOTAL', c.total, true);
 
       // ── SON en letras (lado izquierdo, a la altura de los totales) ──
-      // La orden de compra ya no se imprime aquí: se anexa al campo Observación (la factura
-      // electrónica SUNAT no tiene campo propio de orden de compra).
+      // La OC y las observaciones se imprimen más abajo, en el recuadro "Observaciones" que ocupa
+      // el espacio entre los totales y el QR.
       doc.fontSize(8).font('Helvetica').fillColor('#000');
       doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio, { width: 330 });
 
@@ -221,6 +216,35 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.text(c.fecha_vencimiento || '-', 120, y + 48);
         doc.text(`${simbolo} ${n2(c.total)}`, 220, y + 48, { width: 80, align: 'right' });
         y += hCred + 6;
+      }
+
+      // ── Observaciones — ocupa el espacio libre entre los totales y el pie (QR) ──
+      // La OC va en la primera línea y las observaciones libres debajo (ambas también viajan a
+      // SUNAT en el XML). El recuadro CRECE hasta rozar el pie cuando hay espacio disponible; si
+      // el detalle ya empujó el contenido cerca del pie, se mantiene compacto (todo en una hoja).
+      {
+        const footerTop = 700;            // el QR arranca aquí
+        const obsTop = y;
+        const labelH = 13;
+        const partes = [];
+        if (c.orden_compra) partes.push(`Orden de compra: ${String(c.orden_compra).trim()}`);
+        const obsTxt = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+        if (obsTxt) partes.push(obsTxt);
+        const contenido = partes.length ? partes.join('\n') : '-';
+
+        doc.fontSize(8).font('Helvetica');
+        const hContenido = doc.heightOfString(contenido, { width: 515, lineGap: 2 });
+        const needed = labelH + hContenido + 12;
+        // Si hay sitio hasta el pie, la caja se estira para llenarlo; si no, queda compacta.
+        const obsBottom = (obsTop + Math.max(needed, 45)) <= (footerTop - 10)
+          ? footerTop - 10
+          : obsTop + needed;
+        const obsH = obsBottom - obsTop;
+
+        doc.roundedRect(33, obsTop, 529, obsH, 3).stroke('#000');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Observaciones', 40, obsTop + 6);
+        doc.font('Helvetica').text(contenido, 40, obsTop + 6 + labelH, { width: 515, lineGap: 2 });
+        y = obsBottom + 8;
       }
 
       // ── Pie legal: QR + leyenda ──

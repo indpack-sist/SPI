@@ -394,23 +394,23 @@ function App() {
                       <Route
                         path="/ventas/guias-remision"
                         element={
-                          <ProtectedRouteWithPermiso modulo="guiasRemision">
+                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
                             <GuiasRemision />
                           </ProtectedRouteWithPermiso>
                         }
                       />
                       <Route 
-                        path="/ventas/guias-remision/nueva" 
+                        path="/ventas/guias-remision/nueva"
                         element={
-                          <ProtectedRouteWithPermiso modulo="guiasRemision">
+                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
                             <NuevaGuiaRemision />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/ventas/guias-remision/:id" 
+                        path="/ventas/guias-remision/:id"
                         element={
-                          <ProtectedRouteWithPermiso modulo="guiasRemision">
+                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
                             <DetalleGuiaRemision />
                           </ProtectedRouteWithPermiso>
                         } 

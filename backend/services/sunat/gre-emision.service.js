@@ -100,6 +100,10 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null) {
     const [[conductor]] = g.id_conductor
       ? await conn.query('SELECT id_empleado, dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
       : [[null]];
+    // Placa: se toma del vehículo de la flota enlazado a la guía (guias_remision.id_vehiculo).
+    const [[vehiculo]] = g.id_vehiculo
+      ? await conn.query('SELECT id_vehiculo, placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
+      : [[null]];
     // fecha_traslado como string 'YYYY-MM-DD' (sin corrimiento de zona).
     const [[ft]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);
     const fechaTraslado = ft?.f || emision;
@@ -118,9 +122,9 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null) {
     if (modalidad === '01') {
       throw new AppError('Transporte público (transportista) aún no soportado; usa una guía con conductor (privado)', 422);
     }
-    let placa = g.placa_vehiculo || g.placa || null; // guias_remision no tiene placa propia
+    let placa = vehiculo?.placa || null; // placa real desde la flota (id_vehiculo)
     if (!placa) {
-      if (sunatConfig.mode === 'PROD') throw new AppError('Falta la placa del vehículo para transporte privado', 422);
+      if (sunatConfig.mode === 'PROD') throw new AppError('Falta el vehículo de la flota (placa) para transporte privado', 422);
       placa = 'XXX-000'; // placeholder solo BETA/mock (no válido en PROD)
     }
 

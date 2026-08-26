@@ -3,7 +3,7 @@
 // Coexiste con el panel de facturación manual (no lo reemplaza). Gatear su render con
 // tienePermiso('facturacion') desde el contenedor. Toda la lógica SEE de comprobantes vive aquí.
 import { useState, useEffect } from 'react';
-import { Zap, FileText, RefreshCw, FileMinus, Ban } from 'lucide-react';
+import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
@@ -74,6 +74,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
 
   const handleVerificar = (f) => tras(() => sunatAPI.estadoComprobante(f.id_factura), 'Estado consultado.');
   const handlePdf = async (f) => { try { await sunatAPI.verPdfComprobante(f.id_factura); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
+  const abrirUrl = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
 
   const handleEmitirNota = async () => {
     await tras(() => sunatAPI.emitirNota({ id_factura_ref: modalNota.factura.id_factura, tipo: notaTipo, motivo_codigo: notaMotivo }),
@@ -134,6 +135,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
                   {(aceptado || f.sunat_estado === 'BAJA') && (
                     <button className="btn btn-xs btn-outline" onClick={() => handlePdf(f)} disabled={procesando} title="Ver PDF SEE">
                       <FileText size={13} className="mr-1" /> PDF
+                    </button>
+                  )}
+                  {f.xml_url && (
+                    <button className="btn btn-xs btn-outline" onClick={() => abrirUrl(f.xml_url)} disabled={procesando} title="Descargar XML firmado">
+                      <FileCode size={13} className="mr-1" /> XML
+                    </button>
+                  )}
+                  {f.cdr_url && (
+                    <button className="btn btn-xs btn-outline" onClick={() => abrirUrl(f.cdr_url)} disabled={procesando} title="Descargar CDR de SUNAT">
+                      <FileCheck size={13} className="mr-1" /> CDR
                     </button>
                   )}
                   <button className="btn btn-xs btn-outline" onClick={() => handleVerificar(f)} disabled={procesando} title="Verificar estado en SUNAT">

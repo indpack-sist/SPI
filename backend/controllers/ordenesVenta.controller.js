@@ -4546,6 +4546,8 @@ export async function getFacturasOrden(req, res) {
         fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
         fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
         fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion, fv.id_salida,
+        fv.sunat_estado, fv.codigo_tipo_sunat, fv.sunat_ticket, fv.sunat_response_desc,
+        fv.xml_url, fv.cdr_url, fv.id_factura_ref, fv.motivo_nota_codigo,
         e.nombre_completo  AS registrado_por,
         e2.nombre_completo AS anulado_por
       FROM facturas_venta fv
@@ -4559,7 +4561,12 @@ export async function getFacturasOrden(req, res) {
       return res.status(500).json({ success: false, error: facturasRes.error });
     }
 
-    const facturas = facturasRes.data.map(f => ({ ...f, url_pdf: extraerUrlPdf(f.url_pdf) }));
+    const facturas = facturasRes.data.map(f => ({
+      ...f,
+      url_pdf: extraerUrlPdf(f.url_pdf),
+      xml_url: extraerUrlPdf(f.xml_url),
+      cdr_url: extraerUrlPdf(f.cdr_url)
+    }));
     const emitidas = facturas.filter(f => f.estado === 'Emitida');
     const totalOrden = parseFloat(ordenRes.data[0].total || 0);
     const totalFacturado = emitidas.reduce((s, f) => s + parseFloat(f.total || 0), 0);

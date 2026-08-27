@@ -20,7 +20,9 @@ const MOTIVOS = {
   '08': [['01', 'Intereses por mora'], ['02', 'Aumento en el valor'], ['03', 'Penalidades / otros']]
 };
 
-export default function PanelFacturacionSee({ orden, facturas = [], onRefresh }) {
+// `soloLectura`: perfiles de venta (Comercial/Ventas) solo ven/descargan los documentos
+// (PDF, XML, CDR) de comprobantes ya emitidos. No emiten, ni notas (NC/ND), ni baja.
+export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, soloLectura = false }) {
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
@@ -87,7 +89,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
 
   const handleVerificar = (f) => tras(() => sunatAPI.estadoComprobante(f.id_factura), 'Estado consultado.');
   const handlePdf = async (f) => { try { await sunatAPI.verPdfComprobante(f.id_factura); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
-  const abrirUrl = (url) => { if (url) window.open(url, '_blank', 'noopener'); };
+  // Descarga directa (con nombre SUNAT) del XML firmado o del CDR, igual que las cotizaciones.
+  const handleDescargar = async (url) => { try { await sunatAPI.descargarArchivoUrl(url); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
 
   const handleEmitirNota = async () => {
     await tras(() => sunatAPI.emitirNota({ id_factura_ref: modalNota.factura.id_factura, tipo: notaTipo, motivo_codigo: notaMotivo }),
@@ -113,13 +116,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
     return () => { cancel = true; };
   }, [modalEmitir, orden?.id_orden_venta]);
 
+  // En solo lectura la tarjeta aparece únicamente cuando ya hay un comprobante emitido.
+  if (soloLectura && comprobantes.length === 0) return null;
+
   return (
     <div className="card p-3 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 font-semibold text-sm">
           <Zap size={16} className="text-amber-500" /> Facturación Electrónica (SEE)
         </h3>
-        {puedeEmitir && (
+        {!soloLectura && puedeEmitir && (
           <button className="btn btn-sm btn-primary" onClick={() => { setFechaEmision(hoyISO); setModalEmitir(true); }} disabled={procesando}>
             <Zap size={14} className="mr-1" /> Emitir factura SEE
           </button>
@@ -150,19 +156,21 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
                     </button>
                   )}
                   {f.xml_url && (
-                    <button className="btn btn-xs btn-outline" onClick={() => abrirUrl(f.xml_url)} disabled={procesando} title="Descargar XML firmado">
+                    <button className="btn btn-xs btn-outline" onClick={() => handleDescargar(f.xml_url)} disabled={procesando} title="Descargar XML firmado">
                       <FileCode size={13} className="mr-1" /> XML
                     </button>
                   )}
                   {f.cdr_url && (
-                    <button className="btn btn-xs btn-outline" onClick={() => abrirUrl(f.cdr_url)} disabled={procesando} title="Descargar CDR de SUNAT">
+                    <button className="btn btn-xs btn-outline" onClick={() => handleDescargar(f.cdr_url)} disabled={procesando} title="Descargar CDR de SUNAT">
                       <FileCheck size={13} className="mr-1" /> CDR
                     </button>
                   )}
-                  <button className="btn btn-xs btn-outline" onClick={() => handleVerificar(f)} disabled={procesando} title="Verificar estado en SUNAT">
-                    <RefreshCw size={13} className="mr-1" /> Estado
-                  </button>
-                  {esFactura && aceptado && (
+                  {!soloLectura && (
+                    <button className="btn btn-xs btn-outline" onClick={() => handleVerificar(f)} disabled={procesando} title="Verificar estado en SUNAT">
+                      <RefreshCw size={13} className="mr-1" /> Estado
+                    </button>
+                  )}
+                  {!soloLectura && esFactura && aceptado && (
                     <>
                       <button className="btn btn-xs btn-outline" onClick={() => { setNotaTipo('07'); setNotaMotivo('01'); setModalNota({ factura: f }); }} disabled={procesando} title="Emitir Nota de Crédito/Débito">
                         <FileMinus size={13} className="mr-1" /> NC/ND

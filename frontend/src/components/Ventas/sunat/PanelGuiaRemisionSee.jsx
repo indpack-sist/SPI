@@ -9,7 +9,9 @@ import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
 import { sunatAPI } from '../../../config/api';
 
-export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
+// `soloLectura`: perfiles de venta (Comercial/Ventas) solo ven/descargan el PDF de la GRE
+// ya emitida. No emiten, ni reemplazan, ni dejan sin efecto.
+export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = false }) {
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
@@ -119,13 +121,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
 
   const setC = (k, v) => setCorrecciones((c) => ({ ...c, [k]: v }));
 
+  // En solo lectura la tarjeta aparece únicamente cuando la GRE ya está emitida y con PDF disponible.
+  if (soloLectura && !(tieneComprobante && cerradaOk)) return null;
+
   return (
     <div className="card p-3 space-y-3 mb-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 font-semibold text-sm">
           <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
         </h3>
-        {puedeEmitir && (
+        {!soloLectura && puedeEmitir && (
           <button className="btn btn-sm btn-primary" onClick={() => setModalEmitir(true)} disabled={procesando}>
             <Zap size={14} className="mr-1" /> Emitir GRE
           </button>
@@ -144,12 +149,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
               <FileText size={13} className="mr-1" /> PDF
             </button>
           )}
-          {(enviado || aceptado) && (
+          {!soloLectura && (enviado || aceptado) && (
             <button className="btn btn-xs btn-outline" onClick={handleVerificar} disabled={procesando} title="Reconsultar estado en SUNAT">
               <RefreshCw size={13} className="mr-1" /> Estado
             </button>
           )}
-          {aceptado && (
+          {!soloLectura && aceptado && (
             <>
               <button className="btn btn-xs btn-outline" onClick={abrirReemplazo} disabled={procesando} title="Reemplazar por una GRE corregida">
                 <RotateCcw size={13} className="mr-1" /> Reemplazar

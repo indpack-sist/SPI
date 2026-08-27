@@ -346,8 +346,8 @@ function DetalleGuiaRemision() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {/* Guía de Remisión Electrónica (SEE · GRE 09) — Fase 14. Coexiste con el flujo manual. */}
-      {tienePermiso('facturacion') && (
-        <PanelGuiaRemisionSee guia={guia} onRefresh={() => cargarDatos(true)} />
+      {(tienePermiso('facturacion') || tienePermiso('facturacionConsulta')) && (
+        <PanelGuiaRemisionSee guia={guia} onRefresh={() => cargarDatos(true)} soloLectura={!tienePermiso('facturacion')} />
       )}
 
       <div className={`card border-2 ${estadoConfig.color} ${estadoConfig.bgColor} mb-4`}>

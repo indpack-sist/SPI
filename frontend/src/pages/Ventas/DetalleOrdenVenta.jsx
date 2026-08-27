@@ -28,6 +28,9 @@ function DetalleOrdenVenta() {
   // Calidad/Supervisor: acceso de solo lectura sin datos financieros.
   const verFinanzas = tienePermiso('verFinanzasVentas');
   const soloLectura = !verFinanzas;
+  // Facturación Electrónica (SEE): permiso pleno o de solo consulta (Comercial/Ventas).
+  const puedeVerSee = tienePermiso('facturacion') || tienePermiso('facturacionConsulta');
+  const seeSoloLectura = !tienePermiso('facturacion');
   
   const getFechaLocal = () => {
     const fecha = new Date();
@@ -2867,17 +2870,17 @@ function DetalleOrdenVenta() {
         {/* Facturación Electrónica (SEE) nativa — Fase 14. Coexiste con el panel manual de arriba.
             Solo para órdenes de tipo Factura: las Notas de Venta (inafecto) NO se emiten a SUNAT
             (mismo criterio que el gating manual, ver tipo_comprobante === 'Factura' arriba). */}
-        {tienePermiso('facturacion') && orden.tipo_comprobante === 'Factura' && (
-            <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} />
+        {puedeVerSee && orden.tipo_comprobante === 'Factura' && (
+            <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
         )}
 
         {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,
             embebida en el detalle de la OV: emitir, ver estado SUNAT y descargar el PDF aquí mismo.
             La card completa aparece cuando ya existe la guía; si no, se ofrece crearla. */}
-        {tienePermiso('facturacion') && esVehiculoEmpresa && (
+        {puedeVerSee && esVehiculoEmpresa && (
             guiaDetalleSee ? (
                 <div>
-                    <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} />
+                    <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
                     <button
                         className="btn btn-link btn-xs text-muted -mt-2 mb-4"
                         onClick={() => navigate(`/ventas/guias-remision/${guiaDetalleSee.id_guia}`)}
@@ -2885,7 +2888,7 @@ function DetalleOrdenVenta() {
                         Ver guía completa (despacho / entrega) →
                     </button>
                 </div>
-            ) : puedeDespachar() && (
+            ) : !seeSoloLectura && puedeDespachar() && (
                 <div className="card p-3 space-y-3 mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-sm">
                         <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)

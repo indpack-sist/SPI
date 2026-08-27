@@ -1207,8 +1207,21 @@ export const archivosAPI = {
 // Emisión electrónica nativa: facturas (01), notas (07/08), baja (RA) y GRE Remitente (09).
 // Requiere permiso 'facturacion'. Coexiste con el flujo manual existente hasta el corte a PROD.
 
-// Abre en una pestaña nueva un PDF (blob) del backend, enviando el token en el header.
-const abrirPdfSunat = async (path) => {
+// Dispara la descarga de un blob con un nombre de archivo dado (patrón de cotizaciones).
+const dispararDescarga = (blob, nombre) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nombre;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+};
+
+// Descarga el PDF (blob) del backend con el nombre SUNAT (Content-Disposition), enviando el token.
+// Descarga directa (sin abrir pestaña), igual que las cotizaciones.
+const descargarPdfSunat = async (path) => {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -1224,18 +1237,19 @@ const abrirPdfSunat = async (path) => {
     (disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || 'documento.pdf').trim()
   );
   const blob = await response.blob();
-  const archivo = new File([blob], nombre, { type: 'application/pdf' });
-  const url = window.URL.createObjectURL(archivo);
-  // 1) Abre la vista previa en una pestaña nueva.
-  window.open(url, '_blank');
-  // 2) Además descarga el archivo ya con el nombre SUNAT (como las cotizaciones).
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = nombre;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  dispararDescarga(new File([blob], nombre, { type: 'application/pdf' }), nombre);
+};
+
+// Descarga un archivo público (Cloudinary: XML firmado / CDR .zip) forzando el nombre correcto,
+// en vez de abrirlo en una pestaña. El nombre por defecto sale del último segmento de la URL,
+// que ya es el nombre SUNAT (p. ej. RUC-01-FE01-1.xml, R-RUC-01-FE01-1.zip).
+const descargarUrlComoArchivo = async (url, nombreSugerido) => {
+  if (!url) throw new Error('No hay archivo para descargar');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('No se pudo descargar el archivo');
+  const nombre = nombreSugerido
+    || decodeURIComponent((url.split('?')[0].split('/').pop() || 'documento').trim());
+  dispararDescarga(await response.blob(), nombre);
 };
 
 export const sunatAPI = {
@@ -1254,14 +1268,16 @@ export const sunatAPI = {
     api.post('/sunat/comprobantes/notas/emitir', { id_factura_ref, tipo, motivo_codigo, items }),
   darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),
   estadoComprobante: (id) => api.get(`/sunat/comprobantes/${id}/estado`),
-  verPdfComprobante: (id) => abrirPdfSunat(`/sunat/comprobantes/${id}/pdf`),
+  verPdfComprobante: (id) => descargarPdfSunat(`/sunat/comprobantes/${id}/pdf`),
+  // Descarga directa (blob) del XML firmado / CDR desde su URL pública, con nombre SUNAT.
+  descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
   // Guías de remisión (GRE Remitente 09) + Fase 12 (sin efecto / reemplazo).
   emitirGuia: (id) => api.post(`/sunat/guias/${id}/emitir`),
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
   dejarSinEfectoGuia: (id, motivo) => api.post(`/sunat/guias/${id}/sin-efecto`, { motivo }),
   reemplazarGuia: (id, correcciones = {}) => api.post(`/sunat/guias/${id}/reemplazar`, { correcciones }),
-  verPdfGuia: (id) => abrirPdfSunat(`/sunat/guias/${id}/pdf`),
+  verPdfGuia: (id) => descargarPdfSunat(`/sunat/guias/${id}/pdf`),
 
   // Monitor SUNAT (Fase 15): conteo por estado, tickets abiertos, rechazos y errores del log.
   monitor: () => api.get('/sunat/monitor'),

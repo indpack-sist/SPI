@@ -127,7 +127,10 @@ const PERMISOS_POR_ROL = {
       pagosCobranzas: false,
       listasPrecios: true,
       reportes: false,
-      verFinanzasVentas: true
+      verFinanzasVentas: true,
+      // Vista de solo lectura de la Facturación Electrónica (SEE): ver/descargar
+      // PDF, XML y CDR de comprobantes/guías ya emitidos. NO emite ni da de baja.
+      facturacionConsulta: true
     },
     api: {
       dashboard: false,
@@ -149,7 +152,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true
+      reportes: true,
+      facturacionConsulta: true
     }
   },
   'Ventas': {
@@ -173,7 +177,8 @@ const PERMISOS_POR_ROL = {
       pagosCobranzas: false,
       listasPrecios: true,
       reportes: false,
-      verFinanzasVentas: true
+      verFinanzasVentas: true,
+      facturacionConsulta: true
     },
     api: {
       dashboard: false,
@@ -194,7 +199,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: true,
-      reportes: false
+      reportes: false,
+      facturacionConsulta: true
     }
   },
   'Produccion': {
@@ -597,7 +603,10 @@ export const verificarToken = (req, res, next) => {
   }
 };
 
-export const verificarPermiso = (modulo) => {
+// Acepta uno o varios módulos: el acceso se concede si el rol tiene CUALQUIERA
+// de ellos (útil para endpoints que sirven tanto al permiso pleno como al de
+// solo lectura, p. ej. 'facturacion' o 'facturacionConsulta').
+export const verificarPermiso = (...modulos) => {
   return (req, res, next) => {
     try {
       const { rol } = req.user;
@@ -614,11 +623,11 @@ export const verificarPermiso = (modulo) => {
           error: 'Rol no reconocido'
         });
       }
-      if (!permisos.api[modulo]) {
+      if (!modulos.some((m) => permisos.api[m])) {
         return res.status(403).json({
           success: false,
           error: 'No tienes permiso para acceder a este módulo',
-          modulo: modulo,
+          modulo: modulos.join(' | '),
           rol: rol
         });
       }

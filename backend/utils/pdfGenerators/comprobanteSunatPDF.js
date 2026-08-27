@@ -40,6 +40,7 @@ const n2 = (v) => Number(v || 0).toFixed(2);
  * @param {object} p
  * @param {object} p.comprobante  { codigo_tipo_sunat, serie, numero, fecha_emision, moneda,
  *                                   subtotal, igv, total, afectacion?: '10'|'20'|'30'|'40',
+ *                                   guias?: 'TE01-5, TE01-6' (guías de remisión que ampara),
  *                                   sunat_digest_value, sunat_estado,
  *                                   docAfectado?: { comprobante, motivo } }
  * @param {object} p.emisor       empresa_config { razon_social, ruc, direccion, urbanizacion, telefono, email }
@@ -229,6 +230,14 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       if (obsTxt) {
         doc.font('Helvetica-Bold').text('Observaciones: ', 40, y, { continued: true, width: 515 })
            .font('Helvetica').text(obsTxt);
+        y = doc.y + 2;
+      }
+      // Guías de remisión que amparan el traslado (las declaradas en el XML). Solo aplica a la
+      // factura cuando la GRE se emitió antes; refleja el cac:DespatchDocumentReference.
+      const guiasTxt = String(c.guias || '').trim();
+      if (guiasTxt) {
+        doc.font('Helvetica-Bold').text('Guía(s) de remisión: ', 40, y, { continued: true, width: 515 })
+           .font('Helvetica').text(guiasTxt);
         y = doc.y + 2;
       }
 

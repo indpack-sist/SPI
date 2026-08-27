@@ -11,7 +11,7 @@ import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gr
 import { anularGuiaRemision, reemplazarGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
-import { sleep, copiaLocal, extraerUrl } from '../services/sunat/util.service.js';
+import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacionGuia } from '../services/sunat/util.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
@@ -786,8 +786,9 @@ export async function generarPdfGuia(req, res, next) {
   try {
     if (!idGuia) throw new AppError('id de guía inválido', 400);
     const [[g]] = await pool.query(
-      "SELECT *, DATE_FORMAT(COALESCE(fecha_emision, sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
-      "DATE_FORMAT(fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt FROM guias_remision WHERE id_guia = ?",
+      "SELECT g.*, DATE_FORMAT(COALESCE(g.fecha_emision, g.sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
+      "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente " +
+      "FROM guias_remision g LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = g.id_orden_venta WHERE g.id_guia = ?",
       [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     // Se imprime la GRE ACEPTADA y también las invalidadas (ANULADA/REEMPLAZADA), estas últimas
@@ -811,6 +812,11 @@ export async function generarPdfGuia(req, res, next) {
     const [[conductor]] = g.id_conductor
       ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
       : [[null]];
+    // Placa: se resuelve desde la flota (id_vehiculo) y se normaliza igual que en la emisión, para
+    // que el PDF muestre exactamente la placa enviada a SUNAT (fallback a columnas legacy).
+    const [[vehiculo]] = g.id_vehiculo
+      ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
+      : [[null]];
     const [detalle] = await pool.query(
       'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
@@ -824,7 +830,8 @@ export async function generarPdfGuia(req, res, next) {
         ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
         sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,
-        placa: g.placa_vehiculo || g.placa || null,
+        placa: normalizarPlaca(vehiculo?.placa || g.placa_vehiculo || g.placa),
+        observaciones: componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
       emisor, cliente, detalle, conductor, qrBuffer

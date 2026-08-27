@@ -12,7 +12,7 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima, ahoraLima } from './fecha.service.js';
-import { sleep, copiaLocal } from './util.service.js';
+import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia } from './util.service.js';
 import AppError from '../../utils/AppError.js';
 
 // ── FASE 12: reconciliación de reemplazo ────────────────────────────────────
@@ -91,7 +91,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null) {
     if (!g) throw new AppError('Guía no existe', 404);
     if (g.sunat_estado === 'ACEPTADO') throw new AppError('La guía ya fue aceptada por SUNAT', 409);
     // Regla de negocio: la GRE se emite una vez que la orden ya fue despachada.
-    const [[ov]] = await conn.query('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [g.id_orden_venta]);
+    const [[ov]] = await conn.query('SELECT estado, orden_compra_cliente FROM ordenes_venta WHERE id_orden_venta = ?', [g.id_orden_venta]);
     if (!ov || ov.estado !== 'Despachada') {
       throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
     }
@@ -127,16 +127,21 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null) {
     if (modalidad === '01') {
       throw new AppError('Transporte público (transportista) aún no soportado; usa una guía con conductor (privado)', 422);
     }
-    let placa = vehiculo?.placa || null; // placa real desde la flota (id_vehiculo)
+    // Placa normalizada (sin guion/espacios, mayúsculas) para que coincida con el registro MTC y
+    // con la representación de SUNAT (ver normalizarPlaca): "AVZ-890" → "AVZ890".
+    let placa = normalizarPlaca(vehiculo?.placa); // placa real desde la flota (id_vehiculo)
     if (!placa) {
       if (sunatConfig.mode === 'PROD') throw new AppError('Falta el vehículo de la flota (placa) para transporte privado', 422);
-      placa = 'XXX-000'; // placeholder solo BETA/mock (no válido en PROD)
+      placa = 'XXX000'; // placeholder solo BETA/mock (no válido en PROD)
     }
+
+    // Observación = texto libre de la guía + OC del cliente (si la OV la tiene) → viaja en cbc:Note.
+    const observacion = componerObservacionGuia(g.observaciones, ov?.orden_compra_cliente);
 
     const numero = await obtenerCorrelativo(conn, tipo, serie);
     const datos = {
       tipo, serie, numero, empresa, cliente, guia: g, detalle,
-      fecha: { emision, hora }, fechaTraslado, modalidad, conductor, placa
+      fecha: { emision, hora }, fechaTraslado, modalidad, conductor, placa, observacion
     };
     const { xml } = construirDespatchAdviceXML(datos);
     const { xmlFirmado, digestValue } = firmarXml(xml);

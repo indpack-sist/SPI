@@ -98,7 +98,8 @@ async function main() {
       motivo_traslado_cod: '01', peso_bruto_kg: 100.50,
       ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VILLA EL SALVADOR',
       ubigeo_llegada: '150101', direccion_llegada: 'AV. ARGENTINA 1234 - LIMA',
-      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-1'), placa: 'ABC-123'
+      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-1'), placa: 'ABC123',
+      observaciones: 'Entrega en almacen central | OC: 260610043'
     },
     emisor, cliente,
     detalle: [{ codigo: 'PROD-001', nombre: 'CAJA DE CARTON 30x30x30', cantidad: 100, codigo_unidad_sunat: 'NIU' }],
@@ -106,6 +107,9 @@ async function main() {
     qrBuffer: qrGre
   });
   check('GRE (09) genera PDF válido (QR = URL SUNAT)', esPdf(pdfGre), `${pdfGre.length} bytes`);
+  const txtGre = await textoDe(pdfGre);
+  check('GRE (09) imprime Observaciones (texto libre + OC)',
+    txtGre.includes('Observaciones') && txtGre.includes('OC: 260610043'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
   // 5) Rótulo de operación por afectación (catálogo 07) — sin incongruencias con el importe.

@@ -82,6 +82,7 @@ function vehiclesXml(vehiculos, mtcDefault) {
  * @param {'01'|'02'} d.modalidad  01 público (CarrierParty) · 02 privado (DriverPerson+placa)
  * @param {object|null} d.conductor {dni, nombre_completo, licencia_conducir}  (privado)
  * @param {string|null} d.placa    placa del vehículo (privado)
+ * @param {string} [d.observacion] observación libre + OC → cbc:Note (SUNAT la muestra como "Observaciones")
  * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada)
  * @returns {{ xml: string }}
  */
@@ -123,6 +124,12 @@ export function construirDespatchAdviceXML(d) {
     </cac:TransportHandlingUnit>`
     : '';
 
+  // Observación (texto libre + OC) → cbc:Note. Va tras DespatchAdviceTypeCode y antes de
+  // AdditionalDocumentReference/Signature (orden de secuencia UBL). SUNAT la refleja como "Observaciones".
+  const notaXml = d.observacion
+    ? `\n  <cbc:Note>${cdata(trunc(d.observacion, 250))}</cbc:Note>`
+    : '';
+
   // Documento relacionado (factura), opcional.
   const docRelXml = d.docRelacionado
     ? `\n  <cac:AdditionalDocumentReference>
@@ -155,7 +162,7 @@ export function construirDespatchAdviceXML(d) {
   <cbc:ID>${idComprobante}</cbc:ID>
   <cbc:IssueDate>${d.fecha.emision}</cbc:IssueDate>
   <cbc:IssueTime>${d.fecha.hora}</cbc:IssueTime>
-  <cbc:DespatchAdviceTypeCode>09</cbc:DespatchAdviceTypeCode>${docRelXml}
+  <cbc:DespatchAdviceTypeCode>09</cbc:DespatchAdviceTypeCode>${notaXml}${docRelXml}
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>

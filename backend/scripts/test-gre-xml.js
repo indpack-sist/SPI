@@ -35,7 +35,8 @@ const datos = {
   fechaTraslado: '2026-08-24',
   modalidad: '02',
   conductor: { dni: '75336849', nombre_completo: 'MAX ALEX SANANCINO', licencia_conducir: 'Q75336849' },
-  placa: 'XXX-000' // placeholder BETA (guias_remision no tiene columna placa)
+  placa: 'XXX000', // placeholder BETA (ya normalizado, sin guion)
+  observacion: 'Entrega en almacen central | OC: 260610043' // texto libre + OC → cbc:Note
 };
 
 const nombre = `${RUC}-${datos.tipo}-${datos.serie}-${datos.numero}`; // core del filename == cbc:ID sin serie
@@ -93,7 +94,10 @@ check('Ubigeo de partida presente',
 const driver = ship?.ShipmentStage?.DriverPerson;
 check('DriverPerson con DNI (schemeID=1)', String(driver?.ID?.['#text']) === '75336849');
 check('DriverPerson con licencia', String(driver?.IdentityDocumentReference?.ID) === 'Q75336849');
-check('TransportHandlingUnit con placa', String(ship?.TransportHandlingUnit?.TransportEquipment?.ID) === 'XXX-000');
+check('TransportHandlingUnit con placa', String(ship?.TransportHandlingUnit?.TransportEquipment?.ID) === 'XXX000');
+
+// Observación (texto libre + OC) → cbc:Note, que SUNAT refleja como "Observaciones".
+check('cbc:Note con observación + OC', String(da?.Note || '').includes('OC: 260610043'), `Note=${da?.Note}`);
 
 // Líneas
 const lineas = Array.isArray(da?.DespatchLine) ? da.DespatchLine : [da?.DespatchLine];

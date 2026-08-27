@@ -25,7 +25,7 @@ const MOTIVOS_TRASLADO = {
  * @param {object} p
  * @param {object} p.guia      { serie_sunat, numero_sunat, fecha_emision, fecha_traslado, motivo_traslado_cod,
  *                               peso_bruto_kg, ubigeo_partida, direccion_partida, ubigeo_llegada, direccion_llegada,
- *                               sunat_estado, sunat_digest_value, placa }
+ *                               sunat_estado, sunat_digest_value, placa, observaciones }
  * @param {object} p.emisor    empresa_config
  * @param {object} p.cliente   destinatario { razon_social, ruc }
  * @param {Array}  p.detalle   [{ codigo, nombre, cantidad, codigo_unidad_sunat }]
@@ -127,6 +127,18 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
         y += hFila;
       }
       doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
+      y += 8;
+
+      // ── Observaciones (texto libre + OC) — texto plano, sin recuadro, posición inteligente ──
+      // Mismo diseño que la factura: fluye bajo la tabla (baja con ella cuando hay muchos ítems) y
+      // el mismo texto viaja a SUNAT en cbc:Note. SUNAT la refleja como "Observaciones".
+      const obsTxt = String(g.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      if (obsTxt) {
+        doc.fontSize(8).fillColor('#000')
+          .font('Helvetica-Bold').text('Observaciones: ', 40, y, { continued: true, width: 515 })
+          .font('Helvetica').text(obsTxt);
+        y = doc.y + 2;
+      }
 
       // ── Pie legal: QR (URL SUNAT) + leyenda ──
       // El "Valor resumen (hash)" NO se imprime (consistente con la factura; el digest sigue en el

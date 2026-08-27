@@ -18,3 +18,29 @@ export function extraerUrl(v) {
   if (typeof v === 'object') return v.url || null;
   try { return JSON.parse(v).url || null; } catch { return v; }
 }
+
+/**
+ * Placa para SUNAT: alfanumérica en MAYÚSCULAS, sin guion ni espacios. Así la registra el MTC y
+ * así la refleja la representación impresa de SUNAT (p. ej. "AVZ-890" → "AVZ890"); el guion puede
+ * provocar rechazo en la GRE REST. Devuelve null si queda vacía. Se aplica solo al valor enviado,
+ * no al dato de flota.
+ */
+export function normalizarPlaca(placa) {
+  const s = String(placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return s || null;
+}
+
+/**
+ * Observación de la GRE: concatena el texto libre de la guía con la orden de compra del cliente
+ * (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones" y viaja en cbc:Note.
+ * Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de SUNAT). Máx 250,
+ * mismo tope que la observación de la factura.
+ */
+export function componerObservacionGuia(observaciones, ordenCompra) {
+  const partes = [];
+  const obs = String(observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+  if (obs) partes.push(obs);
+  const oc = String(ordenCompra || '').trim();
+  if (oc) partes.push(`OC: ${oc}`);
+  return partes.join(' | ').slice(0, 250);
+}

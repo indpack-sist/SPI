@@ -78,10 +78,9 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       // ── Datos del cliente (layout de flujo dinámico anti-desborde) ──
       // Cada campo mide su propio alto real y el siguiente arranca debajo, de modo que los
-      // valores largos (razón social, direcciones) envuelven sin taparse entre sí. Dos
-      // columnas estrictamente separadas: izquierda (cliente/RUC/direcciones) x40–313,
-      // derecha (condición comercial/fecha/moneda) x325–560; la observación va full-width
-      // al final, bajo ambas columnas.
+      // valores largos (razón social) envuelven sin taparse entre sí. Dos columnas estrictamente
+      // separadas: izquierda (cliente/RUC) x40–313, derecha (condición comercial/fecha/moneda)
+      // x325–560; la observación va full-width al final, bajo ambas columnas.
       let y = 140;
       const boxTop = y;
       const boxPad = 8;
@@ -98,17 +97,15 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         return atY + Math.max(h, 11) + 3;
       };
 
-      const dirFiscal = String(cliente.direccion || '-').replace(/[\r\n]+/g, ' ').trim() || '-';
-      const dirEnt = String(c.direccion_entrega || '').replace(/[\r\n]+/g, ' ').trim();
-      const dirEntrega = dirEnt && dirEnt !== dirFiscal ? dirEnt : '(la misma que la fiscal)';
       const rucLabel = String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC:' : 'Doc:';
 
-      // Columna izquierda
+      // Columna izquierda — solo identificación del adquiriente (razón social + documento).
+      // La representación impresa de SUNAT NO muestra la dirección del cliente receptor: ni la
+      // fiscal ni la de entrega. Esta última, además, no aplica cuando es recojo en tienda. Se
+      // omiten a propósito para reflejar el mismo formato que el PDF generado por SUNAT.
       let yl = boxTop + boxPad;
       yl = campo('Cliente:', cliente.razon_social, 40, 108, 205, yl);
       yl = campo(rucLabel, cliente.ruc, 40, 108, 205, yl);
-      yl = campo('Dir. fiscal:', dirFiscal, 40, 108, 205, yl);
-      yl = campo('Dir. entrega:', dirEntrega, 40, 108, 205, yl);
 
       // Columna derecha — condición comercial (misma fuente que el cac:PaymentTerms del XML).
       const esCredito = String(c.tipo_venta || '').toLowerCase().startsWith('cr');

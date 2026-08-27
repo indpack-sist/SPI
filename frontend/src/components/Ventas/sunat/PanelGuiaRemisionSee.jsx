@@ -124,7 +124,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh }) {
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 font-semibold text-sm">
           <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
-          <span className="badge badge-warning text-[10px]">BETA</span>
         </h3>
         {puedeEmitir && (
           <button className="btn btn-sm btn-primary" onClick={() => setModalEmitir(true)} disabled={procesando}>

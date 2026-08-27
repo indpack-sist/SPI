@@ -2107,16 +2107,9 @@ function DetalleOrdenVenta() {
             )
           )}
 
-          {puedeReservarStock() && (
-            <button
-  className="btn btn-warning"
-  onClick={handleAbrirReservaStock}
-  disabled={procesando}
-  title="Reservar/Editar stock físico"
->
-  <Lock size={20} /> {orden.stock_reservado > 0 ? 'Editar Reserva' : 'Reservar Stock'}
-</button>
-          )}
+          {/* Botón "Reservar Stock" retirado de la cabecera por decisión del usuario (2026-08-27):
+              el despacho se registra al crear la guía de remisión. El modal de reserva y sus
+              handlers se conservan por si se reactiva. */}
 
           {puedeDespachar() && (
              <button
@@ -2896,7 +2889,6 @@ function DetalleOrdenVenta() {
                 <div className="card p-3 space-y-3 mb-4">
                     <h3 className="flex items-center gap-2 font-semibold text-sm">
                         <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
-                        <span className="badge badge-warning text-[10px]">BETA</span>
                     </h3>
                     <p className="text-xs text-muted">Aún no se ha creado la guía de remisión de esta orden.</p>
                     <button

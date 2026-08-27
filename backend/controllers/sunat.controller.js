@@ -11,7 +11,7 @@ import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gr
 import { anularGuiaRemision, reemplazarGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
-import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacionGuia } from '../services/sunat/util.service.js';
+import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia } from '../services/sunat/util.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
@@ -39,6 +39,37 @@ function diffDiasISO(desdeISO, hastaISO) {
   const a = new Date(desdeISO + 'T00:00:00');
   const b = new Date(hastaISO + 'T00:00:00');
   return Math.round((b - a) / 86400000);
+}
+
+// Valida/normaliza la fecha de emisión opcional (retro-fecha). Sin valor → hoy Lima.
+// Regla: la fecha no puede ser futura y el beneficio de retro-fecha alcanza como máximo
+// 2 días anteriores. La regla cronológica (no anterior a la última factura ya emitida de la
+// serie) se valida aparte, contra la BD. Devuelve 'YYYY-MM-DD'.
+function validarFechaEmision(solicitada, hoyISO) {
+  const s = String(solicitada || '').trim();
+  if (!s) return hoyISO;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new AppError('fecha_emision debe tener formato YYYY-MM-DD', 400);
+  }
+  const d = new Date(s + 'T00:00:00');
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+    throw new AppError('fecha_emision no es una fecha válida', 400);
+  }
+  const dias = diffDiasISO(s, hoyISO); // >0 = pasado, <0 = futuro
+  if (dias < 0) throw new AppError('La fecha de emisión no puede ser futura', 422);
+  if (dias > 2) throw new AppError('La fecha de emisión solo puede retrocederse hasta 2 días anteriores', 422);
+  return s;
+}
+
+// Última fecha de emisión (DATE 'YYYY-MM-DD') de la serie ya usada por un comprobante vivo
+// (no rechazado). Sirve para la regla cronológica: no se puede emitir con fecha anterior a esta.
+// `db` puede ser el pool o una conexión de transacción (ambos exponen .query).
+async function ultimaFechaEmitidaSerie(db, serie) {
+  const [[row]] = await db.query(
+    "SELECT DATE_FORMAT(MAX(fecha_emision), '%Y-%m-%d') AS ultima FROM facturas_venta " +
+    "WHERE serie = ? AND codigo_tipo_sunat = '01' AND sunat_estado IS NOT NULL AND sunat_estado <> 'RECHAZADO'",
+    [serie]);
+  return row?.ultima || null;
 }
 
 // GET /api/sunat/ping  -> verificación de despliegue (sin auth)
@@ -70,7 +101,12 @@ export async function emitirComprobante(req, res, next) {
       throw new AppError('Las notas 07/08 se emiten desde el endpoint de notas (Fase 7)', 400);
     }
 
-    const { emision, hora, emisionDateTime } = fechaLima();
+    const lima = fechaLima();
+    const { hora } = lima;
+    // Fecha de emisión: por defecto hoy (Lima); se permite retro-fechar dentro del plazo de
+    // envío de SUNAT (≤ 3 días calendario). Nunca a futuro. La hora es siempre la real.
+    const emision = validarFechaEmision(req.body.fecha_emision, lima.emision);
+    const emisionDateTime = `${emision} ${hora}`;
     const serie = 'FE01';
 
     // ── TX1: validar + reservar correlativo + INSERT factura ENVIADO (traza) ──
@@ -83,6 +119,18 @@ export async function emitirComprobante(req, res, next) {
       }
       if (ov.facturado_sunat) throw new AppError('La OV ya fue facturada', 409);
       if (ov.estado_verificacion !== 'Aprobada') throw new AppError('La OV debe estar Aprobada para facturar', 422);
+
+      // Regla cronológica: no se puede retro-fechar por debajo de la última factura ya emitida
+      // de la serie. Los días previos solo quedan "libres" mientras no se haya avanzado la
+      // facturación (no exista aún un comprobante con fecha posterior). Solo aplica al retro-fechar.
+      if (emision !== lima.emision) {
+        const ultima = await ultimaFechaEmitidaSerie(conn, serie);
+        if (ultima && diffDiasISO(emision, ultima) > 0) {
+          throw new AppError(
+            `No se puede emitir con fecha ${emision}: la serie ya tiene un comprobante con fecha ${ultima}. ` +
+            'Solo se puede retro-fechar mientras no se haya emitido una factura con fecha posterior.', 422);
+        }
+      }
 
       const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [ov.id_cliente]);
       if (!cliente) throw new AppError('Cliente de la OV no existe', 404);
@@ -104,6 +152,16 @@ export async function emitirComprobante(req, res, next) {
           ? addDiasISO(emision, ov.dias_credito) : null
       };
 
+      // Observaciones (cbc:Note, lo que SUNAT muestra como "Observaciones"). Editable desde el
+      // panel: si el cliente envía `observaciones` se usa tal cual; si no (API antigua), se compone
+      // por defecto con la OC del cliente. Se normaliza (sin saltos, ≤250) para que lo PERSISTIDO
+      // coincida byte a byte con el cbc:Note del XML y así el PDF muestre exactamente lo enviado.
+      const observacionEnviada = (req.body.observaciones !== undefined
+        ? String(req.body.observaciones)
+        : componerObservacion(ov.observaciones, ov.orden_compra_cliente)
+      ).replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
+      ov.observaciones = observacionEnviada;
+
       const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       // El número del nombre de archivo debe coincidir EXACTO con cbc:ID (serie-numero),
@@ -120,14 +178,14 @@ export async function emitirComprobante(req, res, next) {
         `INSERT INTO facturas_venta
           (numero_factura, id_orden_venta, id_cliente, tipo_comprobante, serie, numero,
            subtotal, igv, total, moneda, estado, codigo_tipo_sunat, tipo_operacion_sunat,
-           fecha_emision,
+           fecha_emision, observaciones,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, 'ENVIADO', ?,?,?,?, ?, ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, ?, 'ENVIADO', ?,?,?,?, ?, ?)`,
         [`${serie}-${numero}`, id_orden_venta, ov.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ov.moneda || 'PEN', 'Emitida',
          tipo, esExport ? '0200' : (ov.tipo_operacion_sunat || '0101'),
-         emisionDateTime,
+         emisionDateTime, observacionEnviada,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales };
@@ -241,6 +299,10 @@ export async function previewComprobante(req, res, next) {
       igv: calc.igv,
       total: calc.total,
       montoEnLetras: calc.montoEnLetras,
+      // Observación SUGERIDA (cbc:Note) que el panel prellena y el usuario puede editar antes de emitir.
+      observacion: componerObservacion(ov.observaciones, ov.orden_compra_cliente),
+      // Última fecha ya emitida en la serie: el panel no deja retro-fechar por debajo de ella (regla cronológica).
+      ultimaFechaEmitida: await ultimaFechaEmitidaSerie(pool, 'FE01'),
       avisos
     });
   } catch (e) { next(e); }
@@ -716,7 +778,9 @@ export async function generarPdfComprobante(req, res, next) {
     const [[f]] = await pool.query(
       "SELECT f.*, DATE_FORMAT(f.fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt, " +
       "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(ov.fecha_vencimiento, '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
-      "ov.observaciones, ov.orden_compra_cliente, ov.direccion_entrega, ov.tipo_impuesto, ov.es_exportacion " +
+      // ov.observaciones se alía para NO pisar f.observaciones (misma clave). El PDF muestra lo
+      // PERSISTIDO en la factura (== cbc:Note enviado); ov_observaciones solo es fallback histórico.
+      "ov.observaciones AS ov_observaciones, ov.orden_compra_cliente, ov.direccion_entrega, ov.tipo_impuesto, ov.es_exportacion " +
       "FROM facturas_venta f LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = f.id_orden_venta " +
       "WHERE f.id_factura = ?",
       [idFactura]);
@@ -756,7 +820,13 @@ export async function generarPdfComprobante(req, res, next) {
         codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
         fecha_emision: f.fecha_emision_fmt, moneda: f.moneda,
         tipo_venta: f.tipo_venta, dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
-        observaciones: f.observaciones, orden_compra: f.orden_compra_cliente,
+        // "Observaciones" del PDF = lo enviado a SUNAT (cbc:Note) persistido en la factura. Para filas
+        // viejas (sin persistir) se compone del texto de la OV + OC. La OC ya viaja DENTRO de este
+        // texto, así que no se imprime aparte (paridad exacta con lo que muestra SUNAT).
+        observaciones: (f.observaciones != null && f.observaciones !== '')
+          ? f.observaciones
+          : componerObservacion(f.ov_observaciones, f.orden_compra_cliente),
+        orden_compra: null,
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado

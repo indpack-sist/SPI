@@ -42,7 +42,20 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
   // Datos derivados para la vista previa del comprobante (lo que se enviará a SUNAT).
   const esExportacion = Number(orden?.es_exportacion) === 1;
   const lineas = orden?.detalle || [];
-  const hoy = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  // Fecha de emisión editable: por defecto hoy; se permite retro-fechar hasta 2 días, nunca a
+  // futuro, y nunca por debajo de la última factura ya emitida de la serie (regla cronológica:
+  // los días previos solo quedan libres mientras no se haya avanzado la facturación). El backend
+  // revalida ambas reglas. `preview.ultimaFechaEmitida` (YYYY-MM-DD) llega al abrir el modal.
+  const hoyISO = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+  const minVentana = new Date(Date.now() - 2 * 86400000).toLocaleDateString('en-CA');
+  const ultimaFechaEmitida = preview?.ultimaFechaEmitida || null;
+  const minISO = ultimaFechaEmitida && ultimaFechaEmitida > minVentana ? ultimaFechaEmitida : minVentana;
+  const [fechaEmision, setFechaEmision] = useState(hoyISO);
+  const fechaFmt = (iso) => { const [y, m, d] = (iso || '').split('-'); return d ? `${d}/${m}/${y}` : iso; };
+  // Observaciones (cbc:Note) que SUNAT muestra como "Observaciones". Se prellena con la sugerencia
+  // del backend (incluye "OC: <correlativo>" si la OV tiene orden de compra) y es editable.
+  const [observaciones, setObservaciones] = useState('');
+  const OBS_MAX = 250;
 
   // Comprobantes electrónicos (nativos): tienen sunat_estado. Los manuales quedan en su panel.
   const comprobantes = (facturas || []).filter((f) => f.sunat_estado);
@@ -62,7 +75,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
   };
 
   const handleEmitir = async () => {
-    const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta), null);
+    const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta, fechaEmision, observaciones), null);
     const d = r?.data;
     if (d) {
       setAlerta(d.ok
@@ -94,7 +107,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
     let cancel = false;
     setPreviewLoading(true); setPreviewError(null); setPreview(null);
     sunatAPI.previewComprobante(orden.id_orden_venta)
-      .then((r) => { if (!cancel) setPreview(r.data); })
+      .then((r) => { if (!cancel) { setPreview(r.data); setObservaciones(r.data?.observacion || ''); } })
       .catch((e) => { if (!cancel) setPreviewError(errorMsg(e)); })
       .finally(() => { if (!cancel) setPreviewLoading(false); });
     return () => { cancel = true; };
@@ -107,7 +120,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
           <Zap size={16} className="text-amber-500" /> Facturación Electrónica (SEE)
         </h3>
         {puedeEmitir && (
-          <button className="btn btn-sm btn-primary" onClick={() => setModalEmitir(true)} disabled={procesando}>
+          <button className="btn btn-sm btn-primary" onClick={() => { setFechaEmision(hoyISO); setModalEmitir(true); }} disabled={procesando}>
             <Zap size={14} className="mr-1" /> Emitir factura SEE
           </button>
         )}
@@ -180,7 +193,21 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
             </div>
             <div className="bg-gray-50 rounded p-2">
               <div className="text-[10px] text-muted uppercase">Fecha de emisión</div>
-              <div className="font-semibold">{hoy}</div>
+              <input
+                type="date"
+                className="form-input w-full text-sm font-semibold py-0.5 px-1 bg-white"
+                value={fechaEmision}
+                min={minISO}
+                max={hoyISO}
+                onChange={(e) => setFechaEmision(e.target.value)}
+                disabled={procesando}
+              />
+              {fechaEmision !== hoyISO && (
+                <div className="text-[10px] text-amber-600 mt-0.5">Retro-fechada al {fechaFmt(fechaEmision)} (dentro del plazo).</div>
+              )}
+              {ultimaFechaEmitida && ultimaFechaEmitida >= hoyISO && (
+                <div className="text-[10px] text-muted mt-0.5">Ya existe una factura con fecha {fechaFmt(ultimaFechaEmitida)}: no se puede retro-fechar.</div>
+              )}
             </div>
             <div className="bg-gray-50 rounded p-2">
               <div className="text-[10px] text-muted uppercase">Moneda</div>
@@ -189,6 +216,26 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh })
             <div className="bg-gray-50 rounded p-2">
               <div className="text-[10px] text-muted uppercase">Tipo de operación</div>
               <div className="font-semibold">{esExportacion ? 'Exportación (0200)' : 'Venta interna (0101)'}</div>
+            </div>
+          </div>
+
+          {/* Observaciones (cbc:Note) — lo que aparece en SUNAT. Editable. */}
+          <div className="border border-gray-200 rounded p-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-muted uppercase">Observaciones (aparecen en SUNAT)</label>
+              <span className="text-[10px] text-muted">{observaciones.length}/{OBS_MAX}</span>
+            </div>
+            <textarea
+              className="form-input w-full text-sm"
+              rows={2}
+              maxLength={OBS_MAX}
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Ej: OC: 15152"
+              disabled={procesando || previewLoading}
+            />
+            <div className="text-[10px] text-muted mt-0.5">
+              Este texto viaja en el comprobante (cbc:Note) y es lo que verás en SUNAT. Se prellena con la orden de compra si la orden la tiene.
             </div>
           </div>
 

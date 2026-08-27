@@ -1218,9 +1218,7 @@ const abrirPdfSunat = async (path) => {
     try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
     throw new Error(msg);
   }
-  // Nombre del backend (Content-Disposition) para que la pestaña/descarga muestre el nombre SUNAT
-  // (RUC-01-FE01-1.pdf) en vez del UUID del blob. Se envuelve el blob en un File con ese nombre:
-  // el visor PDF del navegador usa File.name como nombre sugerido al descargar.
+  // Nombre del backend (Content-Disposition) → nombre SUNAT (RUC-01-FE01-1.pdf) en vez del UUID.
   const disp = response.headers.get('Content-Disposition') || '';
   const nombre = decodeURIComponent(
     (disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || 'documento.pdf').trim()
@@ -1228,7 +1226,15 @@ const abrirPdfSunat = async (path) => {
   const blob = await response.blob();
   const archivo = new File([blob], nombre, { type: 'application/pdf' });
   const url = window.URL.createObjectURL(archivo);
+  // 1) Abre la vista previa en una pestaña nueva.
   window.open(url, '_blank');
+  // 2) Además descarga el archivo ya con el nombre SUNAT (como las cotizaciones).
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nombre;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
   setTimeout(() => window.URL.revokeObjectURL(url), 60000);
 };
 

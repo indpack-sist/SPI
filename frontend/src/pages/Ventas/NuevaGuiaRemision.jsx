@@ -22,6 +22,13 @@ function NuevaGuiaRemision() {
   const [validacionProductos, setValidacionProductos] = useState({});
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
+  const [transportistas, setTransportistas] = useState([]);
+  // Transportista heredado de la OV cuando la entrega es por tercero (modalidad pública).
+  const [ovTransportista, setOvTransportista] = useState(null);
+  // Alta rápida de transportista (modalidad pública) sin salir del form.
+  const [showNuevoTransportista, setShowNuevoTransportista] = useState(false);
+  const [nuevoTransportista, setNuevoTransportista] = useState({ ruc: '', razon_social: '', numero_mtc: '' });
+  const [guardandoTransportista, setGuardandoTransportista] = useState(false);
   
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
@@ -39,8 +46,15 @@ function NuevaGuiaRemision() {
     numero_bultos: 0,
     observaciones: '',
     id_conductor: '',
-    id_vehiculo: ''
+    id_vehiculo: '',
+    id_transportista: ''
   });
+
+  // Modalidad pública = transporte por un tercero transportista (RUC + razón social).
+  const esPublico = String(formData.modalidad_transporte)
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .includes('publico');
   
   const [detalle, setDetalle] = useState([]);
 
@@ -54,14 +68,16 @@ function NuevaGuiaRemision() {
   useEffect(() => {
     (async () => {
       try {
-        const [rc, rv] = await Promise.all([
+        const [rc, rv, rt] = await Promise.all([
           ordenesVentaAPI.getConductores(),
-          ordenesVentaAPI.getVehiculos()
+          ordenesVentaAPI.getVehiculos(),
+          guiasRemisionAPI.getTransportistas()
         ]);
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
+        if (rt.data?.success) setTransportistas(rt.data.data || []);
       } catch (err) {
-        console.error('Error al cargar conductores/vehículos:', err);
+        console.error('Error al cargar catálogos de transporte:', err);
       }
     })();
   }, []);
@@ -129,13 +145,26 @@ function NuevaGuiaRemision() {
         
         setDetalle(detalleInicial);
         
+        // Transporte por tercero en la OV ('Transporte Privado') = modalidad pública SUNAT.
+        // Se hereda el transportista declarado en la orden (RUC + razón social); el backend lo
+        // materializa en el maestro al crear la guía, así no hay que re-seleccionarlo aquí.
+        const ovEsTercero = ordenData.tipo_entrega === 'Transporte Privado';
+        setOvTransportista(ovEsTercero ? {
+          ruc: ordenData.transporte_ruc || '',
+          razon: ordenData.transporte_nombre || '',
+          mtc: ordenData.transporte_mtc || ''
+        } : null);
+
         setFormData(prev => ({
           ...prev,
           id_orden_venta: id,
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || '',
           ubigeo_llegada: ordenData.ubigeo_llegada || '',
-          // Heredar el transporte asignado en la OV (editable como override en los selects).
+          // Si la OV es por tercero, la guía nace en modalidad pública.
+          modalidad_transporte: ovEsTercero ? 'Transporte Público' : prev.modalidad_transporte,
+          tipo_traslado: ovEsTercero ? 'Público' : prev.tipo_traslado,
+          // Heredar el transporte propio asignado en la OV (editable como override en los selects).
           id_conductor: ordenData.id_conductor ? String(ordenData.id_conductor) : '',
           id_vehiculo: ordenData.id_vehiculo ? String(ordenData.id_vehiculo) : ''
         }));
@@ -211,6 +240,44 @@ function NuevaGuiaRemision() {
     setDetalle(newDetalle);
   };
 
+  // Alta rápida de transportista: lo registra en el maestro y lo deja seleccionado en la guía.
+  const guardarTransportista = async () => {
+    setError(null);
+    const { ruc, razon_social } = nuevoTransportista;
+    if (!/^\d{11}$/.test(String(ruc).trim())) {
+      setError('El RUC del transportista debe tener 11 dígitos');
+      return;
+    }
+    if (!razon_social.trim()) {
+      setError('La razón social del transportista es obligatoria');
+      return;
+    }
+    try {
+      setGuardandoTransportista(true);
+      const resp = await guiasRemisionAPI.createTransportista({
+        ruc: ruc.trim(),
+        razon_social: razon_social.trim(),
+        numero_mtc: nuevoTransportista.numero_mtc.trim() || null
+      });
+      if (!resp.data?.success) {
+        setError(resp.data?.error || 'No se pudo registrar el transportista');
+        return;
+      }
+      const nuevo = resp.data.data;
+      // Refrescar el maestro y dejar el nuevo seleccionado.
+      const lista = await guiasRemisionAPI.getTransportistas();
+      if (lista.data?.success) setTransportistas(lista.data.data || []);
+      setFormData(prev => ({ ...prev, id_transportista: String(nuevo.id_transportista) }));
+      setShowNuevoTransportista(false);
+      setNuevoTransportista({ ruc: '', razon_social: '', numero_mtc: '' });
+    } catch (err) {
+      console.error('Error al registrar transportista:', err);
+      setError(err.response?.data?.error || 'Error al registrar transportista');
+    } finally {
+      setGuardandoTransportista(false);
+    }
+  };
+
   const calcularTotales = () => {
     const pesoTotal = detalle.reduce((sum, item) => 
       sum + (parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0)), 0
@@ -266,10 +333,19 @@ function NuevaGuiaRemision() {
       return;
     }
 
-    // La GRE electrónica en transporte privado exige conductor + vehículo (placa de la flota).
-    // Como ahora se emite en un solo paso, lo validamos aquí para no crear una guía inemitible.
-    const esPrivado = String(formData.modalidad_transporte).toLowerCase().includes('privado');
-    if (esPrivado && (!formData.id_conductor || !formData.id_vehiculo)) {
+    // Requisitos según modalidad para que la GRE sea emitible (se emite en un solo paso):
+    //  · Público  → transportista tercero (RUC + razón social).
+    //  · Privado  → conductor + vehículo (placa de la flota).
+    if (esPublico) {
+      // Válido si la OV ya trae el transportista (con RUC) o si se eligió uno del maestro.
+      const tieneOvTransportista = ovTransportista && ovTransportista.ruc;
+      if (!tieneOvTransportista && !formData.id_transportista) {
+        setError(ovTransportista
+          ? 'La orden se entrega por tercero pero le falta el RUC del transportista. Complétalo en "Transporte y Logística" de la orden.'
+          : 'Para emitir la GRE en transporte público debes seleccionar (o registrar) un transportista.');
+        return;
+      }
+    } else if (!formData.id_conductor || !formData.id_vehiculo) {
       setError('Para emitir la GRE en transporte privado debes seleccionar conductor y vehículo (placa).');
       return;
     }
@@ -299,8 +375,10 @@ function NuevaGuiaRemision() {
         peso_bruto_kg: parseFloat(formData.peso_bruto_kg),
         numero_bultos: parseInt(formData.numero_bultos) || 0,
         observaciones: formData.observaciones,
-        id_conductor: formData.id_conductor ? parseInt(formData.id_conductor) : null,
-        id_vehiculo: formData.id_vehiculo ? parseInt(formData.id_vehiculo) : null,
+        // En público el transporte lo hace el tercero: no se envían conductor/vehículo propios.
+        id_conductor: esPublico ? null : (formData.id_conductor ? parseInt(formData.id_conductor) : null),
+        id_vehiculo: esPublico ? null : (formData.id_vehiculo ? parseInt(formData.id_vehiculo) : null),
+        id_transportista: esPublico && formData.id_transportista ? parseInt(formData.id_transportista) : null,
         detalle: detalleValido.map(item => ({
           id_detalle_orden: item.id_detalle_orden,
           id_producto: item.id_producto,
@@ -486,40 +564,89 @@ function NuevaGuiaRemision() {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Conductor</label>
-                <select
-                  className="form-select"
-                  value={formData.id_conductor}
-                  onChange={(e) => setFormData({ ...formData, id_conductor: e.target.value })}
-                >
-                  <option value="">— Seleccionar conductor —</option>
-                  {conductores.map((c) => (
-                    <option key={c.id_empleado} value={c.id_empleado}>
-                      {c.nombre_completo} (DNI {c.dni})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {esPublico ? (
+                <div className="form-group col-span-2">
+                  <label className="form-label">Transportista (tercero) *</label>
+                  {ovTransportista && ovTransportista.ruc ? (
+                    // Heredado de la orden: se emite con estos datos (el backend lo registra en el maestro).
+                    <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm">
+                      <p className="font-medium text-green-900">{ovTransportista.razon || '(sin razón social)'}</p>
+                      <p className="text-green-700">RUC {ovTransportista.ruc}{ovTransportista.mtc ? ` · MTC ${ovTransportista.mtc}` : ''}</p>
+                      <p className="text-xs text-muted mt-1">Tomado de "Transporte y Logística" de la orden.</p>
+                    </div>
+                  ) : ovTransportista ? (
+                    // Orden por tercero pero sin RUC: no se puede emitir la GRE pública.
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                      La orden se entrega por tercero pero <b>no tiene el RUC del transportista</b>.
+                      Complétalo en "Transporte y Logística" de la orden antes de crear la guía.
+                    </div>
+                  ) : (
+                    // Público elegido manualmente (sin datos en la OV): elegir del maestro.
+                    <div className="flex gap-2">
+                      <select
+                        className="form-select flex-1"
+                        value={formData.id_transportista}
+                        onChange={(e) => setFormData({ ...formData, id_transportista: e.target.value })}
+                      >
+                        <option value="">— Seleccionar transportista —</option>
+                        {transportistas.map((t) => (
+                          <option key={t.id_transportista} value={t.id_transportista}>
+                            {t.razon_social} (RUC {t.ruc})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => setShowNuevoTransportista(true)}
+                        title="Registrar nuevo transportista"
+                      >
+                        <Plus size={18} />
+                        Nuevo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Conductor</label>
+                    <select
+                      className="form-select"
+                      value={formData.id_conductor}
+                      onChange={(e) => setFormData({ ...formData, id_conductor: e.target.value })}
+                    >
+                      <option value="">— Seleccionar conductor —</option>
+                      {conductores.map((c) => (
+                        <option key={c.id_empleado} value={c.id_empleado}>
+                          {c.nombre_completo} (DNI {c.dni})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="form-group">
-                <label className="form-label">Vehículo (placa)</label>
-                <select
-                  className="form-select"
-                  value={formData.id_vehiculo}
-                  onChange={(e) => setFormData({ ...formData, id_vehiculo: e.target.value })}
-                >
-                  <option value="">— Seleccionar vehículo —</option>
-                  {vehiculos.map((v) => (
-                    <option key={v.id_vehiculo} value={v.id_vehiculo}>
-                      {v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="form-group">
+                    <label className="form-label">Vehículo (placa)</label>
+                    <select
+                      className="form-select"
+                      value={formData.id_vehiculo}
+                      onChange={(e) => setFormData({ ...formData, id_vehiculo: e.target.value })}
+                    >
+                      <option value="">— Seleccionar vehículo —</option>
+                      {vehiculos.map((v) => (
+                        <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                          {v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
             <p className="text-xs text-muted mt-2">
-              Conductor y vehículo son obligatorios para emitir la Guía de Remisión electrónica (GRE) en transporte privado.
+              {esPublico
+                ? 'En transporte público la GRE declara al transportista (RUC + razón social). La placa y el conductor los declara el propio transportista en su guía.'
+                : 'Conductor y vehículo son obligatorios para emitir la Guía de Remisión electrónica (GRE) en transporte privado.'}
             </p>
           </div>
         </div>
@@ -787,6 +914,70 @@ function NuevaGuiaRemision() {
           </button>
         </div>
       </form>
+
+      {showNuevoTransportista && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-md">
+            <div className="card-header flex items-center gap-2">
+              <Truck size={20} />
+              <h2 className="card-title">Nuevo Transportista</h2>
+            </div>
+            <div className="card-body space-y-3">
+              <div className="form-group">
+                <label className="form-label">RUC *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoTransportista.ruc}
+                  onChange={(e) => setNuevoTransportista({ ...nuevoTransportista, ruc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  placeholder="11 dígitos"
+                  maxLength="11"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Razón Social *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoTransportista.razon_social}
+                  onChange={(e) => setNuevoTransportista({ ...nuevoTransportista, razon_social: e.target.value })}
+                  placeholder="Nombre de la empresa transportista"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nº Registro MTC</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoTransportista.numero_mtc}
+                  onChange={(e) => setNuevoTransportista({ ...nuevoTransportista, numero_mtc: e.target.value })}
+                  placeholder="Opcional (referencia interna)"
+                />
+                <small className="text-gray-500">Solo referencia interna; no se envía en la GRE del remitente.</small>
+              </div>
+            </div>
+            <div className="card-footer flex gap-2 justify-end">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => { setShowNuevoTransportista(false); setNuevoTransportista({ ruc: '', razon_social: '', numero_mtc: '' }); }}
+                disabled={guardandoTransportista}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={guardarTransportista}
+                disabled={guardandoTransportista}
+              >
+                <Save size={18} />
+                {guardandoTransportista ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

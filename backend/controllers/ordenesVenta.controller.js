@@ -2902,7 +2902,11 @@ export async function actualizarDatosTransporte(req, res) {
       transporte_placa,
       transporte_conductor,
       transporte_dni,
-      fecha_entrega_estimada 
+      transporte_licencia,
+      transporte_ruc,
+      transporte_mtc,
+      transporte_tuc,
+      fecha_entrega_estimada
     } = req.body;
 
     const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
@@ -2953,9 +2957,18 @@ export async function actualizarDatosTransporte(req, res) {
     }
     // Si es 'Recojo Tienda', todos quedan null
 
+    // Datos del transportista tercero: solo aplican en 'Transporte Privado' (público SUNAT).
+    // El RUC + razón social + placa + conductor + licencia van al XML de la GRE; el MTC (empresa)
+    // en cbc:CompanyID y el TUC (certificado del vehículo) en RegistrationNationalityID.
+    const esTercero = tipo_entrega === 'Transporte Privado';
+    const transRucFinal = esTercero ? (transporte_ruc || null) : null;
+    const transMtcFinal = esTercero ? (transporte_mtc || null) : null;
+    const transTucFinal = esTercero ? (transporte_tuc || null) : null;
+    const transLicFinal = esTercero ? (transporte_licencia || null) : null;
+
     const result = await executeQuery(`
-      UPDATE ordenes_venta 
-      SET 
+      UPDATE ordenes_venta
+      SET
         tipo_entrega = ?,
         id_vehiculo = ?,
         id_conductor = ?,
@@ -2963,6 +2976,10 @@ export async function actualizarDatosTransporte(req, res) {
         transporte_placa = ?,
         transporte_conductor = ?,
         transporte_dni = ?,
+        transporte_licencia = ?,
+        transporte_ruc = ?,
+        transporte_mtc = ?,
+        transporte_tuc = ?,
         fecha_entrega_estimada = COALESCE(?, fecha_entrega_estimada)
       WHERE id_orden_venta = ?
     `, [
@@ -2973,6 +2990,10 @@ export async function actualizarDatosTransporte(req, res) {
       transPlacaFinal,
       transCondFinal,
       transDniFinal,
+      transLicFinal,
+      transRucFinal,
+      transMtcFinal,
+      transTucFinal,
       fecha_entrega_estimada || null,
       id
     ]);

@@ -523,6 +523,7 @@ function Productos() {
                 <option value="m3">Metro cúbico (m³)</option>
                 <option value="mill">Millar (mill)</option>
                 <option value="bol">Bolsas (bol)</option>
+                <option value="caja">Cajas (caja)</option>
               </select>
             </div>
           </div>

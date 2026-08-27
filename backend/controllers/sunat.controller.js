@@ -145,6 +145,14 @@ export async function emitirComprobante(req, res, next) {
         'WHERE d.id_orden_venta = ?', [id_orden_venta]);
       const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
 
+      // Guías de remisión electrónicas ya ACEPTADAS de esta OV: se declaran en la factura
+      // (cac:DespatchDocumentReference) y, al aceptarse el comprobante, se les estampa id_factura
+      // como liga interna. Solo las ACEPTADAS tienen serie_sunat/numero_sunat válidos.
+      const [guias] = await conn.query(
+        `SELECT id_guia, serie_sunat, numero_sunat FROM guias_remision
+          WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
+            AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL`, [id_orden_venta]);
+
       const numero = await obtenerCorrelativo(conn, tipo, serie);
       const fecha = {
         emision, hora,
@@ -162,7 +170,7 @@ export async function emitirComprobante(req, res, next) {
       ).replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
       ov.observaciones = observacionEnviada;
 
-      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha });
+      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       // El número del nombre de archivo debe coincidir EXACTO con cbc:ID (serie-numero),
       // SIN ceros a la izquierda: SUNAT (fault 1036) compara ambos sin normalizar el padding.
@@ -188,11 +196,12 @@ export async function emitirComprobante(req, res, next) {
          emisionDateTime, observacionEnviada,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
-      return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales };
+      return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales,
+        guiaIds: guias.map((g) => g.id_guia) };
     });
 
     // ── Fuera de transacción: envío a SUNAT + subida de archivos ──
-    const { idFactura, numero, nombre, xmlFirmado, totales } = prep;
+    const { idFactura, numero, nombre, xmlFirmado, totales, guiaIds } = prep;
     // Diagnóstico fault 1036: las TRES cadenas deben producir el mismo Serie-Número.
     const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
     const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
@@ -244,6 +253,12 @@ export async function emitirComprobante(req, res, next) {
       if (aceptado) {
         await marcarOrdenFacturada(conn, { idOrdenVenta: id_orden_venta, serie, numero,
           idEmpleado, fecha: emisionDateTime });
+        // Liga interna factura ↔ guías: las guías que la factura declaró en el XML quedan
+        // asociadas a esta factura (solo si el comprobante fue aceptado por SUNAT).
+        if (guiaIds && guiaIds.length) {
+          await conn.query(
+            'UPDATE guias_remision SET id_factura = ? WHERE id_guia IN (?)', [idFactura, guiaIds]);
+        }
       }
     });
 
@@ -798,6 +813,14 @@ export async function generarPdfComprobante(req, res, next) {
       'p.codigo_unidad_sunat AS unidad FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
       'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
 
+    // Guías de remisión que ampara esta factura (las mismas que se declararon en el XML como
+    // cac:DespatchDocumentReference). Se rotulan en el PDF para dejar constancia impresa.
+    const [guiasRef] = await pool.query(
+      `SELECT serie_sunat, numero_sunat FROM guias_remision
+        WHERE id_factura = ? AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL
+        ORDER BY id_guia`, [idFactura]);
+    const guiasTexto = guiasRef.map((g) => `${g.serie_sunat}-${g.numero_sunat}`).join(', ');
+
     // Notas: documento afectado + descripción del motivo (catálogo 09/10).
     let docAfectado = null;
     if (f.id_factura_ref) {
@@ -829,6 +852,7 @@ export async function generarPdfComprobante(req, res, next) {
         orden_compra: null,
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
+        guias: guiasTexto,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
       },
       emisor, cliente, detalle, qrBuffer

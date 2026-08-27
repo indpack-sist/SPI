@@ -127,7 +127,7 @@ export function calcularComprobante({ ov, detalle }) {
  * Construye el XML de una Factura (01) a partir de la OV, su detalle, el cliente y empresa_config.
  * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
  */
-export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha }) {
+export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias }) {
   if (!detalle || !detalle.length) {
     const err = new Error('La orden de venta no tiene líneas para facturar');
     err.statusCode = 422; err.isOperational = true; throw err;
@@ -228,6 +228,19 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const notaObservaciones = observaciones ? `\n  <cbc:Note>${cdata(observaciones)}</cbc:Note>` : '';
   const orderReference = ocCliente ? `\n  <cac:OrderReference><cbc:ID>${cdata(ocCliente)}</cbc:ID></cac:OrderReference>` : '';
 
+  // ── Guías de remisión que amparan el traslado (factura → GRE) ────────────────
+  // Cuando la GRE se emitió ANTES que la factura (caso más común), la factura declara
+  // cada guía electrónica aceptada con cac:DespatchDocumentReference (una por guía).
+  // DocumentTypeCode 09 = Guía de Remisión Remitente (catálogo 01). Va tras OrderReference
+  // y antes de cac:Signature, según el orden del XSD de UBL Invoice.
+  const despatchReferences = (guias || [])
+    .filter((g) => g.serie_sunat && g.numero_sunat != null)
+    .map((g) => `\n  <cac:DespatchDocumentReference>
+    <cbc:ID>${g.serie_sunat}-${g.numero_sunat}</cbc:ID>
+    <cbc:DocumentTypeCode>09</cbc:DocumentTypeCode>
+  </cac:DespatchDocumentReference>`)
+    .join('');
+
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -243,7 +256,7 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   <cbc:IssueTime>${fecha.hora}</cbc:IssueTime>${dueDateLine}
   <cbc:InvoiceTypeCode listID="${tipoOperacion}">01</cbc:InvoiceTypeCode>
   <cbc:Note languageLocaleID="1000">${cdata(numeroALetras(totalPagar, moneda))}</cbc:Note>${notaObservaciones}
-  <cbc:DocumentCurrencyCode>${moneda}</cbc:DocumentCurrencyCode>${orderReference}
+  <cbc:DocumentCurrencyCode>${moneda}</cbc:DocumentCurrencyCode>${orderReference}${despatchReferences}
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>

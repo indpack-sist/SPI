@@ -53,8 +53,9 @@ router.post('/guias/:id/reemplazar', verificarToken, verificarPermiso('facturaci
 router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
 
 // Representación impresa (PDF) con QR y hash — Fase 13.
-router.get('/comprobantes/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfComprobante);
-router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfGuia);
+// El PDF también lo pueden descargar los perfiles de venta en solo lectura (facturacionConsulta).
+router.get('/comprobantes/:id/pdf', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), c.generarPdfComprobante);
+router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), c.generarPdfGuia);
 
 // Fase 15: cola de reintentos / monitor. /jobs/tick se protege por TOKEN INTERNO (header
 // x-jobs-token) dentro del handler, para un scheduler externo → sin verificarToken aquí.

@@ -1,6 +1,33 @@
 import { executeQuery } from '../config/database.js';
 import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.js';
 
+// Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
+// (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring
+// OV→GRE (cuando la orden se entrega por tercero, su RUC se materializa en el maestro).
+async function upsertTransportista(ruc, razon_social, numero_mtc) {
+  const rucLimpio = String(ruc || '').trim();
+  if (!/^\d{11}$/.test(rucLimpio) || !razon_social || !String(razon_social).trim()) return null;
+  const razon = String(razon_social).trim();
+  const mtc = numero_mtc ? String(numero_mtc).trim() : null;
+
+  const existente = await executeQuery(
+    'SELECT id_transportista FROM transportistas WHERE ruc = ?', [rucLimpio]
+  );
+  if (existente.success && existente.data.length > 0) {
+    const idT = existente.data[0].id_transportista;
+    await executeQuery(
+      'UPDATE transportistas SET razon_social = ?, numero_mtc = COALESCE(?, numero_mtc), activo = 1 WHERE id_transportista = ?',
+      [razon, mtc, idT]
+    );
+    return idT;
+  }
+  const ins = await executeQuery(
+    'INSERT INTO transportistas (ruc, razon_social, numero_mtc) VALUES (?, ?, ?)',
+    [rucLimpio, razon, mtc]
+  );
+  return ins.success ? ins.data.insertId : null;
+}
+
 export async function getAllGuiasRemision(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, id_orden_venta } = req.query;
@@ -185,6 +212,7 @@ export async function createGuiaRemision(req, res) {
       observaciones,
       id_conductor,
       id_vehiculo,
+      id_transportista,
       motivo_traslado_cod,
       detalle
     } = req.body;
@@ -227,7 +255,11 @@ export async function createGuiaRemision(req, res) {
         ov.estado,
         ov.direccion_entrega,
         ov.id_conductor,
-        ov.id_vehiculo
+        ov.id_vehiculo,
+        ov.tipo_entrega,
+        ov.transporte_nombre,
+        ov.transporte_ruc,
+        ov.transporte_mtc
       FROM ordenes_venta ov
       WHERE ov.id_orden_venta = ?
     `, [id_orden_venta]);
@@ -270,10 +302,32 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
+    // Transporte público (tercero transportista) vs privado (conductor+vehículo propios).
+    // Fuente del transportista, en orden de prioridad:
+    //   1) el que venga explícito en el request (id_transportista);
+    //   2) el que la OV declaró como entrega por tercero ('Transporte Privado' + RUC): se
+    //      materializa en el maestro (upsert por RUC) para emitir la GRE pública.
+    let idTransportistaFinal = id_transportista || null;
+    if (!idTransportistaFinal && orden.tipo_entrega === 'Transporte Privado' && orden.transporte_ruc) {
+      idTransportistaFinal = await upsertTransportista(
+        orden.transporte_ruc, orden.transporte_nombre, orden.transporte_mtc
+      );
+    }
+    // La OV es por tercero pero no tiene RUC: no se puede emitir GRE pública sin él.
+    if (orden.tipo_entrega === 'Transporte Privado' && !idTransportistaFinal && !orden.transporte_ruc) {
+      return res.status(400).json({
+        success: false,
+        error: 'La orden se entrega por transporte de tercero, pero falta el RUC del transportista. Complétalo en "Transporte y Logística" de la orden antes de crear la guía.'
+      });
+    }
+
+    // La presencia de un transportista define la modalidad pública: en ese caso NO se hereda
+    // el conductor/vehículo de la OV (evita datos que harían derivar modalidad privada al emitir).
+    const esPublico = !!idTransportistaFinal;
     // Herencia de transporte: si el request no especifica conductor/vehículo, usar el
     // asignado en la orden de venta (la OV ya los captura a su nivel).
-    const idConductorFinal = id_conductor || orden.id_conductor || null;
-    const idVehiculoFinal = id_vehiculo || orden.id_vehiculo || null;
+    const idConductorFinal = esPublico ? null : (id_conductor || orden.id_conductor || null);
+    const idVehiculoFinal = esPublico ? null : (id_vehiculo || orden.id_vehiculo || null);
 
     // Punto de partida por defecto = dirección fiscal de la empresa (empresa_config). El origen
     // real de un traslado por venta es el domicilio fiscal; si el request llega sin dirección/ubigeo
@@ -371,9 +425,10 @@ export async function createGuiaRemision(req, res) {
         observaciones,
         id_conductor,
         id_vehiculo,
+        id_transportista,
         motivo_traslado_cod,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
@@ -395,6 +450,7 @@ export async function createGuiaRemision(req, res) {
       observaciones,
       idConductorFinal,
       idVehiculoFinal,
+      idTransportistaFinal,
       motivoCod
     ]);
     
@@ -869,5 +925,68 @@ export async function descargarPDFGuiaRemision(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+
+// ── Maestro de transportistas (terceros para GRE en transporte público) ──────
+// Reutilizable: se registra una vez cada transportista y se elige por su id en la guía.
+// El nº de registro MTC se guarda solo como referencia interna (SUNAT no lo exige en la
+// GRE del remitente en modalidad pública: solo RUC + razón social viajan en el XML).
+
+export async function getTransportistas(req, res) {
+  try {
+    const result = await executeQuery(`
+      SELECT id_transportista, ruc, razon_social, numero_mtc
+      FROM transportistas
+      WHERE activo = 1
+      ORDER BY razon_social
+    `);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Error al obtener transportistas:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function createTransportista(req, res) {
+  try {
+    const { ruc, razon_social, numero_mtc } = req.body;
+
+    if (!ruc || !/^\d{11}$/.test(String(ruc).trim())) {
+      return res.status(400).json({
+        success: false,
+        error: 'El RUC del transportista es obligatorio y debe tener 11 dígitos'
+      });
+    }
+
+    if (!razon_social || razon_social.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'La razón social del transportista es obligatoria'
+      });
+    }
+
+    const rucLimpio = String(ruc).trim();
+
+    // Idempotente por RUC (ver upsertTransportista): si ya existe se actualiza en vez de
+    // fallar por el UNIQUE. Así el alta rápida nunca se rompe al reingresar un RUC ya registrado.
+    const idT = await upsertTransportista(rucLimpio, razon_social, numero_mtc);
+    if (!idT) {
+      return res.status(500).json({ success: false, error: 'No se pudo registrar el transportista' });
+    }
+
+    res.status(201).json({
+      success: true,
+      data: { id_transportista: idT, ruc: rucLimpio, razon_social: razon_social.trim(), numero_mtc: numero_mtc?.trim() || null },
+      message: 'Transportista registrado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al crear transportista:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }

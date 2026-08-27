@@ -960,7 +960,11 @@ export const guiasRemisionAPI = {
   getById: (id) => api.get(`/guias-remision/${id}`),
   create: (data) => api.post('/guias-remision', data),
 
-  despachar: (id, data = {}) => 
+  // Maestro de transportistas (terceros, para GRE en transporte público).
+  getTransportistas: () => api.get('/guias-remision/transportistas'),
+  createTransportista: (data) => api.post('/guias-remision/transportistas', data),
+
+  despachar: (id, data = {}) =>
     api.post(`/guias-remision/${id}/despachar`, data),
 
   marcarEntregada: (id, data = {}) => 

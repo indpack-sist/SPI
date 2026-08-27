@@ -49,8 +49,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     if (!guia?.ubigeo_llegada) faltantes.push('ubigeo de llegada (6 dígitos)');
     if (!(Number(guia?.peso_bruto_kg) > 0)) faltantes.push('peso bruto > 0');
     if (!guia?.motivo_traslado_cod) faltantes.push('código de motivo de traslado (catálogo 20)');
-    if (!guia?.id_conductor) faltantes.push('conductor (transporte privado)');
-    if (!guia?.id_vehiculo) faltantes.push('vehículo/placa de la flota (transporte privado)');
+    // Transporte público (tercero transportista) vs privado (conductor + vehículo propios).
+    if (guia?.id_transportista) {
+      // En público la placa/conductor los declara el transportista; aquí basta el transportista.
+    } else {
+      if (!guia?.id_conductor) faltantes.push('conductor (transporte privado) o un transportista (transporte público)');
+      if (!guia?.id_vehiculo) faltantes.push('vehículo/placa de la flota (transporte privado)');
+    }
   }
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';

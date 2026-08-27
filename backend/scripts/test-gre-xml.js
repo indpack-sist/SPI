@@ -34,8 +34,8 @@ const datos = {
   fecha: { emision: '2026-08-24', hora: '10:00:00' },
   fechaTraslado: '2026-08-24',
   modalidad: '02',
-  conductor: { dni: '75336849', nombre_completo: 'MAX ALEX SANANCINO', licencia_conducir: 'Q75336849' },
-  placa: 'XXX000', // placeholder BETA (ya normalizado, sin guion)
+  conductor: { dni: '75336849', nombre: 'MAX ALEX SANANCINO', licencia: 'Q75336849' },
+  vehiculo: { placa: 'XXX000', tuc: null }, // placeholder BETA (ya normalizado, sin guion)
   observacion: 'Entrega en almacen central | OC: 260610043' // texto libre + OC → cbc:Note
 };
 
@@ -68,7 +68,7 @@ const doc = parser.parse(xml);
 const da = doc.DespatchAdvice;
 
 check('Elemento raíz = DespatchAdvice', !!da);
-check('DespatchAdviceTypeCode = 09', String(da?.DespatchAdviceTypeCode) === '09');
+check('DespatchAdviceTypeCode = 09', String(da?.DespatchAdviceTypeCode?.['#text'] ?? da?.DespatchAdviceTypeCode) === '09');
 check('UBLVersionID = 2.1', String(da?.UBLVersionID) === '2.1');
 check('CustomizationID = 2.0', String(da?.CustomizationID) === '2.0');
 check(`cbc:ID = ${cbcIdEsperado} (== core del filename ${nombre})`, String(da?.ID) === cbcIdEsperado,
@@ -104,6 +104,32 @@ const lineas = Array.isArray(da?.DespatchLine) ? da.DespatchLine : [da?.Despatch
 check('DespatchLine: cantidad de líneas == detalle', lineas.length === datos.detalle.length);
 check('DeliveredQuantity con unitCode', lineas[0]?.DeliveredQuantity?.['@unitCode'] === 'NIU',
   `unitCode=${lineas[0]?.DeliveredQuantity?.['@unitCode']}`);
+
+// ── Escenario TERCERO (transporte por transportista): CarrierParty + MTC + TUC ──────────────
+// Espeja la GRE real aceptada docs/…-09-EG07-309.xml (modalidad 02 con carrier+vehículo+conductor).
+console.log('\n=== Escenario TERCERO — CarrierParty (RUC+MTC) + DriverPerson + Vehículo (placa+TUC) ===\n');
+const datosTercero = {
+  ...datos,
+  transportista: { ruc: '20611807555', razon: 'EMPRESA DE TRANSPORTES Y SERVICIOS YELA & N S.A.C.', mtc: '15141794CNG' },
+  conductor: { dni: '47327793', nombre: 'VASQUEZ MENDEZ MIGUEL', licencia: 'D47327793' },
+  // Un solo vehículo (la placa que se coloca al emitir), tal como la GRE real EG07-309.
+  vehiculo: { placa: 'BZK970', tuc: '15M26042991E' }
+};
+const { xml: xmlT } = construirDespatchAdviceXML(datosTercero);
+check('XML tercero bien-formado', XMLValidator.validate(xmlT) === true);
+const dt = parser.parse(xmlT).DespatchAdvice;
+const stageT = dt?.Shipment?.ShipmentStage;
+check('CarrierParty RUC transportista', String(stageT?.CarrierParty?.PartyIdentification?.ID?.['#text']) === '20611807555');
+check('CarrierParty razón social', String(stageT?.CarrierParty?.PartyLegalEntity?.RegistrationName || '').includes('YELA'));
+check('Nº MTC en CompanyID', String(stageT?.CarrierParty?.PartyLegalEntity?.CompanyID) === '15141794CNG');
+check('DriverPerson (tercero) con DNI', String(stageT?.DriverPerson?.ID?.['#text']) === '47327793');
+const teq = dt?.Shipment?.TransportHandlingUnit?.TransportEquipment;
+check('Placa del vehículo (una sola)', String(teq?.ID) === 'BZK970');
+check('Registro del vehículo en RegistrationNationalityID',
+  String(teq?.ApplicableTransportMeans?.RegistrationNationalityID) === '15M26042991E');
+check('Sin segundo vehículo (AttachedTransportEquipment ausente)', !teq?.AttachedTransportEquipment);
+check('AdditionalItemProperty bien regulado (cat55 7022)',
+  String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
 
 console.log('\n=== FASE 10 · ítem 3 — Flujo MOCK de punta a punta (sin BD/cert) ===\n');
 

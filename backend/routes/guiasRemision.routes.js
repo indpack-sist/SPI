@@ -7,12 +7,19 @@ import {
   actualizarEstadoGuiaRemision,
   marcarEntregadaGuiaRemision,
   getEstadisticasGuiasRemision,
-  descargarPDFGuiaRemision
+  descargarPDFGuiaRemision,
+  getTransportistas,
+  createTransportista
 } from '../controllers/guiasRemision.controller.js';
 
 const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasGuiasRemision);
+
+// Maestro de transportistas (terceros, modalidad pública). Declarado antes de '/:id'
+// para que '/transportistas' no sea capturado por la ruta paramétrica.
+router.get('/transportistas', getTransportistas);
+router.post('/transportistas', createTransportista);
 
 router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);

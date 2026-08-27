@@ -157,6 +157,9 @@ function DetalleOrdenVenta() {
     transporte_conductor: '',
     transporte_dni: '',
     transporte_licencia: '',
+    transporte_ruc: '',
+    transporte_mtc: '',
+    transporte_tuc: '',
     fecha_entrega_estimada: ''
   });
 
@@ -774,6 +777,9 @@ function DetalleOrdenVenta() {
       transporte_conductor: orden.transporte_conductor || '',
       transporte_dni: orden.transporte_dni || '',
       transporte_licencia: orden.transporte_licencia || '',
+      transporte_ruc: orden.transporte_ruc || '',
+      transporte_mtc: orden.transporte_mtc || '',
+      transporte_tuc: orden.transporte_tuc || '',
       fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
     });
     setModalTransporteOpen(true);
@@ -1566,10 +1572,10 @@ function DetalleOrdenVenta() {
   // se enlaza a la existente (evita GRE duplicadas; el backend también lo bloquea).
   const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
 
-  // La GRE Remitente (09) es transporte privado con conductor + placa propios: solo aplica
-  // cuando la orden se entrega con vehículo de la empresa. Con transporte de terceros o
-  // recojo en tienda no corresponde emitir esta guía, así que se oculta toda la sección.
-  const esVehiculoEmpresa = orden?.tipo_entrega === 'Vehiculo Empresa';
+  // La GRE Remitente (09) aplica tanto en transporte privado (Vehículo Empresa: conductor +
+  // placa propios) como en transporte público (Transporte Privado/Tercero: un transportista con
+  // RUC). Solo se excluye "Recojo en Tienda" (el cliente recoge, sin traslado del remitente).
+  const esGREAplicable = orden?.tipo_entrega === 'Vehiculo Empresa' || orden?.tipo_entrega === 'Transporte Privado';
 
   const puedeReservarStock = () => {
     if (!orden) return false;
@@ -2125,7 +2131,7 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          {!guiaActiva && puedeDespachar() && esVehiculoEmpresa && (
+          {!guiaActiva && puedeDespachar() && esGREAplicable && (
              <button
                className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
@@ -2877,7 +2883,7 @@ function DetalleOrdenVenta() {
         {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,
             embebida en el detalle de la OV: emitir, ver estado SUNAT y descargar el PDF aquí mismo.
             La card completa aparece cuando ya existe la guía; si no, se ofrece crearla. */}
-        {puedeVerSee && esVehiculoEmpresa && (
+        {puedeVerSee && esGREAplicable && (
             guiaDetalleSee ? (
                 <div>
                     <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
@@ -4187,7 +4193,7 @@ function DetalleOrdenVenta() {
                 onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
               >
                 <option value="Vehiculo Empresa">Vehículo Empresa</option>
-                <option value="Transporte Privado">Transporte Privado / Tercero</option>
+                <option value="Transporte Privado">Transporte Público / Tercero</option>
                 <option value="Recojo Tienda">Recojo en Tienda</option>
               </select>
             </div>
@@ -4236,49 +4242,92 @@ function DetalleOrdenVenta() {
 
             {transporteForm.tipo_entrega === 'Transporte Privado' && (
               <>
+                <div className="rounded-md bg-blue-50 border border-blue-200 p-2 text-xs text-blue-800">
+                  Transporte público / tercero (SUNAT modalidad 02): otra empresa realiza el traslado.
+                  Obligatorios para la GRE: <b>RUC y razón social</b> del transportista, <b>una placa</b> y datos del conductor.
+                  El <b>MTC de la empresa</b> (formato …CNG) es opcional; el <b>Nº de registro del vehículo</b> (formato 15M…E) es el de la placa que declares. Solo se coloca una placa por guía.
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">RUC Transportista *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_ruc}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_ruc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                      placeholder="11 dígitos"
+                      maxLength={11}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nº Registro MTC (empresa)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_mtc}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_mtc: e.target.value })}
+                      placeholder="Opcional (formato …CNG)"
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
                 <div className="form-group">
-                  <label className="form-label">Empresa Transporte</label>
-                  <input 
-                    type="text" 
+                  <label className="form-label">Empresa Transporte (Razón Social) *</label>
+                  <input
+                    type="text"
                     className="form-input"
                     value={transporteForm.transporte_nombre}
                     onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
-                    placeholder="Nombre del empresa o transportista"
+                    placeholder="Razón social del transportista"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="form-group">
-                    <label className="form-label">Placa Vehículo</label>
-                    <input 
-                      type="text" 
+                    <label className="form-label">Placa Vehículo *</label>
+                    <input
+                      type="text"
                       className="form-input"
                       value={transporteForm.transporte_placa}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
+                      placeholder="La placa que va en la guía"
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">DNI Chofer</label>
-                    <input 
-                      type="text" 
+                    <label className="form-label">Nº Registro del vehículo</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_tuc}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_tuc: e.target.value })}
+                      placeholder="Formato 15M…E"
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">DNI Chofer *</label>
+                    <input
+                      type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
                     />
                   </div>
+                  <div className="form-group">
+                    <label className="form-label">Nombre Chofer *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_conductor}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Nombre Chofer</label>
-                  <input 
-                    type="text" 
-                    className="form-input"
-                    value={transporteForm.transporte_conductor}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Licencia de Conducir</label>
-                  <input 
-                    type="text" 
+                  <label className="form-label">Licencia de Conducir *</label>
+                  <input
+                    type="text"
                     className="form-input"
                     value={transporteForm.transporte_licencia}
                     onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}

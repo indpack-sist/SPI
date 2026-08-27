@@ -773,8 +773,11 @@ export async function generarPdfComprobante(req, res, next) {
       } catch (e) { console.warn('[SUNAT] subir PDF comprobante falló:', e.message); }
     }
 
+    // Nombre estilo SUNAT (RUC-TIPO-SERIE-NUMERO.pdf), igual que el XML/CDR, para que la pestaña
+    // y la descarga usen un nombre reconocible en vez del UUID del blob.
+    const nombrePdf = `${f.sunat_nombre_xml || `${f.serie}-${f.numero}`}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${f.serie}-${f.numero}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${nombrePdf}"`);
     res.send(pdf);
   } catch (e) { next(e); }
 }
@@ -844,8 +847,10 @@ export async function generarPdfGuia(req, res, next) {
       } catch (e) { console.warn('[SUNAT] subir PDF GRE falló:', e.message); }
     }
 
+    // Nombre estilo SUNAT (RUC-09-SERIE-NUMERO.pdf), igual que el XML/CDR de la GRE.
+    const nombrePdf = `${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${g.serie_sunat}-${g.numero_sunat}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${nombrePdf}"`);
     res.send(pdf);
   } catch (e) { next(e); }
 }

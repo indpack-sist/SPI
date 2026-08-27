@@ -101,7 +101,10 @@ function NuevaGuiaRemision() {
             cantidad_despachada: parseFloat(item.cantidad_despachada || 0),
             cantidad_disponible: cantidadDisponible,
             stock_actual: parseFloat(item.stock_disponible || 0),
-            peso_unitario_kg: parseFloat(item.peso_unitario_kg || 0)
+            // Peso por unidad heredado de la OV (el detalle de la orden lo devuelve como
+            // `peso_unitario`, del maestro de productos). Se traspasa como valor inicial y queda
+            // editable en el form; si viene vacío/0, el usuario puede completarlo a mano.
+            peso_unitario_kg: parseFloat(item.peso_unitario_kg ?? item.peso_unitario ?? 0) || 0
           };
         }).filter(item => item.cantidad_disponible > 0);
         

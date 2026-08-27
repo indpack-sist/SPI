@@ -1218,8 +1218,16 @@ const abrirPdfSunat = async (path) => {
     try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
     throw new Error(msg);
   }
+  // Nombre del backend (Content-Disposition) para que la pestaña/descarga muestre el nombre SUNAT
+  // (RUC-01-FE01-1.pdf) en vez del UUID del blob. Se envuelve el blob en un File con ese nombre:
+  // el visor PDF del navegador usa File.name como nombre sugerido al descargar.
+  const disp = response.headers.get('Content-Disposition') || '';
+  const nombre = decodeURIComponent(
+    (disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || 'documento.pdf').trim()
+  );
   const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
+  const archivo = new File([blob], nombre, { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(archivo);
   window.open(url, '_blank');
   setTimeout(() => window.URL.revokeObjectURL(url), 60000);
 };

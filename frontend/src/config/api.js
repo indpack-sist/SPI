@@ -1242,7 +1242,14 @@ export const sunatAPI = {
   // Vista previa de emisión (solo lectura): totales/desglose calculados por el backend (fuente única).
   previewComprobante: (id_orden_venta) => api.post('/sunat/comprobantes/preview', { id_orden_venta }),
   // Comprobantes: factura (01), notas de crédito/débito (07/08) y comunicación de baja (RA).
-  emitirFactura: (id_orden_venta) => api.post('/sunat/comprobantes/emitir', { id_orden_venta }),
+  // fecha_emision opcional ('YYYY-MM-DD'): retro-fecha dentro del plazo SUNAT (≤ 3 días).
+  // observaciones: texto del cbc:Note que SUNAT muestra como "Observaciones" (editable en el panel).
+  emitirFactura: (id_orden_venta, fecha_emision, observaciones) =>
+    api.post('/sunat/comprobantes/emitir', {
+      id_orden_venta,
+      ...(fecha_emision ? { fecha_emision } : {}),
+      ...(observaciones !== undefined ? { observaciones } : {})
+    }),
   emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items }) =>
     api.post('/sunat/comprobantes/notas/emitir', { id_factura_ref, tipo, motivo_codigo, items }),
   darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),

@@ -31,12 +31,12 @@ export function normalizarPlaca(placa) {
 }
 
 /**
- * Observación de la GRE: concatena el texto libre de la guía con la orden de compra del cliente
- * (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones" y viaja en cbc:Note.
- * Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de SUNAT). Máx 250,
- * mismo tope que la observación de la factura.
+ * Observación por defecto de un comprobante (factura/GRE): concatena el texto libre con la orden
+ * de compra del cliente (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones"
+ * y viaja en cbc:Note. Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de
+ * SUNAT). Máx 250. Es solo el valor SUGERIDO: en la factura el usuario puede editarlo antes de emitir.
  */
-export function componerObservacionGuia(observaciones, ordenCompra) {
+export function componerObservacion(observaciones, ordenCompra) {
   const partes = [];
   const obs = String(observaciones || '').replace(/[\r\n]+/g, ' ').trim();
   if (obs) partes.push(obs);
@@ -44,3 +44,6 @@ export function componerObservacionGuia(observaciones, ordenCompra) {
   if (oc) partes.push(`OC: ${oc}`);
   return partes.join(' | ').slice(0, 250);
 }
+
+// Alias histórico usado por la GRE; misma composición.
+export const componerObservacionGuia = componerObservacion;

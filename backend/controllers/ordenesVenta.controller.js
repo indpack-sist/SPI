@@ -94,8 +94,10 @@ export async function getAllOrdenesVenta(req, res) {
         ov.id_verificador,
         (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
         (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos,
-        (SELECT COUNT(*) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida') AS total_facturas,
-        (SELECT COALESCE(SUM(fv.total), 0) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida') AS total_facturado
+        (SELECT COUNT(*) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida'
+           AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat NOT IN ('07','08')) AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'ACEPTADO')) AS total_facturas,
+        (SELECT COALESCE(SUM(fv.total), 0) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida'
+           AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat NOT IN ('07','08')) AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'ACEPTADO')) AS total_facturado
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -4543,6 +4545,8 @@ async function sincronizarResumenFacturacion(idOrden) {
     `SELECT id_factura, numero_factura, url_pdf, fecha_emision, id_registrado_por
        FROM facturas_venta
       WHERE id_orden_venta = ? AND estado = 'Emitida'
+        AND (codigo_tipo_sunat IS NULL OR codigo_tipo_sunat NOT IN ('07','08'))
+        AND (sunat_estado IS NULL OR sunat_estado = 'ACEPTADO')
       ORDER BY fecha_emision ASC, id_factura ASC`,
     [idOrden]
   );

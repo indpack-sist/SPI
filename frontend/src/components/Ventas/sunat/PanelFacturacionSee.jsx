@@ -262,6 +262,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50/40' : (esNC || esND ? 'border-sky-200 bg-sky-50/40' : 'border-gray-200')}`}>
                 <span className={`font-mono font-bold text-sm ${anulada ? 'line-through text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
                 <BadgeEstadoSunat estado={f.sunat_estado} />
+                {/* Transición de estado: la factura fue ACEPTADA y luego ANULADA por una NC → se muestra con flecha. */}
+                {rol && anulada && <span className="text-xs text-muted" aria-hidden="true">→</span>}
                 {rol && <span className={`badge ${rol.clase} text-xs`}>{rol.txt}</span>}
                 <span className="text-xs text-muted">{fmt(f.total)}</span>
                 <div className="flex flex-wrap items-center gap-1 ml-auto">

@@ -93,10 +93,19 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       if (emisor.telefono) doc.text(`Teléfono: ${emisor.telefono}`, 36, doc.y + 1, { width: 330 });
       if (emisor.email) doc.text(`E-mail: ${emisor.email}`, 36, doc.y + 1, { width: 330 });
 
-      doc.roundedRect(380, 40, 182, 70, 5).stroke('#000');
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(`R.U.C. ${emisor.ruc}`, 385, 50, { align: 'center', width: 172 });
-      doc.fontSize(11).text(tipoNombre, 385, 68, { align: 'center', width: 172 });
-      doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, 90, { align: 'center', width: 172 });
+      doc.roundedRect(380, 40, 182, 78, 5).stroke('#000');
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(`R.U.C. ${emisor.ruc}`, 385, 48, { align: 'center', width: 172 });
+      // El tipo se dibuja línea por línea (p. ej. "NOTA DE CRÉDITO" / "ELECTRÓNICA")
+      // para repartir el espacio vertical de forma pareja en vez de dejar que se ajuste solo.
+      const lineasTipo = tipoNombre.endsWith(' ELECTRÓNICA')
+        ? [tipoNombre.slice(0, -' ELECTRÓNICA'.length), 'ELECTRÓNICA']
+        : [tipoNombre];
+      let yTipo = 66;
+      for (const linea of lineasTipo) {
+        doc.fontSize(11).text(linea, 385, yTipo, { align: 'center', width: 172 });
+        yTipo += 15;
+      }
+      doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, yTipo + 3, { align: 'center', width: 172 });
 
       // ── Datos del comprobante (formato SUNAT: lista de campos etiquetados en una columna) ──
       // Orden como el PDF oficial: Fecha de Emisión, [Documento que modifica + doc afectado],

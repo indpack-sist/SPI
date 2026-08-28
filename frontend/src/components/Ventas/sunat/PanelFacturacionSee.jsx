@@ -151,8 +151,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 <BadgeEstadoSunat estado={f.sunat_estado} />
                 <span className="text-xs text-muted">{fmt(f.total)}</span>
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
-                  {(aceptado || f.sunat_estado === 'BAJA') && (
-                    <button className="btn btn-xs btn-outline" onClick={() => handlePdf(f)} disabled={procesando} title="Ver PDF SEE">
+                  {(aceptado || f.sunat_estado === 'BAJA' || f.sunat_estado === 'RECHAZADO') && (
+                    <button className="btn btn-xs btn-outline" onClick={() => handlePdf(f)} disabled={procesando}
+                      title={f.sunat_estado === 'RECHAZADO' ? 'Ver PDF (rechazado, con marca y motivo)' : 'Ver PDF SEE'}>
                       <FileText size={13} className="mr-1" /> PDF
                     </button>
                   )}

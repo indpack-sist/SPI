@@ -21,7 +21,7 @@ import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSu
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
 import { subirRaw } from '../services/cloudinary.service.js';
-import { marcarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
+import { marcarOrdenFacturada, liberarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
 import { ejecutarReintentosSunat } from '../jobs/sunat-reintentos.job.js';
 import AppError from '../utils/AppError.js';
 
@@ -611,11 +611,11 @@ export async function emitirNota(req, res, next) {
          id_factura_ref, String(motivo_codigo), sustento || null, emisionDateTime,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
-      return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales };
+      return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales, idOrdenVenta: ref.id_orden_venta };
     });
 
     // ── Envío a SUNAT + CDR (mismo flujo que la factura) ──
-    const { idNota, numero, nombre, xmlFirmado, totales } = prep;
+    const { idNota, numero, nombre, xmlFirmado, totales, idOrdenVenta } = prep;
     const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
     const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
     console.log('[SUNAT] emitirNota ->', JSON.stringify(debug));
@@ -664,6 +664,10 @@ export async function emitirNota(req, res, next) {
       if (aceptado && tipo === '07' && String(motivo_codigo) === '01') {
         await conn.query(
           `UPDATE facturas_venta SET estado = 'Anulada' WHERE id_factura = ?`, [id_factura_ref]);
+        // La anulación total reversa la operación: se libera la OV (facturado_sunat = 0) para poder
+        // refacturar, igual que hace la Comunicación de Baja de una factura. El nuevo comprobante
+        // tomará el siguiente correlativo (FE01-7 anulada queda como histórico junto a su NC).
+        await liberarOrdenFacturada(conn, idOrdenVenta);
       }
     });
 
@@ -1070,6 +1074,14 @@ export async function generarPdfComprobante(req, res, next) {
       const [[b]] = await pool.query(
         'SELECT motivo FROM sunat_bajas_detalle WHERE id_factura = ? ORDER BY id_baja DESC LIMIT 1', [idFactura]);
       motivoEstado = b?.motivo || null;
+    } else if (f.estado === 'Anulada') {
+      // Anulada por Nota de Crédito de anulación (motivo 01): se rotula qué NC la dejó sin efecto.
+      const [[nc]] = await pool.query(
+        "SELECT numero_factura FROM facturas_venta WHERE id_factura_ref = ? AND codigo_tipo_sunat = '07' " +
+        "AND motivo_nota_codigo = '01' AND sunat_estado = 'ACEPTADO' ORDER BY id_factura DESC LIMIT 1", [idFactura]);
+      motivoEstado = nc
+        ? `Anulada por Nota de Crédito ${nc.numero_factura} (Anulación de la operación).`
+        : 'Operación anulada mediante Nota de Crédito.';
     }
 
     const qrBuffer = f.sunat_qr_data ? await qrPng(f.sunat_qr_data) : null;
@@ -1089,7 +1101,7 @@ export async function generarPdfComprobante(req, res, next) {
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
         guias: guiasTexto,
-        sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, motivoEstado, docAfectado
+        sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, estado: f.estado, motivoEstado, docAfectado
       },
       emisor, cliente, detalle, qrBuffer
     });

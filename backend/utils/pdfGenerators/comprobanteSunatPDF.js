@@ -77,7 +77,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       const simbolo = String(c.moneda) === 'USD' ? '$' : 'S/';
       const tipoNombre = NOMBRE_TIPO[c.codigo_tipo_sunat] || 'COMPROBANTE ELECTRÓNICO';
-      const anulado = c.sunat_estado === 'BAJA';
+      // Anulado = dado de baja (RA) O reversado por una Nota de Crédito de anulación (estado interno
+      // 'Anulada' aunque su sunat_estado siga 'ACEPTADO'). Ambos casos llevan marca de agua ANULADO.
+      const anulado = c.sunat_estado === 'BAJA' || c.estado === 'Anulada';
+      const anuladoPorNota = c.estado === 'Anulada' && c.sunat_estado !== 'BAJA';
       const rechazado = c.sunat_estado === 'RECHAZADO';
 
       // ── Cabecera: logo + emisor (izq) + recuadro RUC/tipo/serie-numero (der) ──
@@ -160,9 +163,12 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       if (rechazado || anulado) {
         const titulo = rechazado
           ? 'COMPROBANTE RECHAZADO POR SUNAT — SIN VALIDEZ'
-          : 'COMPROBANTE ANULADO — COMUNICACIÓN DE BAJA ACEPTADA';
+          : (anuladoPorNota
+            ? 'COMPROBANTE ANULADO — NOTA DE CRÉDITO ACEPTADA'
+            : 'COMPROBANTE ANULADO — COMUNICACIÓN DE BAJA ACEPTADA');
         const motivo = c.motivoEstado
-          || (rechazado ? 'Comprobante rechazado por SUNAT.' : 'Comprobante dado de baja ante SUNAT.');
+          || (rechazado ? 'Comprobante rechazado por SUNAT.'
+            : (anuladoPorNota ? 'Operación anulada mediante Nota de Crédito.' : 'Comprobante dado de baja ante SUNAT.'));
         doc.fontSize(8).font('Helvetica');
         const hBanner = doc.heightOfString(`Motivo: ${motivo}`, { width: 515 }) + 24;
         doc.roundedRect(33, y, 529, hBanner, 3).fillAndStroke('#FDECEA', '#D32F2F');

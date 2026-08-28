@@ -98,6 +98,9 @@ function DetalleOrdenVenta() {
   const [facturaAEliminar, setFacturaAEliminar] = useState(null);
   const [fileSunat, setFileSunat] = useState(null);
   const [facturas, setFacturas] = useState([]);
+  // Comprobantes electrónicos (SEE) para el panel: TODOS los que tienen sunat_estado, incluidas las
+  // facturas anuladas por NC y las rechazadas → trazabilidad total (nada desaparece al refacturar).
+  const [facturasSee, setFacturasSee] = useState([]);
   const [resumenFacturacion, setResumenFacturacion] = useState(null);
   const [facturaTabActiva, setFacturaTabActiva] = useState(0);
   const [facturaAAnular, setFacturaAAnular] = useState(null);
@@ -443,8 +446,11 @@ function DetalleOrdenVenta() {
       }
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
-        const emitidas = (fData.facturas || []).filter(f => f.estado === 'Emitida');
-        setFacturas(emitidas);
+        const todas = fData.facturas || [];
+        setFacturas(todas.filter(f => f.estado === 'Emitida'));
+        // El panel SEE recibe todos los comprobantes electrónicos (Emitidas + Anuladas por NC +
+        // Rechazadas): así FE01-7 anulada sigue visible junto a su NC y a las reemisiones.
+        setFacturasSee(todas.filter(f => f.sunat_estado));
         setResumenFacturacion(fData.resumen || null);
         setFacturaTabActiva(0);
       }
@@ -2887,7 +2893,7 @@ function DetalleOrdenVenta() {
             Solo para órdenes de tipo Factura: las Notas de Venta (inafecto) NO se emiten a SUNAT
             (mismo criterio que el gating manual, ver tipo_comprobante === 'Factura' arriba). */}
         {puedeVerSee && orden.tipo_comprobante === 'Factura' && (
-            <PanelFacturacionSee orden={orden} facturas={facturas} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
+            <PanelFacturacionSee orden={orden} facturas={facturasSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
         )}
 
         {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,

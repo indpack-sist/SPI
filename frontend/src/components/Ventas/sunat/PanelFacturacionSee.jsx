@@ -111,7 +111,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const quitarGuia = (i) => setGuiasRef((prev) => prev.filter((_, idx) => idx !== i));
 
   // Comprobantes electrónicos (nativos): tienen sunat_estado. Los manuales quedan en su panel.
-  const comprobantes = (facturas || []).filter((f) => f.sunat_estado);
+  // Todos los comprobantes electrónicos, en ORDEN CRONOLÓGICO (id ascendente) para que la historia se
+  // lea natural: factura rechazada → reemisión → nota que la anula → refacturación.
+  const comprobantes = (facturas || [])
+    .filter((f) => f.sunat_estado)
+    .sort((a, b) => (Number(a.id_factura) || 0) - (Number(b.id_factura) || 0));
+  // Relaciones entre comprobantes para rotular cada fila con claridad.
+  const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);          // factura afectada por una nota
+  const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
+    && x.codigo_tipo_sunat === '07' && x.sunat_estado === 'ACEPTADO');                        // NC 07 que anuló esta factura
   const puedeEmitir = orden?.estado_verificacion === 'Aprobada' && Number(orden?.facturado_sunat) !== 1;
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
@@ -237,15 +245,24 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         <div className="space-y-2">
           {comprobantes.map((f) => {
             const esFactura = f.codigo_tipo_sunat === '01';
+            const esNC = f.codigo_tipo_sunat === '07';
+            const esND = f.codigo_tipo_sunat === '08';
             // Anulada = factura reversada por una NC de anulación (sigue ACEPTADA en SUNAT, pero sin efecto).
             const anulada = f.estado === 'Anulada';
             const aceptado = f.sunat_estado === 'ACEPTADO' && !anulada;
             const esRechazo = f.sunat_estado === 'RECHAZADO' || f.sunat_estado === 'ERROR';
+            // Etiqueta de ROL que deja claro qué es cada fila y a qué documento se relaciona.
+            let rol = null;
+            if (anulada) rol = { clase: 'badge-danger', txt: `Anulada por NC ${notaQueAnula(f)?.numero_factura || ''}`.trim() };
+            else if (esNC) rol = { clase: 'badge-info', txt: `Nota de Crédito → ${refDe(f)?.numero_factura || 'factura'}` };
+            else if (esND) rol = { clase: 'badge-info', txt: `Nota de Débito → ${refDe(f)?.numero_factura || 'factura'}` };
+            else if (esFactura && aceptado) rol = { clase: 'badge-success', txt: 'Factura vigente' };
+            else if (esRechazo) rol = { clase: 'badge-danger', txt: 'Rechazada — sin validez' };
             return (
-              <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada ? 'border-gray-300 bg-gray-50 opacity-90' : 'border-gray-200'}`}>
+              <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50/40' : (esNC || esND ? 'border-sky-200 bg-sky-50/40' : 'border-gray-200')}`}>
                 <span className={`font-mono font-bold text-sm ${anulada ? 'line-through text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
                 <BadgeEstadoSunat estado={f.sunat_estado} />
-                {anulada && <span className="badge badge-secondary text-xs" title="Anulada por Nota de Crédito">Anulada por NC</span>}
+                {rol && <span className={`badge ${rol.clase} text-xs`}>{rol.txt}</span>}
                 <span className="text-xs text-muted">{fmt(f.total)}</span>
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
                   {(aceptado || anulada || f.sunat_estado === 'BAJA' || f.sunat_estado === 'RECHAZADO') && (

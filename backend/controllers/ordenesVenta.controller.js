@@ -4609,13 +4609,14 @@ export async function getFacturasOrden(req, res) {
       xml_url: extraerUrlPdf(f.xml_url),
       cdr_url: extraerUrlPdf(f.cdr_url)
     }));
-    // Solo suman al facturado las facturas realmente vigentes. Para los comprobantes SEE
-    // (tienen `sunat_estado`) solo cuentan los ACEPTADO/BAJA; los RECHAZADO/ENVIADO/ERROR NO
-    // son facturas válidas y no deben inflar el total ni descuadrar el saldo. Las facturas
-    // manuales (sin `sunat_estado`) siguen contando por su `estado = 'Emitida'` como antes.
+    // Solo suman al facturado las facturas realmente vigentes: FACTURAS (01) o manuales, en estado
+    // 'Emitida' y aceptadas por SUNAT. Se EXCLUYEN: notas de crédito/débito (07/08 — no facturan la OV,
+    // solo ajustan/anulan), rechazadas/enviadas/error, y las dadas de baja (BAJA). Así el total facturado
+    // y el saldo no se inflan con la NC ni con documentos sin efecto.
     const emitidas = facturas.filter(f =>
       f.estado === 'Emitida' &&
-      (!f.sunat_estado || f.sunat_estado === 'ACEPTADO' || f.sunat_estado === 'BAJA'));
+      f.codigo_tipo_sunat !== '07' && f.codigo_tipo_sunat !== '08' &&
+      (!f.sunat_estado || f.sunat_estado === 'ACEPTADO'));
     const totalOrden = parseFloat(ordenRes.data[0].total || 0);
     const totalFacturado = emitidas.reduce((s, f) => s + parseFloat(f.total || 0), 0);
     const saldoPendiente = +(totalOrden - totalFacturado).toFixed(2);

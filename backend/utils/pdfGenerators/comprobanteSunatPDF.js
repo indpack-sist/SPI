@@ -34,6 +34,23 @@ const OPERACION_LABEL = {
   '40': 'OP. EXPORTACIÓN'
 };
 
+// Nombre del comprobante en minúsculas para la leyenda legal estilo SUNAT
+// ("…representación impresa de la nota de crédito electrónica, generada en el Sistema de SUNAT…").
+const LEYENDA_TIPO = {
+  '01': 'factura electrónica',
+  '07': 'nota de crédito electrónica',
+  '08': 'nota de débito electrónica'
+};
+
+// Descripción del código de unidad (catálogo 03) para imprimir "UNIDAD", "MILLAR"… como el PDF de
+// SUNAT, en lugar del código (NIU, MIL…). Fallback: el propio código si no está mapeado.
+const UNIDAD_NOMBRE = {
+  NIU: 'UNIDAD', ZZ: 'SERVICIO', MIL: 'MILLAR', KGM: 'KILOGRAMO', GRM: 'GRAMO', TNE: 'TONELADA',
+  MTR: 'METRO', CMT: 'CENTÍMETRO', MTK: 'METRO CUADRADO', MTQ: 'METRO CÚBICO', LTR: 'LITRO',
+  BX: 'CAJA', PK: 'PAQUETE', BG: 'BOLSA', ROL: 'ROLLO', SET: 'JUEGO', DZN: 'DOCENA', CEN: 'CIENTO',
+  GLL: 'GALÓN', BE: 'FARDO', PR: 'PAR', BOB: 'BOBINA'
+};
+
 const n2 = (v) => Number(v || 0).toFixed(2);
 
 /**
@@ -78,58 +95,56 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.fontSize(11).text(tipoNombre, 385, 68, { align: 'center', width: 172 });
       doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, 90, { align: 'center', width: 172 });
 
-      // ── Datos del cliente (layout de flujo dinámico anti-desborde) ──
-      // Cada campo mide su propio alto real y el siguiente arranca debajo, de modo que los
-      // valores largos (razón social) envuelven sin taparse entre sí. Dos columnas estrictamente
-      // separadas: izquierda (cliente/RUC) x40–313, derecha (condición comercial/fecha/moneda)
-      // x325–560; la observación va full-width al final, bajo ambas columnas.
+      // ── Datos del comprobante (formato SUNAT: lista de campos etiquetados en una columna) ──
+      // Orden como el PDF oficial: Fecha de Emisión, [Documento que modifica + doc afectado],
+      // Señor(es), RUC, Tipo de Moneda, Forma de Pago, [Vencimiento], Observación (motivo/nota).
       let y = 140;
       const boxTop = y;
       const boxPad = 8;
+      const labelW = 96;          // ancho de la etiqueta
+      const valX = 40 + labelW;   // x del valor ("­: valor")
+      const valW = 400;           // ancho del valor (envuelve valores largos)
+      let yc = boxTop + boxPad;
 
-      // Dibuja "Etiqueta: valor" con el valor envuelto dentro de vw. Devuelve la Y tras la fila.
-      const campo = (label, valor, lx, vx, vw, atY) => {
-        const v = valor == null || valor === ''
-          ? '-'
-          : (String(valor).replace(/[\r\n]+/g, ' ').trim() || '-');
+      // Fila "Etiqueta : valor" (una sola columna, con wrap del valor). Avanza yc.
+      const filaSunat = (label, valor) => {
+        const v = valor == null || valor === '' ? '-' : String(valor).replace(/[\r\n]+/g, ' ').trim();
         doc.fontSize(8).fillColor('#000');
-        doc.font('Helvetica-Bold').text(label, lx, atY, { width: vx - lx - 3, lineBreak: false });
-        doc.font('Helvetica').text(v, vx, atY, { width: vw });
-        const h = doc.heightOfString(v, { width: vw });
-        return atY + Math.max(h, 11) + 3;
+        doc.font('Helvetica-Bold').text(label, 40, yc, { width: labelW - 3, lineBreak: false });
+        doc.font('Helvetica').text(`: ${v}`, valX, yc, { width: valW });
+        yc += Math.max(doc.heightOfString(`: ${v}`, { width: valW }), 11) + 3;
       };
 
-      const rucLabel = String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC:' : 'Doc:';
-
-      // Columna izquierda — solo identificación del adquiriente (razón social + documento).
-      // La representación impresa de SUNAT NO muestra la dirección del cliente receptor: ni la
-      // fiscal ni la de entrega. Esta última, además, no aplica cuando es recojo en tienda. Se
-      // omiten a propósito para reflejar el mismo formato que el PDF generado por SUNAT.
-      let yl = boxTop + boxPad;
-      yl = campo('Cliente:', cliente.razon_social, 40, 108, 205, yl);
-      yl = campo(rucLabel, cliente.ruc, 40, 108, 205, yl);
-
-      // Columna derecha — condición comercial (misma fuente que el cac:PaymentTerms del XML).
       const esCredito = String(c.tipo_venta || '').toLowerCase().startsWith('cr');
       const diasCredito = Number(c.dias_credito) || 0;
       const formaPago = esCredito
         ? (diasCredito > 0 ? `CRÉDITO A ${diasCredito} DÍAS` : 'CRÉDITO')
         : 'CONTADO';
-      let yr = boxTop + boxPad;
-      yr = campo('Forma de pago:', formaPago, 325, 410, 150, yr);
-      if (esCredito) yr = campo('Vencimiento:', c.fecha_vencimiento, 325, 410, 150, yr);
-      yr = campo('Fecha emisión:', c.fecha_emision, 325, 410, 150, yr);
-      yr = campo('Moneda:', String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 325, 410, 150, yr);
+      const monedaTxt = String(c.moneda) === 'USD' ? 'DÓLAR AMERICANO' : 'SOLES';
 
-      // La OC y las observaciones YA NO van en este recuadro: se imprimen abajo, en el espacio
-      // libre entre los totales y el QR (ver bloque "Observaciones"). Aquí solo se cierra el alto
-      // del recuadro de datos según la columna más larga.
-      const yo = Math.max(yl, yr);
+      // "Observación" = motivo de la nota (sin el prefijo "NN - ", en mayúsculas como SUNAT) o, en
+      // factura/ND, las observaciones libres (cbc:Note). La razón social del cliente va en "Señor(es)".
+      const motivoTxt = c.docAfectado?.motivo
+        ? String(c.docAfectado.motivo).replace(/^\s*\d+\s*-\s*/, '').toUpperCase()
+        : null;
+      const obsHeader = motivoTxt || String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
 
-      // La altura del recuadro se calcula tras medir todo, y el borde se dibuja al final.
-      const boxH = (yo + boxPad) - boxTop;
+      filaSunat('Fecha de Emisión', c.fecha_emision);
+      if (c.docAfectado) {
+        // El documento afectado por una nota siempre es una Factura Electrónica (01) en este sistema.
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Documento que modifica:', 40, yc, { lineBreak: false });
+        yc += 12;
+        filaSunat('Factura Electrónica', c.docAfectado.comprobante);
+      }
+      filaSunat('Señor(es)', cliente.razon_social);
+      filaSunat(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc);
+      filaSunat('Tipo de Moneda', monedaTxt);
+      filaSunat('Forma de Pago', formaPago);
+      if (esCredito) filaSunat('Fecha de Vencimiento', c.fecha_vencimiento);
+      if (obsHeader) filaSunat('Observación', obsHeader);
+
+      const boxH = (yc + boxPad) - boxTop;
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
-
       y = boxTop + boxH + 8;
 
       // ── Banda de estado (rojo): RECHAZADO o ANULADO + su motivo, para dejar constancia impresa ──
@@ -148,69 +163,71 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.fillColor('#000');
       }
 
-      // ── Notas: documento afectado + motivo ──
-      if (c.docAfectado) {
-        doc.roundedRect(33, y, 529, 30, 3).stroke('#000');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Documento que modifica:', 40, y + 6);
-        doc.font('Helvetica').text(c.docAfectado.comprobante || '-', 165, y + 6);
-        doc.font('Helvetica-Bold').text('Motivo:', 40, y + 18);
-        doc.font('Helvetica').text(c.docAfectado.motivo || '-', 165, y + 18, { width: 385 });
-        y += 38;
-      }
-
-      // ── Tabla de ítems ──
+      // ── Tabla de ítems (formato SUNAT: Cantidad | Unidad de Medida | Descripción | Valor Unitario) ──
       doc.rect(33, y, 529, 18).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
-      doc.text('CÓDIGO', 40, y + 5);
-      doc.text('CANT.', 120, y + 5, { width: 45, align: 'center' });
-      doc.text('UND.', 168, y + 5, { width: 35, align: 'center' });
-      doc.text('DESCRIPCIÓN', 210, y + 5);
-      doc.text('P.UNIT.', 450, y + 5, { width: 50, align: 'right' });
-      doc.text('TOTAL', 505, y + 5, { width: 55, align: 'right' });
+      doc.text('CANTIDAD', 40, y + 5, { width: 55, align: 'center' });
+      doc.text('UNIDAD DE MEDIDA', 98, y + 5, { width: 78, align: 'center' });
+      doc.text('DESCRIPCIÓN', 182, y + 5);
+      doc.text('VALOR UNITARIO', 450, y + 5, { width: 108, align: 'right' });
       y += 18;
 
       doc.font('Helvetica').fontSize(8);
       for (const it of detalle) {
-        // El código ya tiene su propia columna: la descripción lleva solo el nombre del producto.
         const desc = it.descripcion || it.nombre || it.codigo || '-';
         const cant = Number(it.cantidad || 0);
-        const pu = Number(it.precio_unitario || 0);
-        const totalLinea = cant * pu * (1 - Number(it.descuento_porcentaje || 0) / 100);
-        const hDesc = doc.heightOfString(desc, { width: 235, lineGap: 1 });
+        // "Valor Unitario" = valor unitario SIN IGV, ya con el descuento de línea aplicado
+        // (precio_unitario se almacena sin IGV; ver calcularComprobante en ubl.service.js).
+        const valorUnit = Number(it.precio_unitario || 0) * (1 - Number(it.descuento_porcentaje || 0) / 100);
+        const und = it.unidad || it.codigo_unidad_sunat || 'NIU';
+        const undTxt = UNIDAD_NOMBRE[und] || und;
+        const hDesc = doc.heightOfString(desc, { width: 262, lineGap: 1 });
         const hFila = Math.max(16, hDesc + 6);
         if (y + hFila > 690) { doc.addPage(); y = 40; }
         doc.fillColor('#000');
-        doc.text(it.codigo || '-', 40, y + 3, { width: 78 });
-        doc.text(cant.toFixed(2), 120, y + 3, { width: 45, align: 'center' });
-        doc.text(it.unidad || it.codigo_unidad_sunat || 'NIU', 168, y + 3, { width: 35, align: 'center' });
-        doc.text(desc, 210, y + 3, { width: 235, lineGap: 1 });
-        doc.text(n2(pu), 450, y + 3, { width: 50, align: 'right' });
-        doc.text(`${simbolo} ${n2(totalLinea)}`, 505, y + 3, { width: 55, align: 'right' });
+        doc.text(cant.toFixed(2), 40, y + 3, { width: 55, align: 'center' });
+        doc.text(undTxt, 98, y + 3, { width: 78, align: 'center' });
+        doc.text(desc, 182, y + 3, { width: 262, lineGap: 1 });
+        doc.text(`${simbolo} ${n2(valorUnit)}`, 450, y + 3, { width: 108, align: 'right' });
         y += hFila;
       }
       doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
       y += 8;
 
-      // ── Totales ──
+      // El bloque de totales SUNAT ocupa ~150px; si no cabe en la página actual, salta a la siguiente
+      // para no encimarse con el pie ni cortarse.
+      if (y + 170 > 720) { doc.addPage(); y = 40; }
+
+      // ── Totales (desglose completo, formato SUNAT) ──
+      // La mayoría de conceptos no aplican en el modelo actual (van en 0.00): se imprimen igual
+      // para replicar el formato oficial. Los importes autoritativos son subtotal/igv/total.
       const filaTotal = (label, valor, bold) => {
-        doc.roundedRect(385, y, 85, 15, 3).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFF').text(label, 390, y + 4, { width: 80 });
-        doc.roundedRect(472, y, 90, 15, 3).stroke('#CCCCCC');
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000').text(`${simbolo} ${n2(valor)}`, 476, y + 4, { width: 82, align: 'right' });
-        y += 19;
+        doc.roundedRect(360, y, 118, 13, 2).fill('#CCCCCC');
+        doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#000').text(label, 364, y + 3.5, { width: 112 });
+        doc.roundedRect(480, y, 82, 13, 2).stroke('#CCCCCC');
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000').text(`${simbolo} ${n2(valor)}`, 484, y + 3.5, { width: 74, align: 'right' });
+        y += 15;
       };
       const yTotalesInicio = y;
       const afect = String(c.afectacion || '10');
-      const gravado = afect === '10';
-      filaTotal(OPERACION_LABEL[afect] || 'OP. GRAVADA', c.subtotal);
-      filaTotal(gravado ? 'IGV (18%)' : 'IGV', c.igv);
-      filaTotal('IMPORTE TOTAL', c.total, true);
+      filaTotal('Sub Total Ventas', c.subtotal);
+      filaTotal('Anticipos', 0);
+      filaTotal('Descuentos', 0);
+      filaTotal('Valor Venta', c.subtotal);
+      filaTotal('ISC', 0);
+      filaTotal('IGV', c.igv);
+      filaTotal('Otros Cargos', 0);
+      filaTotal('Otros Tributos', 0);
+      filaTotal('Monto de Redondeo', 0);
+      filaTotal('Importe Total', c.total, true);
 
-      // ── SON en letras (lado izquierdo, a la altura de los totales) ──
-      // La OC y las observaciones se imprimen más abajo, en el recuadro "Observaciones" que ocupa
-      // el espacio entre los totales y el QR.
-      doc.fontSize(8).font('Helvetica').fillColor('#000');
-      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio, { width: 330 });
+      // ── Columna izquierda: tipo de operación (afectación) + SON en letras ──
+      // El tipo de operación (Gravada/Exonerada/Inafecta/Exportación) se rotula aparte para que la
+      // afectación quede impresa sin ambigüedad, aunque el bloque de totales use rótulos genéricos.
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
+      doc.text(`Tipo de operación: ${OPERACION_LABEL[afect] || 'OP. GRAVADA'}`, 40, yTotalesInicio, { width: 300 });
+      doc.font('Helvetica');
+      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio + 16, { width: 300 });
 
       y += 6;
 
@@ -243,12 +260,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
            .font('Helvetica').text(String(c.orden_compra).trim());
         y = doc.y + 2;
       }
-      const obsTxt = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
-      if (obsTxt) {
-        doc.font('Helvetica-Bold').text('Observaciones: ', 40, y, { continued: true, width: 515 })
-           .font('Helvetica').text(obsTxt);
-        y = doc.y + 2;
-      }
+      // Las observaciones (cbc:Note) y el motivo de la nota ya se imprimen arriba, en el campo
+      // "Observación" de la cabecera (formato SUNAT), por eso no se repiten aquí.
       // Guías de remisión que amparan el traslado (las declaradas en el XML). Solo aplica a la
       // factura cuando la GRE se emitió antes; refleja el cac:DespatchDocumentReference.
       const guiasTxt = String(c.guias || '').trim();
@@ -266,19 +279,22 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // RECHAZADOS (nunca se registraron). En ACEPTADO/BAJA sí se imprime.
       if (qrBuffer && !rechazado) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
       doc.fontSize(7).font('Helvetica').fillColor('#000');
+      const leyendaTipo = LEYENDA_TIPO[c.codigo_tipo_sunat] || 'comprobante electrónico';
       if (rechazado) {
-        doc.fillColor('#D32F2F').text('Representación impresa de un comprobante RECHAZADO por SUNAT. No tiene validez como comprobante de pago.', 145, yPie + 6, { width: 410 });
+        doc.fillColor('#D32F2F').text(`Representación impresa de una ${leyendaTipo} RECHAZADA por SUNAT. No tiene validez como comprobante de pago.`, 145, yPie + 6, { width: 410 });
         doc.fillColor('#000');
       } else {
-        doc.text('Representación impresa del Comprobante de Pago Electrónico.', 145, yPie + 6, { width: 410 });
-        doc.font('Helvetica').fillColor('#555').text('Autorizado mediante Resolución de Intendencia. Consulte su validez en www.sunat.gob.pe', 145, yPie + 22, { width: 410 });
+        doc.text(`Esta es una representación impresa de la ${leyendaTipo}, generada en el Sistema de SUNAT. Puede verificarla utilizando su clave SOL, además del número de RUC y otros datos del comprobante, en www.sunat.gob.pe`, 145, yPie + 6, { width: 410 });
       }
 
       const marcaAgua = rechazado ? 'RECHAZADO' : (anulado ? 'ANULADO' : null);
       if (marcaAgua) {
+        // fontSize reducido + lineBreak:false para que la palabra completa entre en UNA sola línea
+        // (a 72px "RECHAZADO" desbordaba el ancho y la "O" caía debajo). Caja centrada en la página.
         doc.save().rotate(-30, { origin: [297, 400] })
-          .fontSize(72).fillColor('#D32F2F').opacity(0.25)
-          .text(marcaAgua, 120, 380, { align: 'center' }).opacity(1).restore();
+          .fontSize(56).fillColor('#D32F2F').opacity(0.22)
+          .text(marcaAgua, 80, 385, { width: 435, align: 'center', lineBreak: false })
+          .opacity(1).restore();
       }
 
       doc.end();

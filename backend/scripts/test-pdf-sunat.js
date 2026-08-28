@@ -77,6 +77,11 @@ async function main() {
     }, emisor, cliente, detalle, qrBuffer: qrNota
   });
   check('Nota de Crédito (07) genera PDF válido', esPdf(pdfNota), `${pdfNota.length} bytes`);
+  const txtNota = await textoDe(pdfNota);
+  check('NC usa cabecera SUNAT (Señor(es), Documento que modifica, Tipo de Moneda)',
+    txtNota.includes('Señor(es)') && txtNota.includes('Documento que modifica') && txtNota.includes('Tipo de Moneda'));
+  check('NC muestra el motivo en "Observación" (sin código, en mayúsculas)',
+    txtNota.includes('Observación') && txtNota.includes('DEVOLUCION POR ITEM'));
   await fs.writeFile(path.join(outDir, 'test-FC01-1.pdf'), pdfNota);
 
   // 3) Factura BAJA → marca de agua ANULADO
@@ -112,15 +117,15 @@ async function main() {
     txtGre.includes('Observaciones') && txtGre.includes('OC: 260610043'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
-  // 5) Rótulo de operación por afectación (catálogo 07) — sin incongruencias con el importe.
-  //    Gravada muestra "IGV (18%)"; exonerada/inafecta/exportación NO (IGV = 0), y cada una
-  //    rotula su propia operación. Cierra la deuda afectacion-igv-no-poblada en la impresión.
+  // 5) Rótulo de operación por afectación (catálogo 07) — impreso en la línea "Tipo de operación".
+  //    Gravada: el IGV del bloque de totales es != 0 (180.00); exonerada/inafecta/exportación: IGV 0.
+  //    El bloque de totales usa el formato SUNAT (Sub Total Ventas / Valor Venta / Importe Total).
   const detalleAfect = [{ codigo: 'P1', nombre: 'PRODUCTO', cantidad: 10, precio_unitario: 100, unidad: 'NIU', descuento_porcentaje: 0 }];
   const casosAfect = [
-    { afect: '10', label: 'OP. GRAVADA',      igv: 180, conPct: true  },
-    { afect: '20', label: 'OP. EXONERADA',    igv: 0,   conPct: false },
-    { afect: '30', label: 'OP. INAFECTA',     igv: 0,   conPct: false },
-    { afect: '40', label: 'OP. EXPORTACIÓN',  igv: 0,   conPct: false }
+    { afect: '10', label: 'OP. GRAVADA',      igv: 180, gravado: true  },
+    { afect: '20', label: 'OP. EXONERADA',    igv: 0,   gravado: false },
+    { afect: '30', label: 'OP. INAFECTA',     igv: 0,   gravado: false },
+    { afect: '40', label: 'OP. EXPORTACIÓN',  igv: 0,   gravado: false }
   ];
   for (const ca of casosAfect) {
     const pdf = await generarComprobanteSunatPDF({
@@ -131,9 +136,10 @@ async function main() {
       }, emisor, cliente, detalle: detalleAfect, qrBuffer: null
     });
     const txt = await textoDe(pdf);
-    const rotulaOk = txt.includes(ca.label);
-    const pctOk = ca.conPct ? txt.includes('IGV (18%)') : !txt.includes('IGV (18%)');
-    check(`Afectación ${ca.afect} rotula "${ca.label}" y ${ca.conPct ? 'muestra' : 'oculta'} "(18%)"`, rotulaOk && pctOk);
+    const rotulaOk = txt.includes(`Tipo de operación: ${ca.label}`);
+    const bloqueOk = txt.includes('Sub Total Ventas') && txt.includes('Importe Total');
+    const igvOk = ca.gravado ? txt.includes('180.00') : !txt.includes('180.00');
+    check(`Afectación ${ca.afect} rotula "${ca.label}", usa bloque SUNAT y ${ca.gravado ? 'muestra IGV' : 'IGV 0'}`, rotulaOk && bloqueOk && igvOk);
   }
 
   console.log(`\n  PDFs escritos en: ${outDir}`);

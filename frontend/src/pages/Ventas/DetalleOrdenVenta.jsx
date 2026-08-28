@@ -447,9 +447,15 @@ function DetalleOrdenVenta() {
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
         const todas = fData.facturas || [];
-        setFacturas(todas.filter(f => f.estado === 'Emitida'));
-        // El panel SEE recibe todos los comprobantes electrónicos (Emitidas + Anuladas por NC +
-        // Rechazadas): así FE01-7 anulada sigue visible junto a su NC y a las reemisiones.
+        // "Ver facturas" (conteo/pestañas legacy) = SOLO facturas VÁLIDAS y vigentes: no notas (07/08),
+        // no rechazadas, no anuladas. Así el contador refleja la factura realmente válida, no el historial.
+        const facturaValida = (f) =>
+          f.estado === 'Emitida' &&
+          f.codigo_tipo_sunat !== '07' && f.codigo_tipo_sunat !== '08' &&
+          (!f.sunat_estado || f.sunat_estado === 'ACEPTADO');
+        setFacturas(todas.filter(facturaValida));
+        // El panel SEE recibe TODOS los comprobantes electrónicos (válidas + Anuladas por NC +
+        // Rechazadas + notas): así FE01-7 anulada sigue visible junto a su NC y a las reemisiones.
         setFacturasSee(todas.filter(f => f.sunat_estado));
         setResumenFacturacion(fData.resumen || null);
         setFacturaTabActiva(0);

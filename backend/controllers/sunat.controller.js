@@ -821,8 +821,10 @@ export async function generarPdfComprobante(req, res, next) {
       "WHERE f.id_factura = ?",
       [idFactura]);
     if (!f) throw new AppError('Comprobante no existe', 404);
-    if (!['ACEPTADO', 'BAJA'].includes(f.sunat_estado)) {
-      throw new AppError(`El PDF solo se genera para comprobantes ACEPTADOS (estado actual: ${f.sunat_estado || 'sin enviar'})`, 409);
+    // ACEPTADO (válido), BAJA (anulado con constancia) y RECHAZADO (sin validez, pero se imprime
+    // con marca de agua + motivo en rojo para dejar constancia del intento y su correlativo).
+    if (!['ACEPTADO', 'BAJA', 'RECHAZADO'].includes(f.sunat_estado)) {
+      throw new AppError(`El PDF solo se genera para comprobantes ACEPTADOS, dados de BAJA o RECHAZADOS (estado actual: ${f.sunat_estado || 'sin enviar'})`, 409);
     }
 
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
@@ -858,6 +860,20 @@ export async function generarPdfComprobante(req, res, next) {
     // Gravada / Exonerada / Inafecta / Exportación (no un "IGV 18%" fijo).
     const afectacion = afectacionLinea({ tipo_impuesto: f.tipo_impuesto, es_exportacion: f.es_exportacion }, {});
 
+    // Motivo a rotular EN ROJO cuando el comprobante no es válido:
+    //  - RECHAZADO: la descripción del CDR/fault guardada en la propia factura.
+    //  - BAJA: el motivo de la Comunicación de Baja (sunat_bajas_detalle, la más reciente).
+    let motivoEstado = null;
+    if (f.sunat_estado === 'RECHAZADO') {
+      motivoEstado = f.sunat_response_desc
+        ? (f.sunat_response_code ? `(${f.sunat_response_code}) ${f.sunat_response_desc}` : f.sunat_response_desc)
+        : null;
+    } else if (f.sunat_estado === 'BAJA') {
+      const [[b]] = await pool.query(
+        'SELECT motivo FROM sunat_bajas_detalle WHERE id_factura = ? ORDER BY id_baja DESC LIMIT 1', [idFactura]);
+      motivoEstado = b?.motivo || null;
+    }
+
     const qrBuffer = f.sunat_qr_data ? await qrPng(f.sunat_qr_data) : null;
     const pdf = await generarComprobanteSunatPDF({
       comprobante: {
@@ -874,7 +890,7 @@ export async function generarPdfComprobante(req, res, next) {
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
         guias: guiasTexto,
-        sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
+        sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, motivoEstado, docAfectado
       },
       emisor, cliente, detalle, qrBuffer
     });

@@ -61,6 +61,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       const simbolo = String(c.moneda) === 'USD' ? '$' : 'S/';
       const tipoNombre = NOMBRE_TIPO[c.codigo_tipo_sunat] || 'COMPROBANTE ELECTRÓNICO';
       const anulado = c.sunat_estado === 'BAJA';
+      const rechazado = c.sunat_estado === 'RECHAZADO';
 
       // ── Cabecera: logo + emisor (izq) + recuadro RUC/tipo/serie-numero (der) ──
       const logo = logoBuffer();
@@ -130,6 +131,22 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
 
       y = boxTop + boxH + 8;
+
+      // ── Banda de estado (rojo): RECHAZADO o ANULADO + su motivo, para dejar constancia impresa ──
+      if (rechazado || anulado) {
+        const titulo = rechazado
+          ? 'COMPROBANTE RECHAZADO POR SUNAT — SIN VALIDEZ'
+          : 'COMPROBANTE ANULADO — COMUNICACIÓN DE BAJA ACEPTADA';
+        const motivo = c.motivoEstado
+          || (rechazado ? 'Comprobante rechazado por SUNAT.' : 'Comprobante dado de baja ante SUNAT.');
+        doc.fontSize(8).font('Helvetica');
+        const hBanner = doc.heightOfString(`Motivo: ${motivo}`, { width: 515 }) + 24;
+        doc.roundedRect(33, y, 529, hBanner, 3).fillAndStroke('#FDECEA', '#D32F2F');
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#D32F2F').text(titulo, 40, y + 6, { width: 515 });
+        doc.fontSize(8).font('Helvetica').fillColor('#D32F2F').text(`Motivo: ${motivo}`, 40, y + 19, { width: 515 });
+        y += hBanner + 8;
+        doc.fillColor('#000');
+      }
 
       // ── Notas: documento afectado + motivo ──
       if (c.docAfectado) {
@@ -245,15 +262,23 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // El "Valor resumen (hash/digestValue)" NO se imprime: las facturas reales no lo muestran
       // (el digest sigue en el XML firmado y en el CDR; solo se omite de la representación impresa).
       const yPie = Math.max(y, 700);
-      if (qrBuffer) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
+      // El QR (validez SUNAT) solo tiene sentido si el comprobante existe en SUNAT: se omite en los
+      // RECHAZADOS (nunca se registraron). En ACEPTADO/BAJA sí se imprime.
+      if (qrBuffer && !rechazado) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
       doc.fontSize(7).font('Helvetica').fillColor('#000');
-      doc.text('Representación impresa del Comprobante de Pago Electrónico.', 145, yPie + 6, { width: 410 });
-      doc.font('Helvetica').fillColor('#555').text('Autorizado mediante Resolución de Intendencia. Consulte su validez en www.sunat.gob.pe', 145, yPie + 22, { width: 410 });
+      if (rechazado) {
+        doc.fillColor('#D32F2F').text('Representación impresa de un comprobante RECHAZADO por SUNAT. No tiene validez como comprobante de pago.', 145, yPie + 6, { width: 410 });
+        doc.fillColor('#000');
+      } else {
+        doc.text('Representación impresa del Comprobante de Pago Electrónico.', 145, yPie + 6, { width: 410 });
+        doc.font('Helvetica').fillColor('#555').text('Autorizado mediante Resolución de Intendencia. Consulte su validez en www.sunat.gob.pe', 145, yPie + 22, { width: 410 });
+      }
 
-      if (anulado) {
+      const marcaAgua = rechazado ? 'RECHAZADO' : (anulado ? 'ANULADO' : null);
+      if (marcaAgua) {
         doc.save().rotate(-30, { origin: [297, 400] })
           .fontSize(72).fillColor('#D32F2F').opacity(0.25)
-          .text('ANULADO', 120, 380, { align: 'center' }).opacity(1).restore();
+          .text(marcaAgua, 120, 380, { align: 'center' }).opacity(1).restore();
       }
 
       doc.end();

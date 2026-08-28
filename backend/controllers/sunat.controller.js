@@ -28,6 +28,40 @@ import AppError from '../utils/AppError.js';
 // Tipos de comprobante dentro de alcance (catálogo 01). Boletas (03) y otros: fuera de alcance.
 const TIPOS_PERMITIDOS = ['01', '07', '08'];
 
+// Normaliza y VALIDA la lista de guías de remisión relacionadas que el panel adjunta a una factura
+// (buscador manual: las GRE se emiten directo en SUNAT y no hay registro local). Devuelve:
+//   - null  → el request NO trae la clave `guias` (se usan las GRE del sistema, comportamiento previo);
+//   - []    → el usuario limpió la lista a propósito (no se declara ninguna guía);
+//   - [{ tipo_documento, serie, numero }] → lista saneada y deduplicada.
+// Reglas de formato (para que SUNAT no observe/rechace el cac:DespatchDocumentReference):
+//   tipo ∈ {09 Remitente, 31 Transportista}; serie = 4 alfanuméricos (p. ej. T001, EG01, 0001);
+//   número = 1..8 dígitos. La serie se guarda en MAYÚSCULAS; el número, literal.
+function normalizarGuiasFactura(input) {
+  if (input === undefined || input === null) return null;
+  if (!Array.isArray(input)) throw new AppError('guias debe ser una lista', 400);
+  const vistos = new Set();
+  const out = [];
+  for (const raw of input) {
+    const tipoDoc = String(raw?.tipo_documento ?? raw?.tipo ?? '09').trim();
+    if (!['09', '31'].includes(tipoDoc)) {
+      throw new AppError(`Tipo de guía inválido "${tipoDoc}" (solo 09 Remitente o 31 Transportista)`, 422);
+    }
+    const serie = String(raw?.serie ?? '').toUpperCase().trim();
+    const numero = String(raw?.numero ?? '').trim();
+    if (!/^[A-Z0-9]{4}$/.test(serie)) {
+      throw new AppError(`Serie de guía inválida "${serie}" (4 caracteres alfanuméricos, p. ej. T001)`, 422);
+    }
+    if (!/^\d{1,8}$/.test(numero)) {
+      throw new AppError(`Número de guía inválido "${numero}" (solo dígitos, hasta 8)`, 422);
+    }
+    const key = `${tipoDoc}|${serie}|${numero}`;
+    if (vistos.has(key)) continue;
+    vistos.add(key);
+    out.push({ tipo_documento: tipoDoc, serie, numero });
+  }
+  return out;
+}
+
 // fechaLima() → services/sunat/fecha.service.js · sleep/copiaLocal/extraerUrl → util.service.js
 function addDiasISO(iso, dias) {
   const d = new Date(iso + 'T00:00:00');
@@ -64,11 +98,12 @@ function validarFechaEmision(solicitada, hoyISO) {
 // Última fecha de emisión (DATE 'YYYY-MM-DD') de la serie ya usada por un comprobante vivo
 // (no rechazado). Sirve para la regla cronológica: no se puede emitir con fecha anterior a esta.
 // `db` puede ser el pool o una conexión de transacción (ambos exponen .query).
-async function ultimaFechaEmitidaSerie(db, serie) {
+// `tipo` (catálogo 01/07/08) acota a la serie del propio documento (factura vs nota).
+async function ultimaFechaEmitidaSerie(db, serie, tipo = '01') {
   const [[row]] = await db.query(
     "SELECT DATE_FORMAT(MAX(fecha_emision), '%Y-%m-%d') AS ultima FROM facturas_venta " +
-    "WHERE serie = ? AND codigo_tipo_sunat = '01' AND sunat_estado IS NOT NULL AND sunat_estado <> 'RECHAZADO'",
-    [serie]);
+    "WHERE serie = ? AND codigo_tipo_sunat = ? AND sunat_estado IS NOT NULL AND sunat_estado <> 'RECHAZADO'",
+    [serie, tipo]);
   return row?.ultima || null;
 }
 
@@ -92,6 +127,9 @@ export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;
   const tipo = req.body.tipo || '01';
   const idEmpleado = req.user?.id_empleado || null;
+  // Guías relacionadas ingresadas en el buscador del panel (null = no vino la clave → usar GRE del
+  // sistema). Se validan ACÁ para fallar temprano, antes de reservar correlativo.
+  const guiasManual = normalizarGuiasFactura(req.body.guias);
   try {
     if (!id_orden_venta) throw new AppError('Falta id_orden_venta', 400);
     if (!TIPOS_PERMITIDOS.includes(tipo)) {
@@ -160,17 +198,36 @@ export async function emitirComprobante(req, res, next) {
           ? addDiasISO(emision, ov.dias_credito) : null
       };
 
-      // Observaciones (cbc:Note, lo que SUNAT muestra como "Observaciones"). Editable desde el
-      // panel: si el cliente envía `observaciones` se usa tal cual; si no (API antigua), se compone
-      // por defecto con la OC del cliente. Se normaliza (sin saltos, ≤250) para que lo PERSISTIDO
-      // coincida byte a byte con el cbc:Note del XML y así el PDF muestre exactamente lo enviado.
+      // Orden de compra (cac:OrderReference): campo PROPIO, ya no se mezcla en las observaciones.
+      // Si el panel la envía (editable), se usa y se persiste en la OV — que es la fuente que leen
+      // tanto el XML (OrderReference) como el PDF; si no viene, se conserva la de la OV. Máx 30.
+      if (req.body.orden_compra_cliente !== undefined) {
+        ov.orden_compra_cliente = String(req.body.orden_compra_cliente || '').trim().slice(0, 30);
+        await conn.query('UPDATE ordenes_venta SET orden_compra_cliente = ? WHERE id_orden_venta = ?',
+          [ov.orden_compra_cliente || null, id_orden_venta]);
+      }
+
+      // Observaciones (cbc:Note, lo que SUNAT muestra como "Observaciones"). Texto LIBRE editable
+      // desde el panel; ya NO se le inyecta la OC (esa viaja aparte en cac:OrderReference). Si el
+      // cliente no envía la clave, se usa el texto de la OV tal cual. Se normaliza (sin saltos, ≤250)
+      // para que lo PERSISTIDO coincida byte a byte con el cbc:Note del XML (y así el PDF).
       const observacionEnviada = (req.body.observaciones !== undefined
         ? String(req.body.observaciones)
-        : componerObservacion(ov.observaciones, ov.orden_compra_cliente)
+        : String(ov.observaciones || '')
       ).replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
       ov.observaciones = observacionEnviada;
 
-      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias });
+      // Guías declaradas en la factura = UNIÓN de dos fuentes (nunca reemplazo, para no perder
+      // las del sistema si el panel manda lista vacía):
+      //  · sistema: las GRE de la OV ya ACEPTADAS (se les liga id_factura al aceptar);
+      //  · manual: las del buscador del panel (GRE emitidas directo en SUNAT, sin registro local).
+      // Se deduplica por tipo|serie|número para no declarar la misma guía dos veces.
+      const guiasSistema = guias.map((g) => ({ tipo_documento: '09', serie: String(g.serie_sunat), numero: String(g.numero_sunat) }));
+      const clavesSistema = new Set(guiasSistema.map((g) => `${g.tipo_documento}|${g.serie}|${g.numero}`));
+      const guiasManualNuevas = (guiasManual || []).filter((g) => !clavesSistema.has(`${g.tipo_documento}|${g.serie}|${g.numero}`));
+      const guiasDeclaradas = [...guiasSistema, ...guiasManualNuevas];
+
+      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias: guiasDeclaradas });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       // El número del nombre de archivo debe coincidir EXACTO con cbc:ID (serie-numero),
       // SIN ceros a la izquierda: SUNAT (fault 1036) compara ambos sin normalizar el padding.
@@ -197,11 +254,11 @@ export async function emitirComprobante(req, res, next) {
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales,
-        guiaIds: guias.map((g) => g.id_guia) };
+        guiaIds: guias.map((g) => g.id_guia), guiasManualNuevas };
     });
 
     // ── Fuera de transacción: envío a SUNAT + subida de archivos ──
-    const { idFactura, numero, nombre, xmlFirmado, totales, guiaIds } = prep;
+    const { idFactura, numero, nombre, xmlFirmado, totales, guiaIds, guiasManualNuevas } = prep;
     // Diagnóstico fault 1036: las TRES cadenas deben producir el mismo Serie-Número.
     const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
     const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
@@ -271,11 +328,19 @@ export async function emitirComprobante(req, res, next) {
       if (aceptado) {
         await marcarOrdenFacturada(conn, { idOrdenVenta: id_orden_venta, serie, numero,
           idEmpleado, fecha: emisionDateTime });
-        // Liga interna factura ↔ guías: las guías que la factura declaró en el XML quedan
-        // asociadas a esta factura (solo si el comprobante fue aceptado por SUNAT).
+        // Liga interna factura ↔ guías (solo si el comprobante fue aceptado por SUNAT). Ambos
+        // caminos conviven (la declaración en el XML fue la UNIÓN de las dos fuentes):
+        //  · sistema (GRE ACEPTADAS de la OV) → se les estampa id_factura como antes;
+        //  · manual (buscador del panel, las NUEVAS ya deduplicadas) → se guardan en
+        //    facturas_guias_referencia para dejar constancia y rotularlas en el PDF.
         if (guiaIds && guiaIds.length) {
           await conn.query(
             'UPDATE guias_remision SET id_factura = ? WHERE id_guia IN (?)', [idFactura, guiaIds]);
+        }
+        if (guiasManualNuevas && guiasManualNuevas.length) {
+          await conn.query(
+            'INSERT IGNORE INTO facturas_guias_referencia (id_factura, tipo_documento, serie, numero) VALUES ?',
+            [guiasManualNuevas.map((g) => [idFactura, g.tipo_documento, g.serie, g.numero])]);
         }
       }
     });
@@ -310,6 +375,13 @@ export async function previewComprobante(req, res, next) {
 
     const calc = calcularComprobante({ ov, detalle });
 
+    // GRE del sistema ya ACEPTADAS de esta OV: se declararán automáticamente en la factura (además
+    // de las que el usuario agregue en el buscador). El panel las muestra como "ya incluidas".
+    const [guiasSistema] = await pool.query(
+      `SELECT serie_sunat AS serie, numero_sunat AS numero FROM guias_remision
+        WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
+          AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL ORDER BY id_guia`, [id_orden_venta]);
+
     // Avisos que NO bloquean la previsualización, pero sí la emisión real (mismos checks que emitirComprobante).
     const avisos = [];
     if (String(ov.tipo_comprobante || '').trim() !== 'Factura') {
@@ -332,8 +404,12 @@ export async function previewComprobante(req, res, next) {
       igv: calc.igv,
       total: calc.total,
       montoEnLetras: calc.montoEnLetras,
-      // Observación SUGERIDA (cbc:Note) que el panel prellena y el usuario puede editar antes de emitir.
-      observacion: componerObservacion(ov.observaciones, ov.orden_compra_cliente),
+      // Observación SUGERIDA (cbc:Note): texto LIBRE de la OV, ya SIN la OC (esta viaja aparte).
+      observacion: String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 250),
+      // Orden de compra (cac:OrderReference): campo propio, editable en el panel antes de emitir.
+      ordenCompra: String(ov.orden_compra_cliente || '').trim().slice(0, 30),
+      // GRE del sistema que se auto-declaran (el panel las muestra como ya incluidas, no editables).
+      guiasSistema: guiasSistema.map((g) => ({ tipo_documento: '09', serie: String(g.serie), numero: String(g.numero) })),
       // Última fecha ya emitida en la serie: el panel no deja retro-fechar por debajo de ella (regla cronológica).
       ultimaFechaEmitida: await ultimaFechaEmitidaSerie(pool, 'FE01'),
       avisos
@@ -344,28 +420,128 @@ export async function previewComprobante(req, res, next) {
 // Serie fija por tipo de nota (asociadas a facturas FE01).
 const SERIES_NOTA = { '07': 'FC01', '08': 'FD01' };
 
+// Vista previa de una Nota (07/08) — MISMO cálculo (calcularComprobante) que la nota real, para que el
+// panel muestre el "Preliminar de Nota" tal como se firmará y enviará. Solo lectura: no numera, no envía.
+// POST /api/sunat/comprobantes/notas/preview  { id_factura_ref, tipo, motivo_codigo }
+export async function previewNota(req, res, next) {
+  try {
+    const { id_factura_ref, motivo_codigo } = req.body;
+    const tipo = String(req.body.tipo || '');
+    if (!id_factura_ref) throw new AppError('Falta id_factura_ref', 400);
+    if (!SERIES_NOTA[tipo]) throw new AppError('tipo de nota inválido (07 NC | 08 ND)', 400);
+
+    const [[ref]] = await pool.query(
+      "SELECT *, DATE_FORMAT(COALESCE(fecha_emision, sunat_fecha_envio), '%Y-%m-%d') AS fecha_emision_iso " +
+      'FROM facturas_venta WHERE id_factura = ?', [id_factura_ref]);
+    if (!ref) throw new AppError('Comprobante afectado no existe', 404);
+
+    const [[ov]] = await pool.query('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [ref.id_orden_venta]);
+    if (!ov) throw new AppError('Orden de venta del comprobante afectado no existe', 404);
+    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [ref.id_cliente]);
+    if (!cliente) throw new AppError('Cliente del comprobante afectado no existe', 404);
+    const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+
+    const motivos = motivosValidos(tipo);
+    const motivoLabel = motivos[String(motivo_codigo)] || null;
+
+    const [detalle] = await pool.query(
+      'SELECT d.*, p.codigo, p.nombre, p.codigo_unidad_sunat ' +
+      'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
+      'WHERE d.id_orden_venta = ?', [ref.id_orden_venta]);
+
+    const calc = calcularComprobante({ ov, detalle });
+
+    // Información del crédito (solo informativa en el preliminar; la nota total hereda el cronograma
+    // de la factura afectada = una cuota a su vencimiento = fecha de emisión de la factura + días de crédito).
+    const esCredito = String(ov.tipo_venta || '').toLowerCase().startsWith('cr');
+    const baseVenc = ref.fecha_emision_iso || fechaLima().emision;
+    const credito = esCredito
+      ? { esCredito: true, montoPendiente: calc.total, totalCuotas: 1,
+          cuotas: [{ n: 1, venc: addDiasISO(baseVenc, ov.dias_credito), monto: calc.total }] }
+      : { esCredito: false, montoPendiente: 0, totalCuotas: 0, cuotas: [] };
+
+    // Avisos que NO bloquean el preliminar pero sí la emisión real (mismos checks que emitirNota).
+    const avisos = [];
+    if (ref.codigo_tipo_sunat !== '01') avisos.push('Solo se emiten notas sobre facturas (01).');
+    if (ref.sunat_estado !== 'ACEPTADO') avisos.push('El comprobante afectado no está ACEPTADO por SUNAT.');
+    if (ref.estado === 'Anulada') avisos.push('El comprobante afectado ya está anulado.');
+    if (!motivoLabel) avisos.push(`motivo_codigo ${motivo_codigo} inválido para el tipo ${tipo}.`);
+    const sinUnidad = calc.lineas.filter((l) => !l.unidad).map((l) => l.codigo);
+    if (sinUnidad.length) avisos.push(`Productos sin codigo_unidad_sunat: ${sinUnidad.join(', ')}.`);
+
+    res.json({
+      ok: true,
+      mode: sunatConfig.mode,
+      tipo,
+      serie: SERIES_NOTA[tipo],
+      tipoLabel: tipo === '08' ? 'NOTA DE DÉBITO ELECTRÓNICA' : 'NOTA DE CRÉDITO ELECTRÓNICA',
+      docAfectado: { numero: ref.numero_factura, tipoLabel: 'Factura Electrónica' },
+      empresa: {
+        razon_social: empresa?.razon_social || '',
+        ruc: empresa?.ruc || sunatConfig.ruc,
+        direccion: [empresa?.direccion, [empresa?.distrito, empresa?.provincia, empresa?.departamento].filter(Boolean).join(' - ')]
+          .filter(Boolean).join(' ')
+      },
+      cliente: {
+        razon_social: cliente.razon_social || cliente.nombre || '',
+        ruc: cliente.ruc || '',
+        tipo_documento: cliente.tipo_documento || '',
+        direccion: cliente.direccion_despacho || cliente.direccion || ''
+      },
+      motivo: { codigo: String(motivo_codigo || ''), label: motivoLabel },
+      moneda: calc.moneda,
+      monedaLabel: calc.moneda === 'USD' ? 'DOLAR AMERICANO' : 'SOLES',
+      esExport: calc.esExport,
+      lineas: calc.lineas.map(({ cfg, ...l }) => l),
+      // Desglose al estilo del preliminar SUNAT (los conceptos no usados van en cero).
+      totales: {
+        subtotal: calc.subtotal, anticipos: 0, descuentos: 0, valorVenta: calc.subtotal,
+        isc: 0, igv: calc.igv, otrosCargos: 0, otrosTributos: 0, redondeo: 0, total: calc.total
+      },
+      montoEnLetras: calc.montoEnLetras,
+      credito,
+      // Última fecha ya emitida en la serie de la NOTA: el panel no deja retro-fechar por debajo.
+      ultimaFechaEmitida: await ultimaFechaEmitidaSerie(pool, SERIES_NOTA[tipo], tipo),
+      avisos
+    });
+  } catch (e) { next(e); }
+}
+
 // POST /api/sunat/comprobantes/notas/emitir  { id_factura_ref, tipo, motivo_codigo, items? }
 // Emite una Nota de Crédito (07) o Débito (08) sobre una FACTURA (01) ACEPTADA.
 export async function emitirNota(req, res, next) {
   const { id_factura_ref, motivo_codigo } = req.body;
   const tipo = String(req.body.tipo || '');
   const items = Array.isArray(req.body.items) ? req.body.items : null;
+  // Sustento libre del usuario (cbc:Description). Vacío → cae a la etiqueta del catálogo en el XML.
+  const sustento = String(req.body.sustento || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
   const idEmpleado = req.user?.id_empleado || null;
   try {
     if (!id_factura_ref) throw new AppError('Falta id_factura_ref', 400);
     if (!SERIES_NOTA[tipo]) throw new AppError('tipo de nota inválido (07 NC | 08 ND)', 400);
     if (!motivo_codigo) throw new AppError('Falta motivo_codigo', 400);
     const serie = SERIES_NOTA[tipo];
-    const { emision, hora, emisionDateTime } = fechaLima();
+    // Fecha de emisión editable (mismas reglas que la factura): retro-fecha ≤2 días, nunca futura, y la
+    // regla cronológica contra la serie de la nota se valida dentro de la transacción.
+    const lima = fechaLima();
+    const emision = validarFechaEmision(req.body.fecha_emision, lima.emision);
+    const hora = lima.hora;
+    const emisionDateTime = `${emision} ${hora}`;
 
     // ── TX1: validar doc afectado + reservar correlativo + INSERT nota ENVIADO ──
     const prep = await withTransaction(async (conn) => {
       const [[ref]] = await conn.query(
-        'SELECT * FROM facturas_venta WHERE id_factura = ? FOR UPDATE', [id_factura_ref]);
+        "SELECT *, DATE_FORMAT(COALESCE(fecha_emision, sunat_fecha_envio), '%Y-%m-%d') AS fecha_emision_iso " +
+        'FROM facturas_venta WHERE id_factura = ? FOR UPDATE', [id_factura_ref]);
       if (!ref) throw new AppError('Comprobante afectado no existe', 404);
       if (ref.codigo_tipo_sunat !== '01') throw new AppError('Solo se emiten notas sobre facturas (01)', 422);
       if (ref.sunat_estado !== 'ACEPTADO') throw new AppError('El comprobante afectado no está ACEPTADO por SUNAT', 409);
       if (ref.estado === 'Anulada') throw new AppError('El comprobante afectado ya está anulado', 409);
+      // SUNAT rechaza una nota cuya fecha de emisión sea ANTERIOR a la de la factura que modifica.
+      if (ref.fecha_emision_iso && diffDiasISO(emision, ref.fecha_emision_iso) > 0) {
+        throw new AppError(
+          `La nota no puede emitirse con fecha ${emision}: es anterior a la factura afectada (${ref.fecha_emision_iso}).`, 422);
+      }
 
       const [[ov]] = await conn.query(
         'SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [ref.id_orden_venta]);
@@ -394,13 +570,22 @@ export async function emitirNota(req, res, next) {
           'WHERE d.id_orden_venta = ?', [ref.id_orden_venta]);
       }
 
+      // Regla cronológica: no retro-fechar por debajo de la última nota ya emitida de la MISMA serie.
+      if (emision !== lima.emision) {
+        const ultima = await ultimaFechaEmitidaSerie(conn, serie, tipo);
+        if (ultima && diffDiasISO(emision, ultima) > 0) {
+          throw new AppError(
+            `No se puede emitir con fecha ${emision}: la serie ${serie} ya tiene una nota con fecha ${ultima}.`, 422);
+        }
+      }
+
       const numero = await obtenerCorrelativo(conn, tipo, serie);
       const fecha = { emision, hora };
       const docAfectado = { comprobante: ref.numero_factura, tipo: '01' };
 
       const { xml, totales } = construirNotaXML({
         tipo, serie, numero, motivoCodigo: String(motivo_codigo),
-        docAfectado, ov, detalle, cliente, empresa, fecha
+        docAfectado, ov, detalle, cliente, empresa, fecha, sustento
       });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
@@ -416,14 +601,14 @@ export async function emitirNota(req, res, next) {
         `INSERT INTO facturas_venta
           (numero_factura, id_orden_venta, id_cliente, tipo_comprobante, serie, numero,
            subtotal, igv, total, moneda, estado, codigo_tipo_sunat, tipo_operacion_sunat,
-           id_factura_ref, motivo_nota_codigo, fecha_emision,
+           id_factura_ref, motivo_nota_codigo, observaciones, fecha_emision,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, ?, ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, ?, ?)`,
         [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ref.moneda || 'PEN', 'Emitida',
          tipo, ov.tipo_operacion_sunat || '0101',
-         id_factura_ref, String(motivo_codigo), emisionDateTime,
+         id_factura_ref, String(motivo_codigo), sustento || null, emisionDateTime,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales };
@@ -840,12 +1025,20 @@ export async function generarPdfComprobante(req, res, next) {
       'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
 
     // Guías de remisión que ampara esta factura (las mismas que se declararon en el XML como
-    // cac:DespatchDocumentReference). Se rotulan en el PDF para dejar constancia impresa.
+    // cac:DespatchDocumentReference). Se rotulan en el PDF para dejar constancia impresa. Dos
+    // fuentes: GRE del sistema (guias_remision) y las ingresadas a mano en el buscador del panel
+    // (facturas_guias_referencia; tabla opcional → si aún no existe, se ignora sin romper el PDF).
     const [guiasRef] = await pool.query(
-      `SELECT serie_sunat, numero_sunat FROM guias_remision
+      `SELECT serie_sunat AS serie, numero_sunat AS numero FROM guias_remision
         WHERE id_factura = ? AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL
         ORDER BY id_guia`, [idFactura]);
-    const guiasTexto = guiasRef.map((g) => `${g.serie_sunat}-${g.numero_sunat}`).join(', ');
+    let guiasManualRef = [];
+    try {
+      const [gm] = await pool.query(
+        'SELECT serie, numero FROM facturas_guias_referencia WHERE id_factura = ? ORDER BY id', [idFactura]);
+      guiasManualRef = gm;
+    } catch { /* tabla opcional aún no creada */ }
+    const guiasTexto = [...guiasRef, ...guiasManualRef].map((g) => `${g.serie}-${g.numero}`).join(', ');
 
     // Notas: documento afectado + descripción del motivo (catálogo 09/10).
     let docAfectado = null;
@@ -854,7 +1047,9 @@ export async function generarPdfComprobante(req, res, next) {
       const motivos = motivosValidos(f.codigo_tipo_sunat);
       docAfectado = {
         comprobante: ref?.numero_factura || '-',
-        motivo: `${f.motivo_nota_codigo} - ${motivos[f.motivo_nota_codigo] || 'MODIFICACIÓN'}`
+        motivo: `${f.motivo_nota_codigo} - ${motivos[f.motivo_nota_codigo] || 'MODIFICACIÓN'}`,
+        // Sustento libre que escribió el usuario (lo mismo que viajó en el cbc:Description a SUNAT).
+        sustento: String(f.observaciones || '').replace(/[\r\n]+/g, ' ').trim() || null
       };
     }
 
@@ -889,7 +1084,8 @@ export async function generarPdfComprobante(req, res, next) {
         observaciones: (f.observaciones != null && f.observaciones !== '')
           ? f.observaciones
           : componerObservacion(f.ov_observaciones, f.orden_compra_cliente),
-        orden_compra: null,
+        // OC = campo PROPIO del PDF (ya no embebida en las observaciones). Se rotula en la cabecera.
+        orden_compra: f.orden_compra_cliente || null,
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
         guias: guiasTexto,

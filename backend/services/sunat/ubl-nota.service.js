@@ -61,9 +61,10 @@ const PERFIL = {
  * @param {object}  p.cliente
  * @param {object}  p.empresa        empresa_config
  * @param {object}  p.fecha          { emision, hora }
+ * @param {string}  [p.sustento]     texto libre del usuario (cbc:Description). Si vacío → etiqueta del catálogo.
  * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
  */
-export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectado, ov, detalle, cliente, empresa, fecha }) {
+export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectado, ov, detalle, cliente, empresa, fecha, sustento }) {
   const perfil = PERFIL[tipo];
   if (!perfil) {
     const err = new Error(`Tipo de nota no soportado: ${tipo}`);
@@ -180,7 +181,7 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
   <cac:DiscrepancyResponse>
     <cbc:ReferenceID>${docAfectado.comprobante}</cbc:ReferenceID>
     <cbc:ResponseCode>${motivoCodigo}</cbc:ResponseCode>
-    <cbc:Description>${cdata(motivoDesc)}</cbc:Description>
+    <cbc:Description>${cdata(trunc(String(sustento || '').trim() || motivoDesc, 250))}</cbc:Description>
   </cac:DiscrepancyResponse>
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>

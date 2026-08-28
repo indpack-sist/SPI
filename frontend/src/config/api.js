@@ -1260,16 +1260,30 @@ export const sunatAPI = {
   // Vista previa de emisión (solo lectura): totales/desglose calculados por el backend (fuente única).
   previewComprobante: (id_orden_venta) => api.post('/sunat/comprobantes/preview', { id_orden_venta }),
   // Comprobantes: factura (01), notas de crédito/débito (07/08) y comunicación de baja (RA).
-  // fecha_emision opcional ('YYYY-MM-DD'): retro-fecha dentro del plazo SUNAT (≤ 3 días).
-  // observaciones: texto del cbc:Note que SUNAT muestra como "Observaciones" (editable en el panel).
-  emitirFactura: (id_orden_venta, fecha_emision, observaciones) =>
+  // Opciones (todas opcionales):
+  //   fecha_emision ('YYYY-MM-DD'): retro-fecha dentro del plazo SUNAT (≤ 3 días).
+  //   observaciones: texto LIBRE del cbc:Note que SUNAT muestra como "Observaciones".
+  //   orden_compra_cliente: OC del cliente → cac:OrderReference (campo propio, ya no en observaciones).
+  //   guias: [{ tipo_documento:'09'|'31', serie, numero }] → cac:DespatchDocumentReference (buscador).
+  emitirFactura: (id_orden_venta, { fecha_emision, observaciones, orden_compra_cliente, guias } = {}) =>
     api.post('/sunat/comprobantes/emitir', {
       id_orden_venta,
       ...(fecha_emision ? { fecha_emision } : {}),
-      ...(observaciones !== undefined ? { observaciones } : {})
+      ...(observaciones !== undefined ? { observaciones } : {}),
+      ...(orden_compra_cliente !== undefined ? { orden_compra_cliente } : {}),
+      ...(Array.isArray(guias) ? { guias } : {})
     }),
-  emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items }) =>
-    api.post('/sunat/comprobantes/notas/emitir', { id_factura_ref, tipo, motivo_codigo, items }),
+  // Vista previa de una nota (07/08): preliminar estilo SUNAT (empresa, doc afectado, cliente,
+  // desglose de totales, información del crédito) calculado por el backend con la MISMA lógica.
+  previewNota: ({ id_factura_ref, tipo, motivo_codigo }) =>
+    api.post('/sunat/comprobantes/notas/preview', { id_factura_ref, tipo, motivo_codigo }),
+  // sustento: texto libre del usuario → cbc:Description (Motivo o Sustento). fecha_emision: retro-fecha ≤2 días.
+  emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items, sustento, fecha_emision }) =>
+    api.post('/sunat/comprobantes/notas/emitir', {
+      id_factura_ref, tipo, motivo_codigo, items,
+      ...(sustento !== undefined ? { sustento } : {}),
+      ...(fecha_emision ? { fecha_emision } : {})
+    }),
   darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),
   estadoComprobante: (id) => api.get(`/sunat/comprobantes/${id}/estado`),
   verPdfComprobante: (id) => descargarPdfSunat(`/sunat/comprobantes/${id}/pdf`),

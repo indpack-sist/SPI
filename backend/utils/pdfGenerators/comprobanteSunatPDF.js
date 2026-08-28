@@ -127,6 +127,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       const motivoTxt = c.docAfectado?.motivo
         ? String(c.docAfectado.motivo).replace(/^\s*\d+\s*-\s*/, '').toUpperCase()
         : null;
+      // Sustento libre de la nota (lo que escribió el usuario y viajó a SUNAT). Se rotula aparte del
+      // motivo del catálogo, igual que el preliminar de SUNAT ("Motivo o Sustento" + etiqueta del código).
+      const sustentoTxt = c.docAfectado?.sustento
+        ? String(c.docAfectado.sustento).replace(/[\r\n]+/g, ' ').trim()
+        : null;
       const obsHeader = motivoTxt || String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
 
       filaSunat('Fecha de Emisión', c.fecha_emision);
@@ -141,6 +146,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaSunat('Tipo de Moneda', monedaTxt);
       filaSunat('Forma de Pago', formaPago);
       if (esCredito) filaSunat('Fecha de Vencimiento', c.fecha_vencimiento);
+      // Orden de compra (cac:OrderReference) como campo propio de la cabecera, igual que SUNAT.
+      if (c.orden_compra) filaSunat('Orden de Compra', String(c.orden_compra).trim());
+      // En notas: primero el sustento del usuario, luego la etiqueta del catálogo (motivo).
+      if (sustentoTxt) filaSunat('Motivo o Sustento', sustentoTxt);
       if (obsHeader) filaSunat('Observación', obsHeader);
 
       const boxH = (yc + boxPad) - boxTop;
@@ -250,20 +259,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += hCred + 6;
       }
 
-      // ── OC + Observaciones — texto plano pegado a la izquierda, SIN recuadro ni bordes ──
-      // Fluye justo debajo de los totales, así que se desplaza solo cuando el detalle tiene muchos
-      // ítems (los totales bajan y estas líneas bajan con ellos). La OC va arriba y las
-      // observaciones libres debajo. Ambas también viajan a SUNAT en el XML.
+      // ── Guías de remisión que amparan el traslado — texto plano, SIN recuadro ──
+      // Fluye justo debajo de los totales. La OC y las observaciones (cbc:Note) ya se imprimen en la
+      // cabecera (campos "Orden de Compra" / "Observación", formato SUNAT), por eso no se repiten.
+      // Refleja los cac:DespatchDocumentReference declarados en el XML.
       doc.fontSize(8).fillColor('#000');
-      if (c.orden_compra) {
-        doc.font('Helvetica-Bold').text('Orden de compra: ', 40, y, { continued: true, width: 515 })
-           .font('Helvetica').text(String(c.orden_compra).trim());
-        y = doc.y + 2;
-      }
-      // Las observaciones (cbc:Note) y el motivo de la nota ya se imprimen arriba, en el campo
-      // "Observación" de la cabecera (formato SUNAT), por eso no se repiten aquí.
-      // Guías de remisión que amparan el traslado (las declaradas en el XML). Solo aplica a la
-      // factura cuando la GRE se emitió antes; refleja el cac:DespatchDocumentReference.
       const guiasTxt = String(c.guias || '').trim();
       if (guiasTxt) {
         doc.font('Helvetica-Bold').text('Guía(s) de remisión: ', 40, y, { continued: true, width: 515 })

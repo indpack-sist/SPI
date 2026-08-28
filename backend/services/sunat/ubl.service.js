@@ -52,6 +52,31 @@ export function afectacionLinea(ov, d) {
   return afectacionDesdeOrden(ov?.tipo_impuesto);
 }
 
+// Catálogo 01 (tipo de documento) — subconjunto admitido como GUÍA relacionada de una factura
+// (cac:DespatchDocumentReference). SUNAT solo acepta guías de remisión aquí: Remitente (09) o
+// Transportista (31). Cualquier otro código sería observado/rechazado.
+export const TIPOS_GUIA_REF = {
+  '09': 'Guía de Remisión Remitente',
+  '31': 'Guía de Remisión Transportista'
+};
+
+/**
+ * Normaliza una referencia de guía (para cac:DespatchDocumentReference) desde cualquiera de las dos
+ * fuentes: guía del sistema (`{ serie_sunat, numero_sunat }`, siempre tipo 09) o entrada manual del
+ * buscador (`{ tipo_documento|tipo, serie, numero }`). Devuelve `{ tipoDoc, serie, numero, id }` o
+ * null si falta serie/número. La serie se pasa a MAYÚSCULAS; el número se conserva literal (el
+ * cbc:ID debe coincidir EXACTO con el documento tal como SUNAT lo registró). NO valida formato: eso
+ * lo hace el controller (validarGuiaRef) antes de aceptar la lista del usuario.
+ */
+export function normalizarGuiaRef(g) {
+  if (!g) return null;
+  const tipoDoc = String(g.tipo_documento ?? g.tipoDoc ?? g.tipo ?? '09').trim() || '09';
+  const serie = String(g.serie ?? g.serie_sunat ?? '').toUpperCase().trim();
+  const numero = String(g.numero ?? g.numero_sunat ?? '').trim();
+  if (!serie || !numero) return null;
+  return { tipoDoc, serie, numero, id: `${serie}-${numero}` };
+}
+
 // Catálogo 06 (documento de identidad del cliente).
 export function schemeIdDocumento(tipoDoc) {
   switch (String(tipoDoc || '').toUpperCase()) {
@@ -229,15 +254,18 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const orderReference = ocCliente ? `\n  <cac:OrderReference><cbc:ID>${cdata(ocCliente)}</cbc:ID></cac:OrderReference>` : '';
 
   // ── Guías de remisión que amparan el traslado (factura → GRE) ────────────────
-  // Cuando la GRE se emitió ANTES que la factura (caso más común), la factura declara
-  // cada guía electrónica aceptada con cac:DespatchDocumentReference (una por guía).
-  // DocumentTypeCode 09 = Guía de Remisión Remitente (catálogo 01). Va tras OrderReference
-  // y antes de cac:Signature, según el orden del XSD de UBL Invoice.
+  // La factura declara cada guía con cac:DespatchDocumentReference (una por guía). El origen puede
+  // ser una GRE del sistema ya aceptada (tipo 09) o una guía ingresada a mano en el buscador del
+  // panel (tipo 09 Remitente o 31 Transportista) cuando la GRE se emitió directo en SUNAT y no hay
+  // registro local. normalizarGuiaRef unifica ambas fuentes; el DocumentTypeCode sale del propio
+  // ítem (ya no es fijo). Va tras OrderReference y antes de cac:Signature, según el orden del XSD.
   const despatchReferences = (guias || [])
-    .filter((g) => g.serie_sunat && g.numero_sunat != null)
+    .map(normalizarGuiaRef)
+    .filter(Boolean)
     .map((g) => `\n  <cac:DespatchDocumentReference>
-    <cbc:ID>${g.serie_sunat}-${g.numero_sunat}</cbc:ID>
-    <cbc:DocumentTypeCode>09</cbc:DocumentTypeCode>
+    <cbc:ID>${g.id}</cbc:ID>
+    <cbc:DocumentTypeCode>${g.tipoDoc}</cbc:DocumentTypeCode>
+    <cbc:DocumentType>${cdata(TIPOS_GUIA_REF[g.tipoDoc] || 'Guía de Remisión')}</cbc:DocumentType>
   </cac:DespatchDocumentReference>`)
     .join('');
 

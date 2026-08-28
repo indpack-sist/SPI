@@ -41,7 +41,10 @@ export function componerObservacion(observaciones, ordenCompra) {
   const obs = String(observaciones || '').replace(/[\r\n]+/g, ' ').trim();
   if (obs) partes.push(obs);
   const oc = String(ordenCompra || '').trim();
-  if (oc) partes.push(`OC: ${oc}`);
+  // Solo se agrega "OC: <oc>" si la OC NO está ya mencionada en el texto libre (evita el duplicado
+  // "OC - 123 | OC: OC - 123" cuando el usuario ya escribió la OC en las observaciones). Además la
+  // OC viaja aparte en cac:OrderReference del XML, así que esto es solo la sugerencia del panel.
+  if (oc && !obs.toLowerCase().includes(oc.toLowerCase())) partes.push(`OC: ${oc}`);
   return partes.join(' | ').slice(0, 250);
 }
 

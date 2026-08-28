@@ -813,7 +813,10 @@ export async function generarPdfComprobante(req, res, next) {
     // (tipo_venta Contado/Crédito + vencimiento) de la OV, que es la misma fuente del cac:PaymentTerms del XML.
     const [[f]] = await pool.query(
       "SELECT f.*, DATE_FORMAT(f.fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt, " +
-      "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(ov.fecha_vencimiento, '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
+      // Vencimiento = fecha de emisión + días de crédito (MISMO cálculo que el XML: addDiasISO(emision,
+      // dias)). Antes se imprimía ov.fecha_vencimiento (calculada desde la fecha de la orden), lo que
+      // podía diferir de lo declarado a SUNAT cuando la emisión no coincidía con la fecha de la orden.
+      "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(DATE_ADD(f.fecha_emision, INTERVAL ov.dias_credito DAY), '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
       // ov.observaciones se alía para NO pisar f.observaciones (misma clave). El PDF muestra lo
       // PERSISTIDO en la factura (== cbc:Note enviado); ov_observaciones solo es fallback histórico.
       "ov.observaciones AS ov_observaciones, ov.orden_compra_cliente, ov.direccion_entrega, ov.tipo_impuesto, ov.es_exportacion " +

@@ -160,6 +160,11 @@ function DetalleOrdenVenta() {
     transporte_ruc: '',
     transporte_mtc: '',
     transporte_tuc: '',
+    transporte_autorizacion: '',
+    transporte_placa2: '',
+    transporte_tuc2: '',
+    transporte_autorizacion2: '',
+    transporte_fecha_entrega: '',
     fecha_entrega_estimada: ''
   });
 
@@ -780,6 +785,11 @@ function DetalleOrdenVenta() {
       transporte_ruc: orden.transporte_ruc || '',
       transporte_mtc: orden.transporte_mtc || '',
       transporte_tuc: orden.transporte_tuc || '',
+      transporte_autorizacion: orden.transporte_autorizacion || '',
+      transporte_placa2: orden.transporte_placa2 || '',
+      transporte_tuc2: orden.transporte_tuc2 || '',
+      transporte_autorizacion2: orden.transporte_autorizacion2 || '',
+      transporte_fecha_entrega: orden.transporte_fecha_entrega ? orden.transporte_fecha_entrega.split('T')[0] : '',
       fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
     });
     setModalTransporteOpen(true);
@@ -4243,9 +4253,18 @@ function DetalleOrdenVenta() {
             {transporteForm.tipo_entrega === 'Transporte Privado' && (
               <>
                 <div className="rounded-md bg-blue-50 border border-blue-200 p-2 text-xs text-blue-800">
-                  Transporte público / tercero (SUNAT modalidad 02): otra empresa realiza el traslado.
-                  Obligatorios para la GRE: <b>RUC y razón social</b> del transportista, <b>una placa</b> y datos del conductor.
-                  El <b>MTC de la empresa</b> (formato …CNG) es opcional; el <b>Nº de registro del vehículo</b> (formato 15M…E) es el de la placa que declares. Solo se coloca una placa por guía.
+                  Transporte público / tercero (SUNAT modalidad 01): otra empresa realiza el traslado.
+                  Obligatorios: <b>RUC y razón social</b> del transportista, <b>fecha de entrega al transportista</b>, datos del conductor y al menos una <b>placa</b>.
+                  El <b>MTC de la empresa</b> (formato …CNG) es opcional. Por vehículo puedes indicar su <b>TUCE/Certificado</b> y su <b>Nº de autorización especial</b> (formato 15M…E). El 2º vehículo (carreta) es opcional.
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Fecha de entrega al transportista *</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={transporteForm.transporte_fecha_entrega}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_fecha_entrega: e.target.value })}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="form-group">
@@ -4281,24 +4300,69 @@ function DetalleOrdenVenta() {
                     placeholder="Razón social del transportista"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="text-xs font-semibold text-gray-600 mt-1">Vehículo principal *</p>
+                <div className="grid grid-cols-3 gap-3">
                   <div className="form-group">
-                    <label className="form-label">Placa Vehículo *</label>
+                    <label className="form-label">Placa *</label>
                     <input
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_placa}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
-                      placeholder="La placa que va en la guía"
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Nº Registro del vehículo</label>
+                    <label className="form-label">TUCE / Certificado</label>
                     <input
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_tuc}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_tuc: e.target.value })}
+                      placeholder="Ej. 151716963"
+                      maxLength={20}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nº autorización especial</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_autorizacion}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_autorizacion: e.target.value })}
+                      placeholder="Formato 15M…E"
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs font-semibold text-gray-600 mt-1">Vehículo secundario / carreta (opcional)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">Placa</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_placa2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa2: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">TUCE / Certificado</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_tuc2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_tuc2: e.target.value })}
+                      placeholder="Ej. 152108547"
+                      maxLength={20}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nº autorización especial</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_autorizacion2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_autorizacion2: e.target.value })}
                       placeholder="Formato 15M…E"
                       maxLength={20}
                     />

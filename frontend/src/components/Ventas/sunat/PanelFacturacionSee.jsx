@@ -144,6 +144,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
           {comprobantes.map((f) => {
             const esFactura = f.codigo_tipo_sunat === '01';
             const aceptado = f.sunat_estado === 'ACEPTADO';
+            const esRechazo = f.sunat_estado === 'RECHAZADO' || f.sunat_estado === 'ERROR';
             return (
               <div key={f.id_factura} className="border border-gray-200 rounded p-2 flex flex-wrap items-center gap-2">
                 <span className="font-mono font-bold text-sm">{f.numero_factura || `${f.serie}-${f.numero}`}</span>
@@ -181,6 +182,14 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     </>
                   )}
                 </div>
+                {esRechazo && (f.sunat_response_desc || f.sunat_response_code) && (
+                  <div className="w-full text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1">
+                    <span className="font-semibold">
+                      Motivo del rechazo{f.sunat_response_code ? ` (${f.sunat_response_code})` : ''}:
+                    </span>{' '}
+                    {f.sunat_response_desc || 'Sin detalle. Usa "Estado" para consultar el CDR en SUNAT.'}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -215,7 +215,25 @@ export async function emitirComprobante(req, res, next) {
       cdrZip = await sendBill(`${nombre}.zip`, zipBuf);
       cdr = parsearCdr(cdrZip);
     } catch (e) {
-      // Fault SOAP (timeout, 1033, 0111, caída...): la fila queda ENVIADO para consulta/reintento.
+      // Fault 1032: "el comprobante ya está informado y se encuentra anulado o rechazado". Es un
+      // estado DEFINITIVO en SUNAT (ese serie-número quedó quemado): reintentar el MISMO número
+      // nunca va a funcionar. Marcamos la fila RECHAZADO (estado final) para no dejarla colgada en
+      // ENVIADO; hay que emitir con el SIGUIENTE correlativo. A diferencia del 1033 (ya ACEPTADO),
+      // que sí queda ENVIADO para reconciliarse por getStatusCdr.
+      if (String(e.faultCode) === '1032') {
+        await pool.query(
+          `UPDATE facturas_venta SET sunat_estado = 'RECHAZADO', sunat_response_code = '1032',
+             sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?`,
+          [`El comprobante ya estaba informado en SUNAT (anulado/rechazado); debe emitirse con el siguiente correlativo. ${e.message}`.slice(0, 4000), idFactura]);
+        await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
+          exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+        return res.status(409).json({
+          ok: false, estado: 'RECHAZADO', idFactura, serie, numero, faultCode: '1032',
+          error: 'Este número de comprobante ya fue informado a SUNAT (rechazado/anulado). Emítalo con el siguiente correlativo.',
+          debug
+        });
+      }
+      // Resto de faults (timeout, 1033, 0111, caída...): la fila queda ENVIADO para consulta/reintento.
       await pool.query(
         'UPDATE facturas_venta SET sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?',
         [`FAULT ${e.faultCode || ''}: ${e.message}`.slice(0, 4000), idFactura]);
@@ -678,7 +696,10 @@ export async function verificarEstado(req, res, next) {
 // POST /api/sunat/guias/:id/emitir  → GRE Remitente (09) de una guias_remision existente.
 export async function emitirGuiaRemision(req, res, next) {
   try {
-    const r = await emitirGuiaGre(Number(req.params.id), req.user?.id_empleado || null);
+    // Si el panel envía `observaciones` (editable, prellenado con la OC) se usa tal cual como
+    // cbc:Note; si no viene (undefined), el core compone del texto de la guía + OC de la OV.
+    const observacion = req.body?.observaciones !== undefined ? String(req.body.observaciones) : undefined;
+    const r = await emitirGuiaGre(Number(req.params.id), req.user?.id_empleado || null, observacion);
     res.status(r.httpStatus).json(r.body);
   } catch (e) { next(e); }
 }
@@ -928,7 +949,10 @@ export async function generarPdfGuia(req, res, next) {
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
         sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,
         placa: normalizarPlaca(vehiculo?.placa || g.placa_vehiculo || g.placa),
-        observaciones: componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
+        // Muestra lo PERSISTIDO (== cbc:Note enviado) si la guía ya lo tiene; si no, compone con la OC.
+        observaciones: (g.observaciones != null && g.observaciones !== '')
+          ? g.observaciones
+          : componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
       emisor, cliente, detalle, conductor, qrBuffer

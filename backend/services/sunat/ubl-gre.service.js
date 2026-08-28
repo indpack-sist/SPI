@@ -89,10 +89,11 @@ const SCHEME_DOC = 'schemeName="Documento de Identidad" schemeAgencyName="PE:SUN
  * @param {Array}  d.detalle       [{cantidad, codigo_unidad_sunat, nombre, codigo}]
  * @param {object} d.fecha         {emision, hora}
  * @param {string} d.fechaTraslado 'YYYY-MM-DD'
- * @param {'02'} d.modalidad       modalidad de traslado (catálogo 18); hoy siempre 02
- * @param {object|null} d.transportista {ruc, razon, mtc}  (solo traslado por tercero → CarrierParty)
+ * @param {'01'|'02'} d.modalidad   modalidad de traslado (catálogo 18): 01 público (tercero), 02 privado (propio)
+ * @param {object|null} d.transportista {ruc, razon, mtc}  (tercero → CarrierParty; mtc = MTC empresa → CompanyID)
+ * @param {string} [d.fechaEntregaTransportista] 'YYYY-MM-DD' → cac:LoadingTransportEvent (solo tercero)
  * @param {object|null} d.conductor     {dni, nombre, licencia}
- * @param {object|null} d.vehiculo      {placa, tuc}  (un solo vehículo; tuc = registro del vehículo → RegistrationNationalityID)
+ * @param {Array} d.vehiculos           [{placa, tuce, autorizacion}] hasta 2 (principal + secundario→AttachedTransportEquipment); tuce→RegistrationNationalityID, autorizacion→ShipmentDocumentReference
  * @param {string} [d.observacion] observación libre + OC → cbc:Note
  * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada)
  * @returns {{ xml: string }}
@@ -138,15 +139,40 @@ export function construirDespatchAdviceXML(d) {
       </cac:DriverPerson>`
     : '';
 
-  // ── Vehículo → cac:TransportHandlingUnit/TransportEquipment (tras cac:Delivery) ──────────
-  // La guía declara UN solo vehículo (la placa que se coloca al emitir). El Nº de registro del
-  // vehículo (distinto del MTC de la empresa) va en RegistrationNationalityID.
-  const vehiculoXml = d.vehiculo?.placa
+  // ── Indicador "registrar vehículos y conductores del transportista" (solo tercero) ───────
+  const esTercero = !!d.transportista?.ruc;
+  const specialXml = esTercero
+    ? `\n    <cbc:SpecialInstructions>SUNAT_Envio_IndicadorVehiculoConductoresTransp</cbc:SpecialInstructions>`
+    : '';
+
+  // ── Fecha de entrega de bienes al transportista → cac:LoadingTransportEvent (solo tercero) ─
+  const loadingXml = (esTercero && d.fechaEntregaTransportista)
+    ? `
+      <cac:LoadingTransportEvent><cbc:OccurrenceDate>${d.fechaEntregaTransportista}</cbc:OccurrenceDate></cac:LoadingTransportEvent>`
+    : '';
+
+  // ── Vehículos → cac:TransportHandlingUnit/TransportEquipment (tras cac:Delivery) ─────────
+  // Hasta 2 vehículos: principal (TransportEquipment) + secundario (AttachedTransportEquipment).
+  // Cada uno con TUCE/Certificado (RegistrationNationalityID) y autorización especial
+  // (ShipmentDocumentReference schemeID="06"). Estructura calcada de docs/…-09-EG07-325.xml.
+  const vehiculos = Array.isArray(d.vehiculos) ? d.vehiculos.filter(v => v?.placa) : [];
+  const tuceXml = (v, ind) => v?.tuce
+    ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(v.tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
+    : '';
+  const autorizXml = (v, ind) => v?.autorizacion
+    ? `\n${ind}<cac:ShipmentDocumentReference><cbc:ID schemeID="06" schemeName="Entidad Autorizadora" schemeAgencyName="PE:SUNAT">${cdata(v.autorizacion)}</cbc:ID></cac:ShipmentDocumentReference>`
+    : '';
+  const [vp, vs] = vehiculos;
+  const attachedXml = vs
+    ? `\n        <cac:AttachedTransportEquipment>
+          <cbc:ID>${cdata(vs.placa)}</cbc:ID>${tuceXml(vs, '          ')}${autorizXml(vs, '          ')}
+        </cac:AttachedTransportEquipment>`
+    : '';
+  const vehiculoXml = vp
     ? `
     <cac:TransportHandlingUnit>
       <cac:TransportEquipment>
-        <cbc:ID>${cdata(d.vehiculo.placa)}</cbc:ID>${d.vehiculo.tuc ? `
-        <cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(d.vehiculo.tuc)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>` : ''}
+        <cbc:ID>${cdata(vp.placa)}</cbc:ID>${tuceXml(vp, '        ')}${attachedXml}${autorizXml(vp, '        ')}
       </cac:TransportEquipment>
     </cac:TransportHandlingUnit>`
     : '';
@@ -221,10 +247,10 @@ export function construirDespatchAdviceXML(d) {
     <cbc:ID>SUNAT_Envio</cbc:ID>
     <cbc:HandlingCode listAgencyName="PE:SUNAT" listName="Motivo de traslado" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo20">${motivoCod}</cbc:HandlingCode>
     <cbc:HandlingInstructions>${cdata(motivoDesc)}</cbc:HandlingInstructions>
-    <cbc:GrossWeightMeasure unitCode="KGM">${Number(g.peso_bruto_kg).toFixed(2)}</cbc:GrossWeightMeasure>
+    <cbc:GrossWeightMeasure unitCode="KGM">${Number(g.peso_bruto_kg).toFixed(2)}</cbc:GrossWeightMeasure>${specialXml}
     <cac:ShipmentStage>
       <cbc:TransportModeCode listName="Modalidad de traslado" listAgencyName="PE:SUNAT" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo18">${modalidad}</cbc:TransportModeCode>
-      <cac:TransitPeriod><cbc:StartDate>${d.fechaTraslado}</cbc:StartDate></cac:TransitPeriod>${carrierXml}${driverXml}
+      <cac:TransitPeriod><cbc:StartDate>${d.fechaTraslado}</cbc:StartDate></cac:TransitPeriod>${carrierXml}${loadingXml}${driverXml}
     </cac:ShipmentStage>
     <cac:Delivery>
       <cac:DeliveryAddress>

@@ -33,9 +33,9 @@ const datos = {
   ],
   fecha: { emision: '2026-08-24', hora: '10:00:00' },
   fechaTraslado: '2026-08-24',
-  modalidad: '02',
+  modalidad: '02', // vehículo propio (privado)
   conductor: { dni: '75336849', nombre: 'MAX ALEX SANANCINO', licencia: 'Q75336849' },
-  vehiculo: { placa: 'XXX000', tuc: null }, // placeholder BETA (ya normalizado, sin guion)
+  vehiculos: [{ placa: 'XXX000', tuce: null, autorizacion: null }], // placeholder BETA (ya normalizado)
   observacion: 'Entrega en almacen central | OC: 260610043' // texto libre + OC → cbc:Note
 };
 
@@ -105,29 +105,43 @@ check('DespatchLine: cantidad de líneas == detalle', lineas.length === datos.de
 check('DeliveredQuantity con unitCode', lineas[0]?.DeliveredQuantity?.['@unitCode'] === 'NIU',
   `unitCode=${lineas[0]?.DeliveredQuantity?.['@unitCode']}`);
 
-// ── Escenario TERCERO (transporte por transportista): CarrierParty + MTC + TUC ──────────────
-// Espeja la GRE real aceptada docs/…-09-EG07-309.xml (modalidad 02 con carrier+vehículo+conductor).
-console.log('\n=== Escenario TERCERO — CarrierParty (RUC+MTC) + DriverPerson + Vehículo (placa+TUC) ===\n');
+// ── Escenario TERCERO (público 01, 2 vehículos): espeja la GRE real aceptada EG07-325 ──────
+console.log('\n=== Escenario TERCERO (público 01) — CarrierParty+MTC + fecha entrega + 2 vehículos (TUCE+autorización) ===\n');
 const datosTercero = {
   ...datos,
+  modalidad: '01',
   transportista: { ruc: '20611807555', razon: 'EMPRESA DE TRANSPORTES Y SERVICIOS YELA & N S.A.C.', mtc: '15141794CNG' },
-  conductor: { dni: '47327793', nombre: 'VASQUEZ MENDEZ MIGUEL', licencia: 'D47327793' },
-  // Un solo vehículo (la placa que se coloca al emitir), tal como la GRE real EG07-309.
-  vehiculo: { placa: 'BZK970', tuc: '15M26042991E' }
+  fechaEntregaTransportista: '2026-08-27',
+  conductor: { dni: '80627794', nombre: 'TANTALEAN REVILLA OSCAR PEPE', licencia: 'L80627794' },
+  vehiculos: [
+    { placa: 'T7U937', tuce: '151716963', autorizacion: '15M25063308E' },
+    { placa: 'TJQ970', tuce: '152108547', autorizacion: '15M25063309E' }
+  ]
 };
 const { xml: xmlT } = construirDespatchAdviceXML(datosTercero);
 check('XML tercero bien-formado', XMLValidator.validate(xmlT) === true);
 const dt = parser.parse(xmlT).DespatchAdvice;
-const stageT = dt?.Shipment?.ShipmentStage;
+const shipT = dt?.Shipment;
+const stageT = shipT?.ShipmentStage;
+check('TransportModeCode = 01 (público)', String(stageT?.TransportModeCode?.['#text']) === '01');
+check('SpecialInstructions (indicador vehículos/conductores)',
+  String(shipT?.SpecialInstructions || '').includes('IndicadorVehiculoConductoresTransp'));
+check('LoadingTransportEvent (fecha entrega al transportista)',
+  String(stageT?.LoadingTransportEvent?.OccurrenceDate) === '2026-08-27');
 check('CarrierParty RUC transportista', String(stageT?.CarrierParty?.PartyIdentification?.ID?.['#text']) === '20611807555');
-check('CarrierParty razón social', String(stageT?.CarrierParty?.PartyLegalEntity?.RegistrationName || '').includes('YELA'));
-check('Nº MTC en CompanyID', String(stageT?.CarrierParty?.PartyLegalEntity?.CompanyID) === '15141794CNG');
-check('DriverPerson (tercero) con DNI', String(stageT?.DriverPerson?.ID?.['#text']) === '47327793');
-const teq = dt?.Shipment?.TransportHandlingUnit?.TransportEquipment;
-check('Placa del vehículo (una sola)', String(teq?.ID) === 'BZK970');
-check('Registro del vehículo en RegistrationNationalityID',
-  String(teq?.ApplicableTransportMeans?.RegistrationNationalityID) === '15M26042991E');
-check('Sin segundo vehículo (AttachedTransportEquipment ausente)', !teq?.AttachedTransportEquipment);
+check('Nº MTC empresa en CompanyID', String(stageT?.CarrierParty?.PartyLegalEntity?.CompanyID) === '15141794CNG');
+check('DriverPerson (tercero) con DNI', String(stageT?.DriverPerson?.ID?.['#text']) === '80627794');
+const teq = shipT?.TransportHandlingUnit?.TransportEquipment;
+check('Veh. principal placa', String(teq?.ID) === 'T7U937');
+check('Veh. principal TUCE en RegistrationNationalityID',
+  String(teq?.ApplicableTransportMeans?.RegistrationNationalityID) === '151716963');
+check('Veh. principal autorización en ShipmentDocumentReference',
+  String(teq?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063308E');
+check('Veh. secundario en AttachedTransportEquipment (placa)', String(teq?.AttachedTransportEquipment?.ID) === 'TJQ970');
+check('Veh. secundario TUCE',
+  String(teq?.AttachedTransportEquipment?.ApplicableTransportMeans?.RegistrationNationalityID) === '152108547');
+check('Veh. secundario autorización',
+  String(teq?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
 

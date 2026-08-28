@@ -2906,6 +2906,11 @@ export async function actualizarDatosTransporte(req, res) {
       transporte_ruc,
       transporte_mtc,
       transporte_tuc,
+      transporte_autorizacion,
+      transporte_placa2,
+      transporte_tuc2,
+      transporte_autorizacion2,
+      transporte_fecha_entrega,
       fecha_entrega_estimada
     } = req.body;
 
@@ -2965,6 +2970,11 @@ export async function actualizarDatosTransporte(req, res) {
     const transMtcFinal = esTercero ? (transporte_mtc || null) : null;
     const transTucFinal = esTercero ? (transporte_tuc || null) : null;
     const transLicFinal = esTercero ? (transporte_licencia || null) : null;
+    const transAutFinal = esTercero ? (transporte_autorizacion || null) : null;
+    const transPlaca2Final = esTercero ? (transporte_placa2 || null) : null;
+    const transTuc2Final = esTercero ? (transporte_tuc2 || null) : null;
+    const transAut2Final = esTercero ? (transporte_autorizacion2 || null) : null;
+    const transFechaEntregaFinal = esTercero ? (transporte_fecha_entrega || null) : null;
 
     const result = await executeQuery(`
       UPDATE ordenes_venta
@@ -2980,6 +2990,11 @@ export async function actualizarDatosTransporte(req, res) {
         transporte_ruc = ?,
         transporte_mtc = ?,
         transporte_tuc = ?,
+        transporte_autorizacion = ?,
+        transporte_placa2 = ?,
+        transporte_tuc2 = ?,
+        transporte_autorizacion2 = ?,
+        transporte_fecha_entrega = ?,
         fecha_entrega_estimada = COALESCE(?, fecha_entrega_estimada)
       WHERE id_orden_venta = ?
     `, [
@@ -2994,6 +3009,11 @@ export async function actualizarDatosTransporte(req, res) {
       transRucFinal,
       transMtcFinal,
       transTucFinal,
+      transAutFinal,
+      transPlaca2Final,
+      transTuc2Final,
+      transAut2Final,
+      transFechaEntregaFinal,
       fecha_entrega_estimada || null,
       id
     ]);
@@ -4567,7 +4587,8 @@ export async function getFacturasOrden(req, res) {
         fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
         fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
         fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion, fv.id_salida,
-        fv.sunat_estado, fv.codigo_tipo_sunat, fv.sunat_ticket, fv.sunat_response_desc,
+        fv.sunat_estado, fv.codigo_tipo_sunat, fv.sunat_ticket,
+        fv.sunat_response_code, fv.sunat_response_desc,
         fv.xml_url, fv.cdr_url, fv.id_factura_ref, fv.motivo_nota_codigo,
         e.nombre_completo  AS registrado_por,
         e2.nombre_completo AS anulado_por
@@ -4588,7 +4609,13 @@ export async function getFacturasOrden(req, res) {
       xml_url: extraerUrlPdf(f.xml_url),
       cdr_url: extraerUrlPdf(f.cdr_url)
     }));
-    const emitidas = facturas.filter(f => f.estado === 'Emitida');
+    // Solo suman al facturado las facturas realmente vigentes. Para los comprobantes SEE
+    // (tienen `sunat_estado`) solo cuentan los ACEPTADO/BAJA; los RECHAZADO/ENVIADO/ERROR NO
+    // son facturas válidas y no deben inflar el total ni descuadrar el saldo. Las facturas
+    // manuales (sin `sunat_estado`) siguen contando por su `estado = 'Emitida'` como antes.
+    const emitidas = facturas.filter(f =>
+      f.estado === 'Emitida' &&
+      (!f.sunat_estado || f.sunat_estado === 'ACEPTADO' || f.sunat_estado === 'BAJA'));
     const totalOrden = parseFloat(ordenRes.data[0].total || 0);
     const totalFacturado = emitidas.reduce((s, f) => s + parseFloat(f.total || 0), 0);
     const saldoPendiente = +(totalOrden - totalFacturado).toFixed(2);

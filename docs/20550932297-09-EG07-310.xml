@@ -9,19 +9,19 @@
       <Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#WithComments"/>
     </Transforms>
     <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-    <DigestValue>HxiBhaMoZFR/0E4VTp4+Yu0bZ1E=</DigestValue>
+    <DigestValue>yP88WCG5A967Mj00QJZPCE1mGWI=</DigestValue>
   </Reference>
 </SignedInfo>
-    <SignatureValue>GbE9er8L/1tXhuZKp5YkBgh7+gZyTaii3b43d2tNSFqu4nOWcapPPmom+VD2UdXo1ILtnYFKOpLT3mdSamscJaGfW/yCQLBEBJ4hnTz/3hEpiwk0LjY4bVxUUa2Em0q60u39hygnA9uULzvbmb5VwwYwieKlTu30iBbj1Lj1XsDOST3bklh22IxuteJMaISbo1V1LF0LtbT5D4QRJquVdD4+UjQo3Be3YpXAzCFa8BTLpCLLoMUGsbcWCuDbhqO8aUN6KWdyt6pVzeMczEyb+EjQF4h2EiMw0zcaFcNdyKHojTNIRLSgsvN/UEOqcMsWDDn+l2ohCtotTGtsw6MgJw==</SignatureValue><KeyInfo><X509Data><X509Certificate>MIIFrjCCBJagAwIBAgIIf9Td7Evg0UswDQYJKoZIhvcNAQELBQAwRjEkMCIGA1UEAwwbTGxhbWEucGUgU0hBMjU2IFN0YW5kYXJkIENBMREwDwYDVQQKDAhMTEFNQS5QRTELMAkGA1UEBhMCUEUwHhcNMjQwODA5MTYxNTM5WhcNMjcwODA5MTYxNTAwWjCCAVQxKzApBgNVBAkMIkFWLiBHQVJDSUxBU08gREUgTEEgVkVHQSBOUk8uIDE0NzIxIjAgBgkqhkiG9w0BCQEWE3JtZXphZ0BzdW5hdC5nb2IucGUxQTA/BgNVBAMMOFNVUEVSSU5ULiBOQUMuIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBMRwwGgYDVQQLDBNBR0VOVEUgQVVUT01BVElaQURPMS4wLAYDVQQLDCVWYWxpZGFkbyBwb3IgQUJDIElERU5USURBRCBESUdJVEFMIEVSMVQwUgYDVQQKDEtTVVBFUklOVEVOREVOQ0lBIE5BQ0lPTkFMIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBIC0gU1VOQVQxDTALBgNVBAcMBExJTUExCzAJBgNVBAYTAlBFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1apapJOwMj9tBpgKAgjRwIloUk+xwvQZxc0s/4yl4mDSrc/F/PKZ3QBmKb43fFwivqPUvsr68fQTfyLKM14B+xXwlbQ/yh3+87sMyulLhOPmtSOU0PE8Rw0PsmGVxf1L0HPAPc3Gvuhq4Z9Dx5ByED6s+VppDmncvctlJ/NrzYZCk9H91OinTTPVZrDtbmqnOYra8PaTRoCI9Fmndeo9Oo7esM7KVX9f53NEd/mNQqzAOrgSXthFuBZN7zOsGxJ4ZGrVzHSlCH/jFLgObEizHrqisgL1cxKj8QvbGLUjNtUuTvR5IY6hwRLCxbliTa84BN10E0jC7hhAnnuEIAFJiwIDAQABo4IBjjCCAYowDAYDVR0TAQH/BAIwADAfBgNVHSMEGDAWgBRdiFut62X7/mii5NlvPVdyou8rmTBnBggrBgEFBQcBAQRbMFkwNQYIKwYBBQUHMAKGKWh0dHA6Ly9jcnQubGxhbWEucGUvbGxhbWFwZXN0YW5kYXJkY2EuY2VyMCAGCCsGAQUFBzABhhRodHRwOi8vb2NzcC5sbGFtYS5wZTAeBgNVHREEFzAVgRNybWV6YWdAc3VuYXQuZ29iLnBlMEYGA1UdIAQ/MD0wOwYNKwYBBAGDl3cAAQADATAqMCgGCCsGAQUFBwIBFhxodHRwczovL2xsYW1hLnBlL3JlcG9zaXRvcnkvMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDBDA6BgNVHR8EMzAxMC+gLaArhilodHRwOi8vY3JsLmxsYW1hLnBlL2xsYW1hcGVzdGFuZGFyZGNhLmNybDAdBgNVHQ4EFgQUuRkPCyM25gAu5se9GraC/UO07X8wDgYDVR0PAQH/BAQDAgbAMA0GCSqGSIb3DQEBCwUAA4IBAQBC8+YM7moZ7bKYCS+VzJ8wzydSboWeNuAs2CfkhI8hRMQr1r5WZg8pDlroCslF/r6SjbkrjuDHcGKJTM2riGEjlOD4CLU9VjOP7Td6CIZyJRLaz63pZYOwE0H0weG/PvYpopDZzJ6AXYzZxwYkJ03/x/vwaCss9ZvmsEn2E1xtGbnMe9MEsg8oF0ul3uRn8Qy5gF37fM7YKuF/r4iBS5uSvBcA5J2FbI/PQls7OgICDyb3W16GeluaT9krY5wQxilJSpGVU++nv5NzmRHkquH3ic2It/KP6MZ9X2tfg6FhpF6JaUz7MSY+J0KnDDcfJlhxgnkgoT5tV3Sr6z5PpQH6</X509Certificate><X509IssuerSerial><X509IssuerName>C=PE, O=LLAMA.PE, CN=Llama.pe SHA256 Standard CA</X509IssuerName><X509SerialNumber>9211231144834552139</X509SerialNumber></X509IssuerSerial></X509Data></KeyInfo><Proposito>Cumple proposito</Proposito><Revocacion>Cumple revocacion</Revocacion><TSL>Cumple tsl</TSL><Expiracion>No ha expirado</Expiracion></Signature></ext:ExtensionContent></ext:UBLExtension></ext:UBLExtensions>
+    <SignatureValue>S8nzqBmUv/vem8VEgyClAM6FsVTYMbm9vLIRtzM+4G51kSihGwdsiXQSyy/rSW/47NFC3knrrw5YA9EPMTy8ilwBuWh2cDfpEoBGfycnN7etIklrW7yuGXJA1YsxMR/jO5jHTw3PpOcICBem7LmJ+FIevANlaUvCAhnsBBzLOI6RrKPySC3cwGkBr1HmGSvWtzsWIPBIUSaH3DFgzrSmONVf0ebxBIqGzJVOf+WiJlTie+1fgTvDLKIodH4BohxkpDofPLnSs3DO6EYbgJtncAJ0M51nFdc/Zw1YitckRpoX+ycDGwsE6G7hg66Wk0FQpkCmCQA0YHnWrwwnakuKJw==</SignatureValue><KeyInfo><X509Data><X509Certificate>MIIFrjCCBJagAwIBAgIIf9Td7Evg0UswDQYJKoZIhvcNAQELBQAwRjEkMCIGA1UEAwwbTGxhbWEucGUgU0hBMjU2IFN0YW5kYXJkIENBMREwDwYDVQQKDAhMTEFNQS5QRTELMAkGA1UEBhMCUEUwHhcNMjQwODA5MTYxNTM5WhcNMjcwODA5MTYxNTAwWjCCAVQxKzApBgNVBAkMIkFWLiBHQVJDSUxBU08gREUgTEEgVkVHQSBOUk8uIDE0NzIxIjAgBgkqhkiG9w0BCQEWE3JtZXphZ0BzdW5hdC5nb2IucGUxQTA/BgNVBAMMOFNVUEVSSU5ULiBOQUMuIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBMRwwGgYDVQQLDBNBR0VOVEUgQVVUT01BVElaQURPMS4wLAYDVQQLDCVWYWxpZGFkbyBwb3IgQUJDIElERU5USURBRCBESUdJVEFMIEVSMVQwUgYDVQQKDEtTVVBFUklOVEVOREVOQ0lBIE5BQ0lPTkFMIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBIC0gU1VOQVQxDTALBgNVBAcMBExJTUExCzAJBgNVBAYTAlBFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1apapJOwMj9tBpgKAgjRwIloUk+xwvQZxc0s/4yl4mDSrc/F/PKZ3QBmKb43fFwivqPUvsr68fQTfyLKM14B+xXwlbQ/yh3+87sMyulLhOPmtSOU0PE8Rw0PsmGVxf1L0HPAPc3Gvuhq4Z9Dx5ByED6s+VppDmncvctlJ/NrzYZCk9H91OinTTPVZrDtbmqnOYra8PaTRoCI9Fmndeo9Oo7esM7KVX9f53NEd/mNQqzAOrgSXthFuBZN7zOsGxJ4ZGrVzHSlCH/jFLgObEizHrqisgL1cxKj8QvbGLUjNtUuTvR5IY6hwRLCxbliTa84BN10E0jC7hhAnnuEIAFJiwIDAQABo4IBjjCCAYowDAYDVR0TAQH/BAIwADAfBgNVHSMEGDAWgBRdiFut62X7/mii5NlvPVdyou8rmTBnBggrBgEFBQcBAQRbMFkwNQYIKwYBBQUHMAKGKWh0dHA6Ly9jcnQubGxhbWEucGUvbGxhbWFwZXN0YW5kYXJkY2EuY2VyMCAGCCsGAQUFBzABhhRodHRwOi8vb2NzcC5sbGFtYS5wZTAeBgNVHREEFzAVgRNybWV6YWdAc3VuYXQuZ29iLnBlMEYGA1UdIAQ/MD0wOwYNKwYBBAGDl3cAAQADATAqMCgGCCsGAQUFBwIBFhxodHRwczovL2xsYW1hLnBlL3JlcG9zaXRvcnkvMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDBDA6BgNVHR8EMzAxMC+gLaArhilodHRwOi8vY3JsLmxsYW1hLnBlL2xsYW1hcGVzdGFuZGFyZGNhLmNybDAdBgNVHQ4EFgQUuRkPCyM25gAu5se9GraC/UO07X8wDgYDVR0PAQH/BAQDAgbAMA0GCSqGSIb3DQEBCwUAA4IBAQBC8+YM7moZ7bKYCS+VzJ8wzydSboWeNuAs2CfkhI8hRMQr1r5WZg8pDlroCslF/r6SjbkrjuDHcGKJTM2riGEjlOD4CLU9VjOP7Td6CIZyJRLaz63pZYOwE0H0weG/PvYpopDZzJ6AXYzZxwYkJ03/x/vwaCss9ZvmsEn2E1xtGbnMe9MEsg8oF0ul3uRn8Qy5gF37fM7YKuF/r4iBS5uSvBcA5J2FbI/PQls7OgICDyb3W16GeluaT9krY5wQxilJSpGVU++nv5NzmRHkquH3ic2It/KP6MZ9X2tfg6FhpF6JaUz7MSY+J0KnDDcfJlhxgnkgoT5tV3Sr6z5PpQH6</X509Certificate><X509IssuerSerial><X509IssuerName>C=PE, O=LLAMA.PE, CN=Llama.pe SHA256 Standard CA</X509IssuerName><X509SerialNumber>9211231144834552139</X509SerialNumber></X509IssuerSerial></X509Data></KeyInfo><Proposito>Cumple proposito</Proposito><Revocacion>Cumple revocacion</Revocacion><TSL>Cumple tsl</TSL><Expiracion>No ha expirado</Expiracion></Signature></ext:ExtensionContent></ext:UBLExtension></ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>2.0</cbc:CustomizationID>
-  <cbc:ID><![CDATA[EG07-309]]></cbc:ID>
+  <cbc:ID><![CDATA[EG07-310]]></cbc:ID>
   
   <!-- FECHA Y HORA DE EMISION -->
-  <cbc:IssueDate>2026-08-18</cbc:IssueDate>
-  <cbc:IssueTime>09:36:10</cbc:IssueTime>
+  <cbc:IssueDate>2026-08-19</cbc:IssueDate>
+  <cbc:IssueTime>09:52:25</cbc:IssueTime>
   <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>
-	<cbc:Note><![CDATA[OC - 4600144796]]></cbc:Note>
+	<cbc:Note><![CDATA[OC: 260810058]]></cbc:Note>
 
   <!-- DOCUMENTOS ADICIONALES (Catalogo 41)-->
 	
@@ -58,10 +58,10 @@
   <cac:DeliveryCustomerParty>
      <cac:Party>
       <cac:PartyIdentification>
-       <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20336183791]]></cbc:ID>
+       <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20507939580]]></cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyLegalEntity>
-       <cbc:RegistrationName><![CDATA[EL PEDREGAL S.A]]></cbc:RegistrationName>
+       <cbc:RegistrationName><![CDATA[SOLPACK SOCIEDAD ANONIMA CERRADA - SOLPACK S.A.C.]]></cbc:RegistrationName>
       </cac:PartyLegalEntity>
      </cac:Party>
   </cac:DeliveryCustomerParty>
@@ -80,7 +80,7 @@
 
         
      <!-- PESO BRUTO TOTAL DE LA CARGA-->
-     <cbc:GrossWeightMeasure unitCode="KGM">1080.54</cbc:GrossWeightMeasure>
+     <cbc:GrossWeightMeasure unitCode="KGM">900</cbc:GrossWeightMeasure>
 
         
 
@@ -97,42 +97,28 @@
         <cbc:TransportModeCode listName="Modalidad de traslado" listAgencyName="PE:SUNAT" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo18">02</cbc:TransportModeCode>
 		<!-- FECHA DE INICIO DEL TRASLADO -->
 		<cac:TransitPeriod>
-			<cbc:StartDate>2026-08-18</cbc:StartDate>
+			<cbc:StartDate>2026-08-19</cbc:StartDate>
 		</cac:TransitPeriod>
 
-        <!-- DATOS DEL TRANSPORTISTA -->
-			<cac:CarrierParty>
-			   <cac:PartyIdentification>
-				  <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20611807555]]></cbc:ID>
-			   </cac:PartyIdentification>
-			   <cac:PartyLegalEntity>
-				  <!-- NOMBRE/RAZON SOCIAL DEL TRANSPORTISTA-->
-				   <cbc:RegistrationName><![CDATA[EMPRESA DE TRANSPORTES Y SERVICIOS YELA & N S.A.C.]]></cbc:RegistrationName>
-				  
-				  <!-- NUMERO DE REGISTRO DEL MTC -->
-				   <cbc:CompanyID><![CDATA[15141794CNG]]></cbc:CompanyID>
-			   </cac:PartyLegalEntity>
-			 
-			</cac:CarrierParty>
 
 
 						<!-- CONDUCTOR PRINCIPAL -->
 						<cac:DriverPerson>
 						   <!-- TIPO Y NUMERO DE DOCUMENTO DE IDENTIDAD -->
-							<cbc:ID schemeID="1" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[47327793]]></cbc:ID>
+							<cbc:ID schemeID="1" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[75336849]]></cbc:ID>
 
 						   <!-- NOMBRES -->
-							<cbc:FirstName>VASQUEZ MENDEZ MIGUEL</cbc:FirstName>
+							<cbc:FirstName>RODRIGUEZ SANANCINO MAX ALEX</cbc:FirstName>
 
 						   <!-- APELLIDOS -->
-							<cbc:FamilyName>VASQUEZ MENDEZ MIGUEL</cbc:FamilyName>
+							<cbc:FamilyName>RODRIGUEZ SANANCINO MAX ALEX</cbc:FamilyName>
 						   
 						   <!-- TIPO DE CONDUCTOR: PRINCIPAL -->
 						   <cbc:JobTitle>Principal</cbc:JobTitle>
 						 
 							   <cac:IdentityDocumentReference>
 								  <!-- LICENCIA DE CONDUCIR -->
-								  <cbc:ID><![CDATA[D47327793]]></cbc:ID>
+								  <cbc:ID><![CDATA[Q75336849]]></cbc:ID>
 							   </cac:IdentityDocumentReference>
 						</cac:DriverPerson>
 				
@@ -142,14 +128,14 @@
         <!-- DIRECCION DEL PUNTO DE LLEGADA -->
 			<cac:DeliveryAddress>
 			   <!-- UBIGEO DE LLEGADA -->
-			    <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI"><![CDATA[200104]]></cbc:ID>
+			    <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI"><![CDATA[150716]]></cbc:ID>
 			   
 			   <!-- CODIGO DE ESTABLECIMIENTO ANEXO DE LLEGADA -->
-					<cbc:AddressTypeCode listID="20336183791" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
+					<cbc:AddressTypeCode listID="20507939580" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
 			   
 			   <!-- DIRECCION COMPLETA Y DETALLADA DE LLEGADA -->
 				   <cac:AddressLine>
-					  <cbc:Line><![CDATA[CAR. MEDIO PIURA KM. 11.5 FND. CHAPAIRA Y TERELA (CARRETERA MEDIO PIURA KM. 11.5 - 12) PIURA - PIURA - CASTILLA]]></cbc:Line>
+					  <cbc:Line><![CDATA[AV. PRINCIPAL-1 MZ. A-2 LOTE. 1-2 Z.I. LOTIZACION INDUSTRIAL HUACHIPA ESTE (PUENTE QUEBRADA DE HUAYCOLORO) LIMA - HUAROCHIRI - SAN ANTONIO]]></cbc:Line>
 				   </cac:AddressLine>
 
 			</cac:DeliveryAddress>
@@ -180,12 +166,8 @@
 					
 						<!-- VEHICULO PRINCIPAL -->
 						<!-- PLACA - VEHICULO PRINCIPAL -->
-					   <cbc:ID><![CDATA[BZK970]]></cbc:ID>
+					   <cbc:ID><![CDATA[AVZ890]]></cbc:ID>
 					   
-					   <!-- Tarjeta Unica Circulacion / Cerificado Habilitacion Vehicular - Principal -->
-						<cac:ApplicableTransportMeans>
-							  <cbc:RegistrationNationalityID>15M26042991E</cbc:RegistrationNationalityID>
-						</cac:ApplicableTransportMeans>
 					   
 					   
                         
@@ -209,7 +191,7 @@
 					  <cbc:ID><![CDATA[1]]></cbc:ID>
 
 						  <!-- CANTIDAD -->
-						  <cbc:DeliveredQuantity unitCode="MLL" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">103.5</cbc:DeliveredQuantity>
+						  <cbc:DeliveredQuantity unitCode="NIU" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">90</cbc:DeliveredQuantity>
 
 				  <cac:OrderLineReference>
 						  <cbc:LineID>1</cbc:LineID>
@@ -218,10 +200,10 @@
 
 				  <cac:Item>
 					  <!-- DESCRIPCION -->
-						  <cbc:Description><![CDATA[LAMINA BURBUPACK 0.36 x 0.56 MTS]]></cbc:Description>
+						  <cbc:Description><![CDATA[ZUNCHO PP NEGRO 5/8 X 800 MTS]]></cbc:Description>
 					  <!-- CODIGO DEL ITEM -->
 						  <cac:SellersItemIdentification>
-							  <cbc:ID><![CDATA[LBT60G002]]></cbc:ID>
+							  <cbc:ID><![CDATA[ZPN110E009]]></cbc:ID>
 						  </cac:SellersItemIdentification>
 
 					  <!-- CODIGO GTIN -->

@@ -1,5 +1,6 @@
 import { executeQuery } from '../config/database.js';
 import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.js';
+import { componerObservacion } from '../services/sunat/util.service.js';
 
 // Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
 // (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring
@@ -111,6 +112,7 @@ export async function getGuiaRemisionById(req, res) {
         ov.numero_orden,
         ov.id_orden_venta,
         ov.estado AS estado_orden,
+        ov.orden_compra_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente
@@ -135,9 +137,12 @@ export async function getGuiaRemisionById(req, res) {
     }
     
     const guia = guiaResult.data[0];
-    
+    // Observación sugerida para el panel de emisión: prellenado editable = texto libre + OC de la OV.
+    // Lo que el usuario deje en ese campo es lo que viaja a SUNAT como cbc:Note.
+    guia.observacion_sugerida = componerObservacion(guia.observaciones, guia.orden_compra_cliente);
+
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dgr.*,
         p.codigo AS codigo_producto,
         p.nombre AS producto,

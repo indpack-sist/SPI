@@ -15,6 +15,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
+  // Observaciones editables que viajan a SUNAT como cbc:Note (prellenadas con la OC de la OV).
+  const [observacionesEmitir, setObservacionesEmitir] = useState('');
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [modalReemplazo, setModalReemplazo] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -71,8 +73,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     } finally { setProcesando(false); }
   };
 
+  // Abre el modal de emisión con las observaciones prellenadas (texto libre de la guía + OC).
+  const abrirEmitir = () => {
+    setObservacionesEmitir(guia?.observacion_sugerida ?? guia?.observaciones ?? '');
+    setModalEmitir(true);
+  };
+
   const handleEmitir = async () => {
-    const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia), null);
+    const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia, observacionesEmitir), null);
     const d = r?.data;
     if (d) {
       setAlerta(d.ok
@@ -136,7 +144,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
         </h3>
         {!soloLectura && puedeEmitir && (
-          <button className="btn btn-sm btn-primary" onClick={() => setModalEmitir(true)} disabled={procesando}>
+          <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando}>
             <Zap size={14} className="mr-1" /> Emitir GRE
           </button>
         )}
@@ -285,6 +293,24 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           {faltantes.length > 0 && (
             <Alert type="warning" message={`Faltan datos obligatorios: ${faltantes.join(', ')}.`} />
           )}
+
+          <div className="pt-2">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Observaciones (viajan a SUNAT)
+            </label>
+            <textarea
+              className="form-input w-full text-sm"
+              rows={2}
+              maxLength={250}
+              value={observacionesEmitir}
+              onChange={(e) => setObservacionesEmitir(e.target.value)}
+              placeholder="Ej. OC: 260810058"
+            />
+            <p className="text-[11px] text-muted mt-1">
+              Prellenado con la OC de la orden; puedes corregirlo, quitarlo o añadir más. Lo que quede aquí es lo que llega a SUNAT. (máx. 250)
+            </p>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
             <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Confirmar y emitir a SUNAT'}</button>

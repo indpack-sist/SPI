@@ -237,17 +237,20 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         <div className="space-y-2">
           {comprobantes.map((f) => {
             const esFactura = f.codigo_tipo_sunat === '01';
-            const aceptado = f.sunat_estado === 'ACEPTADO';
+            // Anulada = factura reversada por una NC de anulación (sigue ACEPTADA en SUNAT, pero sin efecto).
+            const anulada = f.estado === 'Anulada';
+            const aceptado = f.sunat_estado === 'ACEPTADO' && !anulada;
             const esRechazo = f.sunat_estado === 'RECHAZADO' || f.sunat_estado === 'ERROR';
             return (
-              <div key={f.id_factura} className="border border-gray-200 rounded p-2 flex flex-wrap items-center gap-2">
-                <span className="font-mono font-bold text-sm">{f.numero_factura || `${f.serie}-${f.numero}`}</span>
+              <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada ? 'border-gray-300 bg-gray-50 opacity-90' : 'border-gray-200'}`}>
+                <span className={`font-mono font-bold text-sm ${anulada ? 'line-through text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
                 <BadgeEstadoSunat estado={f.sunat_estado} />
+                {anulada && <span className="badge badge-secondary text-xs" title="Anulada por Nota de Crédito">Anulada por NC</span>}
                 <span className="text-xs text-muted">{fmt(f.total)}</span>
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
-                  {(aceptado || f.sunat_estado === 'BAJA' || f.sunat_estado === 'RECHAZADO') && (
+                  {(aceptado || anulada || f.sunat_estado === 'BAJA' || f.sunat_estado === 'RECHAZADO') && (
                     <button className="btn btn-xs btn-outline" onClick={() => handlePdf(f)} disabled={procesando}
-                      title={f.sunat_estado === 'RECHAZADO' ? 'Ver PDF (rechazado, con marca y motivo)' : 'Ver PDF SEE'}>
+                      title={f.sunat_estado === 'RECHAZADO' ? 'Ver PDF (rechazado, con marca y motivo)' : (anulada ? 'Ver PDF (anulado por NC, con marca de agua)' : 'Ver PDF SEE')}>
                       <FileText size={13} className="mr-1" /> PDF
                     </button>
                   )}

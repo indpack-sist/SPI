@@ -145,6 +145,13 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         ? String(c.docAfectado.sustento).replace(/[\r\n]+/g, ' ').trim()
         : null;
       const obsHeader = motivoTxt || String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      // La OC ya se imprime como campo propio ("Orden de Compra"). Si la observación libre solo la
+      // repite (dato heredado de cuando la OC viajaba embebida en cbc:Note, p. ej. "OC: <número>"),
+      // no se vuelve a mostrar como "Observación" para no duplicarla.
+      const normOC = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const ocNorm = normOC(c.orden_compra);
+      const obsRepiteOC = !!ocNorm && !motivoTxt
+        && normOC(obsHeader).replace(/^(O\/?C|ORDENDECOMPRA)/, '') === ocNorm;
 
       filaSunat('Fecha de Emisión', c.fecha_emision);
       if (c.docAfectado) {
@@ -162,7 +169,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       if (c.orden_compra) filaSunat('Orden de Compra', String(c.orden_compra).trim());
       // En notas: primero el sustento del usuario, luego la etiqueta del catálogo (motivo).
       if (sustentoTxt) filaSunat('Motivo o Sustento', sustentoTxt);
-      if (obsHeader) filaSunat('Observación', obsHeader);
+      if (obsHeader && !obsRepiteOC) filaSunat('Observación', obsHeader);
 
       const boxH = (yc + boxPad) - boxTop;
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');

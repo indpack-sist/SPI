@@ -4215,6 +4215,7 @@ function DetalleOrdenVenta() {
                 onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
               >
                 <option value="Vehiculo Empresa">Vehículo Empresa</option>
+                <option value="Vehiculo Particular">Carro Particular del Cliente (sin RUC)</option>
                 <option value="Transporte Privado">Transporte Público / Tercero</option>
                 <option value="Recojo Tienda">Recojo en Tienda</option>
               </select>
@@ -4258,6 +4259,64 @@ function DetalleOrdenVenta() {
                     placeholder="Nº Licencia"
                     maxLength={20}
                   />
+                </div>
+              </>
+            )}
+
+            {transporteForm.tipo_entrega === 'Vehiculo Particular' && (
+              <>
+                <div className="rounded-md bg-green-50 border border-green-200 p-2 text-xs text-green-800">
+                  Carro particular del cliente (SUNAT modalidad 02, privado): el propio cliente traslada
+                  con su vehículo. <b>No es una empresa de transporte</b>, por eso no lleva RUC. Solo se
+                  declaran <b>conductor, DNI, licencia y placa</b> (se llenan a mano porque no están en tu flota).
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">DNI Chofer *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_dni}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                      placeholder="8 dígitos"
+                      maxLength={8}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nombre Chofer *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_conductor}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+                      placeholder="Ej. CHAVEZ GUERRA CHARLES JORGE"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">Licencia de Conducir *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_licencia}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
+                      placeholder="Nº Licencia"
+                      maxLength={20}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Placa *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_placa}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value.toUpperCase() })}
+                      placeholder="Ej. B2Q-671 o B2Q671"
+                      maxLength={10}
+                    />
+                    <small className="text-gray-500">Se acepta con o sin guion; se normaliza para SUNAT.</small>
+                  </div>
                 </div>
               </>
             )}

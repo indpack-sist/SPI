@@ -2,12 +2,33 @@
 // Card independiente de GRE Remitente (09) electrónica para el detalle de una guía de remisión.
 // Espeja PanelFacturacionSee pero opera sobre UNA sola guía. Coexiste con el flujo manual (no lo
 // reemplaza). Gatear su render con tienePermiso('facturacion') desde el contenedor.
-import { useState } from 'react';
-import { Zap, FileText, RefreshCw, Ban, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Zap, FileText, RefreshCw, Ban, RotateCcw, ChevronLeft, ChevronRight, Check, Truck, MapPin, Package } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
-import { sunatAPI } from '../../../config/api';
+import { sunatAPI, ordenesVentaAPI } from '../../../config/api';
+
+// ── Validadores de formato (espejo del backend util.service.js) para bloquear "Emitir" ───────────
+// Placa peruana: alfanumérica, sin guion/espacios; se acepta "B2Q671" y "B2Q-671" (ambas → B2Q671).
+const normPlaca = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const placaOk = (p) => /^[A-Z0-9]{6,8}$/.test(normPlaca(p));
+const dniOk = (d) => /^\d{8}$/.test(String(d || '').trim());
+const ubigeoOk = (u) => /^\d{6}$/.test(String(u || '').trim());
+
+// Motivo de traslado (catálogo 20) según sea comercio exterior o no.
+const MOTIVOS_DOMESTICO = [
+  { cod: '01', label: 'Venta' },
+  { cod: '02', label: 'Compra' },
+  { cod: '04', label: 'Traslado entre establecimientos de la misma empresa' },
+  { cod: '14', label: 'Venta sujeta a confirmación del comprador' },
+  { cod: '13', label: 'Otros' },
+];
+const MOTIVOS_COMEX = [
+  { cod: '09', label: 'Exportación' },
+  { cod: '08', label: 'Importación' },
+];
+const labelMotivo = (cod) => [...MOTIVOS_DOMESTICO, ...MOTIVOS_COMEX].find((m) => m.cod === cod)?.label || cod;
 
 // `soloLectura`: perfiles de venta (Comercial/Ventas) solo ven/descargan el PDF de la GRE
 // ya emitida. No emiten, ni reemplazan, ni dejan sin efecto.
@@ -15,8 +36,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
-  // Observaciones editables que viajan a SUNAT como cbc:Note (prellenadas con la OC de la OV).
-  const [observacionesEmitir, setObservacionesEmitir] = useState('');
+  // Wizard de emisión estilo SUNAT: paso actual + formulario editable (prellenado desde la guía/OV).
+  const [wizStep, setWizStep] = useState(0);
+  const [emitForm, setEmitForm] = useState(null);
+  // Catálogos de flota para el modo "vehículo propio de la empresa".
+  const [conductores, setConductores] = useState([]);
+  const [vehiculos, setVehiculos] = useState([]);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [modalReemplazo, setModalReemplazo] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -44,21 +69,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const aceptado = estado === 'ACEPTADO';
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
 
-  // Prerrequisitos que valida el backend antes de emitir (los mostramos como aviso amigable).
+  // Prerrequisito global que se muestra como aviso ANTES de abrir el wizard: el ubigeo de partida
+  // viene de empresa_config (si falta, es un problema de configuración de la empresa). El resto de
+  // datos (llegada, peso, motivo, transporte) se editan y validan dentro del wizard.
   const faltantes = [];
-  if (puedeEmitir) {
-    if (!guia?.ubigeo_partida) faltantes.push('ubigeo de partida (6 dígitos)');
-    if (!guia?.ubigeo_llegada) faltantes.push('ubigeo de llegada (6 dígitos)');
-    if (!(Number(guia?.peso_bruto_kg) > 0)) faltantes.push('peso bruto > 0');
-    if (!guia?.motivo_traslado_cod) faltantes.push('código de motivo de traslado (catálogo 20)');
-    // Transporte público (tercero transportista) vs privado (conductor + vehículo propios).
-    if (guia?.id_transportista) {
-      // En público la placa/conductor los declara el transportista; aquí basta el transportista.
-    } else {
-      if (!guia?.id_conductor) faltantes.push('conductor (transporte privado) o un transportista (transporte público)');
-      if (!guia?.id_vehiculo) faltantes.push('vehículo/placa de la flota (transporte privado)');
-    }
-  }
+  if (puedeEmitir && !guia?.ubigeo_partida) faltantes.push('ubigeo de partida en la configuración de la empresa (6 dígitos)');
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
   const tras = async (fn, okMsg) => {
@@ -73,14 +88,79 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     } finally { setProcesando(false); }
   };
 
-  // Abre el modal de emisión con las observaciones prellenadas (texto libre de la guía + OC).
+  // Modo de transporte inicial derivado de la guía: tercero (empresa de transporte), particular
+  // (carro común del cliente, texto libre) o flota (vehículo propio de la empresa).
+  const modoInicial = guia?.id_transportista
+    ? 'tercero'
+    : (guia?.transporte_modo === 'particular' || guia?.transporte_placa) ? 'particular' : 'flota';
+
+  // Catálogos de flota (solo se necesitan para el modo "vehículo propio"). Se cargan una vez.
+  useEffect(() => {
+    if (soloLectura) return;
+    (async () => {
+      try {
+        const [rc, rv] = await Promise.all([ordenesVentaAPI.getConductores(), ordenesVentaAPI.getVehiculos()]);
+        if (rc.data?.success) setConductores(rc.data.data || []);
+        if (rv.data?.success) setVehiculos(rv.data.data || []);
+      } catch { /* no crítico: el modo flota simplemente no listará opciones */ }
+    })();
+  }, [soloLectura]);
+
+  // Abre el wizard de emisión, prellenando TODOS los campos editables desde la guía/OV.
   const abrirEmitir = () => {
-    setObservacionesEmitir(guia?.observacion_sugerida ?? guia?.observaciones ?? '');
+    const comex = !!guia?.es_comercio_exterior;
+    setEmitForm({
+      es_comercio_exterior: comex,
+      motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : '01'),
+      peso_bruto_kg: guia?.peso_bruto_kg ?? '',
+      direccion_llegada: guia?.direccion_llegada || guia?.punto_llegada || '',
+      ubigeo_llegada: guia?.ubigeo_llegada || '',
+      ciudad_llegada: guia?.ciudad_llegada || '',
+      observaciones: guia?.observacion_sugerida ?? guia?.observaciones ?? '',
+      transporteModo: modoInicial,
+      // Modo particular (texto libre): prellena de la guía; si viene vacío, cae a los datos de la OV.
+      placa: guia?.transporte_placa || guia?.ov_transporte_placa || '',
+      dni: guia?.transporte_dni || guia?.ov_transporte_dni || '',
+      conductor: guia?.transporte_conductor || guia?.ov_transporte_conductor || '',
+      licencia: guia?.transporte_licencia || guia?.ov_transporte_licencia || '',
+      // Modo flota: ids seleccionados.
+      id_conductor: guia?.id_conductor ? String(guia.id_conductor) : '',
+      id_vehiculo: guia?.id_vehiculo ? String(guia.id_vehiculo) : '',
+    });
+    setWizStep(0);
+    setAlerta(null);
     setModalEmitir(true);
   };
 
+  const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
+
+  // Al cambiar comercio exterior se reajusta el motivo al primero válido de su lista.
+  const toggleComex = (comex) => {
+    setEmitForm((f) => ({
+      ...f,
+      es_comercio_exterior: comex,
+      motivo_traslado_cod: comex ? MOTIVOS_COMEX[0].cod : MOTIVOS_DOMESTICO[0].cod,
+    }));
+  };
+
   const handleEmitir = async () => {
-    const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia, observacionesEmitir), null);
+    const f = emitForm;
+    const transporte = f.transporteModo === 'tercero'
+      ? { modo: 'tercero' }
+      : f.transporteModo === 'particular'
+        ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
+        : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null };
+    const payload = {
+      observaciones: f.observaciones,
+      direccion_llegada: f.direccion_llegada,
+      ubigeo_llegada: f.ubigeo_llegada,
+      ciudad_llegada: f.ciudad_llegada,
+      peso_bruto_kg: f.peso_bruto_kg,
+      motivo_traslado_cod: f.motivo_traslado_cod,
+      es_comercio_exterior: f.es_comercio_exterior,
+      transporte,
+    };
+    const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia, payload), null);
     const d = r?.data;
     if (d) {
       setAlerta(d.ok
@@ -133,6 +213,35 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   };
 
   const setC = (k, v) => setCorrecciones((c) => ({ ...c, [k]: v }));
+
+  // ── Estado derivado del wizard de emisión (recomputado en cada render; emitForm es null si cerrado) ──
+  const f = emitForm;
+  const condFlota = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor));
+  const vehFlota = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo));
+  const MOTIVOS_ACTUALES = f?.es_comercio_exterior ? MOTIVOS_COMEX : MOTIVOS_DOMESTICO;
+  // Resumen de transporte para la vista previa (según el modo elegido).
+  const resTransporte = !f ? null : (
+    f.transporteModo === 'tercero'
+      ? { modalidad: 'Público (01) — empresa de transporte', empresa: guia?.transportista_razon || guia?.ov_transporte_nombre, ruc: guia?.transportista_ruc || guia?.ov_transporte_ruc,
+          conductor: guia?.ov_transporte_conductor, dni: guia?.ov_transporte_dni, licencia: guia?.ov_transporte_licencia, placa: normPlaca(guia?.ov_transporte_placa) }
+      : f.transporteModo === 'particular'
+        ? { modalidad: 'Privado (02) — carro particular', conductor: f.conductor, dni: f.dni, licencia: f.licencia, placa: normPlaca(f.placa) }
+        : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa }
+  );
+  // Validez por paso (bloquea "Siguiente"/"Emitir" hasta que el formato sea correcto → sin rechazos SUNAT).
+  const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod;
+  const vLlegada = !!f && !!String(f.direccion_llegada).trim() && ubigeoOk(f.ubigeo_llegada);
+  const vTransporte = !f ? false : (
+    f.transporteModo === 'tercero'
+      ? !!(guia?.id_transportista || guia?.ov_transporte_ruc)
+      : f.transporteModo === 'particular'
+        ? placaOk(f.placa) && dniOk(f.dni) && !!String(f.conductor).trim() && !!String(f.licencia).trim()
+        : !!(f.id_conductor && f.id_vehiculo)
+  );
+  const vPaso1 = vLlegada && vTransporte;
+  const puedeEmitirWizard = vGeneral && vPaso1;
+  const pasoActualValido = wizStep === 0 ? vGeneral : wizStep === 1 ? vPaso1 : puedeEmitirWizard;
+  const PASOS = ['Datos generales', 'Transporte y llegada', 'Vista previa'];
 
   // En solo lectura la tarjeta aparece únicamente cuando la GRE ya está emitida y con PDF disponible.
   if (soloLectura && !(tieneComprobante && cerradaOk)) return null;
@@ -202,120 +311,301 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
       )}
 
-      {/* Modal: vista previa completa de la GRE antes de enviar a SUNAT */}
-      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Vista previa — Guía de Remisión Electrónica (09)" size="xl">
+      {/* Wizard de emisión estilo SUNAT: 3 pasos + Retroceder/Cancelar/Emitir */}
+      <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Emitir Guía de Remisión Electrónica (GRE 09)" size="xl">
+        {f && (
         <div className="space-y-3 text-sm">
-          <p className="text-muted text-xs">Revisa los datos antes de enviar. Esto es lo que se generará en el DespatchAdvice (UBL 2.1) y se declarará a SUNAT.</p>
-
-          {/* Cabecera */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Documento</div>
-              <div className="font-semibold">GRE Remitente (09)</div>
-              <div className="font-mono text-xs">Serie TE01</div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Fecha de emisión</div>
-              <div className="font-semibold">{hoy}</div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Fecha de traslado</div>
-              <div className="font-semibold">{guia?.fecha_traslado ? new Date(guia.fecha_traslado).toLocaleDateString('es-PE') : '-'}</div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Guía interna</div>
-              <div className="font-mono text-xs">{guia?.numero_guia}</div>
-            </div>
+          {/* Barra de pasos */}
+          <div className="flex items-center gap-1 text-xs">
+            {PASOS.map((p, i) => (
+              <div key={p} className="flex items-center gap-1">
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${i === wizStep ? 'bg-primary text-white' : i < wizStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  {i < wizStep ? <Check size={12} /> : i + 1}
+                </span>
+                <span className={i === wizStep ? 'font-semibold' : 'text-muted'}>{p}</span>
+                {i < PASOS.length - 1 && <ChevronRight size={13} className="text-gray-300 mx-1" />}
+              </div>
+            ))}
           </div>
 
-          {/* Destinatario */}
-          <div className="border border-gray-200 rounded p-3">
-            <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-              <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
-              <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
-            </div>
-          </div>
+          {/* ── PASO 1: Datos generales ── */}
+          {wizStep === 0 && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">¿Es una operación de comercio exterior?</label>
+                  <div className="flex gap-2">
+                    <button type="button" className={`btn btn-sm ${f.es_comercio_exterior ? 'btn-primary' : 'btn-outline'}`} onClick={() => toggleComex(true)}>Sí</button>
+                    <button type="button" className={`btn btn-sm ${!f.es_comercio_exterior ? 'btn-primary' : 'btn-outline'}`} onClick={() => toggleComex(false)}>No</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo de traslado *</label>
+                  <select className="form-input w-full text-sm" value={f.motivo_traslado_cod} onChange={(e) => setF('motivo_traslado_cod', e.target.value)}>
+                    {MOTIVOS_ACTUALES.map((m) => <option key={m.cod} value={m.cod}>{m.label} ({m.cod})</option>)}
+                  </select>
+                </div>
+              </div>
 
-          {/* Datos del traslado */}
-          <div className="border border-gray-200 rounded p-3">
-            <div className="text-[10px] text-muted uppercase mb-1">Traslado</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-              <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{guia?.motivo_traslado || '-'}{guia?.motivo_traslado_cod ? ` (${guia.motivo_traslado_cod})` : ''}</span></div>
-              <div className="flex justify-between gap-2"><span className="text-muted">Modalidad:</span><span className="text-right">{guia?.modalidad_transporte || '-'}</span></div>
-              <div className="flex justify-between gap-2"><span className="text-muted">Peso bruto:</span><span>{fmtPeso(guia?.peso_bruto_kg)}</span></div>
-              <div className="flex justify-between gap-2"><span className="text-muted">Bultos:</span><span>{guia?.numero_bultos ?? '-'}</span></div>
-            </div>
-          </div>
+              {/* Destinatario (automático desde la OV) */}
+              <div className="border border-gray-200 rounded p-3">
+                <div className="text-[10px] text-muted uppercase mb-1">Destinatario (de la orden)</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
+                </div>
+              </div>
 
-          {/* Punto de partida / llegada */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div className="border border-gray-200 rounded p-3">
-              <div className="text-[10px] text-muted uppercase mb-1">Punto de partida</div>
-              <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
-              <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
-            </div>
-            <div className="border border-gray-200 rounded p-3">
-              <div className="text-[10px] text-muted uppercase mb-1">Punto de llegada</div>
-              <div className="text-xs">{guia?.direccion_llegada || guia?.punto_llegada || '-'}</div>
-              <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_llegada || '—'}</span></div>
-            </div>
-          </div>
+              {/* Detalle de bienes (de la OV, solo lectura) */}
+              <div className="border border-gray-200 rounded overflow-x-auto">
+                <div className="text-[10px] text-muted uppercase px-2 pt-2 flex items-center gap-1"><Package size={12} /> Bienes por transportar (de la orden)</div>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100 text-muted">
+                    <tr><th className="text-left p-2">Código</th><th className="text-left p-2">Descripción</th><th className="text-center p-2">Und</th><th className="text-right p-2">Cant.</th><th className="text-right p-2">Peso total</th></tr>
+                  </thead>
+                  <tbody>
+                    {lineas.length === 0 ? (
+                      <tr><td colSpan={5} className="p-3 text-center text-muted">La guía no tiene detalle.</td></tr>
+                    ) : lineas.map((it, i) => (
+                      <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
+                        <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
+                        <td className="p-2">{it.producto || it.descripcion}</td>
+                        <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                        <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
+                        <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          {/* Bienes transportados */}
-          <div className="border border-gray-200 rounded overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-100 text-muted">
-                <tr>
-                  <th className="text-left p-2">Código</th>
-                  <th className="text-left p-2">Descripción</th>
-                  <th className="text-center p-2">Und</th>
-                  <th className="text-right p-2">Cant.</th>
-                  <th className="text-right p-2">Peso total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineas.length === 0 ? (
-                  <tr><td colSpan={5} className="p-3 text-center text-muted">La guía no tiene detalle.</td></tr>
-                ) : lineas.map((it, i) => (
-                  <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
-                    <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
-                    <td className="p-2">{it.producto || it.descripcion}</td>
-                    <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
-                    <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
-                    <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {faltantes.length > 0 && (
-            <Alert type="warning" message={`Faltan datos obligatorios: ${faltantes.join(', ')}.`} />
+              {/* Carga */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Unidad de peso bruto</label>
+                  <input className="form-input w-full text-sm bg-gray-50" value="KGM (kilogramos)" readOnly />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Peso bruto total *</label>
+                  <input type="number" step="0.01" min="0" className={`form-input w-full text-sm ${Number(f.peso_bruto_kg) > 0 ? '' : 'border-danger'}`} value={f.peso_bruto_kg} onChange={(e) => setF('peso_bruto_kg', e.target.value)} />
+                  {!(Number(f.peso_bruto_kg) > 0) && <p className="text-[11px] text-danger mt-1">El peso debe ser mayor a 0.</p>}
+                </div>
+              </div>
+            </div>
           )}
 
-          <div className="pt-2">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Observaciones (viajan a SUNAT)
-            </label>
-            <textarea
-              className="form-input w-full text-sm"
-              rows={2}
-              maxLength={250}
-              value={observacionesEmitir}
-              onChange={(e) => setObservacionesEmitir(e.target.value)}
-              placeholder="Ej. OC: 260810058"
-            />
-            <p className="text-[11px] text-muted mt-1">
-              Prellenado con la OC de la orden; puedes corregirlo, quitarlo o añadir más. Lo que quede aquí es lo que llega a SUNAT. (máx. 250)
-            </p>
-          </div>
+          {/* ── PASO 2: Transporte y punto de llegada ── */}
+          {wizStep === 1 && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1"><Truck size={13} /> Modalidad de transporte</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {[
+                    { k: 'flota', t: 'Vehículo propio', d: 'Camioneta/carro de la empresa (flota)' },
+                    { k: 'particular', t: 'Carro particular del cliente', d: 'Carro común, no es empresa de transporte' },
+                    { k: 'tercero', t: 'Empresa de transporte', d: 'Transportista con RUC (modalidad pública)' },
+                  ].map((o) => (
+                    <button key={o.k} type="button" onClick={() => setF('transporteModo', o.k)}
+                      className={`text-left border rounded p-2 ${f.transporteModo === o.k ? 'border-primary bg-blue-50' : 'border-gray-200'}`}>
+                      <div className="font-semibold text-xs">{o.t}</div>
+                      <div className="text-[11px] text-muted">{o.d}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
+              {/* Campos por modalidad */}
+              {f.transporteModo === 'flota' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor (flota) *</label>
+                    <select className="form-input w-full text-sm" value={f.id_conductor} onChange={(e) => setF('id_conductor', e.target.value)}>
+                      <option value="">— Seleccionar —</option>
+                      {conductores.map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo / placa (flota) *</label>
+                    <select className="form-input w-full text-sm" value={f.id_vehiculo} onChange={(e) => setF('id_vehiculo', e.target.value)}>
+                      <option value="">— Seleccionar —</option>
+                      {vehiculos.map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {f.transporteModo === 'particular' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del conductor *</label>
+                    <input className="form-input w-full text-sm" value={f.conductor} onChange={(e) => setF('conductor', e.target.value)} placeholder="Ej. CHAVEZ GUERRA CHARLES JORGE" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">DNI del conductor *</label>
+                    <input className={`form-input w-full text-sm ${f.dni && !dniOk(f.dni) ? 'border-danger' : ''}`} value={f.dni} onChange={(e) => setF('dni', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 dígitos" />
+                    {f.dni && !dniOk(f.dni) && <p className="text-[11px] text-danger mt-1">El DNI debe tener 8 dígitos.</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Licencia de conducir *</label>
+                    <input className="form-input w-full text-sm" value={f.licencia} onChange={(e) => setF('licencia', e.target.value)} placeholder="Ej. Q07471043" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Placa del vehículo *</label>
+                    <input className={`form-input w-full text-sm ${f.placa && !placaOk(f.placa) ? 'border-danger' : ''}`} value={f.placa} onChange={(e) => setF('placa', e.target.value.toUpperCase())} placeholder="Ej. B2Q-671 o B2Q671" />
+                    {f.placa
+                      ? (placaOk(f.placa)
+                          ? <p className="text-[11px] text-green-600 mt-1">Se enviará como: <span className="font-mono font-bold">{normPlaca(f.placa)}</span></p>
+                          : <p className="text-[11px] text-danger mt-1">Placa inválida (6 a 8 caracteres alfanuméricos; el guion/espacio se ignora).</p>)
+                      : <p className="text-[11px] text-muted mt-1">Acepta con o sin guion; se normaliza para SUNAT.</p>}
+                  </div>
+                </div>
+              )}
+
+              {f.transporteModo === 'tercero' && (
+                (guia?.id_transportista || guia?.ov_transporte_ruc) ? (
+                  <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
+                    <p className="font-medium text-green-900">{guia?.transportista_razon || guia?.ov_transporte_nombre || '(sin razón social)'}</p>
+                    <p className="text-green-700">RUC {guia?.transportista_ruc || guia?.ov_transporte_ruc}{(guia?.transportista_mtc || guia?.ov_transporte_mtc) ? ` · MTC ${guia?.transportista_mtc || guia?.ov_transporte_mtc}` : ''}</p>
+                    <p className="text-muted mt-1">La empresa de transporte se toma de la orden. Para cambiarla, edítala en "Transporte y Logística" de la OV.</p>
+                  </div>
+                ) : (
+                  <Alert type="warning" message="Esta orden no tiene una empresa de transporte con RUC. Regístrala en 'Transporte y Logística' de la orden, o usa otra modalidad." />
+                )
+              )}
+
+              {/* Punto de partida (fijo) / llegada (editable) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><MapPin size={12} /> Punto de partida (fijo)</div>
+                  <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
+                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
+                </div>
+                <div className="border border-gray-200 rounded p-3 space-y-2">
+                  <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada (editable)</div>
+                  <div>
+                    <label className="block text-[11px] text-muted mb-1">Dirección *</label>
+                    <input className="form-input w-full text-sm" value={f.direccion_llegada} onChange={(e) => setF('direccion_llegada', e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-muted mb-1">Ubigeo *</label>
+                      <input className={`form-input w-full text-sm ${f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) ? 'border-danger' : ''}`} value={f.ubigeo_llegada} onChange={(e) => setF('ubigeo_llegada', e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6 dígitos" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-muted mb-1">Ciudad</label>
+                      <input className="form-input w-full text-sm" value={f.ciudad_llegada} onChange={(e) => setF('ciudad_llegada', e.target.value)} />
+                    </div>
+                  </div>
+                  {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="text-[11px] text-danger">El ubigeo debe tener 6 dígitos.</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── PASO 3: Vista previa ── */}
+          {wizStep === 2 && (
+            <div className="space-y-3">
+              <p className="text-muted text-xs">Esto es lo que se declarará a SUNAT (DespatchAdvice UBL 2.1). Revísalo antes de emitir.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Documento</div><div className="font-semibold">GRE Remitente (09)</div><div className="font-mono text-xs">Serie TE01</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Fecha emisión</div><div className="font-semibold">{hoy}</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Fecha traslado</div><div className="font-semibold">{guia?.fecha_traslado ? new Date(guia.fecha_traslado).toLocaleDateString('es-PE') : '-'}</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Guía interna</div><div className="font-mono text-xs">{guia?.numero_guia}</div></div>
+              </div>
+
+              <div className="border border-gray-200 rounded p-3">
+                <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
+                </div>
+              </div>
+
+              <div className="border border-gray-200 rounded p-3">
+                <div className="text-[10px] text-muted uppercase mb-1">Traslado</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between gap-2"><span className="text-muted">Comercio exterior:</span><span>{f.es_comercio_exterior ? 'Sí' : 'No'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{labelMotivo(f.motivo_traslado_cod)} ({f.motivo_traslado_cod})</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Modalidad:</span><span className="text-right">{resTransporte?.modalidad}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Peso bruto:</span><span>{fmtPeso(f.peso_bruto_kg)}</span></div>
+                </div>
+              </div>
+
+              <div className="border border-gray-200 rounded p-3">
+                <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><Truck size={12} /> Transporte</div>
+                {resTransporte?.empresa && <div className="flex justify-between gap-2"><span className="text-muted">Empresa:</span><span className="text-right">{resTransporte.empresa} (RUC {resTransporte.ruc})</span></div>}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between gap-2"><span className="text-muted">Conductor:</span><span className="text-right">{resTransporte?.conductor || '—'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">DNI:</span><span className="font-mono">{resTransporte?.dni || '—'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Licencia:</span><span className="font-mono">{resTransporte?.licencia || '—'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Placa:</span><span className="font-mono font-bold">{resTransporte?.placa || '—'}</span></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Punto de partida</div>
+                  <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
+                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
+                </div>
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Punto de llegada</div>
+                  <div className="text-xs">{f.direccion_llegada || '-'}</div>
+                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{f.ubigeo_llegada || '—'}</span></div>
+                </div>
+              </div>
+
+              <div className="border border-gray-200 rounded overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100 text-muted"><tr><th className="text-left p-2">Código</th><th className="text-left p-2">Descripción</th><th className="text-center p-2">Und</th><th className="text-right p-2">Cant.</th><th className="text-right p-2">Peso total</th></tr></thead>
+                  <tbody>
+                    {lineas.map((it, i) => (
+                      <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
+                        <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
+                        <td className="p-2">{it.producto || it.descripcion}</td>
+                        <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                        <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
+                        <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Observaciones (viajan a SUNAT como observación de la GRE)</label>
+                <textarea className="form-input w-full text-sm" rows={2} maxLength={250} value={f.observaciones} onChange={(e) => setF('observaciones', e.target.value)} placeholder="Ej. OC: 260810058" />
+                <p className="text-[11px] text-muted mt-1">Lo que escribas aquí es exactamente lo que se envía a SUNAT y se muestra en el PDF. (máx. 250)</p>
+              </div>
+
+              {f.es_comercio_exterior && (
+                <Alert type="warning" message="Comercio exterior: la GRE de exportación/importación puede requerir datos adicionales según SUNAT. Verifica el resultado de la primera emisión." />
+              )}
+            </div>
+          )}
+
+          {/* Footer de navegación */}
+          <div className="flex justify-between items-center gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Confirmar y emitir a SUNAT'}</button>
+            <div className="flex gap-2">
+              {wizStep > 0 && (
+                <button className="btn btn-sm btn-outline" onClick={() => setWizStep((s) => s - 1)} disabled={procesando}>
+                  <ChevronLeft size={14} className="mr-1" /> Retroceder
+                </button>
+              )}
+              {wizStep < 2 ? (
+                <button className="btn btn-sm btn-primary" onClick={() => setWizStep((s) => s + 1)} disabled={!pasoActualValido}>
+                  Siguiente <ChevronRight size={14} className="ml-1" />
+                </button>
+              ) : (
+                <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando || !puedeEmitirWizard}>
+                  <Zap size={14} className="mr-1" /> {procesando ? 'Emitiendo…' : 'Emitir a SUNAT'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
+        )}
       </Modal>
 
       {/* Modal: dejar sin efecto */}

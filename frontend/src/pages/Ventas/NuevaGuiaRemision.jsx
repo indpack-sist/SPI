@@ -25,6 +25,8 @@ function NuevaGuiaRemision() {
   const [transportistas, setTransportistas] = useState([]);
   // Transportista heredado de la OV cuando la entrega es por tercero (modalidad pública).
   const [ovTransportista, setOvTransportista] = useState(null);
+  // Datos del carro particular del cliente (sin RUC) heredados de la OV (modalidad 02 privada, texto libre).
+  const [ovParticular, setOvParticular] = useState(null);
   // Alta rápida de transportista (modalidad pública) sin salir del form.
   const [showNuevoTransportista, setShowNuevoTransportista] = useState(false);
   const [nuevoTransportista, setNuevoTransportista] = useState({ ruc: '', razon_social: '', numero_mtc: '' });
@@ -55,6 +57,8 @@ function NuevaGuiaRemision() {
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .includes('publico');
+  // Carro particular del cliente (sin RUC): modalidad 02 privada con datos manuales heredados de la OV.
+  const esParticular = orden?.tipo_entrega === 'Vehiculo Particular';
   
   const [detalle, setDetalle] = useState([]);
 
@@ -153,6 +157,15 @@ function NuevaGuiaRemision() {
           ruc: ordenData.transporte_ruc || '',
           razon: ordenData.transporte_nombre || '',
           mtc: ordenData.transporte_mtc || ''
+        } : null);
+
+        // Carro particular del cliente (sin RUC): se hereda conductor/placa a la guía como texto libre.
+        const ovEsParticular = ordenData.tipo_entrega === 'Vehiculo Particular';
+        setOvParticular(ovEsParticular ? {
+          placa: ordenData.transporte_placa || '',
+          conductor: ordenData.transporte_conductor || '',
+          dni: ordenData.transporte_dni || '',
+          licencia: ordenData.transporte_licencia || ''
         } : null);
 
         setFormData(prev => ({
@@ -345,10 +358,12 @@ function NuevaGuiaRemision() {
           : 'Para emitir la GRE en transporte público debes seleccionar (o registrar) un transportista.');
         return;
       }
-    } else if (!formData.id_conductor || !formData.id_vehiculo) {
+    } else if (!esParticular && (!formData.id_conductor || !formData.id_vehiculo)) {
       setError('Para emitir la GRE en transporte privado debes seleccionar conductor y vehículo (placa).');
       return;
     }
+    // Carro particular del cliente: los datos (conductor/placa) se heredan de la OV y se pueden
+    // completar/editar en el wizard de emisión, así que aquí no se bloquea la creación.
 
     // Validar formulario
     if (!validarFormulario()) {
@@ -607,6 +622,19 @@ function NuevaGuiaRemision() {
                     </div>
                   )}
                 </div>
+              ) : esParticular ? (
+                <div className="form-group col-span-2">
+                  <label className="form-label">Carro particular del cliente (sin RUC)</label>
+                  <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm">
+                    <p className="font-medium text-green-900">{ovParticular?.conductor || '(conductor por completar)'}</p>
+                    <p className="text-green-700">
+                      {ovParticular?.dni ? `DNI ${ovParticular.dni}` : 'DNI —'}
+                      {ovParticular?.licencia ? ` · Lic. ${ovParticular.licencia}` : ''}
+                      {ovParticular?.placa ? ` · Placa ${ovParticular.placa}` : ''}
+                    </p>
+                    <p className="text-xs text-muted mt-1">Modalidad 02 (privado). Tomado de "Transporte y Logística" de la orden; podrás completar o editar estos datos en el wizard de emisión.</p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="form-group">
@@ -646,7 +674,9 @@ function NuevaGuiaRemision() {
             <p className="text-xs text-muted mt-2">
               {esPublico
                 ? 'En transporte público la GRE declara al transportista (RUC + razón social). La placa y el conductor los declara el propio transportista en su guía.'
-                : 'Conductor y vehículo son obligatorios para emitir la Guía de Remisión electrónica (GRE) en transporte privado.'}
+                : esParticular
+                  ? 'Carro particular del cliente (modalidad 02, privado): la GRE declara conductor + placa (texto libre, sin RUC). Se heredan de la orden y se pueden editar al emitir.'
+                  : 'Conductor y vehículo son obligatorios para emitir la Guía de Remisión electrónica (GRE) en transporte privado.'}
             </p>
           </div>
         </div>

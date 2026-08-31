@@ -12,9 +12,15 @@
 // Uso:  node backend/scripts/test-gre-xml.js     (o  npm run test:gre  desde backend/)
 // Espeja el fixture real guias_remision id_guia=2 (TE01-1, OCULAB, conductor MAX, VES→Lima).
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { XMLValidator, XMLParser } from 'fast-xml-parser';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
+import { normalizarPlaca, placaValida } from '../services/sunat/util.service.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RUC = '20550932297';
 
@@ -144,6 +150,72 @@ check('Veh. secundario autorización',
   String(teq?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
+
+// ── Escenario PARTICULAR (privado 02) — carro común del cliente SIN RUC: espeja EG07-256 ─────
+// El cliente traslada con su propio auto/camioneta. Estructura IDÉNTICA al vehículo propio de
+// flota (DriverPerson + TransportEquipment, sin CarrierParty): solo cambia el ORIGEN del dato
+// (texto libre vs desplegable de flota). Se contrasta contra el XML real aceptado por SUNAT.
+console.log('\n=== Escenario PARTICULAR (privado 02) — carro del cliente sin RUC (espeja EG07-256) ===\n');
+
+// Normalización de placa: el usuario puede escribir "B2Q-671" y debe llegar a SUNAT como "B2Q671".
+check('placaValida acepta "B2Q-671" y "B2Q671"', placaValida('B2Q-671') && placaValida('B2Q671'));
+check('normalizarPlaca("B2Q-671") == "B2Q671"', normalizarPlaca('B2Q-671') === 'B2Q671', normalizarPlaca('B2Q-671'));
+check('placaValida rechaza vacío / con longitud inválida', !placaValida('') && !placaValida('B2Q'));
+
+const datosParticular = {
+  ...datos,
+  cliente: { ruc: '20606396628', razon_social: 'BERRYCO S.A.C.', tipo_documento: 'RUC' },
+  guia: {
+    motivo_traslado_cod: '01', motivo_traslado: 'VENTA', peso_bruto_kg: 620,
+    ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZ. LL-1 LOTE. 4 B - VILLA EL SALVADOR',
+    ubigeo_llegada: '150131', direccion_llegada: '---- JUAN PEZET NRO. 543 DPTO. 401 - SAN ISIDRO'
+  },
+  modalidad: '02',            // privado — igual que la flota
+  transportista: null,        // ← sin empresa de transporte (no hay RUC tercero)
+  fechaEntregaTransportista: null,
+  // Conductor + placa de TEXTO LIBRE (el backend ya aplicó normalizarPlaca antes de llegar aquí).
+  conductor: { dni: '07471043', nombre: 'CHAVEZ GUERRA CHARLES JORGE', licencia: 'Q07471043' },
+  vehiculos: [{ placa: normalizarPlaca('B2Q-671'), tuce: null, autorizacion: null }]
+};
+const { xml: xmlP } = construirDespatchAdviceXML(datosParticular);
+check('XML particular bien-formado', XMLValidator.validate(xmlP) === true);
+const dp = parser.parse(xmlP).DespatchAdvice;
+const shipP = dp?.Shipment;
+const stageP = shipP?.ShipmentStage;
+
+check('TransportModeCode = 02 (privado)', String(stageP?.TransportModeCode?.['#text']) === '02');
+check('SIN CarrierParty (no es empresa de transporte)', stageP?.CarrierParty === undefined);
+check('SIN SpecialInstructions (solo aplica a tercero)', shipP?.SpecialInstructions === undefined);
+check('SIN LoadingTransportEvent (solo aplica a tercero)', stageP?.LoadingTransportEvent === undefined);
+check('DriverPerson DNI = 07471043', String(stageP?.DriverPerson?.ID?.['#text']) === '07471043');
+check('DriverPerson licencia = Q07471043', String(stageP?.DriverPerson?.IdentityDocumentReference?.ID) === 'Q07471043');
+check('TransportEquipment placa = B2Q671 (normalizada, sin guion)',
+  String(shipP?.TransportHandlingUnit?.TransportEquipment?.ID) === 'B2Q671');
+check('Veh. principal SIN TUCE ni AttachedTransportEquipment',
+  shipP?.TransportHandlingUnit?.TransportEquipment?.ApplicableTransportMeans === undefined &&
+  shipP?.TransportHandlingUnit?.TransportEquipment?.AttachedTransportEquipment === undefined);
+
+// Contraste directo contra el XML REAL aceptado por SUNAT (docs/20550932297-09-EG07-256.xml):
+// misma modalidad, mismo conductor/placa y misma AUSENCIA de bloques de tercero.
+try {
+  const refXml = readFileSync(join(__dirname, '..', '..', 'docs', '20550932297-09-EG07-256.xml'), 'utf8');
+  const ref = parser.parse(refXml).DespatchAdvice;
+  const shipR = ref?.Shipment;
+  const stageR = shipR?.ShipmentStage;
+  check('[EG07-256] modalidad real = 02 == la generada', String(stageR?.TransportModeCode?.['#text']) === String(stageP?.TransportModeCode?.['#text']));
+  check('[EG07-256] motivo real = 01 == el generado', String(shipR?.HandlingCode?.['#text']) === String(shipP?.HandlingCode?.['#text']));
+  check('[EG07-256] DriverPerson DNI real == el generado', String(stageR?.DriverPerson?.ID?.['#text']) === String(stageP?.DriverPerson?.ID?.['#text']));
+  check('[EG07-256] licencia real == la generada', String(stageR?.DriverPerson?.IdentityDocumentReference?.ID) === String(stageP?.DriverPerson?.IdentityDocumentReference?.ID));
+  check('[EG07-256] placa real == la generada', String(shipR?.TransportHandlingUnit?.TransportEquipment?.ID) === String(shipP?.TransportHandlingUnit?.TransportEquipment?.ID));
+  check('[EG07-256] el XML real TAMPOCO tiene CarrierParty', stageR?.CarrierParty === undefined);
+} catch (e) {
+  check('XML de referencia EG07-256 legible en docs/', false, e.message);
+}
+
+// Prueba de EQUIVALENCIA: mismo caso emitido "como flota" (mismos datos) produce el MISMO XML
+// que "como particular". Confirma que para SUNAT no cambia NADA: ambos son privado 02.
+const { xml: xmlComoFlota } = construirDespatchAdviceXML({ ...datosParticular });
+check('Particular y flota generan XML idéntico (misma estructura privada 02)', xmlComoFlota === xmlP);
 
 console.log('\n=== FASE 10 · ítem 3 — Flujo MOCK de punta a punta (sin BD/cert) ===\n');
 

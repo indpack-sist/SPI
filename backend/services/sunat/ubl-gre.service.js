@@ -91,9 +91,12 @@ const SCHEME_DOC = 'schemeName="Documento de Identidad" schemeAgencyName="PE:SUN
  * @param {string} d.fechaTraslado 'YYYY-MM-DD'
  * @param {'01'|'02'} d.modalidad   modalidad de traslado (catálogo 18): 01 público (tercero), 02 privado (propio)
  * @param {object|null} d.transportista {ruc, razon, mtc}  (tercero → CarrierParty; mtc = MTC empresa → CompanyID)
+ * @param {boolean} [d.registrarTransportista=true] solo tercero: true (Caso 2/3) declara veh/cond + SpecialInstructions; false (Caso 1) solo CarrierParty
  * @param {string} [d.fechaEntregaTransportista] 'YYYY-MM-DD' → cac:LoadingTransportEvent (solo tercero)
- * @param {object|null} d.conductor     {dni, nombre, licencia}
+ * @param {Array} [d.conductores]        [{dni, nombre, licencia}] hasta 2 (Principal + Secundario). Alternativa: d.conductor (single, legacy)
+ * @param {object|null} [d.conductor]    {dni, nombre, licencia} (legacy; se envuelve en conductores[0])
  * @param {Array} d.vehiculos           [{placa, tuce, autorizacion}] hasta 2 (principal + secundario→AttachedTransportEquipment); tuce→RegistrationNationalityID, autorizacion→ShipmentDocumentReference
+ * @param {object} [d.indicadores]       {transbordo, m1l, retornoVacio} booleans → cac:SpecialInstructions opcionales
  * @param {string} [d.observacion] observación libre + OC → cbc:Note
  * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada)
  * @returns {{ xml: string }}
@@ -125,25 +128,50 @@ export function construirDespatchAdviceXML(d) {
       </cac:CarrierParty>`
     : '';
 
-  // ── Conductor principal → cac:DriverPerson (dentro de ShipmentStage, tras CarrierParty) ──
-  // El proveedor de referencia repite el nombre completo en FirstName y FamilyName; se replica.
-  const nombreCond = trunc(d.conductor?.nombre || '', 250);
-  const driverXml = d.conductor?.dni
-    ? `
-      <cac:DriverPerson>
-        <cbc:ID schemeID="1" ${SCHEME_DOC}>${cdata(d.conductor.dni)}</cbc:ID>
-        <cbc:FirstName>${cdata(nombreCond)}</cbc:FirstName>
-        <cbc:FamilyName>${cdata(nombreCond)}</cbc:FamilyName>
-        <cbc:JobTitle>Principal</cbc:JobTitle>
-        <cac:IdentityDocumentReference><cbc:ID>${cdata(d.conductor.licencia || '')}</cbc:ID></cac:IdentityDocumentReference>
-      </cac:DriverPerson>`
-    : '';
-
-  // ── Indicador "registrar vehículos y conductores del transportista" (solo tercero) ───────
+  // ── ¿Se declaran vehículos y conductores? ────────────────────────────────────────────────
+  //   · No tercero (flota/particular): SIEMPRE se declaran (es la esencia del traslado privado).
+  //   · Tercero (público 01): depende del interruptor "registrar vehículos y conductores del
+  //     transportista". registrar=true (Caso 2/3) → se declaran + indicador SpecialInstructions.
+  //     registrar=false (Caso 1) → SOLO CarrierParty; el transportista emite su propia GRE 31.
   const esTercero = !!d.transportista?.ruc;
-  const specialXml = esTercero
-    ? `\n    <cbc:SpecialInstructions>SUNAT_Envio_IndicadorVehiculoConductoresTransp</cbc:SpecialInstructions>`
-    : '';
+  const registrar = esTercero ? (d.registrarTransportista !== false) : true;
+  const declararVC = !esTercero || registrar;
+
+  // ── Conductores → cac:DriverPerson (Principal + Secundario) dentro de ShipmentStage ───────
+  // Acepta d.conductores [] (1-2) o el legacy d.conductor (single). El proveedor de referencia
+  // repite el nombre completo en FirstName y FamilyName; se replica. Solo si se declaran (Caso 2/3).
+  const conductores = Array.isArray(d.conductores)
+    ? d.conductores.filter((c) => c?.dni)
+    : (d.conductor?.dni ? [d.conductor] : []);
+  const driverPersonXml = (c, i) => {
+    const nom = trunc(c.nombre || '', 250);
+    return `
+      <cac:DriverPerson>
+        <cbc:ID schemeID="1" ${SCHEME_DOC}>${cdata(c.dni)}</cbc:ID>
+        <cbc:FirstName>${cdata(nom)}</cbc:FirstName>
+        <cbc:FamilyName>${cdata(nom)}</cbc:FamilyName>
+        <cbc:JobTitle>${i === 0 ? 'Principal' : 'Secundario'}</cbc:JobTitle>
+        <cac:IdentityDocumentReference><cbc:ID>${cdata(c.licencia || '')}</cbc:ID></cac:IdentityDocumentReference>
+      </cac:DriverPerson>`;
+  };
+  const driverXml = declararVC ? conductores.map(driverPersonXml).join('') : '';
+
+  // ── Indicadores → cac:SpecialInstructions (cada indicador es su propio nodo) ──────────────
+  // Strings CONFIRMADOS contra el estándar oficial "UBL 2.1 Guía de Remisión Remitente"
+  // (Anexo de la R.S. 123-2022/SUNAT). El de "registrar" además está probado por XML aceptado.
+  const IND = {
+    registrarTransp: 'SUNAT_Envio_IndicadorVehiculoConductoresTransp',
+    transbordo:      'SUNAT_Envio_IndicadorTransbordoProgramado',
+    m1l:             'SUNAT_Envio_IndicadorTrasladoVehiculoM1L',
+    retornoVacio:    'SUNAT_Envio_IndicadorRetornoVehiculoEnvaseVacio',
+  };
+  const ind = d.indicadores || {};
+  const indicadores = [];
+  if (esTercero && registrar) indicadores.push(IND.registrarTransp);
+  if (ind.transbordo) indicadores.push(IND.transbordo);
+  if (ind.m1l) indicadores.push(IND.m1l);
+  if (ind.retornoVacio) indicadores.push(IND.retornoVacio);
+  const specialXml = indicadores.map((s) => `\n    <cbc:SpecialInstructions>${s}</cbc:SpecialInstructions>`).join('');
 
   // ── Fecha de entrega de bienes al transportista → cac:LoadingTransportEvent (solo tercero) ─
   const loadingXml = (esTercero && d.fechaEntregaTransportista)
@@ -155,7 +183,7 @@ export function construirDespatchAdviceXML(d) {
   // Hasta 2 vehículos: principal (TransportEquipment) + secundario (AttachedTransportEquipment).
   // Cada uno con TUCE/Certificado (RegistrationNationalityID) y autorización especial
   // (ShipmentDocumentReference schemeID="06"). Estructura calcada de docs/…-09-EG07-325.xml.
-  const vehiculos = Array.isArray(d.vehiculos) ? d.vehiculos.filter(v => v?.placa) : [];
+  const vehiculos = (declararVC && Array.isArray(d.vehiculos)) ? d.vehiculos.filter(v => v?.placa) : [];
   const tuceXml = (v, ind) => v?.tuce
     ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(v.tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
     : '';
@@ -175,7 +203,13 @@ export function construirDespatchAdviceXML(d) {
         <cbc:ID>${cdata(vp.placa)}</cbc:ID>${tuceXml(vp, '        ')}${attachedXml}${autorizXml(vp, '        ')}
       </cac:TransportEquipment>
     </cac:TransportHandlingUnit>`
-    : '';
+    : (esTercero && !registrar)
+      // ── Caso 1 (tercero sin registrar veh/cond): TransportHandlingUnit vacío (espeja EG07-81) ──
+      ? `
+    <cac:TransportHandlingUnit>
+      <cac:TransportEquipment></cac:TransportEquipment>
+    </cac:TransportHandlingUnit>`
+      : '';
 
   // Observación (texto libre + OC) → cbc:Note tras DespatchAdviceTypeCode.
   const notaXml = d.observacion

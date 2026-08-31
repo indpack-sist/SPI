@@ -92,10 +92,12 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     if (g.sunat_estado === 'ACEPTADO') throw new AppError('La guía ya fue aceptada por SUNAT', 409);
     // Regla de negocio: la GRE se emite una vez que la orden ya fue despachada.
     const [[ov]] = await conn.query(
-      `SELECT estado, orden_compra_cliente, tipo_entrega,
+      `SELECT estado, orden_compra_cliente, tipo_entrega, transporte_registrar,
               transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
+              transporte_dni2, transporte_conductor2, transporte_licencia2,
               transporte_tuc, transporte_autorizacion,
               transporte_placa2, transporte_tuc2, transporte_autorizacion2,
+              transporte_ind_transbordo, transporte_ind_m1l, transporte_ind_retorno_vacio,
               DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
          FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
     if (!ov || ov.estado !== 'Despachada') {
@@ -115,7 +117,15 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     //     fecha de entrega al transportista salen del bloque de transporte de la OV.
     //   · Propio (Vehículo Empresa): modalidad 02 (privado); conductor de empleados y placa de la flota.
     const esTercero = !!g.id_transportista;
-    let carrier = null, conductor = null, vehiculos = [];
+    // registrar: interruptor "registrar vehículos y conductores del transportista" (solo tercero).
+    // default 1 (Caso 2/3); 0 = Caso 1 (solo transportista, él emite su GRE 31). No tercero → siempre true.
+    let carrier = null, conductores = [], vehiculos = [], registrar = true;
+    // Indicadores opcionales (SpecialInstructions) tomados de la OV.
+    const indicadores = {
+      transbordo: !!ov.transporte_ind_transbordo,
+      m1l: !!ov.transporte_ind_m1l,
+      retornoVacio: !!ov.transporte_ind_retorno_vacio,
+    };
 
     if (esTercero) {
       const [[t]] = await conn.query(
@@ -123,22 +133,28 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       if (!t?.ruc || !t?.razon_social) throw new AppError('Falta el transportista (RUC y razón social)', 422);
       if (!/^\d{11}$/.test(String(t.ruc))) throw new AppError('RUC del transportista inválido (11 dígitos)', 422);
       carrier = { ruc: t.ruc, razon: t.razon_social, mtc: t.numero_mtc || null };
-      conductor = { dni: ov.transporte_dni, nombre: ov.transporte_conductor, licencia: ov.transporte_licencia };
-      // Vehículo principal + opcional secundario (carreta); cada uno TUCE (RegistrationNationalityID)
-      // + autorización especial (ShipmentDocumentReference).
-      vehiculos = [{
-        placa: normalizarPlaca(ov.transporte_placa),
-        tuce: ov.transporte_tuc || null,
-        autorizacion: ov.transporte_autorizacion || null
-      }];
-      const placa2 = normalizarPlaca(ov.transporte_placa2);
-      if (placa2) vehiculos.push({ placa: placa2, tuce: ov.transporte_tuc2 || null, autorizacion: ov.transporte_autorizacion2 || null });
+      registrar = ov.transporte_registrar !== 0; // default 1 (Caso 2/3)
+      if (registrar) {
+        // Caso 2/3: se declaran conductor(es) principal + secundario y vehículo(s).
+        if (ov.transporte_dni) conductores.push({ dni: ov.transporte_dni, nombre: ov.transporte_conductor, licencia: ov.transporte_licencia });
+        if (ov.transporte_dni2) conductores.push({ dni: ov.transporte_dni2, nombre: ov.transporte_conductor2, licencia: ov.transporte_licencia2 });
+        // Vehículo principal + opcional secundario (carreta); cada uno TUCE (RegistrationNationalityID)
+        // + autorización especial (ShipmentDocumentReference).
+        vehiculos = [{
+          placa: normalizarPlaca(ov.transporte_placa),
+          tuce: ov.transporte_tuc || null,
+          autorizacion: ov.transporte_autorizacion || null
+        }];
+        const placa2 = normalizarPlaca(ov.transporte_placa2);
+        if (placa2) vehiculos.push({ placa: placa2, tuce: ov.transporte_tuc2 || null, autorizacion: ov.transporte_autorizacion2 || null });
+      }
+      // Caso 1 (registrar=false): conductores/vehiculos quedan vacíos → solo CarrierParty en el XML.
     } else if (g.transporte_modo === 'particular' || g.transporte_placa) {
       // Modalidad 02 (privado) con vehículo/conductor de TEXTO LIBRE: el cliente (o un particular
       // que NO es empresa de transporte) traslada con su propio carro/camioneta. Estructura idéntica
       // al vehículo propio (DriverPerson + TransportEquipment, SIN CarrierParty). Calcado del XML
       // aceptado docs/20550932297-09-EG07-256.xml.
-      conductor = { dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia };
+      conductores = [{ dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia }];
       vehiculos = [{ placa: normalizarPlaca(g.transporte_placa), tuce: null, autorizacion: null }];
     } else {
       const [[cRow]] = g.id_conductor
@@ -147,9 +163,11 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       const [[vRow]] = g.id_vehiculo
         ? await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
         : [[null]];
-      conductor = cRow ? { dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir } : null;
+      conductores = cRow ? [{ dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir }] : [];
       vehiculos = vRow ? [{ placa: normalizarPlaca(vRow.placa), tuce: null, autorizacion: null }] : [];
     }
+    // ¿Se declaran vehículos y conductores? No tercero siempre; tercero solo si registrar=true.
+    const declararVC = !esTercero || registrar;
     // fecha_traslado como string 'YYYY-MM-DD' (sin corrimiento de zona).
     const [[ft]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);
     const fechaTraslado = ft?.f || emision;
@@ -166,28 +184,36 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     // Modalidad de traslado (catálogo 18): 01 público para tercero, 02 privado para vehículo propio.
     const modalidad = esTercero ? '01' : '02';
 
-    // Conductor: DNI + nombre + licencia son obligatorios (SUNAT los exige en DriverPerson).
-    if (!conductor?.dni || !conductor?.nombre || !conductor?.licencia) {
-      throw new AppError('Faltan datos del conductor (DNI, nombre y licencia de conducir)', 422);
-    }
-    // Validación de FORMATO (corre antes de reservar el correlativo → un dato mal formado NO lo quema).
-    if (!dniValido(conductor.dni)) {
-      throw new AppError(`DNI del conductor inválido: "${conductor.dni}" (deben ser 8 dígitos)`, 422);
-    }
-    // Ubigeos de partida/llegada: 6 dígitos (catálogo INEI). Ya se validó que no sean nulos arriba.
+    // Ubigeos de partida/llegada: 6 dígitos (catálogo INEI). Siempre obligatorios (independiente del modo).
     if (!ubigeoValido(g.ubigeo_partida)) throw new AppError(`Ubigeo de partida inválido: "${g.ubigeo_partida}" (6 dígitos)`, 422);
     if (!ubigeoValido(g.ubigeo_llegada)) throw new AppError(`Ubigeo de llegada inválido: "${g.ubigeo_llegada}" (6 dígitos)`, 422);
-    // Placa del vehículo principal normalizada. En PROD es obligatoria; en BETA se usa un
-    // placeholder solo para el mock (no válido en PROD).
-    if (!vehiculos[0]?.placa) {
-      if (sunatConfig.mode === 'PROD') throw new AppError('Falta la placa del vehículo', 422);
-      vehiculos = [{ placa: 'XXX000', tuce: null, autorizacion: null }];
-    } else if (!placaValida(vehiculos[0].placa)) {
-      throw new AppError(`Placa inválida: "${vehiculos[0].placa}" (6 a 8 caracteres alfanuméricos; el guion y los espacios se ignoran)`, 422);
-    }
-    // Placa del vehículo secundario (carreta) si viene: mismo formato.
-    if (vehiculos[1]?.placa && !placaValida(vehiculos[1].placa)) {
-      throw new AppError(`Placa del vehículo secundario inválida: "${vehiculos[1].placa}" (6 a 8 caracteres alfanuméricos)`, 422);
+
+    if (declararVC) {
+      // Caso 2/3 (o privado): conductor principal + placa obligatorios; secundario opcional.
+      const c0 = conductores[0];
+      if (!c0?.dni || !c0?.nombre || !c0?.licencia) {
+        throw new AppError('Faltan datos del conductor (DNI, nombre y licencia de conducir)', 422);
+      }
+      // Validación de FORMATO de cada conductor (corre antes de reservar el correlativo → no lo quema).
+      for (const c of conductores) {
+        if (!dniValido(c.dni)) throw new AppError(`DNI del conductor inválido: "${c.dni}" (deben ser 8 dígitos)`, 422);
+        if (!c.nombre || !c.licencia) throw new AppError('Conductor secundario incompleto (faltan nombre y/o licencia)', 422);
+      }
+      // Placa del vehículo principal normalizada. En PROD es obligatoria; en BETA se usa un
+      // placeholder solo para el mock (no válido en PROD).
+      if (!vehiculos[0]?.placa) {
+        if (sunatConfig.mode === 'PROD') throw new AppError('Falta la placa del vehículo', 422);
+        vehiculos = [{ placa: 'XXX000', tuce: null, autorizacion: null }];
+      } else if (!placaValida(vehiculos[0].placa)) {
+        throw new AppError(`Placa inválida: "${vehiculos[0].placa}" (6 a 8 caracteres alfanuméricos; el guion y los espacios se ignoran)`, 422);
+      }
+      // Placa del vehículo secundario (carreta) si viene: mismo formato.
+      if (vehiculos[1]?.placa && !placaValida(vehiculos[1].placa)) {
+        throw new AppError(`Placa del vehículo secundario inválida: "${vehiculos[1].placa}" (6 a 8 caracteres alfanuméricos)`, 422);
+      }
+    } else {
+      // Caso 1 (tercero sin registrar veh/cond): no se declaran; basta el transportista (ya validado).
+      conductores = []; vehiculos = [];
     }
 
     // Fecha de entrega de bienes al transportista (LoadingTransportEvent, solo tercero); si no se
@@ -208,7 +234,8 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const datos = {
       tipo, serie, numero, empresa, cliente, guia: g, detalle,
       fecha: { emision, hora }, fechaTraslado, modalidad,
-      transportista: carrier, fechaEntregaTransportista, conductor, vehiculos,
+      transportista: carrier, registrarTransportista: registrar, fechaEntregaTransportista,
+      conductores, vehiculos, indicadores,
       observacion
     };
     const { xml } = construirDespatchAdviceXML(datos);

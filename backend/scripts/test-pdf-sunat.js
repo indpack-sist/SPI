@@ -117,6 +117,59 @@ async function main() {
     txtGre.includes('Observaciones') && txtGre.includes('OC: 260610043'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
+  // 4b) GRE Caso 1 (tercero público SIN registrar veh/cond) — solo transportista (espeja EG07-81).
+  const pdfGreC1 = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 81, fecha_emision: '16/02/2026', fecha_traslado: '17/02/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 100, ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VES',
+      ubigeo_llegada: '110205', direccion_llegada: 'CAMINO A VINA VIEJA - EL CARMEN', sunat_estado: 'ACEPTADO',
+      observaciones: 'OC: 0004-624'
+    },
+    emisor, cliente,
+    detalle: [{ codigo: 'LBT60G019', nombre: 'LAMINA BURBUPACK 0.55 x 0.73 MTS', cantidad: 10, codigo_unidad_sunat: 'MIL' }],
+    transportista: { razon: 'TRANSPORTES MORON EXPRESS S.R.L.', ruc: '20610431420', mtc: '15139386CNG' },
+    registrar: false, modalidad: '01', qrBuffer: qrGre
+  });
+  check('GRE Caso 1 (solo transportista) genera PDF válido', esPdf(pdfGreC1), `${pdfGreC1.length} bytes`);
+  const txtC1 = await textoDe(pdfGreC1);
+  check('C1 imprime modalidad PÚBLICO + transportista + RUC + MTC',
+    txtC1.includes('PÚBLICO') && txtC1.includes('TRANSPORTES MORON') && txtC1.includes('20610431420') && txtC1.includes('15139386CNG'));
+  check('C1 muestra el indicador "registrar" y NO imprime conductores',
+    txtC1.includes('registrar veh') && !txtC1.includes('Conductor principal'));
+  await fs.writeFile(path.join(outDir, 'test-TE01-C1.pdf'), pdfGreC1);
+
+  // 4c) GRE Caso 3 (tercero CON registrar) — 2 vehículos con permisos + 2 conductores (espeja EG07-325).
+  const pdfGreC3 = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 325, fecha_emision: '27/08/2026', fecha_traslado: '27/08/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 104, ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VES',
+      ubigeo_llegada: '200104', direccion_llegada: 'CAR. MEDIO PIURA KM. 11.5 - CASTILLA', sunat_estado: 'ACEPTADO',
+      observaciones: 'OC - 4600144796'
+    },
+    emisor, cliente,
+    detalle: [{ codigo: 'LBT60G002', nombre: 'LAMINA BURBUPACK 0.36 x 0.56 MTS', cantidad: 107, codigo_unidad_sunat: 'NIU' }],
+    transportista: { razon: 'EMPRESA DE TRANSPORTES Y SERVICIOS YELA & N S.A.C.', ruc: '20611807555', mtc: '15141794CNG' },
+    registrar: true, modalidad: '01', fechaEntrega: '27/08/2026',
+    vehiculos: [
+      { placa: 'T7U937', tuce: '151716963', autorizacion: '15M25063308E' },
+      { placa: 'TJQ970', tuce: '152108547', autorizacion: '15M25063309E' }
+    ],
+    conductores: [
+      { nombre: 'TANTALEAN REVILLA OSCAR PEPE', dni: '80627794', licencia: 'L80627794' },
+      { nombre: 'CONTRERAS URQUIZO JENSON PAUL', dni: '80257817', licencia: 'Q80257817' }
+    ],
+    qrBuffer: qrGre
+  });
+  check('GRE Caso 3 (permisos, 2 veh/2 cond) genera PDF válido', esPdf(pdfGreC3), `${pdfGreC3.length} bytes`);
+  const txtC3 = await textoDe(pdfGreC3);
+  check('C3 imprime 2 vehículos con TUCE + autorización especial',
+    txtC3.includes('T7U937') && txtC3.includes('TJQ970') && txtC3.includes('151716963') && txtC3.includes('15M25063308E') && txtC3.includes('15M25063309E'));
+  check('C3 imprime 2 conductores (principal + secundario)',
+    txtC3.includes('Conductor principal') && txtC3.includes('Conductor secundario') && txtC3.includes('80627794') && txtC3.includes('80257817'));
+  check('C3 imprime fecha de entrega al transportista',
+    txtC3.includes('Fecha entrega al transportista') && txtC3.includes('27/08/2026'));
+  await fs.writeFile(path.join(outDir, 'test-TE01-C3.pdf'), pdfGreC3);
+
   // 5) Rótulo de operación por afectación (catálogo 07) — impreso en la línea "Tipo de operación".
   //    Gravada: el IGV del bloque de totales es != 0 (180.00); exonerada/inafecta/exportación: IGV 0.
   //    El bloque de totales usa el formato SUNAT (Sub Total Ventas / Valor Venta / Importe Total).

@@ -2913,6 +2913,13 @@ export async function actualizarDatosTransporte(req, res) {
       transporte_tuc2,
       transporte_autorizacion2,
       transporte_fecha_entrega,
+      transporte_registrar,
+      transporte_dni2,
+      transporte_conductor2,
+      transporte_licencia2,
+      transporte_ind_transbordo,
+      transporte_ind_m1l,
+      transporte_ind_retorno_vacio,
       fecha_entrega_estimada
     } = req.body;
 
@@ -2982,6 +2989,16 @@ export async function actualizarDatosTransporte(req, res) {
     const transTuc2Final = esTercero ? (transporte_tuc2 || null) : null;
     const transAut2Final = esTercero ? (transporte_autorizacion2 || null) : null;
     const transFechaEntregaFinal = esTercero ? (transporte_fecha_entrega || null) : null;
+    // Interruptor "registrar veh/cond del transportista" (solo tercero; default 1 = Caso 2/3).
+    const transRegistrarFinal = esTercero ? (transporte_registrar === false ? 0 : 1) : 1;
+    // Conductor secundario (solo tercero).
+    const transDni2Final = esTercero ? (transporte_dni2 || null) : null;
+    const transCond2Final = esTercero ? (transporte_conductor2 || null) : null;
+    const transLic2Final = esTercero ? (transporte_licencia2 || null) : null;
+    // Indicadores SUNAT (opcionales; se persisten según el payload del form).
+    const transIndTransbordoFinal = transporte_ind_transbordo ? 1 : 0;
+    const transIndM1lFinal = transporte_ind_m1l ? 1 : 0;
+    const transIndRetVacioFinal = transporte_ind_retorno_vacio ? 1 : 0;
 
     const result = await executeQuery(`
       UPDATE ordenes_venta
@@ -3002,6 +3019,13 @@ export async function actualizarDatosTransporte(req, res) {
         transporte_tuc2 = ?,
         transporte_autorizacion2 = ?,
         transporte_fecha_entrega = ?,
+        transporte_registrar = ?,
+        transporte_dni2 = ?,
+        transporte_conductor2 = ?,
+        transporte_licencia2 = ?,
+        transporte_ind_transbordo = ?,
+        transporte_ind_m1l = ?,
+        transporte_ind_retorno_vacio = ?,
         fecha_entrega_estimada = COALESCE(?, fecha_entrega_estimada)
       WHERE id_orden_venta = ?
     `, [
@@ -3021,6 +3045,13 @@ export async function actualizarDatosTransporte(req, res) {
       transTuc2Final,
       transAut2Final,
       transFechaEntregaFinal,
+      transRegistrarFinal,
+      transDni2Final,
+      transCond2Final,
+      transLic2Final,
+      transIndTransbordoFinal,
+      transIndM1lFinal,
+      transIndRetVacioFinal,
       fecha_entrega_estimada || null,
       id
     ]);

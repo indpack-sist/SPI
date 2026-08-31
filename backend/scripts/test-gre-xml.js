@@ -151,6 +151,52 @@ check('Veh. secundario autorización',
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
 
+// ── Escenario CASO 1 (tercero 01, registrar=OFF): SOLO CarrierParty (espeja EG07-81) ─────────
+// Interruptor "registrar vehículos y conductores del transportista" DESACTIVADO: la GRE del
+// remitente declara únicamente al transportista; será el transportista quien emita su GRE 31.
+console.log('\n=== Escenario CASO 1 (tercero 01, registrar=OFF) — solo transportista, sin veh/cond ===\n');
+const datosCaso1 = { ...datosTercero, registrarTransportista: false };
+const { xml: xml1 } = construirDespatchAdviceXML(datosCaso1);
+check('XML caso1 bien-formado', XMLValidator.validate(xml1) === true);
+const d1 = parser.parse(xml1).DespatchAdvice;
+const ship1 = d1?.Shipment;
+const stage1 = ship1?.ShipmentStage;
+check('[C1] Modalidad 01 (público)', String(stage1?.TransportModeCode?.['#text']) === '01');
+check('[C1] CarrierParty presente (RUC transportista)', String(stage1?.CarrierParty?.PartyIdentification?.ID?.['#text']) === '20611807555');
+check('[C1] SIN SpecialInstructions (registrar=OFF)', ship1?.SpecialInstructions === undefined);
+check('[C1] SIN DriverPerson', stage1?.DriverPerson === undefined);
+check('[C1] TransportEquipment vacío (sin placa)', ship1?.TransportHandlingUnit?.TransportEquipment?.ID === undefined);
+
+// ── Escenario multi-conductor: 2 cac:DriverPerson (Principal + Secundario) ───────────────────
+console.log('\n=== Escenario multi-conductor (Principal + Secundario) ===\n');
+const datosMulti = {
+  ...datosTercero,
+  conductor: undefined,
+  conductores: [
+    { dni: '75336849', nombre: 'RODRIGUEZ SANANCINO MAX ALEX', licencia: 'Q75336849' },
+    { dni: '80257817', nombre: 'CONTRERAS URQUIZO JENSON PAUL', licencia: 'Q80257817' },
+  ],
+};
+const { xml: xmlM } = construirDespatchAdviceXML(datosMulti);
+check('XML multi-conductor bien-formado', XMLValidator.validate(xmlM) === true);
+const driversM = parser.parse(xmlM).DespatchAdvice?.Shipment?.ShipmentStage?.DriverPerson;
+check('2 DriverPerson emitidos', Array.isArray(driversM) && driversM.length === 2, `n=${Array.isArray(driversM) ? driversM.length : 'no-array'}`);
+check('Conductor 1 = Principal', String(driversM?.[0]?.JobTitle) === 'Principal');
+check('Conductor 2 = Secundario', String(driversM?.[1]?.JobTitle) === 'Secundario');
+check('Conductor 2 DNI = 80257817', String(driversM?.[1]?.ID?.['#text']) === '80257817');
+
+// ── Indicadores opcionales (SpecialInstructions múltiples) ───────────────────────────────────
+console.log('\n=== Indicadores opcionales (transbordo / M1-L / retorno vacíos) ===\n');
+const datosInd = { ...datosTercero, indicadores: { transbordo: true, m1l: true, retornoVacio: true } };
+const { xml: xmlI } = construirDespatchAdviceXML(datosInd);
+check('XML indicadores bien-formado', XMLValidator.validate(xmlI) === true);
+const siList = parser.parse(xmlI).DespatchAdvice?.Shipment?.SpecialInstructions;
+const siArr = Array.isArray(siList) ? siList : [siList];
+check('4 SpecialInstructions (registrar + 3 indicadores)', siArr.length === 4, `n=${siArr.length}`);
+check('Incluye transbordo', siArr.some((s) => String(s).includes('Transbordo')));
+check('Incluye M1L', siArr.some((s) => String(s).includes('VehiculoM1L')));
+check('Incluye retorno vacíos', siArr.some((s) => String(s).includes('RetornoVehiculoEnvaseVacio')));
+
 // ── Escenario PARTICULAR (privado 02) — carro común del cliente SIN RUC: espeja EG07-256 ─────
 // El cliente traslada con su propio auto/camioneta. Estructura IDÉNTICA al vehículo propio de
 // flota (DriverPerson + TransportEquipment, sin CarrierParty): solo cambia el ORIGEN del dato

@@ -126,6 +126,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       // Modo flota: ids seleccionados.
       id_conductor: guia?.id_conductor ? String(guia.id_conductor) : '',
       id_vehiculo: guia?.id_vehiculo ? String(guia.id_vehiculo) : '',
+      // Modo tercero: interruptor "registrar veh/cond" + indicadores (editables al emitir).
+      registrar: guia?.ov_transporte_registrar === 0 ? false : true,
+      indTransbordo: !!guia?.ov_ind_transbordo,
+      indM1l: !!guia?.ov_ind_m1l,
+      indRetornoVacio: !!guia?.ov_ind_retorno_vacio,
     });
     setWizStep(0);
     setAlerta(null);
@@ -146,7 +151,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const handleEmitir = async () => {
     const f = emitForm;
     const transporte = f.transporteModo === 'tercero'
-      ? { modo: 'tercero' }
+      ? { modo: 'tercero', registrar: f.registrar, indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio } }
       : f.transporteModo === 'particular'
         ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
         : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null };
@@ -222,8 +227,21 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Resumen de transporte para la vista previa (según el modo elegido).
   const resTransporte = !f ? null : (
     f.transporteModo === 'tercero'
-      ? { modalidad: 'Público (01) — empresa de transporte', empresa: guia?.transportista_razon || guia?.ov_transporte_nombre, ruc: guia?.transportista_ruc || guia?.ov_transporte_ruc,
-          conductor: guia?.ov_transporte_conductor, dni: guia?.ov_transporte_dni, licencia: guia?.ov_transporte_licencia, placa: normPlaca(guia?.ov_transporte_placa) }
+      ? { modalidad: f.registrar ? 'Público (01) — registra veh/cond (Caso 2/3)' : 'Público (01) — solo transportista (Caso 1)',
+          empresa: guia?.transportista_razon || guia?.ov_transporte_nombre,
+          ruc: guia?.transportista_ruc || guia?.ov_transporte_ruc,
+          mtc: guia?.transportista_mtc || guia?.ov_transporte_mtc,
+          registrar: f.registrar,
+          fechaEntrega: guia?.ov_transporte_fecha_entrega || null,
+          indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio },
+          vehiculos: f.registrar ? [
+            guia?.ov_transporte_placa ? { placa: normPlaca(guia.ov_transporte_placa), tuce: guia?.ov_transporte_tuc, autorizacion: guia?.ov_transporte_autorizacion } : null,
+            guia?.ov_transporte_placa2 ? { placa: normPlaca(guia.ov_transporte_placa2), tuce: guia?.ov_transporte_tuc2, autorizacion: guia?.ov_transporte_autorizacion2 } : null,
+          ].filter(Boolean) : [],
+          conductores: f.registrar ? [
+            guia?.ov_transporte_dni ? { nombre: guia.ov_transporte_conductor, dni: guia.ov_transporte_dni, licencia: guia.ov_transporte_licencia } : null,
+            guia?.ov_transporte_dni2 ? { nombre: guia.ov_transporte_conductor2, dni: guia.ov_transporte_dni2, licencia: guia.ov_transporte_licencia2 } : null,
+          ].filter(Boolean) : [] }
       : f.transporteModo === 'particular'
         ? { modalidad: 'Privado (02) — carro particular', conductor: f.conductor, dni: f.dni, licencia: f.licencia, placa: normPlaca(f.placa) }
         : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa }
@@ -463,10 +481,48 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               {f.transporteModo === 'tercero' && (
                 (guia?.id_transportista || guia?.ov_transporte_ruc) ? (
-                  <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
-                    <p className="font-medium text-green-900">{guia?.transportista_razon || guia?.ov_transporte_nombre || '(sin razón social)'}</p>
-                    <p className="text-green-700">RUC {guia?.transportista_ruc || guia?.ov_transporte_ruc}{(guia?.transportista_mtc || guia?.ov_transporte_mtc) ? ` · MTC ${guia?.transportista_mtc || guia?.ov_transporte_mtc}` : ''}</p>
-                    <p className="text-muted mt-1">La empresa de transporte se toma de la orden. Para cambiarla, edítala en "Transporte y Logística" de la OV.</p>
+                  <div className="space-y-2">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
+                      <p className="font-medium text-green-900">{guia?.transportista_razon || guia?.ov_transporte_nombre || '(sin razón social)'}</p>
+                      <p className="text-green-700">RUC {guia?.transportista_ruc || guia?.ov_transporte_ruc}{(guia?.transportista_mtc || guia?.ov_transporte_mtc) ? ` · MTC ${guia?.transportista_mtc || guia?.ov_transporte_mtc}` : ''}</p>
+                      <p className="text-muted mt-1">Empresa, vehículos y conductores se toman de la orden ("Transporte y Logística"). Aquí ajustas el registro y los indicadores para esta emisión.</p>
+                    </div>
+
+                    {/* Interruptor registrar veh/cond (Caso 1 ↔ 2/3) */}
+                    <label className="flex items-start gap-2 cursor-pointer border border-gray-200 rounded p-2">
+                      <input type="checkbox" className="mt-1" checked={f.registrar} onChange={(e) => setF('registrar', e.target.checked)} />
+                      <span className="text-xs">
+                        <b>Registrar vehículos y conductores del transportista</b>
+                        <span className="block text-muted">Si lo desactivas, la GRE declara solo al transportista (Caso 1) y él emite su GRE 31.</span>
+                      </span>
+                    </label>
+
+                    {f.registrar ? (
+                      <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
+                        <div className="text-[10px] text-muted uppercase">Se declararán (desde la orden)</div>
+                        {(guia?.ov_transporte_placa || guia?.ov_transporte_placa2)
+                          ? (<>
+                              {guia?.ov_transporte_placa && <div>Veh. principal: <b>{normPlaca(guia.ov_transporte_placa)}</b>{guia?.ov_transporte_tuc ? ` · TUCE ${guia.ov_transporte_tuc}` : ''}{guia?.ov_transporte_autorizacion ? ` · Aut. ${guia.ov_transporte_autorizacion}` : ''}</div>}
+                              {guia?.ov_transporte_placa2 && <div>Veh. secundario: <b>{normPlaca(guia.ov_transporte_placa2)}</b>{guia?.ov_transporte_tuc2 ? ` · TUCE ${guia.ov_transporte_tuc2}` : ''}{guia?.ov_transporte_autorizacion2 ? ` · Aut. ${guia.ov_transporte_autorizacion2}` : ''}</div>}
+                            </>)
+                          : <div className="text-amber-700">Falta la placa del vehículo en la orden.</div>}
+                        {guia?.ov_transporte_dni && <div>Cond. principal: <b>{guia.ov_transporte_conductor}</b> (DNI {guia.ov_transporte_dni}, Lic. {guia.ov_transporte_licencia})</div>}
+                        {guia?.ov_transporte_dni2 && <div>Cond. secundario: <b>{guia.ov_transporte_conductor2}</b> (DNI {guia.ov_transporte_dni2}, Lic. {guia.ov_transporte_licencia2})</div>}
+                        {!guia?.ov_transporte_dni && <div className="text-amber-700">Falta el conductor en la orden.</div>}
+                      </div>
+                    ) : (
+                      <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800">
+                        No se declaran vehículos ni conductores: la GRE declara solo al transportista.
+                      </div>
+                    )}
+
+                    {/* Indicadores (opcional) */}
+                    <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
+                      <div className="text-[10px] text-muted uppercase">Indicadores (opcional)</div>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indTransbordo} onChange={(e) => setF('indTransbordo', e.target.checked)} /> Transbordo programado</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indM1l} onChange={(e) => setF('indM1l', e.target.checked)} /> Traslado en vehículo M1/L</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indRetornoVacio} onChange={(e) => setF('indRetornoVacio', e.target.checked)} /> Retorno con envases/embalajes vacíos</label>
+                    </div>
                   </div>
                 ) : (
                   <Alert type="warning" message="Esta orden no tiene una empresa de transporte con RUC. Regístrala en 'Transporte y Logística' de la orden, o usa otra modalidad." />
@@ -533,13 +589,34 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               <div className="border border-gray-200 rounded p-3">
                 <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><Truck size={12} /> Transporte</div>
-                {resTransporte?.empresa && <div className="flex justify-between gap-2"><span className="text-muted">Empresa:</span><span className="text-right">{resTransporte.empresa} (RUC {resTransporte.ruc})</span></div>}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-                  <div className="flex justify-between gap-2"><span className="text-muted">Conductor:</span><span className="text-right">{resTransporte?.conductor || '—'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">DNI:</span><span className="font-mono">{resTransporte?.dni || '—'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">Licencia:</span><span className="font-mono">{resTransporte?.licencia || '—'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">Placa:</span><span className="font-mono font-bold">{resTransporte?.placa || '—'}</span></div>
-                </div>
+                {resTransporte?.empresa && <div className="flex justify-between gap-2"><span className="text-muted">Empresa:</span><span className="text-right">{resTransporte.empresa} (RUC {resTransporte.ruc}{resTransporte.mtc ? ` · MTC ${resTransporte.mtc}` : ''})</span></div>}
+                {f.transporteModo === 'tercero' ? (
+                  <>
+                    {resTransporte?.fechaEntrega && <div className="flex justify-between gap-2"><span className="text-muted">Fecha entrega al transportista:</span><span>{resTransporte.fechaEntrega}</span></div>}
+                    {resTransporte?.registrar ? (
+                      <>
+                        {(resTransporte.vehiculos || []).map((v, i) => (
+                          <div key={`v${i}`} className="flex justify-between gap-2"><span className="text-muted">{i === 0 ? 'Veh. principal:' : 'Veh. secundario:'}</span><span className="font-mono text-right">{v.placa}{v.tuce ? ` · TUCE ${v.tuce}` : ''}{v.autorizacion ? ` · Aut. ${v.autorizacion}` : ''}</span></div>
+                        ))}
+                        {(resTransporte.conductores || []).map((c, i) => (
+                          <div key={`c${i}`} className="flex justify-between gap-2"><span className="text-muted">{i === 0 ? 'Cond. principal:' : 'Cond. secundario:'}</span><span className="text-right">{c.nombre} (DNI {c.dni}, Lic. {c.licencia})</span></div>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="text-amber-700 text-xs mt-1">Solo se declara al transportista (Caso 1); él emite su GRE Transportista (31).</div>
+                    )}
+                    {(resTransporte?.indicadores?.transbordo || resTransporte?.indicadores?.m1l || resTransporte?.indicadores?.retornoVacio) && (
+                      <div className="flex justify-between gap-2"><span className="text-muted">Indicadores:</span><span className="text-right">{[resTransporte.indicadores.transbordo && 'Transbordo', resTransporte.indicadores.m1l && 'M1/L', resTransporte.indicadores.retornoVacio && 'Retorno vacíos'].filter(Boolean).join(', ')}</span></div>
+                    )}
+                  </>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                    <div className="flex justify-between gap-2"><span className="text-muted">Conductor:</span><span className="text-right">{resTransporte?.conductor || '—'}</span></div>
+                    <div className="flex justify-between gap-2"><span className="text-muted">DNI:</span><span className="font-mono">{resTransporte?.dni || '—'}</span></div>
+                    <div className="flex justify-between gap-2"><span className="text-muted">Licencia:</span><span className="font-mono">{resTransporte?.licencia || '—'}</span></div>
+                    <div className="flex justify-between gap-2"><span className="text-muted">Placa:</span><span className="font-mono font-bold">{resTransporte?.placa || '—'}</span></div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

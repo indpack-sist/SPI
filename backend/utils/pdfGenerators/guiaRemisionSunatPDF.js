@@ -29,11 +29,18 @@ const MOTIVOS_TRASLADO = {
  * @param {object} p.emisor    empresa_config
  * @param {object} p.cliente   destinatario { razon_social, ruc }
  * @param {Array}  p.detalle   [{ codigo, nombre, cantidad, codigo_unidad_sunat }]
- * @param {object|null} p.conductor  { nombre_completo, dni, licencia_conducir }
+ * @param {object|null} p.conductor  { nombre_completo, dni, licencia_conducir } (legacy; usar p.conductores)
+ * @param {Array}  [p.conductores] [{ nombre_completo|nombre, dni, licencia_conducir|licencia }] (1-2)
+ * @param {Array}  [p.vehiculos]   [{ placa, tuce, autorizacion }] (1-2)
+ * @param {object|null} [p.transportista] { razon, ruc, mtc } (solo tercero/público)
+ * @param {boolean} [p.registrar=true] tercero: 1=registró veh/cond (Caso 2/3); 0=solo transportista (Caso 1)
+ * @param {object} [p.indicadores] { transbordo, m1l, retornoVacio } booleans
+ * @param {string|null} [p.modalidad] '01' público | '02' privado
+ * @param {string|null} [p.fechaEntrega] fecha entrega de bienes al transportista (dd/mm/yyyy o ISO)
  * @param {Buffer} p.qrBuffer  PNG del QR con la URL de SUNAT
  * @returns {Promise<Buffer>}
  */
-export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, qrBuffer }) {
+export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, qrBuffer }) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 30, left: 30, right: 30 } });
@@ -87,19 +94,59 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       doc.roundedRect(33, boxDestTop, 529, boxDestH, 3).stroke('#000');
       y = boxDestTop + boxDestH + 8;
 
+      // ── Normalización de transporte (soporta 3 casos + legacy conductor/placa) ──
+      const esTercero = !!(transportista && transportista.ruc);
+      const conds = (Array.isArray(conductores) && conductores.length)
+        ? conductores
+        : (conductor ? [conductor] : []);
+      const vehs = (Array.isArray(vehiculos) && vehiculos.length)
+        ? vehiculos
+        : (g.placa ? [{ placa: g.placa }] : []);
+      const si = (b) => (b ? 'SÍ' : 'NO');
+
       // ── Datos del traslado (flujo dinámico, full-width) ──
       const boxTrasTop = y;
       const motivo = MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO';
+      const modalidadTxt = (modalidad === '01' || esTercero) ? 'PÚBLICO (transporte por tercero)' : 'PRIVADO';
       let yt = boxTrasTop + pad;
       yt = campo('Motivo de traslado:', `${g.motivo_traslado_cod} - ${motivo}`, 40, 155, 405, yt);
+      yt = campo('Modalidad de traslado:', modalidadTxt, 40, 155, 405, yt);
       yt = campo('Peso bruto total:', `${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 40, 155, 405, yt);
       yt = campo('Punto de partida:', `[${g.ubigeo_partida}] ${g.direccion_partida || '-'}`, 40, 155, 405, yt);
       yt = campo('Punto de llegada:', `[${g.ubigeo_llegada}] ${g.direccion_llegada || '-'}`, 40, 155, 405, yt);
-      if (conductor) {
-        yt = campo('Conductor / Placa:',
-          `${conductor.nombre_completo || '-'} (DNI ${conductor.dni || '-'}, Lic. ${conductor.licencia_conducir || '-'})  ·  Placa ${g.placa || '-'}`,
+
+      // Indicadores SUNAT (siempre se listan; SÍ/NO).
+      yt = campo('Ind. transbordo programado:', si(indicadores.transbordo), 40, 260, 300, yt);
+      yt = campo('Ind. traslado en vehículo M1/L:', si(indicadores.m1l), 40, 260, 300, yt);
+      yt = campo('Ind. retorno con envases/embalajes vacíos:', si(indicadores.retornoVacio), 40, 300, 260, yt);
+
+      if (esTercero) {
+        // Indicador propio del tercero + datos del transportista (Caso 1/2/3).
+        yt = campo('Ind. registrar veh./cond. del transportista:', si(registrar), 40, 300, 260, yt);
+        yt = campo('Transportista:',
+          `${transportista.razon || '-'}  ·  RUC ${transportista.ruc}${transportista.mtc ? `  ·  MTC ${transportista.mtc}` : ''}`,
           40, 155, 405, yt);
+        if (fechaEntrega) yt = campo('Fecha entrega al transportista:', fechaEntrega, 40, 220, 340, yt);
       }
+
+      // Datos de los vehículos (principal + secundario, con TUCE/autorización si aplican).
+      vehs.forEach((v, i) => {
+        const partes = [
+          v.placa ? `Placa ${v.placa}` : null,
+          v.tuce ? `TUCE ${v.tuce}` : null,
+          v.autorizacion ? `Autoriz. MTC ${v.autorizacion}` : null,
+        ].filter(Boolean).join('  ·  ');
+        yt = campo(i === 0 ? 'Vehículo principal:' : 'Vehículo secundario:', partes || '-', 40, 155, 405, yt);
+      });
+
+      // Datos de los conductores (principal + secundario).
+      conds.forEach((c, i) => {
+        const nom = c.nombre_completo || c.nombre || '-';
+        const lic = c.licencia_conducir || c.licencia || '-';
+        yt = campo(i === 0 ? 'Conductor principal:' : 'Conductor secundario:',
+          `${nom} (DNI ${c.dni || '-'}, Lic. ${lic})`, 40, 155, 405, yt);
+      });
+
       const boxTrasH = (yt + 4) - boxTrasTop;
       doc.roundedRect(33, boxTrasTop, 529, boxTrasH, 3).stroke('#000');
       y = boxTrasTop + boxTrasH + 8;

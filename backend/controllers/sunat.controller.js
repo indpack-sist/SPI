@@ -236,7 +236,8 @@ export async function emitirComprobante(req, res, next) {
       const qr = generarQr({
         ruc: sunatConfig.ruc, tipo, serie, numero,
         igv: totales.igv, total: totales.total, fechaEmision: emision,
-        tipoDocCliente: esExport ? '0' : '6', numDocCliente: cliente.ruc || '0'
+        tipoDocCliente: esExport ? '0' : '6', numDocCliente: cliente.ruc || '0',
+        hash: digestValue
       });
 
       const [ins] = await conn.query(
@@ -620,7 +621,8 @@ export async function emitirNota(req, res, next) {
         ruc: sunatConfig.ruc, tipo, serie, numero,
         igv: totales.igv, total: totales.total, fechaEmision: emision,
         tipoDocCliente: String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? '6' : '0',
-        numDocCliente: cliente.ruc || '0'
+        numDocCliente: cliente.ruc || '0',
+        hash: digestValue
       });
 
       const [ins] = await conn.query(
@@ -977,8 +979,23 @@ export async function emitirGuiaRemision(req, res, next) {
         if (t.id_vehiculo) { sets.push('id_vehiculo = ?'); vals.push(Number(t.id_vehiculo)); }
         sets.push('transporte_modo = ?', 'transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL', 'id_transportista = NULL');
         vals.push('flota');
+      } else if (modo === 'tercero') {
+        // La empresa de transporte + detalle veh/cond viven en la OV ("Transporte y Logística").
+        // El wizard sí puede ajustar por-emisión el interruptor "registrar vehículos y conductores
+        // del transportista" (Caso 1 ↔ 2/3) y los indicadores; se persisten en la OV (fuente única).
+        const ovSets = [], ovVals = [];
+        if (t.registrar !== undefined) { ovSets.push('transporte_registrar = ?'); ovVals.push(t.registrar ? 1 : 0); }
+        if (t.indicadores && typeof t.indicadores === 'object') {
+          ovSets.push('transporte_ind_transbordo = ?', 'transporte_ind_m1l = ?', 'transporte_ind_retorno_vacio = ?');
+          ovVals.push(t.indicadores.transbordo ? 1 : 0, t.indicadores.m1l ? 1 : 0, t.indicadores.retornoVacio ? 1 : 0);
+        }
+        if (ovSets.length) {
+          ovVals.push(idGuia);
+          await pool.query(
+            `UPDATE ordenes_venta ov JOIN guias_remision g ON g.id_orden_venta = ov.id_orden_venta
+                SET ${ovSets.join(', ')} WHERE g.id_guia = ?`, ovVals);
+        }
       }
-      // 'tercero' se mantiene tal cual lo dejó la creación de la guía (id_transportista + datos de la OV).
     }
 
     if (sets.length) {
@@ -1235,8 +1252,16 @@ export async function generarPdfGuia(req, res, next) {
       "SELECT g.*, DATE_FORMAT(COALESCE(g.fecha_emision, g.sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
       "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente, " +
       "ov.transporte_placa AS ov_transporte_placa, ov.transporte_conductor AS ov_transporte_conductor, " +
-      "ov.transporte_dni AS ov_transporte_dni, ov.transporte_licencia AS ov_transporte_licencia " +
-      "FROM guias_remision g LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = g.id_orden_venta WHERE g.id_guia = ?",
+      "ov.transporte_dni AS ov_transporte_dni, ov.transporte_licencia AS ov_transporte_licencia, " +
+      "ov.transporte_dni2 AS ov_transporte_dni2, ov.transporte_conductor2 AS ov_transporte_conductor2, ov.transporte_licencia2 AS ov_transporte_licencia2, " +
+      "ov.transporte_tuc AS ov_transporte_tuc, ov.transporte_autorizacion AS ov_transporte_autorizacion, " +
+      "ov.transporte_placa2 AS ov_transporte_placa2, ov.transporte_tuc2 AS ov_transporte_tuc2, ov.transporte_autorizacion2 AS ov_transporte_autorizacion2, " +
+      "ov.transporte_registrar AS ov_transporte_registrar, " +
+      "ov.transporte_ind_transbordo AS ov_ind_transbordo, ov.transporte_ind_m1l AS ov_ind_m1l, ov.transporte_ind_retorno_vacio AS ov_ind_retorno_vacio, " +
+      "DATE_FORMAT(ov.transporte_fecha_entrega, '%d/%m/%Y') AS ov_transporte_fecha_entrega, " +
+      "t.razon_social AS transportista_razon, t.ruc AS transportista_ruc, t.numero_mtc AS transportista_mtc " +
+      "FROM guias_remision g LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = g.id_orden_venta " +
+      "LEFT JOIN transportistas t ON t.id_transportista = g.id_transportista WHERE g.id_guia = ?",
       [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     // Se imprime la GRE ACEPTADA y también las invalidadas (ANULADA/REEMPLAZADA), estas últimas
@@ -1258,24 +1283,39 @@ export async function generarPdfGuia(req, res, next) {
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
 
-    // Conductor + placa según el MODO con que se emitió, para que el PDF muestre EXACTAMENTE lo enviado:
-    //   · particular → texto libre de la guía · tercero → datos de la OV · flota → empleados/flota.
-    let conductor = null, placaPdf = null;
+    // Transporte según el MODO con que se emitió, para que el PDF muestre EXACTAMENTE lo enviado:
+    //   · particular → texto libre de la guía · tercero → datos de la OV + maestro transportistas
+    //   · flota → empleados/flota. Se arman conductores[] y vehiculos[] (1-2) + indicadores + registrar.
+    let transportistaPdf = null, conductores = [], vehiculosPdf = [], indicadoresPdf = {};
+    let registrarPdf = true, modalidadPdf = null, fechaEntregaPdf = null;
     if (g.transporte_modo === 'particular' || g.transporte_placa) {
-      conductor = { dni: g.transporte_dni, nombre_completo: g.transporte_conductor, licencia_conducir: g.transporte_licencia };
-      placaPdf = normalizarPlaca(g.transporte_placa);
+      modalidadPdf = '02';
+      conductores = g.transporte_dni ? [{ dni: g.transporte_dni, nombre_completo: g.transporte_conductor, licencia_conducir: g.transporte_licencia }] : [];
+      vehiculosPdf = g.transporte_placa ? [{ placa: normalizarPlaca(g.transporte_placa) }] : [];
     } else if (g.id_transportista) {
-      conductor = { dni: g.ov_transporte_dni, nombre_completo: g.ov_transporte_conductor, licencia_conducir: g.ov_transporte_licencia };
-      placaPdf = normalizarPlaca(g.ov_transporte_placa);
+      modalidadPdf = '01';
+      transportistaPdf = { razon: g.transportista_razon, ruc: g.transportista_ruc, mtc: g.transportista_mtc };
+      registrarPdf = g.ov_transporte_registrar !== 0;
+      indicadoresPdf = { transbordo: !!g.ov_ind_transbordo, m1l: !!g.ov_ind_m1l, retornoVacio: !!g.ov_ind_retorno_vacio };
+      fechaEntregaPdf = g.ov_transporte_fecha_entrega || null;
+      if (registrarPdf) {
+        if (g.ov_transporte_dni) conductores.push({ dni: g.ov_transporte_dni, nombre_completo: g.ov_transporte_conductor, licencia_conducir: g.ov_transporte_licencia });
+        if (g.ov_transporte_dni2) conductores.push({ dni: g.ov_transporte_dni2, nombre_completo: g.ov_transporte_conductor2, licencia_conducir: g.ov_transporte_licencia2 });
+        const p1 = normalizarPlaca(g.ov_transporte_placa);
+        if (p1) vehiculosPdf.push({ placa: p1, tuce: g.ov_transporte_tuc || null, autorizacion: g.ov_transporte_autorizacion || null });
+        const p2 = normalizarPlaca(g.ov_transporte_placa2);
+        if (p2) vehiculosPdf.push({ placa: p2, tuce: g.ov_transporte_tuc2 || null, autorizacion: g.ov_transporte_autorizacion2 || null });
+      }
     } else {
+      modalidadPdf = '02';
       const [[cRow]] = g.id_conductor
         ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
         : [[null]];
       const [[vRow]] = g.id_vehiculo
         ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
         : [[null]];
-      conductor = cRow || null;
-      placaPdf = normalizarPlaca(vRow?.placa || g.placa_vehiculo || g.placa);
+      conductores = cRow ? [cRow] : [];
+      vehiculosPdf = vRow?.placa ? [{ placa: normalizarPlaca(vRow.placa) }] : [];
     }
     const [detalle] = await pool.query(
       'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
@@ -1290,14 +1330,16 @@ export async function generarPdfGuia(req, res, next) {
         ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
         sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,
-        placa: placaPdf,
         // Muestra lo PERSISTIDO (== cbc:Note enviado) si la guía ya lo tiene; si no, compone con la OC.
         observaciones: (g.observaciones != null && g.observaciones !== '')
           ? g.observaciones
           : componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
-      emisor, cliente, detalle, conductor, qrBuffer
+      emisor, cliente, detalle,
+      transportista: transportistaPdf, conductores, vehiculos: vehiculosPdf,
+      indicadores: indicadoresPdf, registrar: registrarPdf, modalidad: modalidadPdf, fechaEntrega: fechaEntregaPdf,
+      qrBuffer
     });
 
     if (process.env.SUNAT_PDF_SKIP_UPLOAD !== '1') {

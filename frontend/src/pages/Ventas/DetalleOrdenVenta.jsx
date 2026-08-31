@@ -168,6 +168,16 @@ function DetalleOrdenVenta() {
     transporte_tuc2: '',
     transporte_autorizacion2: '',
     transporte_fecha_entrega: '',
+    // Interruptor "registrar vehículos y conductores del transportista" (Caso 1 ↔ 2/3). Default Sí.
+    transporte_registrar: true,
+    // Conductor secundario (opcional).
+    transporte_dni2: '',
+    transporte_conductor2: '',
+    transporte_licencia2: '',
+    // Indicadores SUNAT (opcionales).
+    transporte_ind_transbordo: false,
+    transporte_ind_m1l: false,
+    transporte_ind_retorno_vacio: false,
     fecha_entrega_estimada: ''
   });
 
@@ -802,6 +812,13 @@ function DetalleOrdenVenta() {
       transporte_tuc2: orden.transporte_tuc2 || '',
       transporte_autorizacion2: orden.transporte_autorizacion2 || '',
       transporte_fecha_entrega: orden.transporte_fecha_entrega ? orden.transporte_fecha_entrega.split('T')[0] : '',
+      transporte_registrar: orden.transporte_registrar === 0 ? false : true,
+      transporte_dni2: orden.transporte_dni2 || '',
+      transporte_conductor2: orden.transporte_conductor2 || '',
+      transporte_licencia2: orden.transporte_licencia2 || '',
+      transporte_ind_transbordo: !!orden.transporte_ind_transbordo,
+      transporte_ind_m1l: !!orden.transporte_ind_m1l,
+      transporte_ind_retorno_vacio: !!orden.transporte_ind_retorno_vacio,
       fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
     });
     setModalTransporteOpen(true);
@@ -4371,6 +4388,29 @@ function DetalleOrdenVenta() {
                     placeholder="Razón social del transportista"
                   />
                 </div>
+
+                {/* Interruptor: registrar vehículos y conductores del transportista (Caso 1 ↔ 2/3) */}
+                <div className="rounded-md border border-gray-200 p-2">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={transporteForm.transporte_registrar}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_registrar: e.target.checked })}
+                    />
+                    <span className="text-sm">
+                      <b>Registrar vehículos y conductores del transportista</b>
+                      <span className="block text-xs text-muted">
+                        Actívalo si hay acuerdo con el transportista para declarar aquí sus vehículos y conductores;
+                        en ese caso NO se emite GRE Transportista (RS 255-2015/SUNAT, art. 3, num. 3.1). Si lo
+                        desactivas, la GRE declara solo al transportista y él emite su propia GRE (31).
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {transporteForm.transporte_registrar && (
+                <>
                 <p className="text-xs font-semibold text-gray-600 mt-1">Vehículo principal *</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="form-group">
@@ -4469,6 +4509,78 @@ function DetalleOrdenVenta() {
                     placeholder="Nº Licencia"
                     maxLength={20}
                   />
+                </div>
+                <p className="text-xs font-semibold text-gray-600 mt-1">Conductor secundario (opcional)</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">DNI Chofer</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_dni2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni2: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                      placeholder="8 dígitos"
+                      maxLength={8}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nombre Chofer</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_conductor2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor2: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Licencia</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={transporteForm.transporte_licencia2}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia2: e.target.value })}
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+                </>
+                )}
+
+                {!transporteForm.transporte_registrar && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800">
+                    No se registran vehículos ni conductores: la GRE declara <b>solo al transportista</b>.
+                    El transportista deberá emitir su propia <b>GRE Transportista (31)</b>.
+                  </div>
+                )}
+
+                {/* Indicadores SUNAT (opcionales) */}
+                <div className="rounded-md border border-gray-200 p-2 space-y-1">
+                  <p className="text-xs font-semibold text-gray-600">Indicadores (opcional)</p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={transporteForm.transporte_ind_transbordo}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_ind_transbordo: e.target.checked })}
+                    />
+                    Transbordo programado
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={transporteForm.transporte_ind_m1l}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_ind_m1l: e.target.checked })}
+                    />
+                    Traslado en vehículo categoría M1 o L
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={transporteForm.transporte_ind_retorno_vacio}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_ind_retorno_vacio: e.target.checked })}
+                    />
+                    Retorno de vehículo con envases o embalajes vacíos
+                  </label>
+                  <p className="text-[11px] text-amber-700">Los 3 indicadores están pendientes de confirmar contra el Anexo SUNAT antes de usarse en producción.</p>
                 </div>
               </>
             )}

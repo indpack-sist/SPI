@@ -167,7 +167,10 @@ export function construirDespatchAdviceXML(d) {
   };
   const ind = d.indicadores || {};
   const indicadores = [];
-  if (esTercero && registrar) indicadores.push(IND.registrarTransp);
+  // NOTA: el indicador SUNAT_Envio_IndicadorVehiculoConductoresTransp NO se auto-emite. Los 3 XML
+  // del portal SUNAT (EG07-81/220/309), incluidos los Casos 2 y 3 con vehículo+conductor declarados,
+  // NO lo llevan. Se deja detrás de un flag explícito (ind.registrarTransp) por si algún día se requiere.
+  if (ind.registrarTransp) indicadores.push(IND.registrarTransp);
   if (ind.transbordo) indicadores.push(IND.transbordo);
   if (ind.m1l) indicadores.push(IND.m1l);
   if (ind.retornoVacio) indicadores.push(IND.retornoVacio);

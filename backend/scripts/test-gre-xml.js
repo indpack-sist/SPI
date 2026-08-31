@@ -130,8 +130,9 @@ const dt = parser.parse(xmlT).DespatchAdvice;
 const shipT = dt?.Shipment;
 const stageT = shipT?.ShipmentStage;
 check('TransportModeCode = 01 (público)', String(stageT?.TransportModeCode?.['#text']) === '01');
-check('SpecialInstructions (indicador vehículos/conductores)',
-  String(shipT?.SpecialInstructions || '').includes('IndicadorVehiculoConductoresTransp'));
+// El portal SUNAT (EG07-220/309, Casos 2 y 3 con veh+cond) NO emite este indicador → el builder tampoco.
+check('SIN SpecialInstructions auto (patrón portal EG07-220/309)',
+  !String(shipT?.SpecialInstructions || '').includes('IndicadorVehiculoConductoresTransp'));
 check('LoadingTransportEvent (fecha entrega al transportista)',
   String(stageT?.LoadingTransportEvent?.OccurrenceDate) === '2026-08-27');
 check('CarrierParty RUC transportista', String(stageT?.CarrierParty?.PartyIdentification?.ID?.['#text']) === '20611807555');
@@ -192,7 +193,9 @@ const { xml: xmlI } = construirDespatchAdviceXML(datosInd);
 check('XML indicadores bien-formado', XMLValidator.validate(xmlI) === true);
 const siList = parser.parse(xmlI).DespatchAdvice?.Shipment?.SpecialInstructions;
 const siArr = Array.isArray(siList) ? siList : [siList];
-check('4 SpecialInstructions (registrar + 3 indicadores)', siArr.length === 4, `n=${siArr.length}`);
+// Solo los 3 indicadores opcionales explícitos; el de vehículos/conductores ya no se auto-emite (patrón portal).
+check('3 SpecialInstructions (solo indicadores explícitos)', siArr.length === 3, `n=${siArr.length}`);
+check('SIN indicador vehículos/conductores auto', !siArr.some((s) => String(s).includes('IndicadorVehiculoConductoresTransp')));
 check('Incluye transbordo', siArr.some((s) => String(s).includes('Transbordo')));
 check('Incluye M1L', siArr.some((s) => String(s).includes('VehiculoM1L')));
 check('Incluye retorno vacíos', siArr.some((s) => String(s).includes('RetornoVehiculoEnvaseVacio')));

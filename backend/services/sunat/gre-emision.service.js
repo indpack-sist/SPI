@@ -216,9 +216,10 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       conductores = []; vehiculos = [];
     }
 
-    // Fecha de entrega de bienes al transportista (LoadingTransportEvent, solo tercero); si no se
-    // capturó, se usa la fecha de traslado.
-    const fechaEntregaTransportista = esTercero ? (ov.transporte_fecha_entrega || fechaTraslado) : null;
+    // Fecha de entrega de bienes al transportista (LoadingTransportEvent, solo tercero). Los 3 XML del
+    // portal SUNAT NO emiten este nodo, así que NO se rellena por defecto: solo si el usuario capturó
+    // explícitamente una fecha de entrega en la OV (sin fallback a fechaTraslado, que lo forzaba siempre).
+    const fechaEntregaTransportista = (esTercero && ov.transporte_fecha_entrega) ? ov.transporte_fecha_entrega : null;
 
     // Observación → cbc:Note. Si el panel envía `observaciones` (editable, prellenado con la OC),
     // se usa TAL CUAL y se persiste en la guía (el PDF luego muestra lo persistido = lo enviado).

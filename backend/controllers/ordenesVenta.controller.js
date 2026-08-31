@@ -2956,7 +2956,10 @@ export async function actualizarDatosTransporte(req, res) {
         }
       }
       
-    } else if (tipo_entrega === 'Transporte Privado') {
+    } else if (tipo_entrega === 'Transporte Privado' || tipo_entrega === 'Vehiculo Particular') {
+      // 'Transporte Privado'  = empresa de transporte tercero (modalidad 01 pública, requiere RUC).
+      // 'Vehiculo Particular' = carro común del cliente SIN RUC (modalidad 02 privada, texto libre):
+      //   solo conductor + DNI + licencia + placa; no lleva RUC/MTC/TUC/autorización/2º vehículo.
       transNombreFinal = transporte_nombre || null;
       transPlacaFinal = transporte_placa || null;
       transCondFinal = transporte_conductor || null;
@@ -2968,10 +2971,12 @@ export async function actualizarDatosTransporte(req, res) {
     // El RUC + razón social + placa + conductor + licencia van al XML de la GRE; el MTC (empresa)
     // en cbc:CompanyID y el TUC (certificado del vehículo) en RegistrationNationalityID.
     const esTercero = tipo_entrega === 'Transporte Privado';
+    const esParticular = tipo_entrega === 'Vehiculo Particular';
     const transRucFinal = esTercero ? (transporte_ruc || null) : null;
     const transMtcFinal = esTercero ? (transporte_mtc || null) : null;
     const transTucFinal = esTercero ? (transporte_tuc || null) : null;
-    const transLicFinal = esTercero ? (transporte_licencia || null) : null;
+    // La licencia aplica tanto al tercero como al carro particular del cliente.
+    const transLicFinal = (esTercero || esParticular) ? (transporte_licencia || null) : null;
     const transAutFinal = esTercero ? (transporte_autorizacion || null) : null;
     const transPlaca2Final = esTercero ? (transporte_placa2 || null) : null;
     const transTuc2Final = esTercero ? (transporte_tuc2 || null) : null;

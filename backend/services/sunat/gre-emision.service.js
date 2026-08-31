@@ -12,7 +12,7 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima, ahoraLima } from './fecha.service.js';
-import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia } from './util.service.js';
+import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from './util.service.js';
 import AppError from '../../utils/AppError.js';
 
 // ── FASE 12: reconciliación de reemplazo ────────────────────────────────────
@@ -133,6 +133,13 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       }];
       const placa2 = normalizarPlaca(ov.transporte_placa2);
       if (placa2) vehiculos.push({ placa: placa2, tuce: ov.transporte_tuc2 || null, autorizacion: ov.transporte_autorizacion2 || null });
+    } else if (g.transporte_modo === 'particular' || g.transporte_placa) {
+      // Modalidad 02 (privado) con vehículo/conductor de TEXTO LIBRE: el cliente (o un particular
+      // que NO es empresa de transporte) traslada con su propio carro/camioneta. Estructura idéntica
+      // al vehículo propio (DriverPerson + TransportEquipment, SIN CarrierParty). Calcado del XML
+      // aceptado docs/20550932297-09-EG07-256.xml.
+      conductor = { dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia };
+      vehiculos = [{ placa: normalizarPlaca(g.transporte_placa), tuce: null, autorizacion: null }];
     } else {
       const [[cRow]] = g.id_conductor
         ? await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
@@ -163,11 +170,24 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     if (!conductor?.dni || !conductor?.nombre || !conductor?.licencia) {
       throw new AppError('Faltan datos del conductor (DNI, nombre y licencia de conducir)', 422);
     }
+    // Validación de FORMATO (corre antes de reservar el correlativo → un dato mal formado NO lo quema).
+    if (!dniValido(conductor.dni)) {
+      throw new AppError(`DNI del conductor inválido: "${conductor.dni}" (deben ser 8 dígitos)`, 422);
+    }
+    // Ubigeos de partida/llegada: 6 dígitos (catálogo INEI). Ya se validó que no sean nulos arriba.
+    if (!ubigeoValido(g.ubigeo_partida)) throw new AppError(`Ubigeo de partida inválido: "${g.ubigeo_partida}" (6 dígitos)`, 422);
+    if (!ubigeoValido(g.ubigeo_llegada)) throw new AppError(`Ubigeo de llegada inválido: "${g.ubigeo_llegada}" (6 dígitos)`, 422);
     // Placa del vehículo principal normalizada. En PROD es obligatoria; en BETA se usa un
     // placeholder solo para el mock (no válido en PROD).
     if (!vehiculos[0]?.placa) {
       if (sunatConfig.mode === 'PROD') throw new AppError('Falta la placa del vehículo', 422);
       vehiculos = [{ placa: 'XXX000', tuce: null, autorizacion: null }];
+    } else if (!placaValida(vehiculos[0].placa)) {
+      throw new AppError(`Placa inválida: "${vehiculos[0].placa}" (6 a 8 caracteres alfanuméricos; el guion y los espacios se ignoran)`, 422);
+    }
+    // Placa del vehículo secundario (carreta) si viene: mismo formato.
+    if (vehiculos[1]?.placa && !placaValida(vehiculos[1].placa)) {
+      throw new AppError(`Placa del vehículo secundario inválida: "${vehiculos[1].placa}" (6 a 8 caracteres alfanuméricos)`, 422);
     }
 
     // Fecha de entrega de bienes al transportista (LoadingTransportEvent, solo tercero); si no se

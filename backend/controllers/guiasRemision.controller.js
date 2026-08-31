@@ -107,18 +107,37 @@ export async function getGuiaRemisionById(req, res) {
     const { id } = req.params;
     
     const guiaResult = await executeQuery(`
-      SELECT 
+      SELECT
         gr.*,
         ov.numero_orden,
         ov.id_orden_venta,
         ov.estado AS estado_orden,
         ov.orden_compra_cliente,
+        ov.tipo_entrega AS ov_tipo_entrega,
+        ov.transporte_nombre AS ov_transporte_nombre,
+        ov.transporte_ruc AS ov_transporte_ruc,
+        ov.transporte_mtc AS ov_transporte_mtc,
+        ov.transporte_placa AS ov_transporte_placa,
+        ov.transporte_conductor AS ov_transporte_conductor,
+        ov.transporte_dni AS ov_transporte_dni,
+        ov.transporte_licencia AS ov_transporte_licencia,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
-        cl.direccion_despacho AS direccion_cliente
+        cl.direccion_despacho AS direccion_cliente,
+        emp.nombre_completo AS conductor_flota_nombre,
+        emp.dni AS conductor_flota_dni,
+        emp.licencia_conducir AS conductor_flota_licencia,
+        fl.placa AS vehiculo_flota_placa,
+        fl.marca_modelo AS vehiculo_flota_marca,
+        tr.razon_social AS transportista_razon,
+        tr.ruc AS transportista_ruc,
+        tr.numero_mtc AS transportista_mtc
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
+      LEFT JOIN empleados emp ON gr.id_conductor = emp.id_empleado
+      LEFT JOIN flota fl ON gr.id_vehiculo = fl.id_vehiculo
+      LEFT JOIN transportistas tr ON gr.id_transportista = tr.id_transportista
       WHERE gr.id_guia = ?
     `, [id]);
     
@@ -264,7 +283,11 @@ export async function createGuiaRemision(req, res) {
         ov.tipo_entrega,
         ov.transporte_nombre,
         ov.transporte_ruc,
-        ov.transporte_mtc
+        ov.transporte_mtc,
+        ov.transporte_placa,
+        ov.transporte_conductor,
+        ov.transporte_dni,
+        ov.transporte_licencia
       FROM ordenes_venta ov
       WHERE ov.id_orden_venta = ?
     `, [id_orden_venta]);
@@ -329,10 +352,19 @@ export async function createGuiaRemision(req, res) {
     // La presencia de un transportista define la modalidad pública: en ese caso NO se hereda
     // el conductor/vehículo de la OV (evita datos que harían derivar modalidad privada al emitir).
     const esPublico = !!idTransportistaFinal;
+    // Carro particular del cliente (sin RUC): modalidad 02 privada con conductor/placa de TEXTO LIBRE
+    // heredados de la OV. No usa flota ni transportista.
+    const esParticular = orden.tipo_entrega === 'Vehiculo Particular';
     // Herencia de transporte: si el request no especifica conductor/vehículo, usar el
     // asignado en la orden de venta (la OV ya los captura a su nivel).
-    const idConductorFinal = esPublico ? null : (id_conductor || orden.id_conductor || null);
-    const idVehiculoFinal = esPublico ? null : (id_vehiculo || orden.id_vehiculo || null);
+    const idConductorFinal = (esPublico || esParticular) ? null : (id_conductor || orden.id_conductor || null);
+    const idVehiculoFinal = (esPublico || esParticular) ? null : (id_vehiculo || orden.id_vehiculo || null);
+    // Datos de transporte de texto libre para la guía (solo modo particular).
+    const modoGuia = esPublico ? 'tercero' : (esParticular ? 'particular' : 'flota');
+    const guiaTransportePlaca = esParticular ? (orden.transporte_placa || null) : null;
+    const guiaTransporteConductor = esParticular ? (orden.transporte_conductor || null) : null;
+    const guiaTransporteDni = esParticular ? (orden.transporte_dni || null) : null;
+    const guiaTransporteLicencia = esParticular ? (orden.transporte_licencia || null) : null;
 
     // Punto de partida por defecto = dirección fiscal de la empresa (empresa_config). El origen
     // real de un traslado por venta es el domicilio fiscal; si el request llega sin dirección/ubigeo
@@ -432,8 +464,13 @@ export async function createGuiaRemision(req, res) {
         id_vehiculo,
         id_transportista,
         motivo_traslado_cod,
+        transporte_modo,
+        transporte_placa,
+        transporte_conductor,
+        transporte_dni,
+        transporte_licencia,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
@@ -456,7 +493,12 @@ export async function createGuiaRemision(req, res) {
       idConductorFinal,
       idVehiculoFinal,
       idTransportistaFinal,
-      motivoCod
+      motivoCod,
+      modoGuia,
+      guiaTransportePlaca,
+      guiaTransporteConductor,
+      guiaTransporteDni,
+      guiaTransporteLicencia
     ]);
     
     if (!result.success) {

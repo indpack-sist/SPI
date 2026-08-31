@@ -1291,7 +1291,9 @@ export const sunatAPI = {
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
   // Guías de remisión (GRE Remitente 09) + Fase 12 (sin efecto / reemplazo).
-  emitirGuia: (id, observaciones) => api.post(`/sunat/guias/${id}/emitir`, observaciones !== undefined ? { observaciones } : {}),
+  // payload del wizard de emisión: { observaciones, direccion_llegada, ubigeo_llegada, ciudad_llegada,
+  // peso_bruto_kg, motivo_traslado_cod, es_comercio_exterior, transporte:{ modo, placa, dni, conductor, licencia, id_conductor, id_vehiculo } }
+  emitirGuia: (id, payload = {}) => api.post(`/sunat/guias/${id}/emitir`, payload || {}),
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
   dejarSinEfectoGuia: (id, motivo) => api.post(`/sunat/guias/${id}/sin-efecto`, { motivo }),
   reemplazarGuia: (id, correcciones = {}) => api.post(`/sunat/guias/${id}/reemplazar`, { correcciones }),

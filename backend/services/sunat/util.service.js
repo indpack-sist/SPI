@@ -31,6 +31,31 @@ export function normalizarPlaca(placa) {
 }
 
 /**
+ * Valida la placa YA normalizada (sin guion/espacios). Las placas peruanas del MTC son alfanuméricas
+ * de 6 caracteres (autos/camionetas: "B2Q671", "AVZ890") y hasta 7-8 en casos especiales (remolques,
+ * placas antiguas). Aceptamos 6–8 alfanuméricos. Devuelve true/false. Úsese sobre normalizarPlaca().
+ */
+export function placaValida(placa) {
+  const s = normalizarPlaca(placa);
+  return !!s && /^[A-Z0-9]{6,8}$/.test(s);
+}
+
+/** DNI: exactamente 8 dígitos. */
+export function dniValido(dni) {
+  return /^\d{8}$/.test(String(dni || '').trim());
+}
+
+/** RUC: exactamente 11 dígitos. */
+export function rucValido(ruc) {
+  return /^\d{11}$/.test(String(ruc || '').trim());
+}
+
+/** Ubigeo INEI: exactamente 6 dígitos. */
+export function ubigeoValido(ubigeo) {
+  return /^\d{6}$/.test(String(ubigeo || '').trim());
+}
+
+/**
  * Observación por defecto de un comprobante (factura/GRE): concatena el texto libre con la orden
  * de compra del cliente (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones"
  * y viaja en cbc:Note. Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de

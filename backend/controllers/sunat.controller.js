@@ -11,7 +11,7 @@ import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gr
 import { anularGuiaRemision, reemplazarGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
-import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia } from '../services/sunat/util.service.js';
+import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from '../services/sunat/util.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
@@ -375,6 +375,19 @@ export async function previewComprobante(req, res, next) {
 
     const calc = calcularComprobante({ ov, detalle });
 
+    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [ov.id_cliente]);
+    const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+
+    // La OC viaja como campo propio (cac:OrderReference). Si las observaciones de la OV solo repiten
+    // la OC (dato heredado de cuando se embebían en cbc:Note, p. ej. "OC: <número>"), no se sugieren
+    // como observación para no duplicarla en SUNAT ni en el PDF.
+    const ocRaw = String(ov.orden_compra_cliente || '').trim();
+    let obsRaw = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+    if (ocRaw) {
+      const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (norm(obsRaw).replace(/^(O\/?C|ORDENDECOMPRA)/, '') === norm(ocRaw)) obsRaw = '';
+    }
+
     // GRE del sistema ya ACEPTADAS de esta OV: se declararán automáticamente en la factura (además
     // de las que el usuario agregue en el buscador). El panel las muestra como "ya incluidas".
     const [guiasSistema] = await pool.query(
@@ -404,8 +417,21 @@ export async function previewComprobante(req, res, next) {
       igv: calc.igv,
       total: calc.total,
       montoEnLetras: calc.montoEnLetras,
+      // Emisor (para el preliminar estilo SUNAT del panel), igual que previewNota.
+      empresa: {
+        razon_social: empresa?.razon_social || '',
+        ruc: empresa?.ruc || sunatConfig.ruc,
+        direccion: [empresa?.direccion, [empresa?.distrito, empresa?.provincia, empresa?.departamento].filter(Boolean).join(' - ')]
+          .filter(Boolean).join(' ')
+      },
+      cliente: {
+        razon_social: cliente?.razon_social || '',
+        ruc: cliente?.ruc || '',
+        tipo_documento: cliente?.tipo_documento || 'RUC',
+        direccion: cliente?.direccion_despacho || ov.direccion_entrega || ''
+      },
       // Observación SUGERIDA (cbc:Note): texto LIBRE de la OV, ya SIN la OC (esta viaja aparte).
-      observacion: String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 250),
+      observacion: obsRaw.slice(0, 250),
       // Orden de compra (cac:OrderReference): campo propio, editable en el panel antes de emitir.
       ordenCompra: String(ov.orden_compra_cliente || '').trim().slice(0, 30),
       // GRE del sistema que se auto-declaran (el panel las muestra como ya incluidas, no editables).
@@ -883,12 +909,87 @@ export async function verificarEstado(req, res, next) {
 // la emisión y el reemplazo (Fase 12) compartan exactamente el mismo pipeline.
 
 // POST /api/sunat/guias/:id/emitir  → GRE Remitente (09) de una guias_remision existente.
+// Catálogo 20 (motivo de traslado) permitido por el wizard de emisión: domésticos (comercio exterior
+// = No) y de comercio exterior (= Sí). Se valida contra esta lista para no mandar un código inválido.
+const MOTIVOS_GRE_VALIDOS = ['01', '02', '04', '08', '09', '13', '14', '18'];
+
 export async function emitirGuiaRemision(req, res, next) {
   try {
+    const idGuia = Number(req.params.id);
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+
+    // El wizard de emisión (SUNAT-style) envía, además de `observaciones`, los campos editables que
+    // el usuario pudo corregir antes de emitir. Se PERSISTEN en la guía ANTES de emitir para que lo
+    // que ve = lo que se guarda = lo que viaja a SUNAT. La emisión (emitirGuiaGre) los relee y hace
+    // la validación autoritativa antes de reservar el correlativo (un error NO lo quema).
+    const b = req.body || {};
+
+    // ── Punto de llegada (editable) ──────────────────────────────────────────────
+    const sets = [];
+    const vals = [];
+    if (typeof b.direccion_llegada === 'string' && b.direccion_llegada.trim()) {
+      sets.push('direccion_llegada = ?', 'punto_llegada = ?');
+      vals.push(b.direccion_llegada.trim().slice(0, 250), b.direccion_llegada.trim().slice(0, 250));
+    }
+    if (b.ubigeo_llegada !== undefined && b.ubigeo_llegada !== null && String(b.ubigeo_llegada).trim() !== '') {
+      const u = String(b.ubigeo_llegada).trim();
+      if (!ubigeoValido(u)) throw new AppError(`Ubigeo de llegada inválido: "${u}" (6 dígitos)`, 400);
+      sets.push('ubigeo_llegada = ?'); vals.push(u);
+    }
+    if (b.ciudad_llegada !== undefined) { sets.push('ciudad_llegada = ?'); vals.push(String(b.ciudad_llegada || '').slice(0, 120)); }
+
+    // ── Carga ────────────────────────────────────────────────────────────────────
+    if (b.peso_bruto_kg !== undefined && b.peso_bruto_kg !== null && String(b.peso_bruto_kg) !== '') {
+      const peso = Number(b.peso_bruto_kg);
+      if (!(peso > 0)) throw new AppError('El peso bruto debe ser mayor a 0', 400);
+      sets.push('peso_bruto_kg = ?'); vals.push(peso);
+    }
+
+    // ── Motivo de traslado (catálogo 20) + comercio exterior ──────────────────────
+    if (b.motivo_traslado_cod !== undefined && String(b.motivo_traslado_cod).trim() !== '') {
+      const cod = String(b.motivo_traslado_cod).trim();
+      if (!MOTIVOS_GRE_VALIDOS.includes(cod)) throw new AppError(`Motivo de traslado inválido: "${cod}"`, 400);
+      sets.push('motivo_traslado_cod = ?'); vals.push(cod);
+    }
+    if (b.es_comercio_exterior !== undefined) {
+      sets.push('es_comercio_exterior = ?'); vals.push(b.es_comercio_exterior ? 1 : 0);
+    }
+
+    // ── Transporte (modalidad + datos del vehículo/conductor) ─────────────────────
+    // El wizard indica el modo: 'flota' (vehículo propio de la empresa), 'particular' (carro común del
+    // cliente/tercero particular → texto libre) o 'tercero' (empresa de transporte, ya cableado por OV).
+    if (b.transporte && typeof b.transporte === 'object') {
+      const t = b.transporte;
+      const modo = t.modo || null;
+      if (modo === 'particular') {
+        // Modalidad 02 con datos de TEXTO LIBRE. Validación de formato en el momento (evita persistir basura).
+        const placaN = normalizarPlaca(t.placa);
+        if (!placaValida(placaN)) throw new AppError(`Placa inválida: "${t.placa}" (6 a 8 caracteres alfanuméricos)`, 400);
+        if (!dniValido(t.dni)) throw new AppError(`DNI del conductor inválido: "${t.dni}" (8 dígitos)`, 400);
+        if (!String(t.conductor || '').trim()) throw new AppError('Falta el nombre del conductor', 400);
+        if (!String(t.licencia || '').trim()) throw new AppError('Falta la licencia de conducir', 400);
+        sets.push('transporte_modo = ?', 'transporte_placa = ?', 'transporte_dni = ?', 'transporte_conductor = ?', 'transporte_licencia = ?',
+          'id_conductor = NULL', 'id_vehiculo = NULL', 'id_transportista = NULL');
+        vals.push('particular', placaN, String(t.dni).trim(), String(t.conductor).trim().slice(0, 250), String(t.licencia).trim().slice(0, 30));
+      } else if (modo === 'flota') {
+        // Vehículo propio: conductor (empleados) + vehículo (flota). Limpia los de texto libre.
+        if (t.id_conductor) { sets.push('id_conductor = ?'); vals.push(Number(t.id_conductor)); }
+        if (t.id_vehiculo) { sets.push('id_vehiculo = ?'); vals.push(Number(t.id_vehiculo)); }
+        sets.push('transporte_modo = ?', 'transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL', 'id_transportista = NULL');
+        vals.push('flota');
+      }
+      // 'tercero' se mantiene tal cual lo dejó la creación de la guía (id_transportista + datos de la OV).
+    }
+
+    if (sets.length) {
+      vals.push(idGuia);
+      await pool.query(`UPDATE guias_remision SET ${sets.join(', ')} WHERE id_guia = ?`, vals);
+    }
+
     // Si el panel envía `observaciones` (editable, prellenado con la OC) se usa tal cual como
     // cbc:Note; si no viene (undefined), el core compone del texto de la guía + OC de la OV.
-    const observacion = req.body?.observaciones !== undefined ? String(req.body.observaciones) : undefined;
-    const r = await emitirGuiaGre(Number(req.params.id), req.user?.id_empleado || null, observacion);
+    const observacion = b.observaciones !== undefined ? String(b.observaciones) : undefined;
+    const r = await emitirGuiaGre(idGuia, req.user?.id_empleado || null, observacion);
     res.status(r.httpStatus).json(r.body);
   } catch (e) { next(e); }
 }
@@ -1132,7 +1233,9 @@ export async function generarPdfGuia(req, res, next) {
     if (!idGuia) throw new AppError('id de guía inválido', 400);
     const [[g]] = await pool.query(
       "SELECT g.*, DATE_FORMAT(COALESCE(g.fecha_emision, g.sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
-      "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente " +
+      "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente, " +
+      "ov.transporte_placa AS ov_transporte_placa, ov.transporte_conductor AS ov_transporte_conductor, " +
+      "ov.transporte_dni AS ov_transporte_dni, ov.transporte_licencia AS ov_transporte_licencia " +
       "FROM guias_remision g LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = g.id_orden_venta WHERE g.id_guia = ?",
       [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
@@ -1154,14 +1257,26 @@ export async function generarPdfGuia(req, res, next) {
 
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
-    const [[conductor]] = g.id_conductor
-      ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
-      : [[null]];
-    // Placa: se resuelve desde la flota (id_vehiculo) y se normaliza igual que en la emisión, para
-    // que el PDF muestre exactamente la placa enviada a SUNAT (fallback a columnas legacy).
-    const [[vehiculo]] = g.id_vehiculo
-      ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
-      : [[null]];
+
+    // Conductor + placa según el MODO con que se emitió, para que el PDF muestre EXACTAMENTE lo enviado:
+    //   · particular → texto libre de la guía · tercero → datos de la OV · flota → empleados/flota.
+    let conductor = null, placaPdf = null;
+    if (g.transporte_modo === 'particular' || g.transporte_placa) {
+      conductor = { dni: g.transporte_dni, nombre_completo: g.transporte_conductor, licencia_conducir: g.transporte_licencia };
+      placaPdf = normalizarPlaca(g.transporte_placa);
+    } else if (g.id_transportista) {
+      conductor = { dni: g.ov_transporte_dni, nombre_completo: g.ov_transporte_conductor, licencia_conducir: g.ov_transporte_licencia };
+      placaPdf = normalizarPlaca(g.ov_transporte_placa);
+    } else {
+      const [[cRow]] = g.id_conductor
+        ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
+        : [[null]];
+      const [[vRow]] = g.id_vehiculo
+        ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
+        : [[null]];
+      conductor = cRow || null;
+      placaPdf = normalizarPlaca(vRow?.placa || g.placa_vehiculo || g.placa);
+    }
     const [detalle] = await pool.query(
       'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
@@ -1175,7 +1290,7 @@ export async function generarPdfGuia(req, res, next) {
         ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
         sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,
-        placa: normalizarPlaca(vehiculo?.placa || g.placa_vehiculo || g.placa),
+        placa: placaPdf,
         // Muestra lo PERSISTIDO (== cbc:Note enviado) si la guía ya lo tiene; si no, compone con la OC.
         observaciones: (g.observaciones != null && g.observaciones !== '')
           ? g.observaciones

@@ -128,9 +128,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       dni: guia?.transporte_dni || guia?.ov_transporte_dni || '',
       conductor: guia?.transporte_conductor || guia?.ov_transporte_conductor || '',
       licencia: guia?.transporte_licencia || guia?.ov_transporte_licencia || '',
-      // Modo flota: ids seleccionados.
+      // Modo flota: ids seleccionados (principal + secundario opcional).
       id_conductor: guia?.id_conductor ? String(guia.id_conductor) : '',
       id_vehiculo: guia?.id_vehiculo ? String(guia.id_vehiculo) : '',
+      id_conductor2: guia?.id_conductor2 ? String(guia.id_conductor2) : '',
+      id_vehiculo2: guia?.id_vehiculo2 ? String(guia.id_vehiculo2) : '',
       // Modo tercero: interruptor "registrar veh/cond" + indicadores (editables al emitir).
       registrar: guia?.ov_transporte_registrar === 0 ? false : true,
       indTransbordo: !!guia?.ov_ind_transbordo,
@@ -159,7 +161,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       ? { modo: 'tercero', registrar: f.registrar, indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio } }
       : f.transporteModo === 'particular'
         ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
-        : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null };
+        : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null,
+            id_conductor2: f.id_conductor2 || null, id_vehiculo2: f.id_vehiculo2 || null };
     const payload = {
       observaciones: f.observaciones,
       direccion_llegada: f.direccion_llegada,
@@ -228,6 +231,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const f = emitForm;
   const condFlota = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor));
   const vehFlota = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo));
+  const condFlota2 = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor2));
+  const vehFlota2 = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo2));
   const MOTIVOS_ACTUALES = f?.es_comercio_exterior ? MOTIVOS_COMEX : MOTIVOS_DOMESTICO;
   // Resumen de transporte para la vista previa (según el modo elegido).
   const resTransporte = !f ? null : (
@@ -249,7 +254,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           ].filter(Boolean) : [] }
       : f.transporteModo === 'particular'
         ? { modalidad: 'Privado (02) — carro particular', conductor: f.conductor, dni: f.dni, licencia: f.licencia, placa: normPlaca(f.placa) }
-        : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa }
+        : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa,
+            conductor2: condFlota2?.nombre_completo, dni2: condFlota2?.dni, licencia2: condFlota2?.licencia_conducir, placa2: vehFlota2?.placa }
   );
   // Validez por paso (bloquea "Siguiente"/"Emitir" hasta que el formato sea correcto → sin rechazos SUNAT).
   const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod;
@@ -259,7 +265,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       ? !!(guia?.id_transportista || guia?.ov_transporte_ruc)
       : f.transporteModo === 'particular'
         ? placaOk(f.placa) && dniOk(f.dni) && !!String(f.conductor).trim() && !!String(f.licencia).trim()
-        : !!(f.id_conductor && f.id_vehiculo && condFlota?.licencia_conducir)
+        : !!(f.id_conductor && f.id_vehiculo && condFlota?.licencia_conducir
+             // Si se eligió un 2º conductor, debe tener licencia registrada (SUNAT la exige).
+             && (!f.id_conductor2 || !!condFlota2?.licencia_conducir))
   );
   const vPaso1 = vLlegada && vTransporte;
   const puedeEmitirWizard = vGeneral && vPaso1;
@@ -467,6 +475,34 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       )}
                     </div>
                   )}
+
+                  {/* Segundo conductor / vehículo (opcional). SUNAT admite hasta 2 de cada uno. */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor secundario (opcional)</label>
+                      <select className="form-input w-full text-sm" value={f.id_conductor2} onChange={(e) => setF('id_conductor2', e.target.value)}>
+                        <option value="">— Ninguno —</option>
+                        {conductores.filter((c) => String(c.id_empleado) !== String(f.id_conductor)).map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo secundario (opcional)</label>
+                      <select className="form-input w-full text-sm" value={f.id_vehiculo2} onChange={(e) => setF('id_vehiculo2', e.target.value)}>
+                        <option value="">— Ninguno —</option>
+                        {vehiculos.filter((v) => String(v.id_vehiculo) !== String(f.id_vehiculo)).map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {(condFlota2 || vehFlota2) && (
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-800 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                      <div>DNI 2: <span className="font-mono font-semibold">{condFlota2?.dni || '—'}</span></div>
+                      <div>Licencia 2: <span className="font-mono font-semibold">{condFlota2?.licencia_conducir || '—'}</span></div>
+                      <div>Placa 2: <span className="font-mono font-semibold">{vehFlota2?.placa ? normPlaca(vehFlota2.placa) : '—'}</span></div>
+                      {condFlota2 && !condFlota2.licencia_conducir && (
+                        <div className="md:col-span-3 text-amber-700">El conductor secundario no tiene licencia registrada en su ficha. Complétala o quítalo.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -634,6 +670,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     <div className="flex justify-between gap-2"><span className="text-muted">DNI:</span><span className="font-mono">{resTransporte?.dni || '—'}</span></div>
                     <div className="flex justify-between gap-2"><span className="text-muted">Licencia:</span><span className="font-mono">{resTransporte?.licencia || '—'}</span></div>
                     <div className="flex justify-between gap-2"><span className="text-muted">Placa:</span><span className="font-mono font-bold">{resTransporte?.placa || '—'}</span></div>
+                    {resTransporte?.conductor2 && (
+                      <>
+                        <div className="flex justify-between gap-2"><span className="text-muted">Conductor 2:</span><span className="text-right">{resTransporte.conductor2}</span></div>
+                        <div className="flex justify-between gap-2"><span className="text-muted">DNI 2:</span><span className="font-mono">{resTransporte?.dni2 || '—'}</span></div>
+                        <div className="flex justify-between gap-2"><span className="text-muted">Licencia 2:</span><span className="font-mono">{resTransporte?.licencia2 || '—'}</span></div>
+                      </>
+                    )}
+                    {resTransporte?.placa2 && (
+                      <div className="flex justify-between gap-2"><span className="text-muted">Placa 2:</span><span className="font-mono font-bold">{normPlaca(resTransporte.placa2)}</span></div>
+                    )}
                   </div>
                 )}
               </div>

@@ -165,6 +165,15 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
         : [[null]];
       conductores = cRow ? [{ dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir }] : [];
       vehiculos = vRow ? [{ placa: normalizarPlaca(vRow.placa), tuce: null, autorizacion: null }] : [];
+      // Vehículo propio: conductor y vehículo secundarios opcionales (SUNAT admite hasta 2 de cada uno).
+      if (g.id_conductor2) {
+        const [[c2]] = await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]);
+        if (c2) conductores.push({ dni: c2.dni, nombre: c2.nombre_completo, licencia: c2.licencia_conducir });
+      }
+      if (g.id_vehiculo2) {
+        const [[v2]] = await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]);
+        if (v2) vehiculos.push({ placa: normalizarPlaca(v2.placa), tuce: null, autorizacion: null });
+      }
     }
     // ¿Se declaran vehículos y conductores? No tercero siempre; tercero solo si registrar=true.
     const declararVC = !esTercero || registrar;

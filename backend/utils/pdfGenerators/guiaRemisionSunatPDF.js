@@ -115,12 +115,11 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       yt = campo('Punto de partida:', `[${g.ubigeo_partida}] ${g.direccion_partida || '-'}`, 40, 155, 405, yt);
       yt = campo('Punto de llegada:', `[${g.ubigeo_llegada}] ${g.direccion_llegada || '-'}`, 40, 155, 405, yt);
 
-      // Indicadores SUNAT (siempre se listan; SÍ/NO).
-      yt = campo('Ind. transbordo programado:', si(indicadores.transbordo), 40, 260, 300, yt);
-      yt = campo('Ind. traslado en vehículo M1/L:', si(indicadores.m1l), 40, 260, 300, yt);
-      yt = campo('Ind. retorno con envases/embalajes vacíos:', si(indicadores.retornoVacio), 40, 300, 260, yt);
-
       if (esTercero) {
+        // Indicadores SUNAT: solo aplican al transporte público (tercero). En privado no se listan.
+        yt = campo('Ind. transbordo programado:', si(indicadores.transbordo), 40, 260, 300, yt);
+        yt = campo('Ind. traslado en vehículo M1/L:', si(indicadores.m1l), 40, 260, 300, yt);
+        yt = campo('Ind. retorno con envases/embalajes vacíos:', si(indicadores.retornoVacio), 40, 300, 260, yt);
         // Indicador propio del tercero + datos del transportista (Caso 1/2/3).
         yt = campo('Ind. registrar veh./cond. del transportista:', si(registrar), 40, 300, 260, yt);
         yt = campo('Transportista:',

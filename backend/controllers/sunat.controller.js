@@ -977,6 +977,9 @@ export async function emitirGuiaRemision(req, res, next) {
         // Vehículo propio: conductor (empleados) + vehículo (flota). Limpia los de texto libre.
         if (t.id_conductor) { sets.push('id_conductor = ?'); vals.push(Number(t.id_conductor)); }
         if (t.id_vehiculo) { sets.push('id_vehiculo = ?'); vals.push(Number(t.id_vehiculo)); }
+        // Conductor/vehículo secundarios opcionales (hasta 2). Se setean o limpian según venga el payload.
+        sets.push('id_conductor2 = ?'); vals.push(t.id_conductor2 ? Number(t.id_conductor2) : null);
+        sets.push('id_vehiculo2 = ?'); vals.push(t.id_vehiculo2 ? Number(t.id_vehiculo2) : null);
         sets.push('transporte_modo = ?', 'transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL', 'id_transportista = NULL');
         vals.push('flota');
       } else if (modo === 'tercero') {
@@ -1249,7 +1252,7 @@ export async function generarPdfGuia(req, res, next) {
   try {
     if (!idGuia) throw new AppError('id de guía inválido', 400);
     const [[g]] = await pool.query(
-      "SELECT g.*, DATE_FORMAT(COALESCE(g.fecha_emision, g.sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
+      "SELECT g.*, DATE_FORMAT(COALESCE(g.sunat_fecha_envio, g.fecha_emision), '%d/%m/%Y %H:%i:%s') AS fecha_emision_fmt, " +
       "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente, " +
       "ov.transporte_placa AS ov_transporte_placa, ov.transporte_conductor AS ov_transporte_conductor, " +
       "ov.transporte_dni AS ov_transporte_dni, ov.transporte_licencia AS ov_transporte_licencia, " +
@@ -1316,6 +1319,15 @@ export async function generarPdfGuia(req, res, next) {
         : [[null]];
       conductores = cRow ? [cRow] : [];
       vehiculosPdf = vRow?.placa ? [{ placa: normalizarPlaca(vRow.placa) }] : [];
+      // Conductor/vehículo secundarios opcionales (flota admite hasta 2).
+      if (g.id_conductor2) {
+        const [[c2]] = await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]);
+        if (c2) conductores.push(c2);
+      }
+      if (g.id_vehiculo2) {
+        const [[v2]] = await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]);
+        if (v2?.placa) vehiculosPdf.push({ placa: normalizarPlaca(v2.placa) });
+      }
     }
     const [detalle] = await pool.query(
       'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +

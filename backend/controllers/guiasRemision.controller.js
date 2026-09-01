@@ -283,7 +283,16 @@ export async function createGuiaRemision(req, res) {
         error: 'La dirección de llegada es obligatoria'
       });
     }
-    
+
+    // Ubigeo de llegada: 6 dígitos INEI (catálogo 13). SUNAT lo exige en la GRE; se valida aquí
+    // para no crear una guía que luego reviente al emitir (gre-emision valida lo mismo).
+    if (!/^\d{6}$/.test(String(ubigeo_llegada || ''))) {
+      return res.status(400).json({
+        success: false,
+        error: 'El ubigeo de llegada es obligatorio (6 dígitos: Departamento, Provincia y Distrito)'
+      });
+    }
+
     // Obtener información de la orden (incluye el transporte asignado a nivel de OV
     // para que la guía lo herede si el request no envía conductor/vehículo).
     const ordenResult = await executeQuery(`

@@ -7,6 +7,8 @@ import { Zap, FileText, RefreshCw, Ban, RotateCcw, ChevronLeft, ChevronRight, Ch
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
+import UbigeoSelector from '../../common/UbigeoSelector';
+import { resolverUbigeoDesdeDireccion } from '../../../utils/ubigeo';
 import { sunatAPI, ordenesVentaAPI } from '../../../config/api';
 
 // ── Validadores de formato (espejo del backend util.service.js) para bloquear "Emitir" ───────────
@@ -114,7 +116,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : '01'),
       peso_bruto_kg: guia?.peso_bruto_kg ?? '',
       direccion_llegada: guia?.direccion_llegada || guia?.punto_llegada || '',
-      ubigeo_llegada: guia?.ubigeo_llegada || '',
+      // Fallback para guías legacy sin ubigeo: derivarlo de la cola de la dirección de llegada.
+      ubigeo_llegada: guia?.ubigeo_llegada
+        || resolverUbigeoDesdeDireccion(guia?.direccion_llegada || guia?.punto_llegada)?.codigo
+        || '',
       ciudad_llegada: guia?.ciudad_llegada || '',
       observaciones: guia?.observacion_sugerida ?? guia?.observaciones ?? '',
       transporteModo: modoInicial,
@@ -542,15 +547,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     <label className="block text-[11px] text-muted mb-1">Dirección *</label>
                     <input className="form-input w-full text-sm" value={f.direccion_llegada} onChange={(e) => setF('direccion_llegada', e.target.value)} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] text-muted mb-1">Ubigeo *</label>
-                      <input className={`form-input w-full text-sm ${f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) ? 'border-danger' : ''}`} value={f.ubigeo_llegada} onChange={(e) => setF('ubigeo_llegada', e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6 dígitos" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-muted mb-1">Ciudad</label>
-                      <input className="form-input w-full text-sm" value={f.ciudad_llegada} onChange={(e) => setF('ciudad_llegada', e.target.value)} />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] text-muted mb-1">Ubigeo * (Departamento / Provincia / Distrito)</label>
+                    <UbigeoSelector
+                      value={f.ubigeo_llegada}
+                      required
+                      onChange={(codigo, meta) => {
+                        setF('ubigeo_llegada', codigo);
+                        setF('ciudad_llegada', meta?.distrito || '');
+                      }}
+                    />
                   </div>
                   {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="text-[11px] text-danger">El ubigeo debe tener 6 dígitos.</p>}
                 </div>

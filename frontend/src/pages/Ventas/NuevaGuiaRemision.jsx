@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import UbigeoSelector from '../../components/common/UbigeoSelector';
+import { resolverUbigeoDesdeDireccion } from '../../utils/ubigeo';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
 
 function NuevaGuiaRemision() {
@@ -173,7 +175,11 @@ function NuevaGuiaRemision() {
           id_orden_venta: id,
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || '',
-          ubigeo_llegada: ordenData.ubigeo_llegada || '',
+          // Ubigeo: si la OV no lo trae, se intenta derivar de la cola de la dirección de entrega
+          // ("..., DISTRITO, PROVINCIA, DEPARTAMENTO"). El usuario siempre puede corregirlo en el selector.
+          ubigeo_llegada: ordenData.ubigeo_llegada
+            || resolverUbigeoDesdeDireccion(ordenData.direccion_entrega)?.codigo
+            || '',
           // Si la OV es por tercero, la guía nace en modalidad pública.
           modalidad_transporte: ovEsTercero ? 'Transporte Público' : prev.modalidad_transporte,
           tipo_traslado: ovEsTercero ? 'Público' : prev.tipo_traslado,
@@ -340,7 +346,12 @@ function NuevaGuiaRemision() {
       setError('La dirección de llegada es obligatoria');
       return;
     }
-    
+
+    if (!/^\d{6}$/.test(String(formData.ubigeo_llegada || ''))) {
+      setError('Seleccione el ubigeo de llegada completo (Departamento, Provincia y Distrito)');
+      return;
+    }
+
     if (!formData.fecha_traslado) {
       setError('La fecha de traslado es obligatoria');
       return;
@@ -736,30 +747,16 @@ function NuevaGuiaRemision() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Ciudad</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.ciudad_llegada}
-                    onChange={(e) => setFormData({ ...formData, ciudad_llegada: e.target.value })}
-                    placeholder="Ciudad"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Ubigeo</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.ubigeo_llegada}
-                    onChange={(e) => setFormData({ ...formData, ubigeo_llegada: e.target.value })}
-                    placeholder="Código ubigeo"
-                    maxLength="6"
-                  />
-                </div>
-              </div>
+              <UbigeoSelector
+                value={formData.ubigeo_llegada}
+                required
+                onChange={(codigo, meta) => setFormData({
+                  ...formData,
+                  ubigeo_llegada: codigo,
+                  // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
+                  ciudad_llegada: meta?.distrito || '',
+                })}
+              />
             </div>
           </div>
         </div>

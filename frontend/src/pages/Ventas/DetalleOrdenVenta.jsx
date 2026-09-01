@@ -77,6 +77,8 @@ function DetalleOrdenVenta() {
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   const [modalCrearOP, setModalCrearOP] = useState(false);
   const [modalDespacho, setModalDespacho] = useState(false);
+  const [modalAnularDespacho, setModalAnularDespacho] = useState(false);
+  const [anularForm, setAnularForm] = useState({ idSalida: null, esGuia: false, anularGuia: false, motivoGuia: '' });
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
   const [modalAsignarComprobante, setModalAsignarComprobante] = useState(false);
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
@@ -560,17 +562,28 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const handleAnularDespacho = async (idSalida) => {
-    if (!confirm('¿Está seguro de anular este despacho? Se revertirá el stock y las cantidades despachadas.')) return;
+  // Abre el modal de anulación. Si la salida proviene de una guía de remisión (su observación
+  // lleva "Despacho Guía ..."), el modal ofrece anular también la guía.
+  const handleAnularDespacho = (idSalida, row) => {
+    const esGuia = /Despacho Gu[ií]a/i.test(row?.observaciones || '');
+    setAnularForm({ idSalida, esGuia, anularGuia: esGuia, motivoGuia: '' });
+    setModalAnularDespacho(true);
+  };
 
+  const confirmAnularDespacho = async () => {
     try {
       setProcesando(true);
       setError(null);
 
-      const response = await ordenesVentaAPI.anularDespacho(id, idSalida);
+      const body = anularForm.esGuia
+        ? { anular_guia: anularForm.anularGuia, motivo_guia: anularForm.motivoGuia.trim() || null }
+        : {};
+
+      const response = await ordenesVentaAPI.anularDespacho(id, anularForm.idSalida, body);
 
       if (response.data.success) {
         setSuccess(response.data.message);
+        setModalAnularDespacho(false);
         await cargarDatos();
       }
 
@@ -3581,7 +3594,7 @@ function DetalleOrdenVenta() {
                                {!soloLectura && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                  <button
                                    className="btn btn-sm btn-danger"
-                                   onClick={() => handleAnularDespacho(val)}
+                                   onClick={() => handleAnularDespacho(val, row)}
                                    disabled={procesando}
                                    title="Anular despacho"
                                  >
@@ -3989,6 +4002,60 @@ function DetalleOrdenVenta() {
             </button>
             <button className="btn btn-primary" onClick={handleRegistrarDespacho} disabled={procesando}>
               {procesando ? 'Procesando...' : 'Confirmar Despacho'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalAnularDespacho}
+        onClose={() => !procesando && setModalAnularDespacho(false)}
+        title="Anular Despacho"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Se revertirá el stock y las cantidades despachadas de esta salida.
+          </p>
+
+          {anularForm.esGuia && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={anularForm.anularGuia}
+                  onChange={(e) => setAnularForm({ ...anularForm, anularGuia: e.target.checked })}
+                />
+                <span className="text-sm">
+                  <b>Anular también la guía de remisión asociada</b>
+                  <span className="block text-xs text-amber-700">
+                    Este despacho se generó desde una guía. Si la GRE ya fue aceptada por SUNAT, se dejará SIN EFECTO (requiere motivo).
+                  </span>
+                </span>
+              </label>
+
+              {anularForm.anularGuia && (
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Motivo (requerido si la GRE ya fue aceptada por SUNAT)</label>
+                  <textarea
+                    className="form-input w-full text-sm"
+                    rows={2}
+                    value={anularForm.motivoGuia}
+                    onChange={(e) => setAnularForm({ ...anularForm, motivoGuia: e.target.value })}
+                    placeholder="Ej. Error en el despacho / traslado no realizado"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-outline" onClick={() => setModalAnularDespacho(false)} disabled={procesando}>
+              Cancelar
+            </button>
+            <button className="btn btn-danger" onClick={confirmAnularDespacho} disabled={procesando}>
+              {procesando ? 'Procesando...' : 'Anular Despacho'}
             </button>
           </div>
         </div>

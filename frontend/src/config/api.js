@@ -881,7 +881,7 @@ export const ordenesVentaAPI = {
   
   registrarDespacho: (id, data) => api.post(`/ordenes-venta/${id}/despacho`, data),
   
-  anularDespacho: (id, idSalida) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`),
+  anularDespacho: (id, idSalida, body = {}) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`, { data: body }),
 
   asignarGuiaInternaASalida: (id, idSalida) => api.post(`/ordenes-venta/${id}/salidas/${idSalida}/asignar-guia-interna`),
 

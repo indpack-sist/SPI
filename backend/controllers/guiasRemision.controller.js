@@ -2,6 +2,13 @@ import { executeQuery } from '../config/database.js';
 import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.js';
 import { componerObservacion } from '../services/sunat/util.service.js';
 
+// Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
+// al escribir TIMESTAMP/DATETIME). Espeja el helper homónimo de ordenesVenta.controller.js.
+function getFechaPeru() {
+  const now = new Date();
+  return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+}
+
 // Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
 // (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring
 // OV→GRE (cuando la orden se entrega por tercero, su RUC se materializa en el maestro).
@@ -663,29 +670,35 @@ export async function despacharGuiaRemision(req, res) {
       totalPrecio += cantidad * costoUnitario;
     }
     
-    // Crear la salida de inventario
+    // Crear la salida de inventario. Se vincula a la OV por FK (id_orden_venta) igual que
+    // "Registrar Despacho", para que aparezca en el "Historial de Despachos" de la orden y
+    // pueda cruzarse con facturas por id_salida. La fecha va en hora de Lima (getFechaPeru).
     const salidaResult = await executeQuery(`
       INSERT INTO salidas (
         id_tipo_inventario,
         tipo_movimiento,
         id_cliente,
+        id_orden_venta,
         total_costo,
         total_precio,
         moneda,
         id_registrado_por,
         observaciones,
-        estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        estado,
+        fecha_movimiento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id_tipo_inventario,
       'Venta',
       guia.id_cliente,
+      guia.id_orden_venta,
       totalCosto,
       totalPrecio,
       'PEN',
       id_usuario,
       `Despacho Guía ${guia.numero_guia} - Orden ${guia.id_orden_venta}`,
-      'Activo'
+      'Activo',
+      fecha_despacho || getFechaPeru()
     ]);
     
     if (!salidaResult.success) {
@@ -762,12 +775,13 @@ export async function despacharGuiaRemision(req, res) {
       WHERE id_guia = ?
     `, [id]);
     
-    // Actualizar estado de la orden
+    // Actualizar estado de la orden y apuntar al último despacho (id_salida), igual que
+    // "Registrar Despacho", para que el cruce factura↔despacho y el historial funcionen.
     await executeQuery(`
       UPDATE ordenes_venta
-      SET estado = 'Despachada'
+      SET estado = 'Despachada', id_salida = ?
       WHERE id_orden_venta = ?
-    `, [guia.id_orden_venta]);
+    `, [id_salida, guia.id_orden_venta]);
     
     res.json({
       success: true,

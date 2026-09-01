@@ -607,15 +607,16 @@ export async function updateClientesAsignados(req, res) {
 export async function getConductores(req, res) {
   try {
     const result = await executeQuery(
-      `SELECT 
-        id_empleado, 
-        dni, 
-        nombre_completo, 
+      `SELECT
+        id_empleado,
+        dni,
+        nombre_completo,
         cargo,
         rol,
+        licencia_conducir,
         estado
-      FROM empleados 
-      WHERE rol = 'Conductor' 
+      FROM empleados
+      WHERE rol = 'Conductor'
       AND estado = 'Activo'
       ORDER BY nombre_completo ASC`,
       []

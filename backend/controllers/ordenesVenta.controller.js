@@ -6,6 +6,7 @@ import { generarPedidoVentaPDF } from '../utils/pdfGenerators/pedidoVentaPDF.js'
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
 import { clientePermitido } from '../utils/asignacionClientes.js';
+import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 
@@ -1515,6 +1516,10 @@ export async function anularDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
     const id_usuario = req.user?.id_empleado || null;
+    // El usuario puede pedir anular también la guía de remisión asociada a este despacho.
+    const anularGuia = req.body?.anular_guia === true || req.body?.anular_guia === 'true';
+    const motivoGuia = (req.body?.motivo_guia || '').trim();
+    const esAdmin = String(req.user?.rol || '').trim().toLowerCase() === 'administrador';
 
     if (!id_usuario) {
       return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
@@ -1526,9 +1531,14 @@ export async function anularDespacho(req, res) {
     }
     const orden = ordenResult.data[0];
 
+    // Vinculación por FK real (id_orden_venta) con fallback por texto para salidas viejas
+    // (mismo criterio que getSalidasOrden). Antes solo hacía LIKE '%numero_orden%', lo que dejaba
+    // fuera las salidas de guía (su observación lleva el id de OV, no el numero_orden).
     const salidaResult = await executeQuery(
-      'SELECT * FROM salidas WHERE id_salida = ? AND observaciones LIKE ?',
-      [idSalida, `%${orden.numero_orden}%`]
+      `SELECT * FROM salidas
+        WHERE id_salida = ?
+          AND (id_orden_venta = ? OR observaciones LIKE ?)`,
+      [idSalida, id, `%${orden.numero_orden}%`]
     );
 
     if (salidaResult.data.length === 0) {
@@ -1537,6 +1547,33 @@ export async function anularDespacho(req, res) {
 
     if (salidaResult.data[0].estado !== 'Activo') {
       return res.status(400).json({ error: 'Esta salida ya fue anulada' });
+    }
+
+    // ¿Este despacho proviene de una guía de remisión? El vínculo es por el texto de la
+    // observación ("Despacho Guía <numero_guia> - Orden <id>"). Si el usuario pidió anular
+    // también la guía, la resolvemos y validamos precondiciones ANTES de tocar el stock.
+    const salida = salidaResult.data[0];
+    let guiaVinculada = null;
+    const mGuia = /Despacho Gu[ií]a\s+(\S+)/i.exec(salida.observaciones || '');
+    if (mGuia) {
+      const grRes = await executeQuery(
+        'SELECT id_guia, numero_guia, estado, sunat_estado FROM guias_remision WHERE numero_guia = ? LIMIT 1',
+        [mGuia[1]]
+      );
+      if (grRes.success && grRes.data.length > 0) guiaVinculada = grRes.data[0];
+    }
+
+    if (anularGuia) {
+      if (!guiaVinculada) {
+        return res.status(400).json({ error: 'No se encontró una guía de remisión asociada a este despacho.' });
+      }
+      if (guiaVinculada.estado === 'Anulada') {
+        return res.status(400).json({ error: `La guía ${guiaVinculada.numero_guia} ya está anulada.` });
+      }
+      // Si la GRE fue aceptada por SUNAT, "dejar sin efecto" exige un motivo.
+      if (guiaVinculada.sunat_estado === 'ACEPTADO' && !motivoGuia) {
+        return res.status(400).json({ error: 'Indica el motivo para dejar sin efecto la GRE aceptada por SUNAT.' });
+      }
     }
 
     const detalleSalida = await executeQuery(
@@ -1609,10 +1646,42 @@ export async function anularDespacho(req, res) {
       await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
     }
 
+    // Anular la guía asociada si el usuario lo pidió. Va DESPUÉS de revertir el stock/estado de
+    // la OV: si la GRE estaba aceptada, "dejar sin efecto" (cambio interno, sin llamada a SUNAT)
+    // exige la guía en 'Emitida', así que primero deshacemos el traslado ('En Tránsito' → 'Emitida').
+    let guiaAnulada = null;
+    if (anularGuia && guiaVinculada) {
+      try {
+        if (guiaVinculada.sunat_estado === 'ACEPTADO') {
+          if (guiaVinculada.estado !== 'Emitida') {
+            await executeQuery(`UPDATE guias_remision SET estado = 'Emitida' WHERE id_guia = ?`, [guiaVinculada.id_guia]);
+          }
+          await anularGuiaRemision(guiaVinculada.id_guia, { motivo: motivoGuia, idEmpleado: id_usuario, esAdmin });
+          guiaAnulada = { numero_guia: guiaVinculada.numero_guia, sin_efecto_sunat: true };
+        } else {
+          // GRE no emitida/no aceptada: anulación puramente interna.
+          await executeQuery(`UPDATE guias_remision SET estado = 'Anulada' WHERE id_guia = ?`, [guiaVinculada.id_guia]);
+          guiaAnulada = { numero_guia: guiaVinculada.numero_guia, sin_efecto_sunat: false };
+        }
+      } catch (e) {
+        // El despacho ya se revirtió; informamos que la guía no pudo anularse para que el usuario
+        // la gestione desde su panel (p. ej. reglas de SUNAT/autorización de Administrador).
+        return res.json({
+          success: true,
+          message: `Despacho anulado. La guía ${guiaVinculada.numero_guia} NO se pudo anular: ${e?.message || 'error'}. Gestiónala desde su panel SEE.`,
+          data: { id_salida_anulada: idSalida, nuevo_estado: nuevoEstado, guia_anulada: null, guia_error: e?.message || 'error' }
+        });
+      }
+    }
+
+    const msgGuia = guiaAnulada
+      ? ` Guía ${guiaAnulada.numero_guia} ${guiaAnulada.sin_efecto_sunat ? 'dejada SIN EFECTO en SUNAT' : 'anulada'}.`
+      : '';
+
     res.json({
       success: true,
-      message: `Despacho anulado correctamente. Orden pasó a estado: ${nuevoEstado}`,
-      data: { id_salida_anulada: idSalida, nuevo_estado: nuevoEstado }
+      message: `Despacho anulado correctamente. Orden pasó a estado: ${nuevoEstado}.${msgGuia}`,
+      data: { id_salida_anulada: idSalida, nuevo_estado: nuevoEstado, guia_anulada: guiaAnulada }
     });
 
   } catch (error) {

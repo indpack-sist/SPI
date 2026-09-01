@@ -259,7 +259,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       ? !!(guia?.id_transportista || guia?.ov_transporte_ruc)
       : f.transporteModo === 'particular'
         ? placaOk(f.placa) && dniOk(f.dni) && !!String(f.conductor).trim() && !!String(f.licencia).trim()
-        : !!(f.id_conductor && f.id_vehiculo)
+        : !!(f.id_conductor && f.id_vehiculo && condFlota?.licencia_conducir)
   );
   const vPaso1 = vLlegada && vTransporte;
   const puedeEmitirWizard = vGeneral && vPaso1;
@@ -439,21 +439,34 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               {/* Campos por modalidad */}
               {f.transporteModo === 'flota' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor (flota) *</label>
-                    <select className="form-input w-full text-sm" value={f.id_conductor} onChange={(e) => setF('id_conductor', e.target.value)}>
-                      <option value="">— Seleccionar —</option>
-                      {conductores.map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
-                    </select>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor (flota) *</label>
+                      <select className="form-input w-full text-sm" value={f.id_conductor} onChange={(e) => setF('id_conductor', e.target.value)}>
+                        <option value="">— Seleccionar —</option>
+                        {conductores.map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo / placa (flota) *</label>
+                      <select className="form-input w-full text-sm" value={f.id_vehiculo} onChange={(e) => setF('id_vehiculo', e.target.value)}>
+                        <option value="">— Seleccionar —</option>
+                        {vehiculos.map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo / placa (flota) *</label>
-                    <select className="form-input w-full text-sm" value={f.id_vehiculo} onChange={(e) => setF('id_vehiculo', e.target.value)}>
-                      <option value="">— Seleccionar —</option>
-                      {vehiculos.map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
-                    </select>
-                  </div>
+                  {/* Datos que se declaran a SUNAT, autocompletados del maestro al elegir conductor/vehículo. */}
+                  {(condFlota || vehFlota) && (
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-800 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                      <div>DNI: <span className="font-mono font-semibold">{condFlota?.dni || '—'}</span></div>
+                      <div>Licencia: <span className="font-mono font-semibold">{condFlota?.licencia_conducir || '—'}</span></div>
+                      <div>Placa: <span className="font-mono font-semibold">{vehFlota?.placa ? normPlaca(vehFlota.placa) : '—'}</span></div>
+                      {condFlota && !condFlota.licencia_conducir && (
+                        <div className="md:col-span-3 text-amber-700">Este conductor no tiene licencia registrada en su ficha de empleado. Complétala antes de emitir.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

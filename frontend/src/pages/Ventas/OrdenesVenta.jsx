@@ -557,7 +557,7 @@ function OrdenesVenta() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(valor);
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
   };
 
   const formatearMoneda = (valor, moneda) => {

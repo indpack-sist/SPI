@@ -98,7 +98,10 @@ const SCHEME_DOC = 'schemeName="Documento de Identidad" schemeAgencyName="PE:SUN
  * @param {Array} d.vehiculos           [{placa, tuce, autorizacion}] hasta 2 (principal + secundario→AttachedTransportEquipment); tuce→RegistrationNationalityID, autorizacion→ShipmentDocumentReference
  * @param {object} [d.indicadores]       {transbordo, m1l, retornoVacio} booleans → cac:SpecialInstructions opcionales
  * @param {string} [d.observacion] observación libre + OC → cbc:Note
- * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada)
+ * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada). En COMPRA además
+ *        {tipo_desc, issuerRuc} → forma completa cat.61 + IssuerParty (RUC del proveedor emisor).
+ * @param {object|null} [d.proveedor]  {ruc, razon_social}  GRE de COMPRA → cac:SellerSupplierParty;
+ *        además hace que el establecimiento de partida (DespatchAddress listID) sea el del proveedor.
  * @returns {{ xml: string }}
  */
 export function construirDespatchAdviceXML(d) {
@@ -239,12 +242,36 @@ export function construirDespatchAdviceXML(d) {
     ? `\n  <cbc:Note>${cdata(trunc(d.observacion, 250))}</cbc:Note>`
     : '';
 
-  // Documento relacionado (factura), opcional.
+  // Documento relacionado (factura), opcional. Dos formas:
+  //   · Venta (legacy): ID + DocumentTypeCode escuetos.
+  //   · Compra: cuando viene issuerRuc, se emite la forma completa (cat.61 + DocumentType +
+  //     IssuerParty con el RUC del proveedor que emitió la factura). Espeja EG07-333.
   const docRelXml = d.docRelacionado
-    ? `\n  <cac:AdditionalDocumentReference>
+    ? (d.docRelacionado.issuerRuc
+      ? `\n  <cac:AdditionalDocumentReference>
+    <cbc:ID>${cdata(d.docRelacionado.numero)}</cbc:ID>
+    <cbc:DocumentTypeCode listAgencyName="PE:SUNAT" listName="Documento relacionado al transporte" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61">${cdata(d.docRelacionado.tipo)}</cbc:DocumentTypeCode>
+    <cbc:DocumentType>${cdata(d.docRelacionado.tipo_desc || 'Factura')}</cbc:DocumentType>
+    <cac:IssuerParty>
+      <cac:PartyIdentification><cbc:ID schemeID="6" ${SCHEME_DOC}>${cdata(d.docRelacionado.issuerRuc)}</cbc:ID></cac:PartyIdentification>
+    </cac:IssuerParty>
+  </cac:AdditionalDocumentReference>`
+      : `\n  <cac:AdditionalDocumentReference>
     <cbc:ID>${d.docRelacionado.numero}</cbc:ID>
     <cbc:DocumentTypeCode>${d.docRelacionado.tipo}</cbc:DocumentTypeCode>
-  </cac:AdditionalDocumentReference>`
+  </cac:AdditionalDocumentReference>`)
+    : '';
+
+  // ── Proveedor (solo GRE de compra) → cac:SellerSupplierParty tras DeliveryCustomerParty ──
+  // En una GRE de compra el remitente Y el destinatario son la propia empresa (recoge su
+  // mercadería con flota propia); el vendedor de los bienes se declara aquí. Espeja EG07-333.
+  const sellerSupplierXml = d.proveedor?.ruc
+    ? `\n  <cac:SellerSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification><cbc:ID schemeID="6" ${SCHEME_DOC}>${cdata(d.proveedor.ruc)}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyLegalEntity><cbc:RegistrationName>${cdata(d.proveedor.razon_social || '')}</cbc:RegistrationName></cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:SellerSupplierParty>`
     : '';
 
   // Documentos relacionados comex (catálogo 61): DAM (cód. 50), DS, etc. Cada uno con su
@@ -320,7 +347,7 @@ export function construirDespatchAdviceXML(d) {
       <cac:PartyIdentification><cbc:ID schemeID="${cliScheme}" ${SCHEME_DOC}>${cli.ruc || '-'}</cbc:ID></cac:PartyIdentification>
       <cac:PartyLegalEntity><cbc:RegistrationName>${cdata(cli.razon_social)}</cbc:RegistrationName></cac:PartyLegalEntity>
     </cac:Party>
-  </cac:DeliveryCustomerParty>
+  </cac:DeliveryCustomerParty>${sellerSupplierXml}
   <cac:Shipment>
     <cbc:ID>SUNAT_Envio</cbc:ID>
     <cbc:HandlingCode listAgencyName="PE:SUNAT" listName="Motivo de traslado" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo20">${motivoCod}</cbc:HandlingCode>
@@ -339,7 +366,7 @@ export function construirDespatchAdviceXML(d) {
       <cac:Despatch>
         <cac:DespatchAddress>
           <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI">${g.ubigeo_partida}</cbc:ID>
-          <cbc:AddressTypeCode listID="${emp.ruc || ''}" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
+          <cbc:AddressTypeCode listID="${d.proveedor?.ruc || emp.ruc || ''}" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
           <cac:AddressLine><cbc:Line>${cdata(trunc(g.direccion_partida, 250))}</cbc:Line></cac:AddressLine>
         </cac:DespatchAddress>
       </cac:Despatch>

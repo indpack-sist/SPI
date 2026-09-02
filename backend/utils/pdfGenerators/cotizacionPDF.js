@@ -287,16 +287,17 @@ export async function generarCotizacionPDF(cotizacion) {
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
       // RECALCULO DE TOTALES (Corrección del problema de totales en cero)
+      const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
       let subtotalCalculado = 0;
 
       cotizacion.detalle.forEach((item, idx) => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioUnitario = parseFloat(item.precio_unitario || 0);
-        
+
         // Si tienes descuento por ítem, úsalo aquí
         const descuento = parseFloat(item.descuento_porcentaje || 0);
-        const valorVentaItem = cantidad * precioUnitario;
-        
+        const valorVentaItem = round2(cantidad * precioUnitario);
+
         subtotalCalculado += valorVentaItem;
 
 const descripcion = item.producto || item.nombre_producto_libre || '';
@@ -343,8 +344,10 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         porcentajeImpuesto = parseFloat(cotizacion.porcentaje_impuesto);
       }
 
-      const montoImpuesto = subtotalCalculado * (porcentajeImpuesto / 100);
-      const totalCalculado = subtotalCalculado + montoImpuesto;
+      // Redondeo a 2 decimales para que el PDF cuadre con el detalle de la cotización
+      subtotalCalculado = round2(subtotalCalculado);
+      const montoImpuesto = round2(subtotalCalculado * (porcentajeImpuesto / 100));
+      const totalCalculado = round2(subtotalCalculado + montoImpuesto);
       
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || `IGV (${porcentajeImpuesto}%)`;
 

@@ -47,6 +47,10 @@ function NuevaGuiaRemision() {
   const [showNuevoTransportista, setShowNuevoTransportista] = useState(false);
   const [nuevoTransportista, setNuevoTransportista] = useState({ ruc: '', razon_social: '', numero_mtc: '' });
   const [guardandoTransportista, setGuardandoTransportista] = useState(false);
+  // Alta rápida de destinatario comex (operador de puerto/depósito) sin salir del form.
+  const [showNuevoDestinatario, setShowNuevoDestinatario] = useState(false);
+  const [nuevoDestinatario, setNuevoDestinatario] = useState({ ruc: '', razon_social: '', codigo_establecimiento: '0' });
+  const [guardandoDestinatario, setGuardandoDestinatario] = useState(false);
   
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
@@ -371,8 +375,47 @@ function NuevaGuiaRemision() {
     }
   };
 
+  // Alta rápida de destinatario comex: lo registra en el catálogo y lo deja seleccionado en la guía.
+  // El código de establecimiento (anexo del destinatario) alimenta DeliveryAddress/AddressTypeCode
+  // en la emisión (default '0' = matriz). Idempotente por RUC en el backend.
+  const guardarDestinatario = async () => {
+    setError(null);
+    const { ruc, razon_social } = nuevoDestinatario;
+    if (!/^\d{11}$/.test(String(ruc).trim())) {
+      setError('El RUC del destinatario debe tener 11 dígitos');
+      return;
+    }
+    if (!razon_social.trim()) {
+      setError('La razón social del destinatario es obligatoria');
+      return;
+    }
+    try {
+      setGuardandoDestinatario(true);
+      const resp = await guiasRemisionAPI.createDestinatarioComex({
+        ruc: ruc.trim(),
+        razon_social: razon_social.trim(),
+        codigo_establecimiento: (nuevoDestinatario.codigo_establecimiento || '0').trim() || '0'
+      });
+      if (!resp.data?.success) {
+        setError(resp.data?.error || 'No se pudo registrar el destinatario');
+        return;
+      }
+      // Refrescar el catálogo y dejar el nuevo seleccionado.
+      const lista = await guiasRemisionAPI.getDestinatariosComex();
+      if (lista.data?.success) setDestinatariosComex(lista.data.data || []);
+      setFormData(prev => ({ ...prev, destinatario_ruc: ruc.trim(), destinatario_razon: razon_social.trim() }));
+      setShowNuevoDestinatario(false);
+      setNuevoDestinatario({ ruc: '', razon_social: '', codigo_establecimiento: '0' });
+    } catch (err) {
+      console.error('Error al registrar destinatario comex:', err);
+      setError(err.response?.data?.error || 'Error al registrar destinatario');
+    } finally {
+      setGuardandoDestinatario(false);
+    }
+  };
+
   const calcularTotales = () => {
-    const pesoTotal = detalle.reduce((sum, item) => 
+    const pesoTotal = detalle.reduce((sum, item) =>
       sum + (parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0)), 0
     );
     
@@ -929,20 +972,31 @@ function NuevaGuiaRemision() {
               {/* Destinatario (operador de puerto/depósito) */}
               <div className="form-group">
                 <label className="form-label">Destinatario (operador de puerto/depósito) *</label>
-                <select
-                  className="form-select"
-                  value={formData.destinatario_ruc}
-                  onChange={(e) => handleDestinatario(e.target.value)}
-                  required
-                >
-                  <option value="">Selecciona un destinatario…</option>
-                  {destinatariosComex.map((d) => (
-                    <option key={d.ruc} value={d.ruc}>{d.razon_social} — RUC {d.ruc}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    className="form-select flex-1"
+                    value={formData.destinatario_ruc}
+                    onChange={(e) => handleDestinatario(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecciona un destinatario…</option>
+                    {destinatariosComex.map((d) => (
+                      <option key={d.ruc} value={d.ruc}>{d.razon_social} — RUC {d.ruc}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setShowNuevoDestinatario(true)}
+                    title="Registrar nuevo destinatario"
+                  >
+                    <Plus size={18} />
+                    Nuevo
+                  </button>
+                </div>
                 <small className="text-gray-500">
                   Es el operador local que recibe en el puerto, NO el cliente extranjero (ese va en la factura).
-                  {destinatariosComex.length === 0 && ' No hay destinatarios registrados: créalos en el catálogo comex.'}
+                  {destinatariosComex.length === 0 && ' No hay destinatarios registrados: créalos con “Nuevo”.'}
                 </small>
               </div>
 
@@ -1275,6 +1329,70 @@ function NuevaGuiaRemision() {
               >
                 <Save size={18} />
                 {guardandoTransportista ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNuevoDestinatario && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-md">
+            <div className="card-header flex items-center gap-2">
+              <Package size={20} />
+              <h2 className="card-title">Nuevo Destinatario (comex)</h2>
+            </div>
+            <div className="card-body space-y-3">
+              <div className="form-group">
+                <label className="form-label">RUC *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoDestinatario.ruc}
+                  onChange={(e) => setNuevoDestinatario({ ...nuevoDestinatario, ruc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  placeholder="11 dígitos"
+                  maxLength="11"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Razón Social *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoDestinatario.razon_social}
+                  onChange={(e) => setNuevoDestinatario({ ...nuevoDestinatario, razon_social: e.target.value })}
+                  placeholder="Operador de puerto / depósito temporal"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Código de establecimiento (anexo)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoDestinatario.codigo_establecimiento}
+                  onChange={(e) => setNuevoDestinatario({ ...nuevoDestinatario, codigo_establecimiento: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                  placeholder="0 = matriz"
+                />
+                <small className="text-gray-500">Anexo del destinatario (SUNAT). Va en el punto de llegada del XML; “0” si es la matriz.</small>
+              </div>
+            </div>
+            <div className="card-footer flex gap-2 justify-end">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => { setShowNuevoDestinatario(false); setNuevoDestinatario({ ruc: '', razon_social: '', codigo_establecimiento: '0' }); }}
+                disabled={guardandoDestinatario}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={guardarDestinatario}
+                disabled={guardandoDestinatario}
+              >
+                <Save size={18} />
+                {guardandoDestinatario ? 'Guardando…' : 'Guardar'}
               </button>
             </div>
           </div>

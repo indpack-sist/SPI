@@ -204,7 +204,24 @@ export async function getGuiaRemisionById(req, res) {
     }
     
     guia.detalle = detalleResult.data;
-    
+
+    // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
+    // Se devuelven siempre (arrays vacíos en guías domésticas) para que el front pueda mostrar/editar
+    // una guía comex ya creada. El orden de inserción == el del XML emitido (ver gre-emision.service.js).
+    if (Number(guia.es_comercio_exterior) === 1) {
+      const docsRelResult = await executeQuery(
+        `SELECT tipo_cod, tipo_desc, serie, numero
+         FROM guias_remision_doc_relacionado WHERE id_guia = ?`, [id]);
+      const contenedoresResult = await executeQuery(
+        `SELECT numero_contenedor, numero_precinto
+         FROM guias_remision_contenedor WHERE id_guia = ?`, [id]);
+      guia.docs_relacionados = docsRelResult.success ? docsRelResult.data : [];
+      guia.contenedores = contenedoresResult.success ? contenedoresResult.data : [];
+    } else {
+      guia.docs_relacionados = [];
+      guia.contenedores = [];
+    }
+
     const guiaTransportistaResult = await executeQuery(`
       SELECT 
         id_guia_transportista,

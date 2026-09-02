@@ -622,19 +622,26 @@ useEffect(() => {
   };
 
   const calcularTotales = () => {
-    let subtotal = 0;
-    let pesoTotal = 0;
-    detalle.forEach(item => {
-      const precioVenta = parseFloat(item.precio_venta) || 0;
-      subtotal += item.cantidad * precioVenta;
-      const peso = parseFloat(item.peso_unitario || 0);
-      if (peso > 0) pesoTotal += item.cantidad * peso;
-    });
     // Exportación fuerza IGV 0% (SUNAT 0200), independiente del tipo_impuesto seleccionado.
     const esExport = Number(formCabecera.es_exportacion) === 1;
     const porcentaje = esExport ? 0 : (parseFloat(formCabecera.porcentaje_impuesto) || 0);
-    const impuesto = subtotal * (porcentaje / 100);
-    const total = subtotal + impuesto;
+    // Totales con redondeo POR LÍNEA (igual que la factura electrónica y el backend de la OV),
+    // para que la vista previa coincida con lo que se guarda al crear la orden.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    let subtotal = 0;
+    let impuesto = 0;
+    let pesoTotal = 0;
+    detalle.forEach(item => {
+      const precioVenta = parseFloat(item.precio_venta) || 0;
+      const lineBase = round2(item.cantidad * precioVenta);
+      subtotal += lineBase;
+      impuesto += round2(lineBase * (porcentaje / 100));
+      const peso = parseFloat(item.peso_unitario || 0);
+      if (peso > 0) pesoTotal += item.cantidad * peso;
+    });
+    subtotal = round2(subtotal);
+    impuesto = round2(impuesto);
+    const total = round2(subtotal + impuesto);
     setTotales({ subtotal, impuesto, total, pesoTotal });
   };
 

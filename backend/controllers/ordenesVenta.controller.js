@@ -643,14 +643,6 @@ export async function createOrdenVenta(req, res) {
       transDniFinal = transporte_dni || null;
     }
 
-    let subtotal = 0;
-    for (const item of detalle) {
-      const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      const valorVenta = cantidad * precioVenta;
-      if (!isNaN(valorVenta)) subtotal += valorVenta;
-    }
-
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
     if (['INAFECTO', 'EXONERADO'].includes(tipoImpuestoFinal)) {
@@ -667,8 +659,23 @@ export async function createOrdenVenta(req, res) {
     const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
     const sinIgv = esNotaVenta || esExport;
     if (esExport) porcentaje = 0;
-    const impuesto = sinIgv ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
-    const total = sinIgv ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
+
+    // Totales con redondeo POR LÍNEA, igual que la factura electrónica (ver ubl.service.js
+    // calcularComprobante), para que el detalle de la OV cuadre con el comprobante emitido.
+    let subtotal = 0;
+    let impuesto = 0;
+    for (const item of detalle) {
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const valorVenta = cantidad * precioVenta;
+      if (isNaN(valorVenta)) continue;
+      const lineBase = Math.round(valorVenta * 100) / 100;             // base de la línea (2 dec)
+      subtotal += lineBase;
+      if (!sinIgv) impuesto += Math.round(lineBase * (porcentaje / 100) * 100) / 100;
+    }
+    subtotal = Math.round(subtotal * 100) / 100;
+    impuesto = Math.round(impuesto * 100) / 100;
+    const total = Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -960,25 +967,6 @@ export async function updateOrdenVenta(req, res) {
       });
     }
 
-    let subtotal = 0;
-    let totalComision = 0;
-    let sumaComisionPorcentual = 0;
-
-    for (const item of detalle) {
-      const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      const valorVenta = cantidad * precioVenta;
-      if (!isNaN(valorVenta)) subtotal += valorVenta;
-
-      const precioBase = parseFloat(item.precio_base || 0);
-      const pctComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (pctComision / 100);
-      totalComision += montoComision * cantidad;
-      sumaComisionPorcentual += pctComision;
-    }
-
-    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
-
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
 
@@ -994,8 +982,36 @@ export async function updateOrdenVenta(req, res) {
     const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
     const sinIgv = esNotaVenta || esExport;
     if (esExport) porcentaje = 0;
-    const impuesto = sinIgv ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
-    const total = sinIgv ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
+
+    // Totales con redondeo POR LÍNEA, igual que la factura electrónica (ver ubl.service.js
+    // calcularComprobante), para que el detalle de la OV cuadre con el comprobante emitido.
+    let subtotal = 0;
+    let impuesto = 0;
+    let totalComision = 0;
+    let sumaComisionPorcentual = 0;
+
+    for (const item of detalle) {
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const valorVenta = cantidad * precioVenta;
+      if (!isNaN(valorVenta)) {
+        const lineBase = Math.round(valorVenta * 100) / 100;           // base de la línea (2 dec)
+        subtotal += lineBase;
+        if (!sinIgv) impuesto += Math.round(lineBase * (porcentaje / 100) * 100) / 100;
+      }
+
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (pctComision / 100);
+      totalComision += montoComision * cantidad;
+      sumaComisionPorcentual += pctComision;
+    }
+
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
+
+    subtotal = Math.round(subtotal * 100) / 100;
+    impuesto = Math.round(impuesto * 100) / 100;
+    const total = Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(

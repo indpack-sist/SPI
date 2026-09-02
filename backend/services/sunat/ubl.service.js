@@ -115,16 +115,12 @@ export function calcularComprobante({ ov, detalle }) {
     const desc = Number(d.descuento_porcentaje || 0);
     const netUnit = Number(d.precio_unitario) * (1 - desc / 100);       // valor unitario sin IGV
     const lineExt = round2(cantidad * netUnit);                         // valor de venta de la línea
-    const igvLineExact = cfg.gravado ? lineExt * (cfg.percent / 100) : 0; // IGV exacto (sin redondear)
-    const igvLine = round2(igvLineExact);                               // IGV de la línea a 2 dec (para el XML por línea)
+    const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;
 
-    // El IGV del grupo/total se acumula SIN redondear y se redondea una sola vez al final
-    // (mismo criterio que ordenes_venta: base × tasa sobre el agregado), para que el panel
-    // de facturación cuadre con el detalle de la OV.
     grupos[afect] = grupos[afect] || { base: 0, igv: 0, cfg };
     grupos[afect].base += lineExt;
-    grupos[afect].igv += igvLineExact;
+    grupos[afect].igv += igvLine;
 
     return {
       numero: i + 1,

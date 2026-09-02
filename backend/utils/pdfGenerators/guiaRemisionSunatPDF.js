@@ -37,10 +37,13 @@ const MOTIVOS_TRASLADO = {
  * @param {object} [p.indicadores] { transbordo, m1l, retornoVacio } booleans
  * @param {string|null} [p.modalidad] '01' público | '02' privado
  * @param {string|null} [p.fechaEntrega] fecha entrega de bienes al transportista (dd/mm/yyyy o ISO)
+ * @param {object|null} [p.comex]  Comercio exterior (exportación). null = guía doméstica (no imprime nada comex).
+ *        { destinatario:{razon_social,ruc}|null, docsRelacionados:[{tipo_desc,serie,numero}],
+ *          contenedores:[{numero_contenedor,numero_precinto}], trasladoTotalDam:boolean, unidadPeso:'KGM' }
  * @param {Buffer} p.qrBuffer  PNG del QR con la URL de SUNAT
  * @returns {Promise<Buffer>}
  */
-export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, qrBuffer }) {
+export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, comex = null, qrBuffer }) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 30, left: 30, right: 30 } });
@@ -80,13 +83,18 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       // ── Destinatario + datos generales (flujo dinámico anti-desborde) ──
       // Doble dirección: la fiscal del destinatario va aquí; la de entrega es el "Punto de llegada".
       // Izquierda (destinatario/RUC/dir.fiscal) x40–311 · derecha (fechas) x322–560.
+      // En exportación el destinatario NO es el cliente de la OV (ese va en la factura), sino el
+      // operador de puerto/depósito (destinatario_ruc/razon). Se usa el comex cuando viene.
+      const esComex = !!comex;
+      const dest = (esComex && comex.destinatario) ? comex.destinatario : cliente;
       let y = 122;
       const boxDestTop = y;
       const pad = 8;
       let yl = boxDestTop + pad;
-      yl = campo('Destinatario:', cliente.razon_social, 40, 118, 193, yl);
-      yl = campo('RUC/Doc:', cliente.ruc, 40, 118, 193, yl);
-      yl = campo('Dir. fiscal:', cliente.direccion, 40, 118, 193, yl);
+      yl = campo('Destinatario:', dest.razon_social, 40, 118, 193, yl);
+      yl = campo('RUC/Doc:', dest.ruc, 40, 118, 193, yl);
+      // Dir. fiscal: solo si existe (el destinatario comex del catálogo no la captura → se omite).
+      if (dest.direccion) yl = campo('Dir. fiscal:', dest.direccion, 40, 118, 193, yl);
       let yr = boxDestTop + pad;
       yr = campo('Fecha emisión:', g.fecha_emision, 322, 410, 150, yr);
       yr = campo('Inicio traslado:', g.fecha_traslado, 322, 410, 150, yr);
@@ -103,6 +111,62 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
         ? vehiculos
         : (g.placa ? [{ placa: g.placa }] : []);
       const si = (b) => (b ? 'SÍ' : 'NO');
+      // Peso con separador de miles, sin decimales redundantes (ej. "1,200"), como el PDF de SUNAT.
+      const pesoFmt = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
+      const docLabel = (d) => {
+        const desc = (d.tipo_desc && String(d.tipo_desc).trim()) || 'Documento relacionado';
+        const num = d.serie ? `${d.serie}-${d.numero}` : d.numero;
+        return `${desc} N° ${num}`;
+      };
+
+      // ── Comercio exterior (exportación) ──────────────────────────────────────────
+      // Bloque intermedio, en el orden EXACTO del PDF oficial de SUNAT (EG07-273):
+      //   Documentos Relacionados (DAM) → Bienes por transportar (importados del doc.) →
+      //   Indicador de traslado total + contenedor/precinto → Unidad + Peso bruto.
+      // En traslado total de la DAM, SUNAT NO itemiza los bienes (se importan del documento):
+      // por eso la tabla de productos se omite abajo cuando la guía es comex. Todo condicionado
+      // a que el dato exista (no se pinta lo que no vino).
+      if (esComex) {
+        const docsRel = Array.isArray(comex.docsRelacionados) ? comex.docsRelacionados.filter(d => d && d.numero) : [];
+        const conts = Array.isArray(comex.contenedores) ? comex.contenedores.filter(c => c && c.numero_contenedor) : [];
+        const boxCxTop = y;
+        let yc = boxCxTop + pad;
+        const header = (txt, atY) => {
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text(txt, 40, atY, { width: 515 });
+          return atY + 13;
+        };
+        const linea = (txt, atY, x = 48, w = 507) => {
+          doc.fontSize(8).font('Helvetica').fillColor('#000').text(txt, x, atY, { width: w });
+          const h = doc.heightOfString(txt, { width: w });
+          return atY + Math.max(h, 11) + 2;
+        };
+        // Documentos Relacionados
+        if (docsRel.length) {
+          yc = header('Documentos Relacionados:', yc);
+          for (const d of docsRel) yc = linea(docLabel(d), yc);
+          yc += 2;
+        }
+        // Bienes por transportar (importados del/los documento(s) relacionado(s))
+        yc = header('Bienes por transportar:', yc);
+        yc = linea('Datos importados del/los documento(s) relacionado(s)', yc);
+        for (const d of docsRel) yc = linea(docLabel(d), yc);
+        yc += 2;
+        // Indicador de traslado total (izq) + contenedores/precintos (der), a dos columnas.
+        const yIndTop = yc;
+        let yLeft = campo('Ind. traslado total de la DAM o DS (*):', si(comex.trasladoTotalDam), 40, 230, 60, yIndTop);
+        let yRight = yIndTop;
+        conts.forEach((c, i) => {
+          yRight = campo(`N° de contenedor ${i + 1}:`, c.numero_contenedor, 305, 400, 157, yRight);
+          if (c.numero_precinto) yRight = campo(`N° de precinto ${i + 1}:`, c.numero_precinto, 305, 400, 157, yRight);
+        });
+        yc = Math.max(yLeft, yRight) + 2;
+        // Unidad de medida + peso bruto (de la DAM en traslado total).
+        yc = campo('Unidad de medida del peso bruto:', comex.unidadPeso || 'KGM', 40, 200, 340, yc);
+        yc = campo('Peso bruto total de la carga:', pesoFmt(g.peso_bruto_kg), 40, 200, 340, yc);
+        const boxCxH = (yc + 4) - boxCxTop;
+        doc.roundedRect(33, boxCxTop, 529, boxCxH, 3).stroke('#000');
+        y = boxCxTop + boxCxH + 8;
+      }
 
       // ── Datos del traslado (flujo dinámico, full-width) ──
       const boxTrasTop = y;
@@ -111,7 +175,8 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       let yt = boxTrasTop + pad;
       yt = campo('Motivo de traslado:', `${g.motivo_traslado_cod} - ${motivo}`, 40, 155, 405, yt);
       yt = campo('Modalidad de traslado:', modalidadTxt, 40, 155, 405, yt);
-      yt = campo('Peso bruto total:', `${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 40, 155, 405, yt);
+      // El peso bruto ya se muestra en el bloque de comercio exterior (unidad + peso de la DAM).
+      if (!esComex) yt = campo('Peso bruto total:', `${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 40, 155, 405, yt);
       yt = campo('Punto de partida:', `[${g.ubigeo_partida}] ${g.direccion_partida || '-'}`, 40, 155, 405, yt);
       yt = campo('Punto de llegada:', `[${g.ubigeo_llegada}] ${g.direccion_llegada || '-'}`, 40, 155, 405, yt);
 
@@ -151,29 +216,34 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       y = boxTrasTop + boxTrasH + 8;
 
       // ── Tabla de bienes (sin montos) ──
-      doc.rect(33, y, 529, 18).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
-      doc.text('CÓDIGO', 40, y + 5);
-      doc.text('CANT.', 120, y + 5, { width: 50, align: 'center' });
-      doc.text('UND.', 175, y + 5, { width: 40, align: 'center' });
-      doc.text('DESCRIPCIÓN', 225, y + 5);
-      y += 18;
+      // En comercio exterior con traslado total de la DAM, SUNAT NO lista los ítems (los bienes se
+      // importan del documento relacionado, ya declarado arriba en "Bienes por transportar"): se
+      // omite la tabla. Esto mantiene la GRE de exportación en una sola hoja sin importar la OV.
+      if (!esComex) {
+        doc.rect(33, y, 529, 18).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
+        doc.text('CÓDIGO', 40, y + 5);
+        doc.text('CANT.', 120, y + 5, { width: 50, align: 'center' });
+        doc.text('UND.', 175, y + 5, { width: 40, align: 'center' });
+        doc.text('DESCRIPCIÓN', 225, y + 5);
+        y += 18;
 
-      doc.font('Helvetica').fontSize(8);
-      for (const it of detalle) {
-        const desc = it.nombre || it.codigo || '-';
-        const hDesc = doc.heightOfString(desc, { width: 320, lineGap: 1 });
-        const hFila = Math.max(16, hDesc + 6);
-        if (y + hFila > 690) { doc.addPage(); y = 40; }
-        doc.fillColor('#000');
-        doc.text(it.codigo || '-', 40, y + 3, { width: 78 });
-        doc.text(Number(it.cantidad || 0).toFixed(2), 120, y + 3, { width: 50, align: 'center' });
-        doc.text(it.codigo_unidad_sunat || 'NIU', 175, y + 3, { width: 40, align: 'center' });
-        doc.text(desc, 225, y + 3, { width: 320, lineGap: 1 });
-        y += hFila;
+        doc.font('Helvetica').fontSize(8);
+        for (const it of detalle) {
+          const desc = it.nombre || it.codigo || '-';
+          const hDesc = doc.heightOfString(desc, { width: 320, lineGap: 1 });
+          const hFila = Math.max(16, hDesc + 6);
+          if (y + hFila > 690) { doc.addPage(); y = 40; }
+          doc.fillColor('#000');
+          doc.text(it.codigo || '-', 40, y + 3, { width: 78 });
+          doc.text(Number(it.cantidad || 0).toFixed(2), 120, y + 3, { width: 50, align: 'center' });
+          doc.text(it.codigo_unidad_sunat || 'NIU', 175, y + 3, { width: 40, align: 'center' });
+          doc.text(desc, 225, y + 3, { width: 320, lineGap: 1 });
+          y += hFila;
+        }
+        doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
+        y += 8;
       }
-      doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
-      y += 8;
 
       // ── Observaciones (texto libre + OC) — texto plano, sin recuadro, posición inteligente ──
       // Mismo diseño que la factura: fluye bajo la tabla (baja con ella cuando hay muchos ítems) y

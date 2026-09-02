@@ -258,7 +258,14 @@ export async function createGuiaRemision(req, res) {
       id_vehiculo,
       id_transportista,
       motivo_traslado_cod,
-      detalle
+      detalle,
+      // Comercio exterior (exportación). Solo se persisten si la OV es export (esComex).
+      destinatario_ruc,
+      destinatario_razon,
+      puerto_codigo,
+      traslado_total_dam,
+      docs_relacionados,   // [{ tipo_cod, tipo_desc, serie, numero }]
+      contenedores         // [{ numero_contenedor, numero_precinto }]
     } = req.body;
 
     // Catálogo 20 (SUNAT): derivar el código de motivo desde el motivo de negocio si no viene explícito.
@@ -266,9 +273,11 @@ export async function createGuiaRemision(req, res) {
     const MOTIVO_TRASLADO_COD = {
       'Venta': '01',
       'Traslado entre Almacenes': '04',
-      'Devolución': '13' // 13 = Otros
+      'Devolución': '13', // 13 = Otros
+      'Exportación': '09', // Comercio exterior (cat.20)
+      'Importación': '08'
     };
-    const motivoCod = motivo_traslado_cod || MOTIVO_TRASLADO_COD[motivo_traslado] || '01';
+    let motivoCod = motivo_traslado_cod || MOTIVO_TRASLADO_COD[motivo_traslado] || '01';
     
     if (!id_orden_venta) {
       return res.status(400).json({
@@ -307,6 +316,7 @@ export async function createGuiaRemision(req, res) {
         ov.id_cliente,
         ov.estado,
         ov.direccion_entrega,
+        ov.es_exportacion,
         ov.id_conductor,
         ov.id_vehiculo,
         ov.tipo_entrega,
@@ -329,6 +339,18 @@ export async function createGuiaRemision(req, res) {
     }
 
     const orden = ordenResult.data[0];
+
+    // Comercio exterior: se hereda del checkbox "Factura de exportación" de la OV
+    // (ordenes_venta.es_exportacion). Es la fuente única que responde a "¿Es una
+    // operación de comercio exterior?" en la guía. Si la OV es exportación, la GRE
+    // nace con motivo Exportación (cat.20 = 09) y es_comercio_exterior = 1, sin
+    // depender de que el usuario lo marque a mano al emitir. Ver GRE_EXPORT_EG07-273.xml.
+    const esComex = Number(orden.es_exportacion) === 1;
+    let motivoTexto = motivo_traslado || 'Venta';
+    if (esComex) {
+      motivoTexto = 'Exportación';
+      motivoCod = '09';
+    }
 
     // Una guía de remisión es un documento de despacho: se permite en cualquier
     // estado activo de la OV, bloqueando solo las órdenes canceladas o ya entregadas
@@ -498,8 +520,13 @@ export async function createGuiaRemision(req, res) {
         transporte_conductor,
         transporte_dni,
         transporte_licencia,
+        es_comercio_exterior,
+        destinatario_ruc,
+        destinatario_razon,
+        traslado_total_dam,
+        puerto_codigo,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
@@ -509,7 +536,7 @@ export async function createGuiaRemision(req, res) {
       direccionPartidaFinal,
       direccion_llegada,
       tipo_traslado || 'Privado',
-      motivo_traslado || 'Venta',
+      motivoTexto,
       modalidad_transporte || 'Transporte Privado',
       direccionPartidaFinal,
       ubigeoPartidaFinal,
@@ -527,7 +554,12 @@ export async function createGuiaRemision(req, res) {
       guiaTransportePlaca,
       guiaTransporteConductor,
       guiaTransporteDni,
-      guiaTransporteLicencia
+      guiaTransporteLicencia,
+      esComex ? 1 : 0,
+      esComex ? (destinatario_ruc || null) : null,
+      esComex ? (destinatario_razon || null) : null,
+      esComex ? (Number(traslado_total_dam) === 0 ? 0 : 1) : 1,
+      esComex ? (puerto_codigo || null) : null
     ]);
     
     if (!result.success) {
@@ -552,8 +584,10 @@ export async function createGuiaRemision(req, res) {
           unidad_medida,
           descripcion,
           peso_unitario_kg,
-          peso_total_kg
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          peso_total_kg,
+          subpartida_nacional,
+          dam_serie
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idGuia,
         item.id_detalle_orden,
@@ -562,10 +596,31 @@ export async function createGuiaRemision(req, res) {
         item.unidad_medida || 'UND',
         item.descripcion || item.producto || '',
         parseFloat(item.peso_unitario_kg) || 0,
-        pesoTotal
+        pesoTotal,
+        // Comex: subpartida nacional (7020) + nº de serie en la DAM (7023) por ítem.
+        esComex ? (item.subpartida_nacional || null) : null,
+        esComex ? (item.dam_serie || null) : null
       ]);
     }
-    
+
+    // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
+    if (esComex) {
+      for (const doc of (Array.isArray(docs_relacionados) ? docs_relacionados : [])) {
+        if (!doc?.tipo_cod || !doc?.numero) continue;
+        await executeQuery(
+          `INSERT INTO guias_remision_doc_relacionado (id_guia, tipo_cod, tipo_desc, serie, numero)
+           VALUES (?, ?, ?, ?, ?)`,
+          [idGuia, String(doc.tipo_cod), doc.tipo_desc || '', doc.serie || null, String(doc.numero)]);
+      }
+      for (const c of (Array.isArray(contenedores) ? contenedores : [])) {
+        if (!c?.numero_contenedor) continue;
+        await executeQuery(
+          `INSERT INTO guias_remision_contenedor (id_guia, numero_contenedor, numero_precinto)
+           VALUES (?, ?, ?)`,
+          [idGuia, String(c.numero_contenedor), c.numero_precinto || null]);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: {
@@ -1070,6 +1125,56 @@ export async function createTransportista(req, res) {
     });
   } catch (error) {
     console.error('Error al crear transportista:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// ── Catálogo de destinatarios comex (operadores de puerto / depósito temporal) ──────────────
+// El destinatario de una GRE de exportación NO es el cliente extranjero de la OV (ese va en la
+// factura), sino el operador local de puerto/depósito. codigo_establecimiento = anexo del
+// destinatario que va en DeliveryAddress/AddressTypeCode (ver gre-comex-spec).
+export async function getDestinatariosComex(req, res) {
+  try {
+    const result = await executeQuery(`
+      SELECT id_destinatario, ruc, razon_social, codigo_establecimiento
+      FROM comex_destinatarios
+      WHERE activo = 1
+      ORDER BY razon_social
+    `);
+    if (!result.success) return res.status(500).json({ success: false, error: result.error });
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Error al obtener destinatarios comex:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function createDestinatarioComex(req, res) {
+  try {
+    const { ruc, razon_social, codigo_establecimiento } = req.body;
+    if (!ruc || !/^\d{11}$/.test(String(ruc).trim())) {
+      return res.status(400).json({ success: false, error: 'El RUC del destinatario es obligatorio y debe tener 11 dígitos' });
+    }
+    if (!razon_social || razon_social.trim() === '') {
+      return res.status(400).json({ success: false, error: 'La razón social del destinatario es obligatoria' });
+    }
+    const rucLimpio = String(ruc).trim();
+    const estab = String(codigo_establecimiento ?? '0').trim() || '0';
+    // Idempotente por RUC: si ya existe se actualiza (mismo criterio que transportistas).
+    const result = await executeQuery(
+      `INSERT INTO comex_destinatarios (ruc, razon_social, codigo_establecimiento)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE razon_social = VALUES(razon_social),
+         codigo_establecimiento = VALUES(codigo_establecimiento), activo = 1`,
+      [rucLimpio, razon_social.trim(), estab]);
+    if (!result.success) return res.status(500).json({ success: false, error: result.error });
+    res.status(201).json({
+      success: true,
+      data: { ruc: rucLimpio, razon_social: razon_social.trim(), codigo_establecimiento: estab },
+      message: 'Destinatario comex registrado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al crear destinatario comex:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

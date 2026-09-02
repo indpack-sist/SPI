@@ -1333,6 +1333,25 @@ export async function generarPdfGuia(req, res, next) {
       'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
 
+    // Comercio exterior (exportación): documentos relacionados (DAM) + contenedores/precintos, en el
+    // MISMO orden de inserción con que se emitió el XML (sin ORDER BY, igual que gre-emision.service.js
+    // → la numeración "contenedor 1/2" del PDF coincide con el cac:Package del XML). El destinatario
+    // impreso es el operador de puerto/depósito (g.destinatario_*), no el cliente de la OV.
+    let comexPdf = null;
+    if (Number(g.es_comercio_exterior) === 1) {
+      const [docsRel] = await pool.query(
+        'SELECT tipo_desc, serie, numero FROM guias_remision_doc_relacionado WHERE id_guia = ?', [idGuia]);
+      const [contenedores] = await pool.query(
+        'SELECT numero_contenedor, numero_precinto FROM guias_remision_contenedor WHERE id_guia = ?', [idGuia]);
+      comexPdf = {
+        destinatario: g.destinatario_razon ? { razon_social: g.destinatario_razon, ruc: g.destinatario_ruc } : null,
+        docsRelacionados: docsRel,
+        contenedores,
+        trasladoTotalDam: Number(g.traslado_total_dam) !== 0,
+        unidadPeso: 'KGM'
+      };
+    }
+
     const qrBuffer = await qrPng(g.sunat_qr_url);
     const pdf = await generarGuiaRemisionSunatPDF({
       guia: {
@@ -1351,6 +1370,7 @@ export async function generarPdfGuia(req, res, next) {
       emisor, cliente, detalle,
       transportista: transportistaPdf, conductores, vehiculos: vehiculosPdf,
       indicadores: indicadoresPdf, registrar: registrarPdf, modalidad: modalidadPdf, fechaEntrega: fechaEntregaPdf,
+      comex: comexPdf,
       qrBuffer
     });
 

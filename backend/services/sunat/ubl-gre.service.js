@@ -109,6 +109,9 @@ export function construirDespatchAdviceXML(d) {
   const emp = d.empresa;
   const cli = d.cliente;
   const g = d.guia;
+  // Datos de comercio exterior (exportación). null en guías domésticas → todo el bloque comex se apaga.
+  // { trasladoTotalDam, docsRelacionados:[{tipo_cod,tipo_desc,serie,numero}], contenedores:[{numero_contenedor,numero_precinto}], damNumero }
+  const comex = d.comex || null;
   const modalidad = d.modalidad || '02';
   const idComprobante = `${d.serie}-${d.numero}`;
   const motivoCod = String(g.motivo_traslado_cod);
@@ -160,6 +163,7 @@ export function construirDespatchAdviceXML(d) {
   // Strings CONFIRMADOS contra el estándar oficial "UBL 2.1 Guía de Remisión Remitente"
   // (Anexo de la R.S. 123-2022/SUNAT). El de "registrar" además está probado por XML aceptado.
   const IND = {
+    trasladoTotalDam: 'SUNAT_Envio_IndicadorTrasladoTotalDAMoDS',
     registrarTransp: 'SUNAT_Envio_IndicadorVehiculoConductoresTransp',
     transbordo:      'SUNAT_Envio_IndicadorTransbordoProgramado',
     m1l:             'SUNAT_Envio_IndicadorTrasladoVehiculoM1L',
@@ -167,9 +171,12 @@ export function construirDespatchAdviceXML(d) {
   };
   const ind = d.indicadores || {};
   const indicadores = [];
-  // NOTA: el indicador SUNAT_Envio_IndicadorVehiculoConductoresTransp NO se auto-emite. Los 3 XML
-  // del portal SUNAT (EG07-81/220/309), incluidos los Casos 2 y 3 con vehículo+conductor declarados,
-  // NO lo llevan. Se deja detrás de un flag explícito (ind.registrarTransp) por si algún día se requiere.
+  // Comex/exportación: el indicador de traslado total de la DAM/DS va PRIMERO (calcado de EG07-273).
+  if (comex?.trasladoTotalDam) indicadores.push(IND.trasladoTotalDam);
+  // NOTA: SUNAT_Envio_IndicadorVehiculoConductoresTransp NO se auto-emite en guías domésticas: los 3 XML
+  // del portal SUNAT (EG07-81/220/309), incluso Casos 2/3 con vehículo+conductor declarados, NO lo llevan.
+  // Queda tras el flag explícito (ind.registrarTransp). En export SÍ se emite (el molde EG07-273 lo lleva):
+  // el servicio de emisión activa ind.registrarTransp cuando es comex + se declaran veh/cond.
   if (ind.registrarTransp) indicadores.push(IND.registrarTransp);
   if (ind.transbordo) indicadores.push(IND.transbordo);
   if (ind.m1l) indicadores.push(IND.m1l);
@@ -199,20 +206,33 @@ export function construirDespatchAdviceXML(d) {
           <cbc:ID>${cdata(vs.placa)}</cbc:ID>${tuceXml(vs, '          ')}${autorizXml(vs, '          ')}
         </cac:AttachedTransportEquipment>`
     : '';
+  // ── Contenedores comex → cac:Package dentro de TransportHandlingUnit (tras TransportEquipment) ──
+  // ID = nº de contenedor, TraceID = nº de precinto (naviera). Calcado de EG07-273.
+  const packagesXml = (comex?.contenedores || []).map((c) => `
+      <cac:Package>
+        <cbc:ID>${cdata(c.numero_contenedor)}</cbc:ID>${c.numero_precinto ? `
+        <cbc:TraceID>${cdata(c.numero_precinto)}</cbc:TraceID>` : ''}
+      </cac:Package>`).join('');
   const vehiculoXml = vp
     ? `
     <cac:TransportHandlingUnit>
       <cac:TransportEquipment>
         <cbc:ID>${cdata(vp.placa)}</cbc:ID>${tuceXml(vp, '        ')}${attachedXml}${autorizXml(vp, '        ')}
-      </cac:TransportEquipment>
+      </cac:TransportEquipment>${packagesXml}
     </cac:TransportHandlingUnit>`
     : (esTercero && !registrar)
       // ── Caso 1 (tercero sin registrar veh/cond): TransportHandlingUnit vacío (espeja EG07-81) ──
       ? `
     <cac:TransportHandlingUnit>
-      <cac:TransportEquipment></cac:TransportEquipment>
+      <cac:TransportEquipment></cac:TransportEquipment>${packagesXml}
     </cac:TransportHandlingUnit>`
-      : '';
+      // Sin vehículo pero con contenedores (comex sin veh declarado): THU solo con Package.
+      : (packagesXml
+        ? `
+    <cac:TransportHandlingUnit>
+      <cac:TransportEquipment></cac:TransportEquipment>${packagesXml}
+    </cac:TransportHandlingUnit>`
+        : '');
 
   // Observación (texto libre + OC) → cbc:Note tras DespatchAdviceTypeCode.
   const notaXml = d.observacion
@@ -227,20 +247,41 @@ export function construirDespatchAdviceXML(d) {
   </cac:AdditionalDocumentReference>`
     : '';
 
-  const lineasXml = d.detalle.map((it, i) => `  <cac:DespatchLine>
+  // Documentos relacionados comex (catálogo 61): DAM (cód. 50), DS, etc. Cada uno con su
+  // DocumentType descriptivo. Calcado de EG07-273. GRE Remitente lleva serie → ID = serie-numero.
+  const comexDocsXml = (comex?.docsRelacionados || []).map((doc) => {
+    const id = doc.serie ? `${doc.serie}-${doc.numero}` : doc.numero;
+    return `\n  <cac:AdditionalDocumentReference>
+    <cbc:ID>${cdata(id)}</cbc:ID>
+    <cbc:DocumentTypeCode listAgencyName="PE:SUNAT" listName="Documento relacionado al transporte" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61">${cdata(doc.tipo_cod)}</cbc:DocumentTypeCode>
+    <cbc:DocumentType>${cdata(doc.tipo_desc)}</cbc:DocumentType>
+  </cac:AdditionalDocumentReference>`;
+  }).join('');
+
+  // AdditionalItemProperty (catálogo 55). 7022 siempre; los comex (7020 subpartida / 7021 nº DAM /
+  // 7023 nº serie DAM) solo si hay datos. Orden calcado de EG07-273: 7020, 7022, 7021, 7023.
+  const CAT55 = 'listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55"';
+  const itemProp = (nombre, code, value) => `
+      <cac:AdditionalItemProperty>
+        <cbc:Name>${nombre}</cbc:Name>
+        <cbc:NameCode ${CAT55}>${code}</cbc:NameCode>
+        <cbc:Value>${cdata(String(value))}</cbc:Value>
+      </cac:AdditionalItemProperty>`;
+  const lineasXml = d.detalle.map((it, i) => {
+    const prop7020 = it.subpartida_nacional ? itemProp('Subpartida nacional', '7020', it.subpartida_nacional) : '';
+    const prop7022 = itemProp('Indicador de bien regulado por SUNAT', '7022', '0');
+    const prop7021 = comex?.damNumero ? itemProp('Numeracion de la DAM o DS', '7021', comex.damNumero) : '';
+    const prop7023 = it.dam_serie ? itemProp('Numero de serie en la DAM o DS', '7023', it.dam_serie) : '';
+    return `  <cac:DespatchLine>
     <cbc:ID>${i + 1}</cbc:ID>
     <cbc:DeliveredQuantity unitCode="${it.codigo_unidad_sunat}" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">${Number(it.cantidad)}</cbc:DeliveredQuantity>
     <cac:OrderLineReference><cbc:LineID>${i + 1}</cbc:LineID></cac:OrderLineReference>
     <cac:Item>
       <cbc:Description>${cdata(trunc(it.nombre || it.codigo, 250))}</cbc:Description>
-      <cac:SellersItemIdentification><cbc:ID>${cdata(it.codigo || it.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>
-      <cac:AdditionalItemProperty>
-        <cbc:Name>Indicador de bien regulado por SUNAT</cbc:Name>
-        <cbc:NameCode listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55">7022</cbc:NameCode>
-        <cbc:Value>0</cbc:Value>
-      </cac:AdditionalItemProperty>
+      <cac:SellersItemIdentification><cbc:ID>${cdata(it.codigo || it.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>${prop7020}${prop7022}${prop7021}${prop7023}
     </cac:Item>
-  </cac:DespatchLine>`).join('\n');
+  </cac:DespatchLine>`;
+  }).join('\n');
 
   // OJO: sin xmlns:ds en la raíz (lo agrega la firma). ext:ExtensionContent vacío = placeholder
   // que rellena firma.service con la firma envelopada.
@@ -257,7 +298,7 @@ export function construirDespatchAdviceXML(d) {
   <cbc:ID>${idComprobante}</cbc:ID>
   <cbc:IssueDate>${d.fecha.emision}</cbc:IssueDate>
   <cbc:IssueTime>${d.fecha.hora}</cbc:IssueTime>
-  <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>${notaXml}${docRelXml}
+  <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>${notaXml}${docRelXml}${comexDocsXml}
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>
@@ -292,7 +333,7 @@ export function construirDespatchAdviceXML(d) {
     <cac:Delivery>
       <cac:DeliveryAddress>
         <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI">${g.ubigeo_llegada}</cbc:ID>
-        <cbc:AddressTypeCode listID="${cli.ruc || ''}" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
+        <cbc:AddressTypeCode listID="${cli.ruc || ''}" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">${comex?.deliveryEstablishmentCode || '0'}</cbc:AddressTypeCode>
         <cac:AddressLine><cbc:Line>${cdata(trunc(g.direccion_llegada, 250))}</cbc:Line></cac:AddressLine>
       </cac:DeliveryAddress>
       <cac:Despatch>

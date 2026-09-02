@@ -348,9 +348,9 @@ function DetalleCotizacion() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 3
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(valor);
   };
 
@@ -603,20 +603,28 @@ function DetalleCotizacion() {
   const calcularTotalesReales = () => {
     if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0, pesoTotal: 0 };
 
-    let pesoTotal = 0;
-    const sub = cotizacion.detalle.reduce((acc, item) => {
-      const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const peso = parseFloat(item.peso_unitario || 0);
-      if (peso > 0) pesoTotal += parseFloat(item.cantidad) * peso;
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
-
     const tipoImp = (cotizacion.tipo_impuesto || 'IGV').toUpperCase();
     const esExonerado = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImp);
     const pct = parseFloat(cotizacion.porcentaje_impuesto || 18);
 
-    const tax = esExonerado ? 0 : sub * (pct / 100);
-    return { sub, tax, tot: sub + tax, pesoTotal };
+    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
+    // para que la cotización cuadre con la OV que se genera al convertirla.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    let pesoTotal = 0;
+    let sub = 0;
+    let tax = 0;
+    cotizacion.detalle.forEach((item) => {
+      const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      const peso = parseFloat(item.peso_unitario || 0);
+      if (peso > 0) pesoTotal += parseFloat(item.cantidad) * peso;
+      if (isNaN(val)) return;
+      const lineBase = round2(val);
+      sub += lineBase;
+      if (!esExonerado) tax += round2(lineBase * (pct / 100));
+    });
+    sub = round2(sub);
+    tax = round2(tax);
+    return { sub, tax, tot: round2(sub + tax), pesoTotal };
   };
 
   const { sub: subtotalReal, tax: igvReal, tot: totalReal, pesoTotal } = calcularTotalesReales();

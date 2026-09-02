@@ -90,39 +90,67 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const [[g]] = await conn.query('SELECT * FROM guias_remision WHERE id_guia = ? FOR UPDATE', [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     if (g.sunat_estado === 'ACEPTADO') throw new AppError('La guía ya fue aceptada por SUNAT', 409);
-    // Regla de negocio: la GRE se emite una vez que la orden ya fue despachada.
-    const [[ov]] = await conn.query(
-      `SELECT estado, orden_compra_cliente, tipo_entrega, transporte_registrar,
-              transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
-              transporte_dni2, transporte_conductor2, transporte_licencia2,
-              transporte_tuc, transporte_autorizacion,
-              transporte_placa2, transporte_tuc2, transporte_autorizacion2,
-              transporte_ind_transbordo, transporte_ind_m1l, transporte_ind_retorno_vacio,
-              DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
-         FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
-    if (!ov || ov.estado !== 'Despachada') {
-      throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
+    // Origen de la guía: 'Venta' (ligada a una OV despachada) o 'Compra' (ligada a una orden de
+    // compra; SPI recoge su mercadería con flota propia y emite la GRE con motivo 02). La rama
+    // Compra NO valida estado de OV ni carga cliente: el destinatario es la propia empresa.
+    const esCompra = g.tipo_origen === 'Compra';
+
+    let ov = null;
+    if (!esCompra) {
+      // Regla de negocio: la GRE de venta se emite una vez que la orden ya fue despachada.
+      const [ovRows] = await conn.query(
+        `SELECT estado, orden_compra_cliente, tipo_entrega, transporte_registrar,
+                transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
+                transporte_dni2, transporte_conductor2, transporte_licencia2,
+                transporte_tuc, transporte_autorizacion,
+                transporte_placa2, transporte_tuc2, transporte_autorizacion2,
+                transporte_ind_transbordo, transporte_ind_m1l, transporte_ind_retorno_vacio,
+                DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
+           FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
+      ov = ovRows[0] || null;
+      if (!ov || ov.estado !== 'Despachada') {
+        throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
+      }
     }
     if (!g.ubigeo_partida || !g.ubigeo_llegada) throw new AppError('Faltan ubigeos de partida/llegada (6 dígitos)', 422);
     if (!(Number(g.peso_bruto_kg) > 0)) throw new AppError('peso_bruto_kg debe ser > 0', 422);
     if (!g.motivo_traslado_cod) throw new AppError('Falta motivo_traslado_cod (catálogo 20)', 422);
 
-    const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
-    if (!cliente) throw new AppError('Cliente de la guía no existe', 404);
     const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
 
-    // Comercio exterior (exportación): el DESTINATARIO de la GRE es el operador de puerto/depósito
-    // (guias_remision.destinatario_ruc/razon), NO el cliente extranjero de la OV (ese va en la factura).
+    // Destinatario de la GRE + (solo compra) proveedor y documento relacionado.
     const esComex = Number(g.es_comercio_exterior) === 1;
-    let destinatario = cliente;
-    if (esComex) {
-      if (!g.destinatario_ruc || !g.destinatario_razon) {
-        throw new AppError('Comercio exterior: falta el destinatario (RUC y razón social)', 422);
+    let destinatario, proveedor = null, docRelacionado = undefined;
+    if (esCompra) {
+      // Compra: destinatario = la propia empresa; el vendedor va en SellerSupplierParty; la factura
+      // del proveedor se referencia con IssuerParty. Espeja EG07-333.
+      const [[oc]] = await conn.query(
+        'SELECT id_proveedor, serie_documento, numero_documento FROM ordenes_compra WHERE id_orden_compra = ?',
+        [g.id_orden_compra]);
+      if (!oc) throw new AppError('Orden de compra de la guía no existe', 404);
+      const [[prov]] = await conn.query(
+        'SELECT ruc, razon_social FROM proveedores WHERE id_proveedor = ?', [g.id_proveedor || oc.id_proveedor]);
+      if (!prov?.ruc) throw new AppError('Proveedor de la guía no existe', 404);
+      proveedor = { ruc: prov.ruc, razon_social: prov.razon_social };
+      destinatario = { ruc: empresa.ruc, razon_social: empresa.razon_social, tipo_documento: 'RUC' };
+      if (oc.serie_documento && oc.numero_documento) {
+        docRelacionado = { tipo: '01', tipo_desc: 'Factura', numero: `${oc.serie_documento}-${oc.numero_documento}`, issuerRuc: prov.ruc };
       }
-      if (!/^\d{11}$/.test(String(g.destinatario_ruc))) {
-        throw new AppError('RUC del destinatario comex inválido (11 dígitos)', 422);
+    } else {
+      const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
+      if (!cliente) throw new AppError('Cliente de la guía no existe', 404);
+      destinatario = cliente;
+      // Comercio exterior (exportación): el DESTINATARIO de la GRE es el operador de puerto/depósito
+      // (guias_remision.destinatario_ruc/razon), NO el cliente extranjero de la OV (ese va en la factura).
+      if (esComex) {
+        if (!g.destinatario_ruc || !g.destinatario_razon) {
+          throw new AppError('Comercio exterior: falta el destinatario (RUC y razón social)', 422);
+        }
+        if (!/^\d{11}$/.test(String(g.destinatario_ruc))) {
+          throw new AppError('RUC del destinatario comex inválido (11 dígitos)', 422);
+        }
+        destinatario = { ruc: g.destinatario_ruc, razon_social: g.destinatario_razon, tipo_documento: 'RUC' };
       }
-      destinatario = { ruc: g.destinatario_ruc, razon_social: g.destinatario_razon, tipo_documento: 'RUC' };
     }
 
     // ── Transporte ─────────────────────────────────────────────────────────────
@@ -136,9 +164,9 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     let carrier = null, conductores = [], vehiculos = [], registrar = true;
     // Indicadores opcionales (SpecialInstructions) tomados de la OV.
     const indicadores = {
-      transbordo: !!ov.transporte_ind_transbordo,
-      m1l: !!ov.transporte_ind_m1l,
-      retornoVacio: !!ov.transporte_ind_retorno_vacio,
+      transbordo: !!ov?.transporte_ind_transbordo,
+      m1l: !!ov?.transporte_ind_m1l,
+      retornoVacio: !!ov?.transporte_ind_retorno_vacio,
     };
 
     if (esTercero) {
@@ -291,7 +319,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       fecha: { emision, hora }, fechaTraslado, modalidad,
       transportista: carrier, registrarTransportista: registrar, fechaEntregaTransportista,
       conductores, vehiculos, indicadores,
-      observacion, comex
+      observacion, comex, proveedor, docRelacionado
     };
     const { xml } = construirDespatchAdviceXML(datos);
     const { xmlFirmado, digestValue } = firmarXml(xml);

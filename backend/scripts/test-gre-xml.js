@@ -366,5 +366,89 @@ check('COMEX: orden de propiedades = 7020, 7022, 7021, 7023',
   props.map((p) => String(p?.NameCode?.['#text'])).join(',') === '7020,7022,7021,7023',
   props.map((p) => String(p?.NameCode?.['#text'])).join(','));
 
+// ── Escenario COMPRA (GRE 09, motivo 02) — SPI recoge su mercadería: espeja EG07-333 ─────────
+// Diferencias vs venta: destinatario = la propia empresa; se agrega cac:SellerSupplierParty con el
+// proveedor; la factura del proveedor va como AdditionalDocumentReference con IssuerParty (RUC
+// proveedor); y el establecimiento de partida (listID) es el del proveedor. Contrasta con el XML real.
+console.log('\n=== COMPRA (GRE 09 motivo 02) — SPI recoge con flota propia (espeja EG07-333) ===\n');
+
+const PROV_RUC = '20100064490';
+const datosCompra = {
+  tipo: '09', serie: 'EG07', numero: '333',
+  empresa: { ruc: RUC, razon_social: 'INDPACK S.A.C.' },
+  cliente: { ruc: RUC, razon_social: 'INDPACK S.A.C.', tipo_documento: 'RUC' }, // destinatario = la propia empresa
+  proveedor: { ruc: PROV_RUC, razon_social: 'DISPERCOL S A' },
+  guia: {
+    motivo_traslado_cod: '02', motivo_traslado: 'COMPRA', peso_bruto_kg: 3000,
+    ubigeo_partida: '150103', direccion_partida: 'AV. SEPARADORA INDUSTRIAL NRO. 2295 URB. VULCANO LIMA - LIMA - ATE',
+    ubigeo_llegada: '150142', direccion_llegada: 'AV. EL SOL MZ. LL-1 LOTE. 4 B COO. LAS VERTIENTES - VILLA EL SALVADOR'
+  },
+  detalle: [
+    { cantidad: 1500, codigo_unidad_sunat: 'KGM', nombre: 'EXXONMOBIL LD 2022.AC', codigo: '01002098F' },
+    { cantidad: 1500, codigo_unidad_sunat: 'KGM', nombre: 'BRASKEM LL4405S', codigo: '02002057F' }
+  ],
+  fecha: { emision: '2026-09-01', hora: '16:48:25' }, fechaTraslado: '2026-09-01',
+  modalidad: '02',
+  conductor: { dni: '75336849', nombre: 'RODRIGUEZ SANANCINO MAX ALEX', licencia: 'Q75336849' },
+  vehiculos: [{ placa: 'ANA848', tuce: null, autorizacion: null }],
+  docRelacionado: { tipo: '01', tipo_desc: 'Factura', numero: 'F001-115256', issuerRuc: PROV_RUC }
+};
+const { xml: xmlC } = construirDespatchAdviceXML(datosCompra);
+check('COMPRA: XML bien-formado', XMLValidator.validate(xmlC) === true);
+const dc = parser.parse(xmlC).DespatchAdvice;
+const shipC = dc?.Shipment;
+
+check('COMPRA: HandlingCode = 02 (Compra)', String(shipC?.HandlingCode?.['#text']) === '02');
+check('COMPRA: HandlingInstructions = COMPRA', String(shipC?.HandlingInstructions || '').toUpperCase().includes('COMPRA'));
+check('COMPRA: DespatchSupplierParty (remitente) = SPI',
+  String(dc?.DespatchSupplierParty?.Party?.PartyIdentification?.ID?.['#text']) === RUC);
+check('COMPRA: DeliveryCustomerParty (destinatario) = SPI mismo',
+  String(dc?.DeliveryCustomerParty?.Party?.PartyIdentification?.ID?.['#text']) === RUC);
+check('COMPRA: SellerSupplierParty = proveedor',
+  String(dc?.SellerSupplierParty?.Party?.PartyIdentification?.ID?.['#text']) === PROV_RUC);
+check('COMPRA: SellerSupplierParty razón social',
+  String(dc?.SellerSupplierParty?.Party?.PartyLegalEntity?.RegistrationName) === 'DISPERCOL S A');
+
+// AdditionalDocumentReference = factura del proveedor (forma completa cat.61 + IssuerParty).
+const docRelC = dc?.AdditionalDocumentReference;
+check('COMPRA: AdditionalDocumentReference ID = factura proveedor', String(docRelC?.ID) === 'F001-115256');
+check('COMPRA: DocumentTypeCode = 01 (cat.61)', String(docRelC?.DocumentTypeCode?.['#text']) === '01');
+check('COMPRA: DocumentType = Factura', String(docRelC?.DocumentType) === 'Factura');
+check('COMPRA: IssuerParty = RUC del proveedor emisor',
+  String(docRelC?.IssuerParty?.PartyIdentification?.ID?.['#text']) === PROV_RUC);
+
+// Establecimientos: partida = proveedor, llegada = SPI.
+check('COMPRA: partida (DespatchAddress) listID = RUC proveedor',
+  String(shipC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']) === PROV_RUC,
+  `listID=${shipC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']}`);
+check('COMPRA: llegada (DeliveryAddress) listID = RUC SPI',
+  String(shipC?.Delivery?.DeliveryAddress?.AddressTypeCode?.['@listID']) === RUC);
+check('COMPRA: 2 DespatchLine (KGM)',
+  Array.isArray(dc?.DespatchLine) && dc.DespatchLine.length === 2 &&
+  dc.DespatchLine[0]?.DeliveredQuantity?.['@unitCode'] === 'KGM');
+
+// Regresión: la GRE de VENTA (sin proveedor) NO emite SellerSupplierParty ni IssuerParty.
+check('COMPRA: VENTA no regresiona (sin SellerSupplierParty)', da?.SellerSupplierParty === undefined);
+check('COMPRA: VENTA no regresiona (docRel simple sin IssuerParty)',
+  da?.AdditionalDocumentReference === undefined || da?.AdditionalDocumentReference?.IssuerParty === undefined);
+
+// Contraste directo contra el XML REAL aceptado por SUNAT (docs/20550932297-09-EG07-333.xml).
+try {
+  const refXml = readFileSync(join(__dirname, '..', '..', 'docs', '20550932297-09-EG07-333.xml'), 'utf8');
+  const refC = parser.parse(refXml).DespatchAdvice;
+  const shipRC = refC?.Shipment;
+  check('[EG07-333] motivo real = 02 == el generado', String(shipRC?.HandlingCode?.['#text']) === String(shipC?.HandlingCode?.['#text']));
+  check('[EG07-333] destinatario real = SPI == el generado',
+    String(refC?.DeliveryCustomerParty?.Party?.PartyIdentification?.ID?.['#text']) === String(dc?.DeliveryCustomerParty?.Party?.PartyIdentification?.ID?.['#text']));
+  check('[EG07-333] SellerSupplierParty real == el generado',
+    String(refC?.SellerSupplierParty?.Party?.PartyIdentification?.ID?.['#text']) === String(dc?.SellerSupplierParty?.Party?.PartyIdentification?.ID?.['#text']));
+  check('[EG07-333] IssuerParty real == el generado',
+    String(refC?.AdditionalDocumentReference?.IssuerParty?.PartyIdentification?.ID?.['#text']) === String(docRelC?.IssuerParty?.PartyIdentification?.ID?.['#text']));
+  check('[EG07-333] partida listID real (proveedor) == el generado',
+    String(shipRC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']) === String(shipC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']));
+} catch (e) {
+  check('XML de referencia EG07-333 legible en docs/', false, e.message);
+}
+
 console.log(`\n=== RESUMEN: ${pass} PASS · ${fail} FAIL ===\n`);
 if (fail > 0) process.exit(1);

@@ -9,6 +9,14 @@ import Loading from '../../components/UI/Loading';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { resolverUbigeoDesdeDireccion } from '../../utils/ubigeo';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
+import puertos from '../../data/puertos.json';
+
+// Tipos de documento relacionado comex (catálogo 61). MVP: DAM (código 50 confirmado vs molde
+// EG07-273). Otros tipos (DS, Constancia IVAP/Detracción, Otros) requieren confirmar su código
+// cat.61 en las Reglas de Validación antes de habilitarlos.
+const DOC_TIPOS_COMEX = [
+  { cod: '50', desc: 'Declaración Aduanera de Mercancías (DAM)' },
+];
 
 function NuevaGuiaRemision() {
   const navigate = useNavigate();
@@ -25,6 +33,12 @@ function NuevaGuiaRemision() {
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   const [transportistas, setTransportistas] = useState([]);
+  // Comercio exterior (exportación): catálogo de destinatarios + listas repetibles.
+  const [destinatariosComex, setDestinatariosComex] = useState([]);
+  const [docsRelacionados, setDocsRelacionados] = useState([
+    { tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: '', numero: '' }
+  ]);
+  const [contenedores, setContenedores] = useState([{ numero_contenedor: '', numero_precinto: '' }]);
   // Transportista heredado de la OV cuando la entrega es por tercero (modalidad pública).
   const [ovTransportista, setOvTransportista] = useState(null);
   // Datos del carro particular del cliente (sin RUC) heredados de la OV (modalidad 02 privada, texto libre).
@@ -51,8 +65,16 @@ function NuevaGuiaRemision() {
     observaciones: '',
     id_conductor: '',
     id_vehiculo: '',
-    id_transportista: ''
+    id_transportista: '',
+    // Comercio exterior (exportación)
+    destinatario_ruc: '',
+    destinatario_razon: '',
+    puerto_codigo: '',
+    traslado_total_dam: 1
   });
+
+  // La OV de exportación (checkbox "Factura de exportación") activa toda la captura comex.
+  const esExportacion = Number(orden?.es_exportacion) === 1;
 
   // Modalidad pública = transporte por un tercero transportista (RUC + razón social).
   const esPublico = String(formData.modalidad_transporte)
@@ -82,6 +104,14 @@ function NuevaGuiaRemision() {
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
         if (rt.data?.success) setTransportistas(rt.data.data || []);
+        // Catálogo comex aparte: un fallo (endpoint nuevo aún no desplegado) NO debe romper los
+        // catálogos de transporte de las guías normales.
+        try {
+          const rd = await guiasRemisionAPI.getDestinatariosComex();
+          if (rd.data?.success) setDestinatariosComex(rd.data.data || []);
+        } catch (e) {
+          console.warn('Catálogo de destinatarios comex no disponible:', e.message);
+        }
       } catch (err) {
         console.error('Error al cargar catálogos de transporte:', err);
       }
@@ -138,7 +168,7 @@ function NuevaGuiaRemision() {
         setProductosDisponibles(productosConDisponibilidad);
         
         // Inicializar detalle con cantidades disponibles
-        const detalleInicial = productosConDisponibilidad.map(p => ({
+        const detalleInicial = productosConDisponibilidad.map((p, i) => ({
           id_detalle_orden: p.id_detalle,
           id_producto: p.id_producto,
           codigo_producto: p.codigo_producto,
@@ -146,7 +176,10 @@ function NuevaGuiaRemision() {
           unidad_medida: p.unidad_medida,
           cantidad: p.cantidad_disponible,
           peso_unitario_kg: p.peso_unitario_kg,
-          descripcion: p.producto
+          descripcion: p.producto,
+          // Comex: subpartida nacional (7020) y nº de serie en la DAM (7023). Serie default = orden del ítem.
+          subpartida_nacional: '',
+          dam_serie: String(i + 1)
         }));
         
         setDetalle(detalleInicial);
@@ -173,6 +206,10 @@ function NuevaGuiaRemision() {
         setFormData(prev => ({
           ...prev,
           id_orden_venta: id,
+          // Comercio exterior: si la OV está marcada como exportación (checkbox
+          // "Factura de exportación"), la guía nace con motivo Exportación (cat.20 = 09).
+          // El backend igual lo fuerza desde ordenes_venta.es_exportacion (fuente única).
+          motivo_traslado: Number(ordenData.es_exportacion) === 1 ? 'Exportación' : prev.motivo_traslado,
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || '',
           // Ubigeo: si la OV no lo trae, se intenta derivar de la cola de la dirección de entrega
@@ -258,6 +295,43 @@ function NuevaGuiaRemision() {
     newDetalle[index].peso_unitario_kg = parseFloat(peso) || 0;
     setDetalle(newDetalle);
   };
+
+  // ── Comercio exterior (exportación): handlers ──────────────────────────────────────────────
+  // Subpartida nacional / nº serie DAM por ítem.
+  const handleComexDetalle = (index, field, value) => {
+    const nd = [...detalle];
+    nd[index][field] = value;
+    setDetalle(nd);
+  };
+  // Destinatario elegido del catálogo → snapshot RUC + razón + puerto (para AddressTypeCode en backend).
+  const handleDestinatario = (ruc) => {
+    const d = destinatariosComex.find((x) => x.ruc === ruc);
+    setFormData((prev) => ({ ...prev, destinatario_ruc: ruc, destinatario_razon: d?.razon_social || '' }));
+  };
+  // Puerto de llegada → arma dirección + ubigeo de llegada desde el catálogo estático.
+  const handlePuerto = (codigo) => {
+    const p = puertos.find((x) => x.codigo === codigo);
+    setFormData((prev) => ({
+      ...prev,
+      puerto_codigo: codigo,
+      direccion_llegada: p?.domicilio || prev.direccion_llegada,
+      ubigeo_llegada: p?.ubigeo || prev.ubigeo_llegada,
+      ciudad_llegada: p?.nombre || prev.ciudad_llegada,
+    }));
+  };
+  // Documentos relacionados (lista repetible).
+  const setDoc = (i, field, value) => setDocsRelacionados((prev) => prev.map((d, j) => {
+    if (j !== i) return d;
+    const nd = { ...d, [field]: value };
+    if (field === 'tipo_cod') nd.tipo_desc = (DOC_TIPOS_COMEX.find((t) => t.cod === value)?.desc) || '';
+    return nd;
+  }));
+  const addDoc = () => setDocsRelacionados((prev) => [...prev, { tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: '', numero: '' }]);
+  const removeDoc = (i) => setDocsRelacionados((prev) => prev.filter((_, j) => j !== i));
+  // Contenedores (lista repetible).
+  const setCont = (i, field, value) => setContenedores((prev) => prev.map((c, j) => (j === i ? { ...c, [field]: value } : c)));
+  const addCont = () => setContenedores((prev) => [...prev, { numero_contenedor: '', numero_precinto: '' }]);
+  const removeCont = (i) => setContenedores((prev) => prev.filter((_, j) => j !== i));
 
   // Alta rápida de transportista: lo registra en el maestro y lo deja seleccionado en la guía.
   const guardarTransportista = async () => {
@@ -357,6 +431,28 @@ function NuevaGuiaRemision() {
       return;
     }
 
+    // Validación de comercio exterior (exportación): destinatario, DAM, contenedor y subpartidas.
+    if (esExportacion) {
+      if (!/^\d{11}$/.test(String(formData.destinatario_ruc || ''))) {
+        setError('Exportación: selecciona el destinatario (operador de puerto/depósito) del catálogo.');
+        return;
+      }
+      const damOk = docsRelacionados.some((d) => d.tipo_cod === '50' && String(d.numero).trim());
+      if (!damOk) {
+        setError('Exportación: agrega el número de la DAM en Documentos Relacionados.');
+        return;
+      }
+      if (!contenedores.some((c) => String(c.numero_contenedor).trim())) {
+        setError('Exportación: ingresa al menos un número de contenedor.');
+        return;
+      }
+      const faltaSub = detalle.some((it) => parseFloat(it.cantidad) > 0 && !String(it.subpartida_nacional || '').trim());
+      if (faltaSub) {
+        setError('Exportación: falta la subpartida nacional en uno o más productos.');
+        return;
+      }
+    }
+
     // Requisitos según modalidad para que la GRE sea emitible (se emite en un solo paso):
     //  · Público  → transportista tercero (RUC + razón social).
     //  · Privado  → conductor + vehículo (placa de la flota).
@@ -411,10 +507,27 @@ function NuevaGuiaRemision() {
           cantidad: parseFloat(item.cantidad),
           unidad_medida: item.unidad_medida,
           descripcion: item.descripcion || item.producto,
-          peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0
+          peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0,
+          // Comex: subpartida (7020) + serie DAM (7023) por ítem.
+          subpartida_nacional: esExportacion ? (item.subpartida_nacional || '').trim() : undefined,
+          dam_serie: esExportacion ? (item.dam_serie || '').trim() : undefined
         }))
       };
-      
+
+      // Datos de comercio exterior (solo si la OV es exportación).
+      if (esExportacion) {
+        payload.destinatario_ruc = formData.destinatario_ruc;
+        payload.destinatario_razon = formData.destinatario_razon;
+        payload.puerto_codigo = formData.puerto_codigo;
+        payload.traslado_total_dam = formData.traslado_total_dam;
+        payload.docs_relacionados = docsRelacionados
+          .filter((d) => d.tipo_cod && String(d.numero).trim())
+          .map((d) => ({ tipo_cod: d.tipo_cod, tipo_desc: d.tipo_desc, serie: (d.serie || '').trim() || null, numero: String(d.numero).trim() }));
+        payload.contenedores = contenedores
+          .filter((c) => String(c.numero_contenedor).trim())
+          .map((c) => ({ numero_contenedor: String(c.numero_contenedor).trim(), numero_precinto: (c.numero_precinto || '').trim() || null }));
+      }
+
       const response = await guiasRemisionAPI.create(payload);
 
       if (!response.data.success) {
@@ -546,11 +659,20 @@ function NuevaGuiaRemision() {
                   value={formData.motivo_traslado}
                   onChange={(e) => setFormData({ ...formData, motivo_traslado: e.target.value })}
                   required
+                  disabled={Number(orden?.es_exportacion) === 1}
                 >
                   <option value="Venta">Venta</option>
                   <option value="Traslado entre Almacenes">Traslado entre Almacenes</option>
                   <option value="Devolución">Devolución</option>
+                  {Number(orden?.es_exportacion) === 1 && (
+                    <option value="Exportación">Exportación</option>
+                  )}
                 </select>
+                {Number(orden?.es_exportacion) === 1 && (
+                  <p className="text-xs text-muted mt-1">
+                    Operación de comercio exterior (la OV está marcada como exportación): motivo fijado en Exportación (código 09).
+                  </p>
+                )}
               </div>
               
               <div className="form-group">
@@ -735,31 +857,160 @@ function NuevaGuiaRemision() {
               </h2>
             </div>
             <div className="card-body">
-              <div className="form-group">
-                <label className="form-label">Dirección de Llegada *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.direccion_llegada}
-                  onChange={(e) => setFormData({ ...formData, direccion_llegada: e.target.value })}
-                  placeholder="Dirección completa de entrega"
-                  required
-                />
-              </div>
-              
-              <UbigeoSelector
-                value={formData.ubigeo_llegada}
-                required
-                onChange={(codigo, meta) => setFormData({
-                  ...formData,
-                  ubigeo_llegada: codigo,
-                  // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
-                  ciudad_llegada: meta?.distrito || '',
-                })}
-              />
+              {esExportacion ? (
+                <>
+                  {/* Exportación: el punto de llegada es el PUERTO (catálogo estático con ubigeo fijo). */}
+                  <div className="form-group">
+                    <label className="form-label">Puerto de embarque *</label>
+                    <select
+                      className="form-select"
+                      value={formData.puerto_codigo}
+                      onChange={(e) => handlePuerto(e.target.value)}
+                      required
+                    >
+                      <option value="">Selecciona un puerto…</option>
+                      {puertos.map((p) => (
+                        <option key={p.codigo} value={p.codigo}>{p.nombre} (ubigeo {p.ubigeo})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Dirección de Llegada *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formData.direccion_llegada}
+                      onChange={(e) => setFormData({ ...formData, direccion_llegada: e.target.value })}
+                      placeholder="Se completa con el puerto; puedes ajustarla"
+                      required
+                    />
+                    <small className="text-gray-500">Ubigeo de llegada: {formData.ubigeo_llegada || '—'} (del puerto)</small>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Dirección de Llegada *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formData.direccion_llegada}
+                      onChange={(e) => setFormData({ ...formData, direccion_llegada: e.target.value })}
+                      placeholder="Dirección completa de entrega"
+                      required
+                    />
+                  </div>
+
+                  <UbigeoSelector
+                    value={formData.ubigeo_llegada}
+                    required
+                    onChange={(codigo, meta) => setFormData({
+                      ...formData,
+                      ubigeo_llegada: codigo,
+                      // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
+                      ciudad_llegada: meta?.distrito || '',
+                    })}
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>
+
+        {esExportacion && (
+          <div className="card mb-4">
+            <div className="card-header bg-gradient-to-r from-amber-50 to-white">
+              <h2 className="card-title text-amber-900">
+                <FileText size={20} />
+                Comercio Exterior (Exportación)
+              </h2>
+            </div>
+            <div className="card-body space-y-5">
+              {/* Destinatario (operador de puerto/depósito) */}
+              <div className="form-group">
+                <label className="form-label">Destinatario (operador de puerto/depósito) *</label>
+                <select
+                  className="form-select"
+                  value={formData.destinatario_ruc}
+                  onChange={(e) => handleDestinatario(e.target.value)}
+                  required
+                >
+                  <option value="">Selecciona un destinatario…</option>
+                  {destinatariosComex.map((d) => (
+                    <option key={d.ruc} value={d.ruc}>{d.razon_social} — RUC {d.ruc}</option>
+                  ))}
+                </select>
+                <small className="text-gray-500">
+                  Es el operador local que recibe en el puerto, NO el cliente extranjero (ese va en la factura).
+                  {destinatariosComex.length === 0 && ' No hay destinatarios registrados: créalos en el catálogo comex.'}
+                </small>
+              </div>
+
+              {/* Documentos relacionados (DAM) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="form-label mb-0">Documentos Relacionados *</label>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={addDoc}>
+                    <Plus size={14} className="mr-1" /> Agregar documento
+                  </button>
+                </div>
+                {docsRelacionados.map((d, i) => (
+                  <div key={i} className="flex flex-wrap items-end gap-2 mb-2">
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="text-xs text-muted">Tipo</label>
+                      <select className="form-select" value={d.tipo_cod} onChange={(e) => setDoc(i, 'tipo_cod', e.target.value)}>
+                        {DOC_TIPOS_COMEX.map((t) => <option key={t.cod} value={t.cod}>{t.desc}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="text-xs text-muted">Número (ej. 118-2026-40-70727)</label>
+                      <input className="form-input" value={d.numero} onChange={(e) => setDoc(i, 'numero', e.target.value)} placeholder="{aduana}-{año}-{régimen}-{número}" />
+                    </div>
+                    {docsRelacionados.length > 1 && (
+                      <button type="button" className="btn btn-sm btn-outline text-danger" onClick={() => removeDoc(i)}>Quitar</button>
+                    )}
+                  </div>
+                ))}
+                <small className="text-gray-500">Régimen DAM = 40 (exportación). El número no debe iniciar con cero.</small>
+              </div>
+
+              {/* Traslado total de la DAM/DS (alcance actual: Sí) */}
+              <div className="form-group">
+                <label className="form-label">¿Traslado por el total de los bienes de la DAM/DS?</label>
+                <div className="text-sm">
+                  <span className="badge badge-success">Sí</span>
+                  <span className="text-gray-500 ml-2">El peso bruto y los bienes se toman de la DAM.</span>
+                </div>
+              </div>
+
+              {/* Contenedores + precintos */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="form-label mb-0">Contenedores *</label>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={addCont}>
+                    <Plus size={14} className="mr-1" /> Agregar contenedor
+                  </button>
+                </div>
+                {contenedores.map((c, i) => (
+                  <div key={i} className="flex flex-wrap items-end gap-2 mb-2">
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="text-xs text-muted">Nº de contenedor {i + 1}</label>
+                      <input className="form-input" value={c.numero_contenedor} onChange={(e) => setCont(i, 'numero_contenedor', e.target.value)} placeholder="Ej. MRSU4280077" />
+                    </div>
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="text-xs text-muted">Nº de precinto (naviera)</label>
+                      <input className="form-input" value={c.numero_precinto} onChange={(e) => setCont(i, 'numero_precinto', e.target.value)} placeholder="Ej. MLPE0153521" />
+                    </div>
+                    {contenedores.length > 1 && (
+                      <button type="button" className="btn btn-sm btn-outline text-danger" onClick={() => removeCont(i)}>Quitar</button>
+                    )}
+                  </div>
+                ))}
+                <small className="text-gray-500">El precinto de agencia, si aplica, se escribe en Observaciones al emitir.</small>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="card mb-4">
           <div className="card-header bg-gradient-to-r from-gray-50 to-white">
@@ -784,6 +1035,8 @@ function NuevaGuiaRemision() {
                         <th>UM</th>
                         <th className="text-right">Peso Unit. (kg)</th>
                         <th className="text-right">Peso Total (kg)</th>
+                        {esExportacion && <th>Subpartida *</th>}
+                        {esExportacion && <th className="text-center">Serie DAM</th>}
                         <th className="text-center">Estado</th>
                       </tr>
                     </thead>
@@ -853,6 +1106,28 @@ function NuevaGuiaRemision() {
                             <td className="text-right font-bold">
                               {pesoTotal.toFixed(2)}
                             </td>
+                            {esExportacion && (
+                              <td>
+                                <input
+                                  type="text"
+                                  className="form-input text-sm"
+                                  value={item.subpartida_nacional || ''}
+                                  onChange={(e) => handleComexDetalle(index, 'subpartida_nacional', e.target.value)}
+                                  placeholder="Ej. 3923210000"
+                                />
+                              </td>
+                            )}
+                            {esExportacion && (
+                              <td>
+                                <input
+                                  type="text"
+                                  className="form-input text-center text-sm"
+                                  value={item.dam_serie || ''}
+                                  onChange={(e) => handleComexDetalle(index, 'dam_serie', e.target.value)}
+                                  placeholder="1"
+                                />
+                              </td>
+                            )}
                             <td className="text-center">
                               {hayError ? (
                                 <span className="badge badge-danger text-xs">Error</span>

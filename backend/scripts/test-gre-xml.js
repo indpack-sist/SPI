@@ -292,5 +292,79 @@ const estadoFinal = decidirEstado(st);
 check('Decisión de estado == ACEPTADO', estadoFinal === 'ACEPTADO', `estadoFinal=${estadoFinal}`);
 check('CDR simulado: aceptación sin CDR-zip real (null en BETA)', st.cdrZip === null);
 
+// ── Escenario COMEX / EXPORTACIÓN (09): espeja la GRE real aceptada EG07-273 ────────────────
+console.log('\n=== FASE 16 · EXPORTACIÓN — GRE comex espeja el molde real EG07-273 ===\n');
+
+const datosComex = {
+  tipo: '09', serie: 'EG07', numero: '273',
+  empresa: { ruc: RUC, razon_social: 'INDPACK S.A.C.' },
+  cliente: { ruc: '20508782013', razon_social: 'VILLAS OQUENDO S.A.', tipo_documento: 'RUC' },
+  guia: {
+    motivo_traslado_cod: '09', motivo_traslado: 'Exportación', peso_bruto_kg: 1200,
+    ubigeo_llegada: '070101', direccion_llegada: 'CAL. G NRO. S/N (PARCELA 1) CALLAO',
+    ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZ. LL-1 LOTE. 4 B VILLA EL SALVADOR',
+  },
+  detalle: [{ cantidad: 1, codigo_unidad_sunat: 'U', nombre: 'BURBUPACK TRANSPARENTE', codigo: '', subpartida_nacional: '3923210000', dam_serie: '1' }],
+  fecha: { emision: '2026-07-16', hora: '12:57:01' }, fechaTraslado: '2026-07-16', modalidad: '01',
+  transportista: { ruc: '20600579755', razon: 'CT LOGISTICO S.A.C.', mtc: '1560506CNG' },
+  registrarTransportista: true, fechaEntregaTransportista: '2026-07-16',
+  conductores: [{ dni: '80257817', nombre: 'CONTRERAS URQUIZO JENSON PAUL', licencia: 'Q80257817' }],
+  vehiculos: [{ placa: 'C5M782', tuce: '151522444', autorizacion: null }, { placa: 'BPO993', tuce: '15M25044060E', autorizacion: null }],
+  indicadores: { registrarTransp: true },
+  observacion: 'CONTENEDOR: MRSU4280077 PRECINTO NAVIERA: ML-PE0153521 PRECINTO AGENCIA: 004VA380282',
+  comex: {
+    trasladoTotalDam: true,
+    docsRelacionados: [{ tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: null, numero: '118-2026-40-70727' }],
+    contenedores: [{ numero_contenedor: 'MRSU4280077', numero_precinto: 'MLPE0153521' }],
+    damNumero: '118-2026-40-70727',
+    deliveryEstablishmentCode: '2', // cód. establecimiento anexo del destinatario (VILLAS OQUENDO puerto)
+  },
+};
+
+const { xml: xmlCx } = construirDespatchAdviceXML(datosComex);
+check('COMEX: XML bien-formado', XMLValidator.validate(xmlCx) === true);
+const dcx = parser.parse(xmlCx).DespatchAdvice;
+const shipCx = dcx?.Shipment;
+
+// Documento relacionado DAM (cat.61 cód.50) tras el Note.
+const docRel = dcx?.AdditionalDocumentReference;
+check('COMEX: AdditionalDocumentReference DAM presente', !!docRel);
+check('COMEX: DAM ID = nº DAM', String(docRel?.ID) === '118-2026-40-70727', `ID=${docRel?.ID}`);
+check('COMEX: DAM DocumentTypeCode = 50 (cat.61)', String(docRel?.DocumentTypeCode?.['#text']) === '50');
+check('COMEX: DAM DocumentType descriptivo', String(docRel?.DocumentType || '').includes('DAM'));
+
+// SpecialInstructions: traslado total PRIMERO, luego VehiculoConductoresTransp.
+const si = Array.isArray(shipCx?.SpecialInstructions) ? shipCx.SpecialInstructions : [shipCx?.SpecialInstructions];
+check('COMEX: SpecialInstructions traslado total de la DAM/DS', si.includes('SUNAT_Envio_IndicadorTrasladoTotalDAMoDS'));
+check('COMEX: traslado total va PRIMERO', String(si[0]) === 'SUNAT_Envio_IndicadorTrasladoTotalDAMoDS', `si[0]=${si[0]}`);
+check('COMEX: IndicadorVehiculoConductoresTransp presente (export lo emite)', si.includes('SUNAT_Envio_IndicadorVehiculoConductoresTransp'));
+
+// HandlingCode 09 + destinatario = operador de puerto.
+check('COMEX: HandlingCode = 09 (Exportación)', String(shipCx?.HandlingCode?.['#text']) === '09');
+check('COMEX: destinatario = operador de puerto (no cliente OV)',
+  String(dcx?.DeliveryCustomerParty?.Party?.PartyIdentification?.ID?.['#text']) === '20508782013');
+check('COMEX: DeliveryAddress AddressTypeCode = cód. establecimiento destinatario (2, como el molde)',
+  String(shipCx?.Delivery?.DeliveryAddress?.AddressTypeCode?.['#text']) === '2',
+  `AddressTypeCode=${shipCx?.Delivery?.DeliveryAddress?.AddressTypeCode?.['#text']}`);
+
+// cac:Package (contenedor + precinto) dentro del TransportHandlingUnit, tras el vehículo.
+const thuCx = shipCx?.TransportHandlingUnit;
+check('COMEX: Package (contenedor) presente', String(thuCx?.Package?.ID) === 'MRSU4280077', `ID=${thuCx?.Package?.ID}`);
+check('COMEX: Package TraceID = precinto', String(thuCx?.Package?.TraceID) === 'MLPE0153521', `TraceID=${thuCx?.Package?.TraceID}`);
+check('COMEX: 2 vehículos (principal + AttachedTransportEquipment)',
+  String(thuCx?.TransportEquipment?.ID) === 'C5M782' && String(thuCx?.TransportEquipment?.AttachedTransportEquipment?.ID) === 'BPO993');
+
+// Item: 7020 subpartida / 7021 nº DAM / 7023 serie DAM (además del 7022).
+const itemCx = (Array.isArray(dcx?.DespatchLine) ? dcx.DespatchLine[0] : dcx?.DespatchLine)?.Item;
+const props = Array.isArray(itemCx?.AdditionalItemProperty) ? itemCx.AdditionalItemProperty : [itemCx?.AdditionalItemProperty];
+const byCode = (c) => props.find((p) => String(p?.NameCode?.['#text']) === c);
+check('COMEX: 7020 subpartida nacional', String(byCode('7020')?.Value) === '3923210000');
+check('COMEX: 7021 numeración de la DAM', String(byCode('7021')?.Value) === '118-2026-40-70727');
+check('COMEX: 7023 nº serie en la DAM', String(byCode('7023')?.Value) === '1');
+check('COMEX: 7022 (bien regulado) se mantiene', String(byCode('7022')?.Value) === '0');
+check('COMEX: orden de propiedades = 7020, 7022, 7021, 7023',
+  props.map((p) => String(p?.NameCode?.['#text'])).join(',') === '7020,7022,7021,7023',
+  props.map((p) => String(p?.NameCode?.['#text'])).join(','));
+
 console.log(`\n=== RESUMEN: ${pass} PASS · ${fail} FAIL ===\n`);
 if (fail > 0) process.exit(1);

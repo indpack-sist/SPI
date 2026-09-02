@@ -115,12 +115,16 @@ export function calcularComprobante({ ov, detalle }) {
     const desc = Number(d.descuento_porcentaje || 0);
     const netUnit = Number(d.precio_unitario) * (1 - desc / 100);       // valor unitario sin IGV
     const lineExt = round2(cantidad * netUnit);                         // valor de venta de la línea
-    const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
+    const igvLineExact = cfg.gravado ? lineExt * (cfg.percent / 100) : 0; // IGV exacto (sin redondear)
+    const igvLine = round2(igvLineExact);                               // IGV de la línea a 2 dec (para el XML por línea)
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;
 
+    // El IGV del grupo/total se acumula SIN redondear y se redondea una sola vez al final
+    // (mismo criterio que ordenes_venta: base × tasa sobre el agregado), para que el panel
+    // de facturación cuadre con el detalle de la OV.
     grupos[afect] = grupos[afect] || { base: 0, igv: 0, cfg };
     grupos[afect].base += lineExt;
-    grupos[afect].igv += igvLine;
+    grupos[afect].igv += igvLineExact;
 
     return {
       numero: i + 1,
@@ -239,7 +243,10 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
 
   // ── Cliente (receptor) ──────────────────────────────────────────────────────
   const cliScheme = esExport ? '0' : schemeIdDocumento(cliente.tipo_documento);
-  const cliNumDoc = esExport ? (cliente.ruc || '0') : (cliente.ruc || '0');
+  // Export: receptor no domiciliado = "SIN DOCUMENTO". schemeID '0' (cat.06 DOC.TRIB.NO.DOM.SIN.RUC)
+  // + número '0'. Reglas de Validación CPE 26.08.2026: r94/2802 pide alfanumérico ≤15 sin espacios;
+  // r97/2800 prohíbe schemeID '6' (RUC) en op. 0200. Solo se usa la razón social del no domiciliado.
+  const cliNumDoc = esExport ? '0' : (cliente.ruc || '0');
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 

@@ -964,6 +964,10 @@ export const guiasRemisionAPI = {
   getTransportistas: () => api.get('/guias-remision/transportistas'),
   createTransportista: (data) => api.post('/guias-remision/transportistas', data),
 
+  // Catálogo de destinatarios comex (operadores de puerto/depósito, para GRE de exportación).
+  getDestinatariosComex: () => api.get('/guias-remision/destinatarios-comex'),
+  createDestinatarioComex: (data) => api.post('/guias-remision/destinatarios-comex', data),
+
   despachar: (id, data = {}) =>
     api.post(`/guias-remision/${id}/despachar`, data),
 

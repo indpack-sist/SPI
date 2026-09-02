@@ -111,6 +111,20 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     if (!cliente) throw new AppError('Cliente de la guía no existe', 404);
     const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
 
+    // Comercio exterior (exportación): el DESTINATARIO de la GRE es el operador de puerto/depósito
+    // (guias_remision.destinatario_ruc/razon), NO el cliente extranjero de la OV (ese va en la factura).
+    const esComex = Number(g.es_comercio_exterior) === 1;
+    let destinatario = cliente;
+    if (esComex) {
+      if (!g.destinatario_ruc || !g.destinatario_razon) {
+        throw new AppError('Comercio exterior: falta el destinatario (RUC y razón social)', 422);
+      }
+      if (!/^\d{11}$/.test(String(g.destinatario_ruc))) {
+        throw new AppError('RUC del destinatario comex inválido (11 dígitos)', 422);
+      }
+      destinatario = { ruc: g.destinatario_ruc, razon_social: g.destinatario_razon, tipo_documento: 'RUC' };
+    }
+
     // ── Transporte ─────────────────────────────────────────────────────────────
     //   · Tercero (g.id_transportista): modalidad 01 (público); CarrierParty (RUC+razón+MTC) del
     //     maestro; conductor + vehículos (hasta 2, cada uno con TUCE + autorización especial) +
@@ -182,7 +196,8 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const fechaTraslado = ft?.f || emision;
 
     const [detalle] = await conn.query(
-      `SELECT d.id_detalle_orden, d.id_producto, d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat
+      `SELECT d.id_detalle_orden, d.id_producto, d.cantidad, d.subpartida_nacional, d.dam_serie,
+              p.codigo, p.nombre, p.codigo_unidad_sunat
          FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
         WHERE d.id_guia = ?`, [idGuia]);
     if (!detalle.length) throw new AppError('La guía no tiene detalle', 422);
@@ -240,13 +255,43 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       await conn.query('UPDATE guias_remision SET observaciones = ? WHERE id_guia = ?', [observacion, idGuia]);
     }
 
+    // ── Comercio exterior: documentos relacionados (DAM) + contenedores + subpartidas ──────────
+    // Alcance actual: solo "traslado total de la DAM/DS = Sí" (importa bienes de la DAM). El detalle
+    // manual por ítem (traslado parcial) queda fuera de alcance. Ver memoria gre-comex-spec.
+    let comex = null;
+    if (esComex) {
+      const [docs] = await conn.query(
+        'SELECT tipo_cod, tipo_desc, serie, numero FROM guias_remision_doc_relacionado WHERE id_guia = ?', [idGuia]);
+      const [contenedores] = await conn.query(
+        'SELECT numero_contenedor, numero_precinto FROM guias_remision_contenedor WHERE id_guia = ?', [idGuia]);
+      if (!docs.length) throw new AppError('Comercio exterior: falta al menos un documento relacionado (DAM)', 422);
+      for (const it of detalle) {
+        if (!it.subpartida_nacional) throw new AppError(`Comercio exterior: falta la subpartida nacional del ítem ${it.codigo}`, 422);
+      }
+      const dam = docs.find((x) => String(x.tipo_cod) === '50') || null; // cat.61: 50 = DAM
+      // Código de establecimiento anexo del destinatario (DeliveryAddress/AddressTypeCode).
+      // Sale del catálogo de destinatarios (p.ej. VILLAS OQUENDO puerto = "2"); default "0" (matriz).
+      const [[destCat]] = await conn.query(
+        'SELECT codigo_establecimiento FROM comex_destinatarios WHERE ruc = ?', [g.destinatario_ruc]);
+      comex = {
+        trasladoTotalDam: Number(g.traslado_total_dam) !== 0,
+        docsRelacionados: docs,
+        contenedores,
+        damNumero: dam?.numero || null,
+        deliveryEstablishmentCode: destCat?.codigo_establecimiento || '0',
+      };
+      // El molde EG07-273 emite SUNAT_Envio_IndicadorVehiculoConductoresTransp cuando el export declara
+      // vehículos/conductores del transportista (público + registrar). Se activa solo en comex.
+      if (declararVC) indicadores.registrarTransp = true;
+    }
+
     const numero = await obtenerCorrelativo(conn, tipo, serie);
     const datos = {
-      tipo, serie, numero, empresa, cliente, guia: g, detalle,
+      tipo, serie, numero, empresa, cliente: destinatario, guia: g, detalle,
       fecha: { emision, hora }, fechaTraslado, modalidad,
       transportista: carrier, registrarTransportista: registrar, fechaEntregaTransportista,
       conductores, vehiculos, indicadores,
-      observacion
+      observacion, comex
     };
     const { xml } = construirDespatchAdviceXML(datos);
     const { xmlFirmado, digestValue } = firmarXml(xml);

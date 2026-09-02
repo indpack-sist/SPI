@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<DespatchAdvice xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns="urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2"><ext:UBLExtensions xmlns=""><ext:UBLExtension><ext:ExtensionContent><Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+<SignedInfo>
+  <CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#WithComments"/>
+  <SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"/>
+  <Reference URI="">
+    <Transforms>
+      <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+      <Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#WithComments"/>
+    </Transforms>
+    <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+    <DigestValue>v2eRCBH4yNwPwaMpQOEtJ1Y9YEc=</DigestValue>
+  </Reference>
+</SignedInfo>
+    <SignatureValue>Mtn7ktVOItxhWqjMNbF4ZjzjwDfw9iTU09IpfeKOb5vmhDa78gg8zZSSe6aAkkuu6SDPBqVOf1PS86mSDrGThuM5o/h2MzBB1kTPLd8K9SwBRc37QMZiEwkGOpj4pPEtDLMyro+jJMTTdVs6QW9y0dOw4l+LxhkdDRxO8RU5WrTuCCbv0FcgqTj8Qrg5/hDA4wd7DUt+O104UCq1HiMUVIacKIOyWYQ4Y/vVNFkNvfzqFI91KqOgS9LS4wsY6V/HtJjRP4hohFti9Z19B/YG8GbgJ6ZnGTxDpNMVTkT2U8QVWxWQ4VNGPiwlxL4AAHJweTIB18He3uBkMmFZSq94kA==</SignatureValue><KeyInfo><X509Data><X509Certificate>MIIFrjCCBJagAwIBAgIIf9Td7Evg0UswDQYJKoZIhvcNAQELBQAwRjEkMCIGA1UEAwwbTGxhbWEucGUgU0hBMjU2IFN0YW5kYXJkIENBMREwDwYDVQQKDAhMTEFNQS5QRTELMAkGA1UEBhMCUEUwHhcNMjQwODA5MTYxNTM5WhcNMjcwODA5MTYxNTAwWjCCAVQxKzApBgNVBAkMIkFWLiBHQVJDSUxBU08gREUgTEEgVkVHQSBOUk8uIDE0NzIxIjAgBgkqhkiG9w0BCQEWE3JtZXphZ0BzdW5hdC5nb2IucGUxQTA/BgNVBAMMOFNVUEVSSU5ULiBOQUMuIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBMRwwGgYDVQQLDBNBR0VOVEUgQVVUT01BVElaQURPMS4wLAYDVQQLDCVWYWxpZGFkbyBwb3IgQUJDIElERU5USURBRCBESUdJVEFMIEVSMVQwUgYDVQQKDEtTVVBFUklOVEVOREVOQ0lBIE5BQ0lPTkFMIERFIEFEVUFOQVMgWSBERSBBRE1JTklTVFJBQ0lPTiBUUklCVVRBUklBIC0gU1VOQVQxDTALBgNVBAcMBExJTUExCzAJBgNVBAYTAlBFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1apapJOwMj9tBpgKAgjRwIloUk+xwvQZxc0s/4yl4mDSrc/F/PKZ3QBmKb43fFwivqPUvsr68fQTfyLKM14B+xXwlbQ/yh3+87sMyulLhOPmtSOU0PE8Rw0PsmGVxf1L0HPAPc3Gvuhq4Z9Dx5ByED6s+VppDmncvctlJ/NrzYZCk9H91OinTTPVZrDtbmqnOYra8PaTRoCI9Fmndeo9Oo7esM7KVX9f53NEd/mNQqzAOrgSXthFuBZN7zOsGxJ4ZGrVzHSlCH/jFLgObEizHrqisgL1cxKj8QvbGLUjNtUuTvR5IY6hwRLCxbliTa84BN10E0jC7hhAnnuEIAFJiwIDAQABo4IBjjCCAYowDAYDVR0TAQH/BAIwADAfBgNVHSMEGDAWgBRdiFut62X7/mii5NlvPVdyou8rmTBnBggrBgEFBQcBAQRbMFkwNQYIKwYBBQUHMAKGKWh0dHA6Ly9jcnQubGxhbWEucGUvbGxhbWFwZXN0YW5kYXJkY2EuY2VyMCAGCCsGAQUFBzABhhRodHRwOi8vb2NzcC5sbGFtYS5wZTAeBgNVHREEFzAVgRNybWV6YWdAc3VuYXQuZ29iLnBlMEYGA1UdIAQ/MD0wOwYNKwYBBAGDl3cAAQADATAqMCgGCCsGAQUFBwIBFhxodHRwczovL2xsYW1hLnBlL3JlcG9zaXRvcnkvMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDBDA6BgNVHR8EMzAxMC+gLaArhilodHRwOi8vY3JsLmxsYW1hLnBlL2xsYW1hcGVzdGFuZGFyZGNhLmNybDAdBgNVHQ4EFgQUuRkPCyM25gAu5se9GraC/UO07X8wDgYDVR0PAQH/BAQDAgbAMA0GCSqGSIb3DQEBCwUAA4IBAQBC8+YM7moZ7bKYCS+VzJ8wzydSboWeNuAs2CfkhI8hRMQr1r5WZg8pDlroCslF/r6SjbkrjuDHcGKJTM2riGEjlOD4CLU9VjOP7Td6CIZyJRLaz63pZYOwE0H0weG/PvYpopDZzJ6AXYzZxwYkJ03/x/vwaCss9ZvmsEn2E1xtGbnMe9MEsg8oF0ul3uRn8Qy5gF37fM7YKuF/r4iBS5uSvBcA5J2FbI/PQls7OgICDyb3W16GeluaT9krY5wQxilJSpGVU++nv5NzmRHkquH3ic2It/KP6MZ9X2tfg6FhpF6JaUz7MSY+J0KnDDcfJlhxgnkgoT5tV3Sr6z5PpQH6</X509Certificate><X509IssuerSerial><X509IssuerName>C=PE, O=LLAMA.PE, CN=Llama.pe SHA256 Standard CA</X509IssuerName><X509SerialNumber>9211231144834552139</X509SerialNumber></X509IssuerSerial></X509Data></KeyInfo><Proposito>Cumple proposito</Proposito><Revocacion>Cumple revocacion</Revocacion><TSL>Cumple tsl</TSL><Expiracion>No ha expirado</Expiracion></Signature></ext:ExtensionContent></ext:UBLExtension></ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>2.0</cbc:CustomizationID>
+  <cbc:ID><![CDATA[EG07-273]]></cbc:ID>
+  
+  <!-- FECHA Y HORA DE EMISION -->
+  <cbc:IssueDate>2026-07-16</cbc:IssueDate>
+  <cbc:IssueTime>12:57:01</cbc:IssueTime>
+  <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>
+	<cbc:Note><![CDATA[CONTENEDOR: MRSU4280077
+PRECINTO NAVIERA: ML-PE0153521
+PRECINTO AGENCIA: 004VA380282]]></cbc:Note>
+
+  <!-- DOCUMENTOS ADICIONALES (Catalogo 41)-->
+	<cac:AdditionalDocumentReference>
+		<cbc:ID><![CDATA[118-2026-40-70727]]></cbc:ID>
+	<cbc:DocumentTypeCode listAgencyName="PE:SUNAT" listName="Documento relacionado al transporte" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61">50</cbc:DocumentTypeCode>
+	<cbc:DocumentType><![CDATA[Declaración Aduanera de Mercancías (DAM)]]></cbc:DocumentType>
+	</cac:AdditionalDocumentReference>
+	
+    <cac:Signature>
+        <cbc:ID><![CDATA[SUNAT]]></cbc:ID>
+        <cac:SignatoryParty>
+            <cac:PartyIdentification>
+                <cbc:ID><![CDATA[20131312955]]></cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name><![CDATA[SUNAT]]></cbc:Name>
+            </cac:PartyName>
+        </cac:SignatoryParty>
+        <cac:DigitalSignatureAttachment>
+            <cac:ExternalReference>
+                <cbc:URI>#SUNAT</cbc:URI>
+            </cac:ExternalReference>
+        </cac:DigitalSignatureAttachment>
+    </cac:Signature>
+
+  <!-- DATOS DEL EMISOR (REMITENTE) -->
+  <cac:DespatchSupplierParty>
+     <cac:Party>
+      <cac:PartyIdentification>
+       <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20550932297]]></cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+       <cbc:RegistrationName><![CDATA[INDPACK S.A.C.]]></cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+     </cac:Party>
+  </cac:DespatchSupplierParty>
+  
+  <!-- DATOS DEL RECEPTOR (DESTINATARIO) -->
+  <cac:DeliveryCustomerParty>
+     <cac:Party>
+      <cac:PartyIdentification>
+       <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20508782013]]></cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+       <cbc:RegistrationName><![CDATA[VILLAS OQUENDO S.A.]]></cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+     </cac:Party>
+  </cac:DeliveryCustomerParty>
+
+
+  <!-- DATOS DEL PROVEEDOR -->
+
+  <!-- DATOS DEL TRASLADO -->
+  <cac:Shipment>
+     <!-- ID OBLIGATORIO POR UBL -->
+     <cbc:ID><![CDATA[SUNAT_Envio]]></cbc:ID>
+       
+     <!-- MOTIVO DEL TRASLADO -->
+     <cbc:HandlingCode listAgencyName="PE:SUNAT" listName="Motivo de traslado" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo20">09</cbc:HandlingCode>
+	 <cbc:HandlingInstructions>Exportaci&#243;n</cbc:HandlingInstructions>
+
+        
+     <!-- PESO BRUTO TOTAL DE LA CARGA-->
+     <cbc:GrossWeightMeasure unitCode="KGM">1200</cbc:GrossWeightMeasure>
+
+        
+
+     <!-- INDICADORES -->
+	 
+     
+	 
+
+     <!-- Indicador de traslado total de la DAM o la DS -->
+	 <cbc:SpecialInstructions>SUNAT_Envio_IndicadorTrasladoTotalDAMoDS</cbc:SpecialInstructions>
+
+
+	 <!-- Indicador de GRE única -->
+	 <cbc:SpecialInstructions>SUNAT_Envio_IndicadorVehiculoConductoresTransp</cbc:SpecialInstructions>
+        
+     <cac:ShipmentStage>
+        <!-- MODALIDAD DE TRASLADO  -->
+        <cbc:TransportModeCode listName="Modalidad de traslado" listAgencyName="PE:SUNAT" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo18">01</cbc:TransportModeCode>
+		<!-- FECHA DE INICIO DEL TRASLADO -->
+		<cac:TransitPeriod>
+			<cbc:StartDate>2026-07-16</cbc:StartDate>
+		</cac:TransitPeriod>
+
+        <!-- DATOS DEL TRANSPORTISTA -->
+			<cac:CarrierParty>
+			   <cac:PartyIdentification>
+				  <cbc:ID schemeID="6" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[20600579755]]></cbc:ID>
+			   </cac:PartyIdentification>
+			   <cac:PartyLegalEntity>
+				  <!-- NOMBRE/RAZON SOCIAL DEL TRANSPORTISTA-->
+				   <cbc:RegistrationName><![CDATA[CORPORACION DE TRANSPORTE LOGISTICO S.A.C. CT LOGISTICO S.A.C.]]></cbc:RegistrationName>
+				  
+				  <!-- NUMERO DE REGISTRO DEL MTC -->
+				   <cbc:CompanyID><![CDATA[1560506CNG]]></cbc:CompanyID>
+			   </cac:PartyLegalEntity>
+			 
+			</cac:CarrierParty>
+
+		<!--FECHA DE ENTREGA DE BIENES AL TRANSPORTISTA-->
+		<cac:LoadingTransportEvent>
+			<cbc:OccurrenceDate>2026-07-16</cbc:OccurrenceDate>
+		</cac:LoadingTransportEvent>
+
+						<!-- CONDUCTOR PRINCIPAL -->
+						<cac:DriverPerson>
+						   <!-- TIPO Y NUMERO DE DOCUMENTO DE IDENTIDAD -->
+							<cbc:ID schemeID="1" schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"><![CDATA[80257817]]></cbc:ID>
+
+						   <!-- NOMBRES -->
+							<cbc:FirstName>CONTRERAS URQUIZO JENSON PAUL</cbc:FirstName>
+
+						   <!-- APELLIDOS -->
+							<cbc:FamilyName>CONTRERAS URQUIZO JENSON PAUL</cbc:FamilyName>
+						   
+						   <!-- TIPO DE CONDUCTOR: PRINCIPAL -->
+						   <cbc:JobTitle>Principal</cbc:JobTitle>
+						 
+							   <cac:IdentityDocumentReference>
+								  <!-- LICENCIA DE CONDUCIR -->
+								  <cbc:ID><![CDATA[Q80257817]]></cbc:ID>
+							   </cac:IdentityDocumentReference>
+						</cac:DriverPerson>
+				
+	 </cac:ShipmentStage>
+
+     <cac:Delivery>
+        <!-- DIRECCION DEL PUNTO DE LLEGADA -->
+			<cac:DeliveryAddress>
+			   <!-- UBIGEO DE LLEGADA -->
+			    <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI"><![CDATA[070101]]></cbc:ID>
+			   
+			   <!-- CODIGO DE ESTABLECIMIENTO ANEXO DE LLEGADA -->
+					<cbc:AddressTypeCode listID="20508782013" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">2</cbc:AddressTypeCode>
+			   
+			   <!-- DIRECCION COMPLETA Y DETALLADA DE LLEGADA -->
+				   <cac:AddressLine>
+					  <cbc:Line><![CDATA[CAL. G NRO. S/N (PARCELA 1, TERRENO RIBEREÑO AL MAR ) PROV. CONST. DEL CALLAO - PROV. CONST. DEL CALLAO - CALLAO]]></cbc:Line>
+				   </cac:AddressLine>
+
+			</cac:DeliveryAddress>
+        
+			<cac:Despatch>
+			   <!-- DIRECCION DEL PUNTO DE PARTIDA -->
+			   <cac:DespatchAddress>
+				  <!-- UBIGEO DE PARTIDA -->
+				   <cbc:ID schemeName="Ubigeos" schemeAgencyName="PE:INEI"><![CDATA[150142]]></cbc:ID>
+			   
+				  <!-- CODIGO DE ESTABLECIMIENTO ANEXO DE PARTIDA -->
+					  <cbc:AddressTypeCode listID="20550932297" listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
+				  
+				  <!-- DIRECCION COMPLETA Y DETALLADA DE PARTIDA -->
+				  <cac:AddressLine>
+					 <cbc:Line><![CDATA[AV. EL SOL MZ. LL-1 LOTE. 4 B COO. LAS VERTIENTES DE TABLADA DE LURIN (MEDIA CDRA DE LA PANAM. SUR) LIMA - LIMA - VILLA EL SALVADOR]]></cbc:Line>
+				  </cac:AddressLine>
+
+			   </cac:DespatchAddress>
+			   
+
+			</cac:Despatch>
+     </cac:Delivery>
+
+     <cac:TransportHandlingUnit>
+        
+			<cac:TransportEquipment>
+					
+						<!-- VEHICULO PRINCIPAL -->
+						<!-- PLACA - VEHICULO PRINCIPAL -->
+					   <cbc:ID><![CDATA[C5M782]]></cbc:ID>
+					   
+					   <!-- Tarjeta Unica Circulacion / Cerificado Habilitacion Vehicular - Principal -->
+						<cac:ApplicableTransportMeans>
+							  <cbc:RegistrationNationalityID>151522444</cbc:RegistrationNationalityID>
+						</cac:ApplicableTransportMeans>
+					   
+					   
+                        
+                        
+					   
+                        <!-- VEHICULO SECUNDARIO -->
+                        <cac:AttachedTransportEquipment>
+                            <!-- PLACA - VEHICULO SECUNDARIO  -->
+                            <cbc:ID><![CDATA[BPO993]]></cbc:ID>
+                         
+                            <!-- TARJETA UNICA CIRCULACION / CERTIFICADO HABILITACION VEHICULAR - SECUNDARIO  -->
+                            <cac:ApplicableTransportMeans>
+                                <cbc:RegistrationNationalityID>15M25044060E</cbc:RegistrationNationalityID>
+                            </cac:ApplicableTransportMeans>
+                              
+                        </cac:AttachedTransportEquipment>
+                        
+                        
+					   
+				    
+					
+				    
+			</cac:TransportEquipment>
+
+		<!-- CONTENEDOR -->
+        <cac:Package>
+           <!-- NUMERO DE CONTENEDOR-->
+           <cbc:ID><![CDATA[MRSU4280077]]></cbc:ID>
+           <!-- NUMERO DE PRECINTO CONTENEDOR-->
+           <cbc:TraceID>MLPE0153521</cbc:TraceID>
+        </cac:Package>
+
+     </cac:TransportHandlingUnit>
+
+		  <!-- PUERTO O AEROPUERTO DE EMBARQUE / DESEMBARQUE -->
+
+		  <!-- PUERTO O AEROPUERTO DE EMBARQUE / DESEMBARQUE -->
+
+  </cac:Shipment>
+
+  <!-- DETALLES DE BIENES A TRASLADAR -->
+			  <cac:DespatchLine>
+				  <!-- NUMERO DE ORDEN DEL ITEM -->
+					  <cbc:ID><![CDATA[1]]></cbc:ID>
+
+						  <!-- CANTIDAD -->
+						  <cbc:DeliveredQuantity unitCode="U" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">1</cbc:DeliveredQuantity>
+
+				  <cac:OrderLineReference>
+						  <cbc:LineID>1</cbc:LineID>
+				  </cac:OrderLineReference>
+
+
+				  <cac:Item>
+					  <!-- DESCRIPCION -->
+						  <cbc:Description><![CDATA[BURBUPACK TRANSPARENTEROLLO BURBUPACK TRANSPARENTECODIGO Nº13 RESTITUCION DE DERECHOS ARANCELARIOS]]></cbc:Description>
+					  <!-- CODIGO DEL ITEM -->
+						  <cac:SellersItemIdentification>
+							  <cbc:ID/>
+						  </cac:SellersItemIdentification>
+
+					  <!-- CODIGO GTIN -->
+						  <cac:StandardItemIdentification>
+							  <cbc:ID schemeID="GTIN-0"/>
+						  </cac:StandardItemIdentification>
+
+						  <!-- CODIGO PRODUCTO SUNAT -->
+						  <cac:CommodityClassification>
+							  <cbc:ItemClassificationCode listID="UNSPSC" listAgencyName="GS1 US" listName="Item Classification"/>
+						  </cac:CommodityClassification>
+
+						  <!-- SUBPARTIDA NACIONAL -->
+						  <cac:AdditionalItemProperty>
+							  <cbc:Name><![CDATA[Subpartida nacional]]></cbc:Name>
+							  <cbc:NameCode listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55">7020</cbc:NameCode>
+							  <cbc:Value><![CDATA[3923210000]]></cbc:Value>
+						  </cac:AdditionalItemProperty>
+
+						  <!--INDICADOR DE BIEN REGULADO POR SUNAT -->
+						  <cac:AdditionalItemProperty>
+							  <cbc:Name><![CDATA[Indicador de bien regulado por SUNAT]]></cbc:Name>
+							  <cbc:NameCode listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55">7022</cbc:NameCode>
+							  <cbc:Value><![CDATA[0]]></cbc:Value>
+						  </cac:AdditionalItemProperty>
+
+							  <!-- Numeracion de la DAM o DS -->
+							  <cac:AdditionalItemProperty>
+								  <cbc:Name><![CDATA[Numeracion de la DAM o DS]]></cbc:Name>
+								  <cbc:NameCode listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55">7021</cbc:NameCode>
+								  <cbc:Value><![CDATA[118-2026-40-70727]]></cbc:Value>
+							  </cac:AdditionalItemProperty>
+
+							  <!--Numero de serie en la DAM o DS -->
+							  <cac:AdditionalItemProperty>
+								  <cbc:Name><![CDATA[Numero de serie en la DAM o DS]]></cbc:Name>
+								  <cbc:NameCode listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55">7023</cbc:NameCode>
+								  <cbc:Value><![CDATA[1]]></cbc:Value>
+							  </cac:AdditionalItemProperty>
+				  </cac:Item>
+			  </cac:DespatchLine>
+
+  
+</DespatchAdvice>

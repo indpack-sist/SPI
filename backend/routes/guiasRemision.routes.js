@@ -9,7 +9,9 @@ import {
   getEstadisticasGuiasRemision,
   descargarPDFGuiaRemision,
   getTransportistas,
-  createTransportista
+  createTransportista,
+  getDestinatariosComex,
+  createDestinatarioComex
 } from '../controllers/guiasRemision.controller.js';
 
 const router = express.Router();
@@ -20,6 +22,10 @@ router.get('/estadisticas', getEstadisticasGuiasRemision);
 // para que '/transportistas' no sea capturado por la ruta paramétrica.
 router.get('/transportistas', getTransportistas);
 router.post('/transportistas', createTransportista);
+
+// Catálogo de destinatarios comex (exportación). Antes de '/:id' por el mismo motivo.
+router.get('/destinatarios-comex', getDestinatariosComex);
+router.post('/destinatarios-comex', createDestinatarioComex);
 
 router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);

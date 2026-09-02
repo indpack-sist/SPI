@@ -1,0 +1,23 @@
+[
+  { "codigo": "BAYOVAR", "nombre": "BAYÓVAR", "ubigeo": "200801", "domicilio": "Jorge Chávez 369 Paita - PIURA - SECHURA - SECHURA" },
+  { "codigo": "CALLAO", "nombre": "CALLAO", "ubigeo": "070101", "domicilio": "Contralmirante Raygada Cdra. 1 Callao - LIMA - PROV. CONST. DEL CALLAO - CALLAO" },
+  { "codigo": "CONCHAN", "nombre": "CONCHÁN", "ubigeo": "150119", "domicilio": "Carretera Panamericana Sur Km.26.5 - LIMA - LIMA - LURÍN" },
+  { "codigo": "CHANCAY", "nombre": "CHANCAY", "ubigeo": "150605", "domicilio": "Av. Roosevelt 680 Chancay - LIMA - HUARAL - CHANCAY" },
+  { "codigo": "CHIMBOTE", "nombre": "CHIMBOTE", "ubigeo": "021801", "domicilio": "Av. Malecón Grau N°519 Chimbote - ANCASH - SANTA - CHIMBOTE" },
+  { "codigo": "ETEN", "nombre": "ETEN", "ubigeo": "140113", "domicilio": "Playa Lobos s/n - LAMBAYEQUE - CHICLAYO - REQUE" },
+  { "codigo": "HUACHO", "nombre": "HUACHO", "ubigeo": "150801", "domicilio": "Luna Arrieta Cdra. 6 - LIMA - HUAURA - HUACHO" },
+  { "codigo": "HUARMEY", "nombre": "HUARMEY", "ubigeo": "021101", "domicilio": "Puerto Punta de Lobitos - ANCASH - HUARMEY - HUARMEY" },
+  { "codigo": "ILO", "nombre": "ILO", "ubigeo": "180301", "domicilio": "Calle Matará N°104 - MOQUEGUA - ILO - ILO" },
+  { "codigo": "IQUITOS", "nombre": "IQUITOS", "ubigeo": "160101", "domicilio": "Av. La Marina N°1383 - LORETO - MAYNAS - IQUITOS" },
+  { "codigo": "MATARANI", "nombre": "MATARANI", "ubigeo": "040701", "domicilio": "Terminal Portuario Matarani S/N - AREQUIPA - ISLAY - MOLLENDO" },
+  { "codigo": "PAITA", "nombre": "PAITA", "ubigeo": "200501", "domicilio": "Jirón Ferrocarril N°127 - PIURA - PAITA - PAITA" },
+  { "codigo": "PISCO", "nombre": "PISCO", "ubigeo": "110505", "domicilio": "Carretera Pisco-Paracas Km.11.5 - ICA - PISCO - PARACAS" },
+  { "codigo": "PUCALLPA", "nombre": "PUCALLPA", "ubigeo": "250101", "domicilio": "Jirón 2 de Mayo N°150 - UCAYALI - CORONEL PORTILLO - CALLERÍA" },
+  { "codigo": "PUNO", "nombre": "PUNO", "ubigeo": "210101", "domicilio": "Av. El Sol Puno - PUNO - PUNO - PUNO" },
+  { "codigo": "SALAVERRY", "nombre": "SALAVERRY", "ubigeo": "130109", "domicilio": "Calle Córdova S/N - LA LIBERTAD - TRUJILLO - SALAVERRY" },
+  { "codigo": "SAN_NICOLAS", "nombre": "SAN NICOLAS", "ubigeo": "110304", "domicilio": "Complejo Metalúrgico de San Nicolás - ICA - NAZCA - MARCONA" },
+  { "codigo": "SUPE", "nombre": "SUPE", "ubigeo": "150204", "domicilio": "Calle Callao N°445-460 - LIMA - BARRANCA - SUPE" },
+  { "codigo": "TALARA", "nombre": "TALARA", "ubigeo": "200701", "domicilio": "Prolongación Av. G-2 (Área Administrativa) - PIURA - TALARA - PARIÑAS" },
+  { "codigo": "YURIMAGUAS", "nombre": "YURIMAGUAS", "ubigeo": "160201", "domicilio": "Calle Mariscal Castilla N°1000 - LORETO - ALTO AMAZONAS - YURIMAGUAS" },
+  { "codigo": "ZORRITOS", "nombre": "ZORRITOS", "ubigeo": "240103", "domicilio": "Puerto Pizarro La Cruz - TUMBES - TUMBES - LA CRUZ" }
+]

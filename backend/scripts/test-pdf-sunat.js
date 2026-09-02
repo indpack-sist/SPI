@@ -170,6 +170,50 @@ async function main() {
     txtC3.includes('Fecha entrega al transportista') && txtC3.includes('27/08/2026'));
   await fs.writeFile(path.join(outDir, 'test-TE01-C3.pdf'), pdfGreC3);
 
+  // 4d) GRE de EXPORTACIÓN (comex) — espeja el molde real aceptado EG07-273 (INDPACK→VILLAS OQUENDO,
+  //     DAM 118-2026-40-70727). Valida las secciones comex, el destinatario del catálogo (no el
+  //     cliente de la OV) y que NO se imprime la tabla de ítems (traslado total de la DAM).
+  const pdfGreExp = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'EG07', numero_sunat: 273, fecha_emision: '16/07/2026 12:57 PM', fecha_traslado: '16/07/2026',
+      motivo_traslado_cod: '09', peso_bruto_kg: 1200,
+      ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZ. LL-1 - VILLA EL SALVADOR - LIMA - LIMA',
+      ubigeo_llegada: '070101', direccion_llegada: 'CAL. G NRO. S/N (PARCELA 1) - CALLAO', sunat_estado: 'ACEPTADO',
+      observaciones: 'CONTENEDOR: MRSU4280077 | PRECINTO NAVIERA: ML-PE0153521 | PRECINTO AGENCIA: 004VA380282'
+    },
+    emisor, cliente,   // cliente = OCULAB (de la OV); el destinatario impreso debe ser VILLAS OQUENDO
+    detalle: [{ codigo: 'LBT60G019', nombre: 'LAMINA BURBUPACK EXPORTACION', cantidad: 500, codigo_unidad_sunat: 'MIL' }],
+    transportista: { razon: 'CORPORACION DE TRANSPORTE LOGISTICO S.A.C.', ruc: '20600579755', mtc: '1560506CNG' },
+    registrar: true, modalidad: '01', fechaEntrega: '16/07/2026',
+    vehiculos: [
+      { placa: 'C5M782', tuce: '151522444' },
+      { placa: 'BPO993', tuce: '15M25044060E' }
+    ],
+    conductores: [{ nombre: 'CONTRERAS URQUIZO JENSON PAUL', dni: '80257817', licencia: 'Q80257817' }],
+    comex: {
+      destinatario: { razon_social: 'VILLAS OQUENDO S.A.', ruc: '20508782013' },
+      docsRelacionados: [{ tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: null, numero: '118-2026-40-70727' }],
+      contenedores: [{ numero_contenedor: 'MRSU4280077', numero_precinto: 'MLPE0153521' }],
+      trasladoTotalDam: true, unidadPeso: 'KGM'
+    },
+    qrBuffer: qrGre
+  });
+  check('GRE Exportación (comex) genera PDF válido', esPdf(pdfGreExp), `${pdfGreExp.length} bytes`);
+  const txtExp = await textoDe(pdfGreExp);
+  check('Comex imprime el DESTINATARIO del catálogo (VILLAS OQUENDO), no el cliente de la OV',
+    txtExp.includes('VILLAS OQUENDO') && txtExp.includes('20508782013') && !txtExp.includes('OCULAB'));
+  check('Comex imprime Documentos Relacionados + DAM',
+    txtExp.includes('Documentos Relacionados') && txtExp.includes('Declaración Aduanera de Mercancías (DAM)') && txtExp.includes('118-2026-40-70727'));
+  check('Comex imprime "Bienes por transportar" (datos importados del documento)',
+    txtExp.includes('Bienes por transportar') && txtExp.includes('Datos importados'));
+  check('Comex imprime indicador de traslado total = SÍ + contenedor 1 + precinto 1',
+    txtExp.includes('traslado total de la DAM') && txtExp.includes('MRSU4280077') && txtExp.includes('MLPE0153521'));
+  check('Comex imprime unidad (KGM) + peso bruto (1,200)',
+    txtExp.includes('Unidad de medida del peso bruto') && txtExp.includes('KGM') && txtExp.includes('1,200'));
+  check('Comex NO imprime la tabla de ítems (traslado total: bienes importados de la DAM)',
+    !txtExp.includes('CÓDIGO') && !txtExp.includes('LAMINA BURBUPACK EXPORTACION'));
+  await fs.writeFile(path.join(outDir, 'test-EG07-273-comex.pdf'), pdfGreExp);
+
   // 5) Rótulo de operación por afectación (catálogo 07) — impreso en la línea "Tipo de operación".
   //    Gravada: el IGV del bloque de totales es != 0 (180.00); exonerada/inafecta/exportación: IGV 0.
   //    El bloque de totales usa el formato SUNAT (Sub Total Ventas / Valor Venta / Importe Total).

@@ -12,3 +12,6 @@ certs/
 *.p12
 *.b64
 backend/sunat-output/
+
+# Configuración local de Claude Code (no pertenece al proyecto)
+.claude/

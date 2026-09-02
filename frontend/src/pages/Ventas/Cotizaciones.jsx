@@ -191,9 +191,9 @@ function Cotizaciones() {
   })();
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 3 
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(valor);
   };
 

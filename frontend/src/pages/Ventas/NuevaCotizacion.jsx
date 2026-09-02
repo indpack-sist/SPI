@@ -667,20 +667,26 @@ setFormCabecera(prev => ({
   };
 
   const calcularTotales = () => {
+    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
+    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
+    // para que la vista previa coincida con lo que se guarda al crear la cotización.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
+    let impuesto = 0;
     let pesoTotal = 0;
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
-      const valorVenta = item.cantidad * precioVenta;
-      subtotal += valorVenta;
+      const lineBase = round2(item.cantidad * precioVenta);
+      subtotal += lineBase;
+      impuesto += round2(lineBase * (porcentaje / 100));
       const peso = parseFloat(item.peso_unitario || 0);
       if (peso > 0) {
         pesoTotal += item.cantidad * peso;
       }
     });
-    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
-    const impuesto = subtotal * (porcentaje / 100);
-    const total = subtotal + impuesto;
+    subtotal = round2(subtotal);
+    impuesto = round2(impuesto);
+    const total = round2(subtotal + impuesto);
     setTotales({ subtotal, impuesto, total, pesoTotal });
   };
 

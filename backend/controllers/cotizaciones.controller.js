@@ -306,14 +306,6 @@ if (moneda !== 'PEN') {
       numeroCotizacion = `COT-${anioActual}-${String(numeroSecuencia).padStart(4, '0')}`;
     }
 
-    let subtotal = 0;
-    for (const item of detalle) {
-      const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || 0);
-      const valorVenta = cantidad * precioVenta;
-      if (!isNaN(valorVenta)) subtotal += valorVenta;
-    }
-
     let porcentaje = 18.00;
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
@@ -321,8 +313,23 @@ if (moneda !== 'PEN') {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    const igv = subtotal * (porcentaje / 100);
-    const total = subtotal + igv;
+    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
+    // para que la cotización cuadre con la OV que se genera al convertirla.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    let subtotal = 0;
+    let igv = 0;
+    for (const item of detalle) {
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || 0);
+      const valorVenta = cantidad * precioVenta;
+      if (isNaN(valorVenta)) continue;
+      const lineBase = round2(valorVenta);
+      subtotal += lineBase;
+      igv += round2(lineBase * (porcentaje / 100));
+    }
+    subtotal = round2(subtotal);
+    igv = round2(igv);
+    const total = round2(subtotal + igv);
 
     if (plazoPagoFinal !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -497,7 +504,19 @@ if (moneda !== 'PEN') {
   tipoCambioFinal = tc.promedio || 3.765;
 }
 
+    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let porcentaje = 18.00;
+
+    if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
+      porcentaje = 0.00;
+    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
+      porcentaje = parseFloat(porcentaje_impuesto);
+    }
+
+    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica).
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
+    let igv = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
 
@@ -505,7 +524,11 @@ if (moneda !== 'PEN') {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const valorVenta = cantidad * precioVenta;
-      if (!isNaN(valorVenta)) subtotal += valorVenta;
+      if (!isNaN(valorVenta)) {
+        const lineBase = round2(valorVenta);
+        subtotal += lineBase;
+        igv += round2(lineBase * (porcentaje / 100));
+      }
 
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
@@ -516,17 +539,9 @@ if (moneda !== 'PEN') {
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
-    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
-    let porcentaje = 18.00;
-
-    if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
-      porcentaje = 0.00;
-    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
-      porcentaje = parseFloat(porcentaje_impuesto);
-    }
-
-    const igv = subtotal * (porcentaje / 100);
-    const total = subtotal + igv;
+    subtotal = round2(subtotal);
+    igv = round2(igv);
+    const total = round2(subtotal + igv);
 
     if (cotActual.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
       const deudaRes = await executeQuery(`
@@ -1051,11 +1066,6 @@ export async function descargarPDFCotizacion(req, res) {
     // 3. RECALCULAR CABECERAS (Subtotal, IGV, Total)
     // Si los items estaban mal en BD, la cabecera también estará mal. 
     // La recalculamos en base a los items corregidos para que todo cuadre.
-    let subtotalRecalculado = 0;
-    cotizacion.detalle.forEach(item => {
-        subtotalRecalculado += parseFloat(item.valor_venta);
-    });
-
     // Definir porcentaje impuesto
     let porcentaje = 18.00;
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes((cotizacion.tipo_impuesto || 'IGV').toUpperCase())) {
@@ -1064,8 +1074,20 @@ export async function descargarPDFCotizacion(req, res) {
         porcentaje = parseFloat(cotizacion.porcentaje_impuesto || 18);
     }
 
-    const igvRecalculado = subtotalRecalculado * (porcentaje / 100);
-    const totalRecalculado = subtotalRecalculado + igvRecalculado;
+    // Redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica).
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    let subtotalRecalculado = 0;
+    let igvRecalculado = 0;
+    cotizacion.detalle.forEach(item => {
+        const val = parseFloat(item.valor_venta);
+        if (isNaN(val)) return;
+        const lineBase = round2(val);
+        subtotalRecalculado += lineBase;
+        igvRecalculado += round2(lineBase * (porcentaje / 100));
+    });
+    subtotalRecalculado = round2(subtotalRecalculado);
+    igvRecalculado = round2(igvRecalculado);
+    const totalRecalculado = round2(subtotalRecalculado + igvRecalculado);
 
     // Sobreescribimos los valores de la cabecera con los matemáticamente correctos
     cotizacion.subtotal = subtotalRecalculado;

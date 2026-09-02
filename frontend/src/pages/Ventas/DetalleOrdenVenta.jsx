@@ -1658,19 +1658,29 @@ function DetalleOrdenVenta() {
   }
   const esUSD = orden.moneda === 'USD';
   const tcVenta = tipoCambio?.venta || null;
-  const subtotalReal = orden.detalle.reduce((acc, item) => {
-      const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      return acc + (isNaN(val) ? 0 : val);
-  }, 0);
+  // Totales con redondeo POR LÍNEA (mismo criterio que la factura electrónica y el backend de
+  // la OV; ver ubl.service.js calcularComprobante): el IGV se calcula y redondea por cada línea
+  // y luego se suma, para que el detalle cuadre con el comprobante que se emite a SUNAT.
+  const round2OV = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
+  const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
+  let subtotalReal = 0;
+  let impuestoReal = 0;
+  for (const item of orden.detalle) {
+    const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+    if (isNaN(val)) continue;
+    const lineBase = round2OV(val);                 // base de la línea (2 dec)
+    subtotalReal += lineBase;
+    if (!esSinImpuesto) impuestoReal += round2OV(lineBase * (porcentajeImpuesto / 100));
+  }
+  subtotalReal = round2OV(subtotalReal);
+  impuestoReal = round2OV(impuestoReal);
+  const totalCorregido = round2OV(subtotalReal + impuestoReal);
   const pesoTotal = orden.detalle.reduce((acc, item) => {
     const peso = parseFloat(item.peso_unitario || 0);
     if (peso > 0) acc += parseFloat(item.cantidad) * peso;
     return acc;
   }, 0);
-  const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
-  const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
-  const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (porcentajeImpuesto / 100);
-  const totalCorregido = subtotalReal + impuestoReal;
   
   const saldoCorregido = resumenPagos ? Math.max(0, totalCorregido - parseFloat(resumenPagos.monto_pagado)) : 0;
 

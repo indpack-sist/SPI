@@ -23,7 +23,8 @@ import {
   registrarIngresoInventario,
   getIngresosCompra,
   getItemsPendientesIngreso,
-  cambiarCuentaCompra
+  cambiarCuentaCompra,
+  parsearXmlFactura
 } from '../controllers/compras.controller.js';
 
 const router = express.Router();
@@ -35,6 +36,9 @@ router.get('/por-cuenta', getComprasPorCuenta);
 
 // RUTA CRÍTICA: Descarga de PDF (Debe ir antes de /:id para evitar conflictos)
 router.get('/:id/pdf', descargarPDFCompra);
+
+// Parseo del XML de la factura del proveedor (prellenar conciliación). Antes de '/:id'.
+router.post('/parse-xml', parsearXmlFactura);
 
 // Rutas de listado y creación
 router.get('/', getAllCompras);

@@ -1,6 +1,7 @@
-import { executeQuery } from '../config/database.js';
-import { obtenerCorrelativoAtomico } from '../services/sunat/numeracion.service.js';
+import { executeQuery, withTransaction } from '../config/database.js';
+import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
 import { componerObservacion } from '../services/sunat/util.service.js';
+import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 
 // Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
 // al escribir TIMESTAMP/DATETIME). Espeja el helper homónimo de ordenesVenta.controller.js.
@@ -151,13 +152,21 @@ export async function getGuiaRemisionById(req, res) {
         fl.marca_modelo AS vehiculo_flota_marca,
         tr.razon_social AS transportista_razon,
         tr.ruc AS transportista_ruc,
-        tr.numero_mtc AS transportista_mtc
+        tr.numero_mtc AS transportista_mtc,
+        pr.razon_social AS proveedor,
+        pr.ruc AS ruc_proveedor,
+        oc.numero_orden AS numero_orden_compra,
+        oc.serie_documento AS oc_serie_documento,
+        oc.numero_documento AS oc_numero_documento,
+        oc.fecha_emision_documento AS oc_fecha_documento
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
       LEFT JOIN empleados emp ON gr.id_conductor = emp.id_empleado
       LEFT JOIN flota fl ON gr.id_vehiculo = fl.id_vehiculo
       LEFT JOIN transportistas tr ON gr.id_transportista = tr.id_transportista
+      LEFT JOIN proveedores pr ON gr.id_proveedor = pr.id_proveedor
+      LEFT JOIN ordenes_compra oc ON gr.id_orden_compra = oc.id_orden_compra
       WHERE gr.id_guia = ?
     `, [id]);
     
@@ -653,6 +662,146 @@ export async function createGuiaRemision(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+
+// ── GUÍA DE REMISIÓN DE COMPRA (motivo 02) ───────────────────────────────────────────────────
+// Función DEDICADA (no toca createGuiaRemision de venta): SPI recoge su mercadería con flota propia
+// y emite la GRE con motivo "02 Compra". Crea la guía (tipo_origen='Compra', ligada a la orden de
+// compra y al proveedor, destinatario = la propia empresa al emitir) e INGRESA el stock en la misma
+// transacción (entrada por tipo_inventario). La emisión a SUNAT es un paso posterior (emitirGuiaGre).
+export async function createGuiaCompra(req, res) {
+  const fail = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
+  try {
+    const {
+      id_orden_compra,
+      fecha_emision, fecha_traslado,
+      direccion_partida, ubigeo_partida,
+      direccion_llegada, ubigeo_llegada, ciudad_llegada,
+      peso_bruto_kg, numero_bultos, observaciones,
+      id_conductor, id_vehiculo,
+      detalle
+    } = req.body;
+    const idRegistradoPor = req.user?.id_empleado || null;
+
+    if (!id_orden_compra) throw fail(400, 'La orden de compra es obligatoria');
+    if (!Array.isArray(detalle) || detalle.length === 0) throw fail(400, 'Debe incluir al menos un producto');
+    if (!id_conductor || !id_vehiculo) throw fail(400, 'Debe seleccionar el conductor y el vehículo de la flota que realiza el traslado');
+    if (!(parseFloat(peso_bruto_kg) > 0)) throw fail(422, 'El peso bruto (kg) debe ser mayor a 0');
+
+    // Llegada = tu almacén: si el request no la trae, se toma la dirección/ubigeo fiscal de la empresa
+    // (empresa_config), igual que en las guías de venta la PARTIDA se autocompleta desde ahí.
+    const empRes = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const empCfg = (empRes.success && empRes.data[0]) || {};
+    const direccionLlegada = (direccion_llegada && String(direccion_llegada).trim()) || empCfg.direccion || '';
+    const ubigeoLlegada = (ubigeo_llegada && String(ubigeo_llegada).trim()) || empCfg.ubigeo || '';
+
+    if (!direccion_partida || !String(direccion_partida).trim()) throw fail(400, 'La dirección de partida (proveedor) es obligatoria');
+    if (!/^\d{6}$/.test(String(ubigeo_partida || ''))) throw fail(400, 'El ubigeo de partida es obligatorio (6 dígitos)');
+    if (!direccionLlegada.trim()) throw fail(400, 'Falta la dirección de llegada (configura la dirección de la empresa o ingrésala).');
+    if (!/^\d{6}$/.test(ubigeoLlegada)) throw fail(400, 'Falta el ubigeo de llegada (configura el ubigeo de la empresa o selecciónalo).');
+
+    const result = await withTransaction(async (conn) => {
+      const [[oc]] = await conn.query(
+        'SELECT * FROM ordenes_compra WHERE id_orden_compra = ? FOR UPDATE', [id_orden_compra]);
+      if (!oc) throw fail(404, 'Orden de compra no encontrada');
+      if (oc.estado === 'Cancelada') throw fail(409, 'No se pueden crear guías para una compra cancelada');
+
+      // Precio + tipo de inventario por producto salen de la COMPRA (no de la guía).
+      const [lineasCompra] = await conn.query(
+        `SELECT doc.id_producto, doc.precio_unitario, doc.descuento_porcentaje,
+                p.id_tipo_inventario, p.unidad_medida, p.nombre
+           FROM detalle_orden_compra doc JOIN productos p ON p.id_producto = doc.id_producto
+          WHERE doc.id_orden_compra = ?`, [id_orden_compra]);
+      const mapaCompra = new Map(lineasCompra.map((l) => [Number(l.id_producto), l]));
+
+      const items = [];
+      for (const it of detalle) {
+        const idProd = Number(it.id_producto);
+        const base = mapaCompra.get(idProd);
+        if (!base) throw fail(400, `El producto (id ${idProd}) no pertenece a esta compra`);
+        const cantidad = parseFloat(it.cantidad);
+        if (!(cantidad > 0)) throw fail(400, `Cantidad recibida inválida para "${base.nombre}"`);
+        items.push({
+          id_producto: idProd,
+          id_tipo_inventario: base.id_tipo_inventario,
+          cantidad,
+          precio_unitario: base.precio_unitario,
+          descuento_porcentaje: base.descuento_porcentaje,
+          unidad_medida: base.unidad_medida,
+          descripcion: it.descripcion || base.nombre,
+          peso_unitario_kg: parseFloat(it.peso_unitario_kg || 0),
+        });
+      }
+
+      // Correlativo interno de guía (atómico dentro de la TX; no lo quema si algo falla).
+      const numeroSecuencia = await obtenerCorrelativo(conn, 'GR', 'T001');
+      const numeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
+      const hoy = new Date().toISOString().split('T')[0];
+
+      const [resGuia] = await conn.query(
+        `INSERT INTO guias_remision (
+           numero_guia, tipo_origen, id_orden_compra, id_proveedor,
+           fecha_emision, fecha_traslado, punto_partida, punto_llegada,
+           tipo_traslado, motivo_traslado, modalidad_transporte,
+           direccion_partida, ubigeo_partida, direccion_llegada, ubigeo_llegada, ciudad_llegada,
+           peso_bruto_kg, numero_bultos, observaciones,
+           id_conductor, id_vehiculo, motivo_traslado_cod, transporte_modo, estado
+         ) VALUES (?, 'Compra', ?, ?, ?, ?, ?, ?, 'Privado', 'Compra', 'Transporte Privado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '02', 'flota', 'Emitida')`,
+        [
+          numeroGuia, id_orden_compra, oc.id_proveedor,
+          fecha_emision || hoy, fecha_traslado || hoy, direccion_partida, direccionLlegada,
+          direccion_partida, ubigeo_partida, direccionLlegada, ubigeoLlegada, ciudad_llegada || null,
+          parseFloat(peso_bruto_kg) || 0, parseInt(numero_bultos) || 0, observaciones || null,
+          id_conductor, id_vehiculo,
+        ]
+      );
+      const idGuia = resGuia.insertId;
+
+      for (const it of items) {
+        const pesoTotal = it.cantidad * (it.peso_unitario_kg || 0);
+        await conn.query(
+          `INSERT INTO detalle_guia_remision (id_guia, id_detalle_orden, id_producto, cantidad, unidad_medida, descripcion, peso_unitario_kg, peso_total_kg)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`,
+          [idGuia, it.id_producto, it.cantidad, it.unidad_medida || 'UND', it.descripcion || '', it.peso_unitario_kg || 0, pesoTotal]);
+      }
+
+      // Ingreso de stock (entrada por tipo_inventario) en la MISMA transacción.
+      const docSoporte = (oc.serie_documento && oc.numero_documento)
+        ? `${oc.serie_documento}-${oc.numero_documento}` : oc.numero_orden;
+      const idsEntrada = await ingresarStockCompra(conn, {
+        idOrdenCompra: id_orden_compra, idProveedor: oc.id_proveedor, docSoporte,
+        moneda: oc.moneda, tipoCambio: oc.tipo_cambio, porcentajeIgv: oc.porcentaje_impuesto,
+        idRegistradoPor, observaciones: `Ingreso por guía de compra ${numeroGuia}`, items,
+      });
+
+      return { id_guia: idGuia, numero_guia: numeroGuia, ids_entrada: idsEntrada };
+    });
+
+    return res.status(201).json({ success: true, data: result, message: 'Guía de compra creada e inventario ingresado' });
+  } catch (error) {
+    console.error('Error al crear guía de compra:', error);
+    return res.status(error?.status || 500).json({ success: false, error: error.message });
+  }
+}
+
+// Datos del remitente (empresa) para prellenar los puntos de partida/llegada en los wizards de guía.
+// En la guía de compra, la LLEGADA es tu almacén → el wizard la prellena con esto (editable).
+export async function getEmpresaRemitente(req, res) {
+  try {
+    const r = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const emp = (r.success && r.data[0]) || {};
+    res.json({
+      success: true,
+      data: {
+        razon_social: emp.razon_social || null,
+        ruc: emp.ruc || null,
+        direccion: emp.direccion || null,
+        ubigeo: emp.ubigeo || null,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 

@@ -43,7 +43,7 @@ const MOTIVOS_TRASLADO = {
  * @param {Buffer} p.qrBuffer  PNG del QR con la URL de SUNAT
  * @returns {Promise<Buffer>}
  */
-export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, comex = null, qrBuffer }) {
+export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, comex = null, proveedor = null, docRelacionado = null, qrBuffer }) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 30, left: 30, right: 30 } });
@@ -95,6 +95,16 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       yl = campo('RUC/Doc:', dest.ruc, 40, 118, 193, yl);
       // Dir. fiscal: solo si existe (el destinatario comex del catálogo no la captura → se omite).
       if (dest.direccion) yl = campo('Dir. fiscal:', dest.direccion, 40, 118, 193, yl);
+      // Compra: el vendedor de los bienes (SellerSupplierParty) y la factura relacionada
+      // (AdditionalDocumentReference) van aquí, para que la GRE de compra sea autoexplicativa.
+      if (proveedor && proveedor.ruc) {
+        yl = campo('Proveedor:', proveedor.razon_social, 40, 118, 193, yl);
+        yl = campo('RUC proveedor:', proveedor.ruc, 40, 118, 193, yl);
+      }
+      if (docRelacionado && docRelacionado.numero) {
+        const num = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
+        yl = campo('Doc. relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${num}`, 40, 118, 193, yl);
+      }
       let yr = boxDestTop + pad;
       yr = campo('Fecha emisión:', g.fecha_emision, 322, 410, 150, yr);
       yr = campo('Inicio traslado:', g.fecha_traslado, 322, 410, 150, yr);

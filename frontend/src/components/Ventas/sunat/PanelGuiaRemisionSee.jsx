@@ -65,7 +65,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Regla de negocio: la GRE se emite una vez que la ORDEN ya está "Despachada".
   const guiaVigente = !!estadoNegocio && estadoNegocio !== 'Anulada';
   const sinEmitirSunat = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
-  const ordenDespachada = guia?.estado_orden === 'Despachada';
+  // Guía de COMPRA (motivo 02): SPI recoge su mercadería; NO depende de una OV despachada.
+  const esCompra = guia?.tipo_origen === 'Compra';
+  const ordenDespachada = esCompra || guia?.estado_orden === 'Despachada';
   const puedeEmitir = guiaVigente && sinEmitirSunat && ordenDespachada;
   const enviado = estado === 'ENVIADO';
   const aceptado = estado === 'ACEPTADO';
@@ -151,7 +153,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     setEmitForm((f) => ({
       ...f,
       es_comercio_exterior: comex,
-      motivo_traslado_cod: comex ? MOTIVOS_COMEX[0].cod : MOTIVOS_DOMESTICO[0].cod,
+      // En compra el motivo siempre es 02 (no cae a "01 Venta" si se togglea comercio exterior).
+      motivo_traslado_cod: comex ? MOTIVOS_COMEX[0].cod : (esCompra ? '02' : MOTIVOS_DOMESTICO[0].cod),
     }));
   };
 
@@ -378,12 +381,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               </div>
 
-              {/* Destinatario (automático desde la OV) */}
+              {/* Contraparte: cliente (venta) o proveedor (compra). En compra el destinatario del XML
+                  es la propia empresa; aquí se muestra el proveedor como referencia de la operación. */}
               <div className="border border-gray-200 rounded p-3">
-                <div className="text-[10px] text-muted uppercase mb-1">Destinatario (de la orden)</div>
+                <div className="text-[10px] text-muted uppercase mb-1">{esCompra ? 'Proveedor' : 'Destinatario (de la orden)'}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{(esCompra ? guia?.proveedor : guia?.cliente) || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{(esCompra ? guia?.ruc_proveedor : guia?.ruc_cliente) || '-'}</span></div>
                 </div>
               </div>
 

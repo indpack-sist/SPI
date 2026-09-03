@@ -3,6 +3,8 @@ import {
   getAllGuiasRemision,
   getGuiaRemisionById,
   createGuiaRemision,
+  createGuiaCompra,
+  getEmpresaRemitente,
   despacharGuiaRemision,
   actualizarEstadoGuiaRemision,
   marcarEntregadaGuiaRemision,
@@ -27,8 +29,13 @@ router.post('/transportistas', createTransportista);
 router.get('/destinatarios-comex', getDestinatariosComex);
 router.post('/destinatarios-comex', createDestinatarioComex);
 
+// Datos de la empresa remitente (para prellenar partida/llegada en los wizards). Antes de '/:id'.
+router.get('/empresa-remitente', getEmpresaRemitente);
+
 router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);
+// Guía de remisión de COMPRA (motivo 02): SPI recoge su mercadería. Antes de '/:id'.
+router.post('/compra', createGuiaCompra);
 
 router.get('/:id/pdf', descargarPDFGuiaRemision);
 router.post('/:id/despachar', despacharGuiaRemision);

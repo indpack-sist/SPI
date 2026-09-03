@@ -58,6 +58,7 @@ import Prospectos from './pages/Ventas/Prospectos';
 
 import Compras from './pages/Compras/Compras';
 import NuevaCompra from './pages/Compras/NuevaCompra';
+import RegistrarCompraXml from './pages/Compras/RegistrarCompraXml';
 import DetalleCompra from './pages/Compras/DetalleCompra';
 
 import CuentasPago from './pages/Finanzas/CuentasPago';
@@ -484,13 +485,21 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                      <Route 
-                        path="/compras/:id/editar" 
+                      <Route
+                        path="/compras/registrar-xml"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="compras">
+                            <RegistrarCompraXml />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+                      <Route
+                        path="/compras/:id/editar"
                         element={
                           <ProtectedRouteWithPermiso modulo="compras">
                             <NuevaCompra />
                           </ProtectedRouteWithPermiso>
-                        } 
+                        }
                       />
                       <Route 
                         path="/compras/:id" 

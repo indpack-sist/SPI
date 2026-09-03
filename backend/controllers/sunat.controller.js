@@ -1262,9 +1262,13 @@ export async function generarPdfGuia(req, res, next) {
       "ov.transporte_registrar AS ov_transporte_registrar, " +
       "ov.transporte_ind_transbordo AS ov_ind_transbordo, ov.transporte_ind_m1l AS ov_ind_m1l, ov.transporte_ind_retorno_vacio AS ov_ind_retorno_vacio, " +
       "DATE_FORMAT(ov.transporte_fecha_entrega, '%d/%m/%Y') AS ov_transporte_fecha_entrega, " +
-      "t.razon_social AS transportista_razon, t.ruc AS transportista_ruc, t.numero_mtc AS transportista_mtc " +
+      "t.razon_social AS transportista_razon, t.ruc AS transportista_ruc, t.numero_mtc AS transportista_mtc, " +
+      "pr.razon_social AS proveedor_razon, pr.ruc AS proveedor_ruc, " +
+      "oc.serie_documento AS oc_serie_doc, oc.numero_documento AS oc_numero_doc " +
       "FROM guias_remision g LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = g.id_orden_venta " +
-      "LEFT JOIN transportistas t ON t.id_transportista = g.id_transportista WHERE g.id_guia = ?",
+      "LEFT JOIN transportistas t ON t.id_transportista = g.id_transportista " +
+      "LEFT JOIN proveedores pr ON pr.id_proveedor = g.id_proveedor " +
+      "LEFT JOIN ordenes_compra oc ON oc.id_orden_compra = g.id_orden_compra WHERE g.id_guia = ?",
       [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     // Se imprime la GRE ACEPTADA y también las invalidadas (ANULADA/REEMPLAZADA), estas últimas
@@ -1284,7 +1288,21 @@ export async function generarPdfGuia(req, res, next) {
     }
 
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
-    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
+    const [[cliente]] = g.id_cliente
+      ? await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente])
+      : [[null]];
+
+    // Guía de COMPRA: el destinatario impreso es la propia empresa (SPI recibe su mercadería),
+    // el proveedor va como bloque aparte y la factura como documento relacionado. Espeja el XML
+    // (DeliveryCustomerParty = emisor, SellerSupplierParty = proveedor, AdditionalDocumentReference).
+    const esCompra = g.tipo_origen === 'Compra';
+    const destinatarioPdf = esCompra
+      ? { razon_social: emisor.razon_social, ruc: emisor.ruc, direccion: emisor.direccion }
+      : cliente;
+    const proveedorPdf = (esCompra && g.proveedor_ruc)
+      ? { razon_social: g.proveedor_razon, ruc: g.proveedor_ruc } : null;
+    const docRelacionadoPdf = (esCompra && g.oc_serie_doc && g.oc_numero_doc)
+      ? { tipo_desc: 'Factura', serie: g.oc_serie_doc, numero: g.oc_numero_doc } : null;
 
     // Transporte según el MODO con que se emitió, para que el PDF muestre EXACTAMENTE lo enviado:
     //   · particular → texto libre de la guía · tercero → datos de la OV + maestro transportistas
@@ -1367,7 +1385,8 @@ export async function generarPdfGuia(req, res, next) {
           : componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
-      emisor, cliente, detalle,
+      emisor, cliente: destinatarioPdf, detalle,
+      proveedor: proveedorPdf, docRelacionado: docRelacionadoPdf,
       transportista: transportistaPdf, conductores, vehiculos: vehiculosPdf,
       indicadores: indicadoresPdf, registrar: registrarPdf, modalidad: modalidadPdf, fechaEntrega: fechaEntregaPdf,
       comex: comexPdf,

@@ -278,6 +278,10 @@ function DetalleGuiaRemision() {
   const estadoConfig = getEstadoConfig(guia.estado);
   const IconoEstado = estadoConfig.icono;
   const puedeEditar = guia.estado !== 'Anulada' && guia.estado !== 'Entregada';
+  // Guía de COMPRA (motivo 02): el "cliente"/OV se reemplazan por proveedor/compra + factura.
+  const esCompra = guia.tipo_origen === 'Compra';
+  const facturaRel = (esCompra && guia.oc_serie_documento && guia.oc_numero_documento)
+    ? `${guia.oc_serie_documento}-${guia.oc_numero_documento}` : null;
 
   return (
     <div className="p-6">
@@ -297,15 +301,31 @@ function DetalleGuiaRemision() {
             </h1>
             <p className="text-muted">
               Emitida el {formatearFecha(guia.fecha_emision)}
-              {guia.numero_orden && (
+              {!esCompra && guia.numero_orden && (
                 <>
                   {' • Orden: '}
-                  <button 
+                  <button
                     className="text-primary hover:underline font-medium"
                     onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
                   >
                     {guia.numero_orden}
                   </button>
+                </>
+              )}
+              {esCompra && (
+                <>
+                  {' • Guía de Compra'}
+                  {guia.numero_orden_compra && (
+                    <>
+                      {' • Compra: '}
+                      <button
+                        className="text-primary hover:underline font-medium"
+                        onClick={() => navigate(`/compras/${guia.id_orden_compra}`)}
+                      >
+                        {guia.numero_orden_compra}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </p>
@@ -389,29 +409,52 @@ function DetalleGuiaRemision() {
           <div className="card-header bg-gradient-to-r from-blue-50 to-white">
             <h2 className="card-title text-blue-900">
               <Building size={20} />
-              Cliente
+              {esCompra ? 'Proveedor' : 'Cliente'}
             </h2>
           </div>
           <div className="card-body space-y-3">
             <div>
               <label className="text-xs text-muted uppercase font-semibold">Razón Social</label>
-              <p className="font-bold text-lg">{guia.cliente}</p>
+              <p className="font-bold text-lg">{esCompra ? (guia.proveedor || '—') : guia.cliente}</p>
             </div>
             <div>
               <label className="text-xs text-muted uppercase font-semibold">RUC</label>
-              <p className="font-mono">{guia.ruc_cliente}</p>
+              <p className="font-mono">{esCompra ? (guia.ruc_proveedor || '—') : guia.ruc_cliente}</p>
             </div>
-            {guia.numero_orden && (
-              <div>
-                <label className="text-xs text-muted uppercase font-semibold">Orden de Venta</label>
-                <button
-                  className="text-primary hover:underline font-bold flex items-center gap-1"
-                  onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
-                >
-                  <ShoppingCart size={14} />
-                  {guia.numero_orden}
-                </button>
-              </div>
+            {esCompra ? (
+              <>
+                {guia.numero_orden_compra && (
+                  <div>
+                    <label className="text-xs text-muted uppercase font-semibold">Compra</label>
+                    <button
+                      className="text-primary hover:underline font-bold flex items-center gap-1"
+                      onClick={() => navigate(`/compras/${guia.id_orden_compra}`)}
+                    >
+                      <ShoppingCart size={14} />
+                      {guia.numero_orden_compra}
+                    </button>
+                  </div>
+                )}
+                {facturaRel && (
+                  <div>
+                    <label className="text-xs text-muted uppercase font-semibold">Factura relacionada</label>
+                    <p className="font-mono">{facturaRel}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              guia.numero_orden && (
+                <div>
+                  <label className="text-xs text-muted uppercase font-semibold">Orden de Venta</label>
+                  <button
+                    className="text-primary hover:underline font-bold flex items-center gap-1"
+                    onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
+                  >
+                    <ShoppingCart size={14} />
+                    {guia.numero_orden}
+                  </button>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -667,8 +710,8 @@ function DetalleGuiaRemision() {
                 <span className="font-mono font-bold">{guia.numero_guia}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted">Cliente:</span>
-                <span className="font-medium">{guia.cliente}</span>
+                <span className="text-muted">{esCompra ? 'Proveedor:' : 'Cliente:'}</span>
+                <span className="font-medium">{esCompra ? (guia.proveedor || '—') : guia.cliente}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Productos:</span>
@@ -740,8 +783,8 @@ function DetalleGuiaRemision() {
                 <span className="font-mono font-bold">{guia.numero_guia}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted">Cliente:</span>
-                <span className="font-medium">{guia.cliente}</span>
+                <span className="text-muted">{esCompra ? 'Proveedor:' : 'Cliente:'}</span>
+                <span className="font-medium">{esCompra ? (guia.proveedor || '—') : guia.cliente}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Productos:</span>

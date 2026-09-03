@@ -2,6 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarCompraPDF } from '../utils/pdfGenerators/compraPDF.js';
 import pool from '../config/database.js';
 import { PERMISOS_POR_ROL } from '../middleware/auth.js';
+import { XMLParser } from 'fast-xml-parser';
 
 // --- Control de visibilidad de montos/finanzas en Compras ---
 // Regla: un rol con verPrecios ve todo. Un rol sin verPrecios (ej. Calidad)
@@ -484,6 +485,33 @@ export async function createCompra(req, res) {
     await connection.beginTransaction();
 
     try {
+      // Auto-creación de productos desde el XML de la factura del proveedor. Un ítem que trae
+      // `crear_producto` (no existía en catálogo, elegido al conciliar) se da de alta aquí y se
+      // resuelve su id_producto. Solo actúa si viene `crear_producto`: cero efecto en el alta manual.
+      for (const item of detalle) {
+        if (item.id_producto || !item.crear_producto) continue;
+        const cp = item.crear_producto;
+        if (!cp.id_tipo_inventario) throw new Error(`Falta el tipo de inventario para el producto nuevo "${cp.nombre || cp.codigo || ''}"`);
+        let codigo = String(cp.codigo || '').trim();
+        const codigoLibre = async (c) => {
+          if (!c) return false;
+          const [r] = await connection.query('SELECT 1 FROM productos WHERE codigo = ? LIMIT 1', [c]);
+          return r.length === 0;
+        };
+        if (!(await codigoLibre(codigo))) {
+          codigo = `COMP-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1000)}`;
+        }
+        const [resProd] = await connection.query(
+          `INSERT INTO productos (codigo, nombre, id_tipo_inventario, unidad_medida, codigo_unidad_sunat, costo_unitario_promedio, precio_venta, stock_actual, estado)
+           VALUES (?, ?, ?, ?, ?, ?, 0, 0, 'Activo')`,
+          [
+            codigo, String(cp.nombre || codigo).slice(0, 200), cp.id_tipo_inventario,
+            (cp.unidad_medida || 'UND').slice(0, 20), cp.codigo_unidad_sunat || null,
+            parseFloat(item.precio_unitario || 0) || 0
+          ]);
+        item.id_producto = resProd.insertId;
+      }
+
       let tipoCambioFinal = parseFloat(tipo_cambio || 1.0000);
 
       if (id_cuenta_pago) {
@@ -2046,7 +2074,7 @@ export async function cambiarCuentaCompra(req, res) {
             cuenta_nueva: id_nueva_cuenta,
             movimientos_migrados: movimientos.length,
             monto_ajustado: totalMovido
-        } 
+        }
       });
 
     } catch (err) {
@@ -2059,5 +2087,104 @@ export async function cambiarCuentaCompra(req, res) {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// ── Parseo del XML de la factura del proveedor (UBL Invoice) ──────────────────────────────────
+// Lee el XML que el proveedor emite en SUNAT (única fuente del detalle de ítems; la consulta REST
+// no lo entrega) y devuelve proveedor + cabecera + líneas, con AUTO-MATCH contra el catálogo por
+// código y por descripción. Es de solo lectura (no crea nada): la creación de productos/proveedor
+// ocurre al "Registrar Compra". El frontend usa esto para prellenar la pantalla de conciliación.
+export async function parsearXmlFactura(req, res) {
+  try {
+    const xml = typeof req.body === 'string' ? req.body : req.body?.xml;
+    if (!xml || typeof xml !== 'string' || !xml.includes('<')) {
+      return res.status(400).json({ success: false, error: 'Debe enviar el contenido del XML de la factura del proveedor (campo "xml").' });
+    }
+    const parser = new XMLParser({
+      ignoreAttributes: false, attributeNamePrefix: '@', removeNSPrefix: true,
+      parseTagValue: false, parseAttributeValue: false
+    });
+    let doc;
+    try { doc = parser.parse(xml); }
+    catch { return res.status(400).json({ success: false, error: 'El XML no se pudo leer (¿archivo dañado o incompleto?).' }); }
+
+    const factura = doc?.Invoice;
+    if (!factura) {
+      return res.status(400).json({ success: false, error: 'El XML no es una Factura electrónica (UBL Invoice).' });
+    }
+
+    // Extrae el texto de un nodo, tolerando CDATA/atributos ({ '#text': ... }).
+    const txt = (n) => (n && typeof n === 'object') ? String(n['#text'] ?? '') : String(n ?? '');
+
+    const idComprobante = txt(factura.ID).trim();
+    const [serie, numero] = idComprobante.includes('-')
+      ? [idComprobante.slice(0, idComprobante.indexOf('-')), idComprobante.slice(idComprobante.indexOf('-') + 1)]
+      : [idComprobante, ''];
+    const fecha = txt(factura.IssueDate).trim();
+    const moneda = txt(factura.DocumentCurrencyCode).trim() || 'PEN';
+    const tipoComprobante = txt(factura.InvoiceTypeCode).trim() || '01';
+
+    const supplier = factura.AccountingSupplierParty?.Party || {};
+    const provRuc = txt(supplier.PartyIdentification?.ID).trim();
+    const provRazon = (txt(supplier.PartyLegalEntity?.RegistrationName)
+      || txt(supplier.PartyName?.Name)).trim();
+
+    // % IGV: del TaxCategory/Percent si viene; por defecto 18.
+    const tt = Array.isArray(factura.TaxTotal) ? factura.TaxTotal[0] : factura.TaxTotal;
+    const ts = Array.isArray(tt?.TaxSubtotal) ? tt.TaxSubtotal[0] : tt?.TaxSubtotal;
+    const pct = parseFloat(txt(ts?.TaxCategory?.Percent));
+    const porcentajeIgv = Number.isNaN(pct) ? 18 : pct;
+
+    const rawLines = factura.InvoiceLine
+      ? (Array.isArray(factura.InvoiceLine) ? factura.InvoiceLine : [factura.InvoiceLine])
+      : [];
+    const lineas = rawLines.map((ln, i) => {
+      const qtyNode = ln.InvoicedQuantity;
+      const item = ln.Item || {};
+      return {
+        orden: i + 1,
+        codigo_xml: txt(item.SellersItemIdentification?.ID).trim(),
+        descripcion: txt(item.Description).trim(),
+        cantidad: parseFloat(txt(qtyNode)) || 0,
+        unidad_sunat: String(qtyNode?.['@unitCode'] || 'NIU'),
+        precio_unitario: parseFloat(txt(ln.Price?.PriceAmount)) || 0,
+      };
+    });
+
+    // Auto-match: proveedor por RUC, productos por código y luego por descripción exacta.
+    const proveedor = { ruc: provRuc, razon_social: provRazon, id_proveedor: null };
+    if (provRuc) {
+      const pr = await executeQuery('SELECT id_proveedor, razon_social FROM proveedores WHERE ruc = ?', [provRuc]);
+      if (pr.success && pr.data.length) {
+        proveedor.id_proveedor = pr.data[0].id_proveedor;
+        proveedor.razon_social = pr.data[0].razon_social;
+      }
+    }
+    for (const l of lineas) {
+      let match = null;
+      if (l.codigo_xml) {
+        const r = await executeQuery('SELECT id_producto, codigo, nombre, unidad_medida FROM productos WHERE codigo = ? LIMIT 1', [l.codigo_xml]);
+        if (r.success && r.data.length) match = r.data[0];
+      }
+      if (!match && l.descripcion) {
+        const r = await executeQuery('SELECT id_producto, codigo, nombre, unidad_medida FROM productos WHERE nombre = ? LIMIT 1', [l.descripcion]);
+        if (r.success && r.data.length) match = r.data[0];
+      }
+      l.id_producto = match?.id_producto || null;
+      l.producto_match = match ? { codigo: match.codigo, nombre: match.nombre, unidad_medida: match.unidad_medida } : null;
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        proveedor,
+        comprobante: { tipo: tipoComprobante, serie, numero, fecha, moneda, porcentaje_igv: porcentajeIgv },
+        lineas
+      }
+    });
+  } catch (error) {
+    console.error('parsearXmlFactura:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 }

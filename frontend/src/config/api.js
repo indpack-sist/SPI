@@ -959,6 +959,10 @@ export const guiasRemisionAPI = {
 
   getById: (id) => api.get(`/guias-remision/${id}`),
   create: (data) => api.post('/guias-remision', data),
+  // Guía de remisión de COMPRA (motivo 02): crea la guía e ingresa el stock. SPI recoge con flota propia.
+  createCompra: (data) => api.post('/guias-remision/compra', data),
+  // Datos de la empresa remitente (dirección/ubigeo) para prellenar los puntos de la guía.
+  getEmpresaRemitente: () => api.get('/guias-remision/empresa-remitente'),
 
   // Maestro de transportistas (terceros, para GRE en transporte público).
   getTransportistas: () => api.get('/guias-remision/transportistas'),
@@ -1057,6 +1061,8 @@ export const comprasAPI = {
   getAll: (params) => api.get('/compras', { params }),
   getById: (id) => api.get(`/compras/${id}`),
   create: (data) => api.post('/compras', data),
+  // Parseo del XML de la factura del proveedor (solo lectura) → prellena la conciliación.
+  parseXml: (xml) => api.post('/compras/parse-xml', { xml }),
   update: (id, data) => api.put(`/compras/${id}`, data),
   
   cancelar: (id, data) => api.patch(`/compras/${id}/cancelar`, data),

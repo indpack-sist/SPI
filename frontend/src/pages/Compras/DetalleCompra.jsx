@@ -12,6 +12,7 @@ import {
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import ModalGuiaCompra from '../../components/Compras/ModalGuiaCompra';
 import { comprasAPI, cuentasPagoAPI, productosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -23,6 +24,7 @@ function DetalleCompra() {
   const verFinanzas = tienePermiso('verPrecios');
 
   const [compra, setCompra] = useState(null);
+  const [modalGuiaOpen, setModalGuiaOpen] = useState(false);
   // verMontos: mostrar PRECIOS de ESTA compra. El backend marca puede_ver_montos
   // por propiedad (Calidad ve montos solo en las compras que él mismo registró).
   const verMontos = compra?.puede_ver_montos ?? verFinanzas;
@@ -657,6 +659,11 @@ function DetalleCompra() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
+          {!estaCancelada && (
+            <button className="btn btn-info text-white" onClick={() => setModalGuiaOpen(true)}>
+              <Truck size={18} /> Emitir Guía de Remisión
+            </button>
+          )}
           {verFinanzas && (<>
           {compra.url_comprobante && (
             <a
@@ -722,6 +729,16 @@ function DetalleCompra() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      <ModalGuiaCompra
+        isOpen={modalGuiaOpen}
+        onClose={() => setModalGuiaOpen(false)}
+        compra={compra}
+        onCreated={(idGuia) => {
+          setModalGuiaOpen(false);
+          if (idGuia) navigate(`/ventas/guias-remision/${idGuia}`);
+        }}
+      />
 
       {verFinanzas && (<>
       <div className={`card mb-6 border-l-4 ${

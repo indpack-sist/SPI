@@ -342,13 +342,23 @@ function Compras() {
           <p className="text-muted">Registro, control de pagos y trazabilidad</p>
         </div>
         {puedeCrear && (
-          <button
-            className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
-            onClick={() => navigate('/compras/nueva')}
-          >
-            <Plus size={20} />
-            Registrar Compra
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-outline"
+              onClick={() => navigate('/compras/registrar-xml')}
+              title="Registrar una compra leyendo el XML de la factura del proveedor"
+            >
+              <FileText size={20} />
+              Desde XML
+            </button>
+            <button
+              className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
+              onClick={() => navigate('/compras/nueva')}
+            >
+              <Plus size={20} />
+              Registrar Compra
+            </button>
+          </div>
         )}
       </div>
 

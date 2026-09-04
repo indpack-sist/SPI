@@ -9,7 +9,7 @@ import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
 import UbigeoSelector from '../../common/UbigeoSelector';
 import { resolverUbigeoDesdeDireccion } from '../../../utils/ubigeo';
-import { sunatAPI, ordenesVentaAPI } from '../../../config/api';
+import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../../config/api';
 
 // ── Validadores de formato (espejo del backend util.service.js) para bloquear "Emitir" ───────────
 // Placa peruana: alfanumérica, sin guion/espacios; se acepta "B2Q671" y "B2Q-671" (ambas → B2Q671).
@@ -44,6 +44,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Catálogos de flota para el modo "vehículo propio de la empresa".
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
+  // Punto de partida por defecto = domicilio fiscal (empresa_config). Se usa como respaldo cuando
+  // la guía no tiene partida guardada (guías antiguas o config poblada después de crearlas).
+  const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [modalReemplazo, setModalReemplazo] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -73,11 +76,15 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const aceptado = estado === 'ACEPTADO';
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
 
+  // Punto de partida efectivo: el de la guía o, si falta, el domicilio fiscal de la empresa (empresa_config).
+  const partidaDireccion = guia?.direccion_partida || guia?.punto_partida || empresaRemitente?.direccion || '';
+  const partidaUbigeo = guia?.ubigeo_partida || empresaRemitente?.ubigeo || '';
+
   // Prerrequisito global que se muestra como aviso ANTES de abrir el wizard: el ubigeo de partida
   // viene de empresa_config (si falta, es un problema de configuración de la empresa). El resto de
   // datos (llegada, peso, motivo, transporte) se editan y validan dentro del wizard.
   const faltantes = [];
-  if (puedeEmitir && !guia?.ubigeo_partida) faltantes.push('ubigeo de partida en la configuración de la empresa (6 dígitos)');
+  if (puedeEmitir && !/^\d{6}$/.test(String(partidaUbigeo || ''))) faltantes.push('ubigeo de partida en la configuración de la empresa (6 dígitos)');
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
   const tras = async (fn, okMsg) => {
@@ -107,6 +114,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
       } catch { /* no crítico: el modo flota simplemente no listará opciones */ }
+      try {
+        const re = await guiasRemisionAPI.getEmpresaRemitente();
+        if (re.data?.data) setEmpresaRemitente(re.data.data);
+      } catch { /* no crítico: solo respalda el punto de partida */ }
     })();
   }, [soloLectura]);
 
@@ -591,8 +602,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="border border-gray-200 rounded p-3">
                   <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><MapPin size={12} /> Punto de partida (fijo)</div>
-                  <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
-                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
+                  <div className="text-xs">{partidaDireccion || '-'}</div>
+                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{partidaUbigeo || '—'}</span></div>
                 </div>
                 <div className="border border-gray-200 rounded p-3 space-y-2">
                   <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada (editable)</div>
@@ -691,8 +702,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div className="border border-gray-200 rounded p-3">
                   <div className="text-[10px] text-muted uppercase mb-1">Punto de partida</div>
-                  <div className="text-xs">{guia?.direccion_partida || guia?.punto_partida || '-'}</div>
-                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{guia?.ubigeo_partida || '—'}</span></div>
+                  <div className="text-xs">{partidaDireccion || '-'}</div>
+                  <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{partidaUbigeo || '—'}</span></div>
                 </div>
                 <div className="border border-gray-200 rounded p-3">
                   <div className="text-[10px] text-muted uppercase mb-1">Punto de llegada</div>

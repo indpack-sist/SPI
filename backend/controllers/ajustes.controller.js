@@ -131,11 +131,11 @@ export async function getAjustesPorProducto(req, res) {
     const { limit = 20 } = req.query;
 
     const result = await executeQuery(
-      `SELECT * FROM vista_ajustes_inventario 
-       WHERE id_producto = ? 
-       ORDER BY fecha_ajuste DESC 
-       LIMIT ?`,
-      [id, parseInt(limit)]
+      `SELECT * FROM vista_ajustes_inventario
+       WHERE id_producto = ?
+       ORDER BY fecha_ajuste DESC
+       LIMIT ${parseInt(limit) || 20}`,
+      [id]
     );
 
     if (!result.success) {
@@ -207,8 +207,7 @@ export async function getTodosLosAjustes(req, res) {
       params.push(id_usuario);
     }
 
-    sql += ' ORDER BY fecha_ajuste DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    sql += ` ORDER BY fecha_ajuste DESC LIMIT ${parseInt(limit) || 100} OFFSET ${parseInt(offset) || 0}`;
 
     const result = await executeQuery(sql, params);
 
@@ -257,8 +256,7 @@ export async function getHistorialAjustes(req, res) {
       params.push(id_producto);
     }
 
-    sql += ' ORDER BY h.fecha_ajuste DESC LIMIT ?';
-    params.push(parseInt(limit));
+    sql += ` ORDER BY h.fecha_ajuste DESC LIMIT ${parseInt(limit) || 50}`;
 
     const result = await executeQuery(sql, params);
 

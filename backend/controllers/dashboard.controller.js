@@ -548,10 +548,10 @@ export const obtenerTopProductos = async (req, res) => {
       FROM productos p
       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE p.estado = 'Activo' AND p.stock_actual > 0
-      ORDER BY ${orderBy} LIMIT ?
+      ORDER BY ${orderBy} LIMIT ${parseInt(limit) || 10}
     `;
 
-    const result = await executeQuery(query, [parseInt(limit)]);
+    const result = await executeQuery(query, []);
 
     res.json({
       productos: result.data.map(p => ({
@@ -597,10 +597,9 @@ export const obtenerProduccionFinalizada = async (req, res) => {
       WHERE op.estado = 'Finalizada' ${whereDate}
       GROUP BY p.id_producto, p.nombre, p.codigo
       ORDER BY total_ordenes DESC
-      LIMIT ?
+      LIMIT ${limit}
     `;
 
-    params.push(limit);
     const result = await executeQuery(query, params);
 
     console.log('Producción result:', JSON.stringify(result)); // 👈 agrega esto temporalmente

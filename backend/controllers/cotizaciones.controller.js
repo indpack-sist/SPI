@@ -107,10 +107,10 @@ export async function getAllCotizaciones(req, res) {
     
     sql += ` ORDER BY c.fecha_creacion ${orden === 'asc' ? 'ASC' : 'DESC'}, c.id_cotizacion ${orden === 'asc' ? 'ASC' : 'DESC'}`;
     if (paginated) {
-      sql += ` LIMIT ? OFFSET ?`;
+      sql += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     }
-    
-    const dataParams = paginated ? [...params, limit, (page - 1) * limit] : params;
+
+    const dataParams = params;
     const [result, countResult, summaryResult] = await Promise.all([
       executeQuery(sql, dataParams),
       paginated ? executeQuery(countSql, params) : Promise.resolve(null),

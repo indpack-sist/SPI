@@ -252,10 +252,10 @@ export async function getAllOrdenesVenta(req, res) {
     
     sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;
     if (paginated) {
-      sql += ` LIMIT ? OFFSET ?`;
+      sql += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     }
-    
-    const dataParams = paginated ? [...params, limit, (page - 1) * limit] : params;
+
+    const dataParams = params;
     const [result, countResult, summaryResult] = await Promise.all([
       executeQuery(sql, dataParams),
       paginated ? executeQuery(countSql, params) : Promise.resolve(null),

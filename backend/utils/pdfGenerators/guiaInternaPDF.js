@@ -127,7 +127,6 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       const alturaConductor = calcularAlturaTexto(doc, conductorFinal || '', 180, 8);
 
       let leftH = 15; // Fecha
-      leftH += 15; // Hora
       leftH += 15; // Tipo
       leftH += Math.max(15, alturaCliente + 5);
       if (direccionEntrega) leftH += Math.max(15, alturaDireccion + 5);
@@ -152,14 +151,7 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       doc.font('Helvetica');
       doc.text(formatearFecha(orden.fecha_emision), 100, cursorY);
       cursorY += 15;
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Hora:', 40, cursorY);
-      doc.font('Helvetica');
-      const horaStr = formatearHora(new Date()); 
-      doc.text(horaStr, 100, cursorY);
-      cursorY += 15;
-      
+
       doc.font('Helvetica-Bold');
       doc.text('Tipo:', 40, cursorY);
       doc.font('Helvetica');

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PermisosProvider } from './context/PermisosContext';
@@ -7,69 +8,61 @@ import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/Protec
 import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable';
 import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
-import AppLauncher from './pages/Home/AppLauncher';
+import Loading from './components/UI/Loading';
 
-import Dashboard from './pages/Dashboard/Dashboard';
-
-import Empleados from './pages/Empleados/Empleados';
-import Flota from './pages/Flota/Flota';
-import Proveedores from './pages/Proveedores/Proveedores';
-import Clientes from './pages/Clientes/Clientes';
-import ClienteDetalle from './pages/Clientes/ClienteDetalle';
-import SolicitudesCredito from './pages/SolicitudesCredito/SolicitudesCredito';
-
-import Productos from './pages/Productos/Productos';
-import ProductoDetalle from './pages/Productos/ProductoDetalle';
-import ListaProductosSimple from './pages/Productos/ListaProductosSimple';
-
-import Entradas from './pages/Inventario/Entradas';
-import Salidas from './pages/Inventario/Salidas';
-import Transferencias from './pages/Inventario/Transferencias';
-import StockInventario from './pages/Inventario/StockInventario';
-
-import OrdenesProduccion from './pages/Produccion/OrdenesProduccion';
-import OrdenDetalle from './pages/Produccion/OrdenDetalle';
-import CrearOrden from './pages/Produccion/CrearOrden';
-import CalendarioProduccion from './pages/Produccion/CalendarioProduccion';
-import TableroSupervisor from './pages/Produccion/TableroSupervisor';
-
-import Incidencias from './pages/Calidad/Incidencias';
-import IncidenciaDetalle from './pages/Calidad/IncidenciaDetalle';
-import IncidenciasPorProducto from './pages/Calidad/IncidenciasPorProducto';
-
-import Cotizaciones from './pages/Ventas/Cotizaciones';
-import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
-import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
-import ListaPrecios from './pages/Ventas/ListaPrecios';
-import OrdenesVenta from './pages/Ventas/OrdenesVenta';
-import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
-import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
-import VerificarOrdenes from './pages/Ventas/VerificarOrdenes';
-import GuiasRemision from './pages/Ventas/GuiasRemision';
-import NuevaGuiaRemision from './pages/Ventas/NuevaGuiaRemision';
-import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
-import GuiasTransportista from './pages/Ventas/GuiasTransportista';
-import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
-import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
-import ReporteVentas from './pages/Ventas/ReporteVentas'; // <--- NUEVO IMPORT
-import SeguimientoVentas from './pages/Ventas/SeguimientoVentas';
-import SeguimientoVentaDetalle from './pages/Ventas/SeguimientoVentaDetalle';
-import Prospectos from './pages/Ventas/Prospectos';
-
-import Compras from './pages/Compras/Compras';
-import NuevaCompra from './pages/Compras/NuevaCompra';
-import RegistrarCompraXml from './pages/Compras/RegistrarCompraXml';
-import DetalleCompra from './pages/Compras/DetalleCompra';
-
-import CuentasPago from './pages/Finanzas/CuentasPago';
-import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
-import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
-import HistorialTipoCambio from './pages/Finanzas/HistorialTipoCambio';
-
-import ReportesSIRE from './pages/Reportes/ReportesSIRE';
-import ReporteProductoDespachos from './pages/Reportes/ReporteProductoDespachos';
-import ReporteDeudasClientes from './pages/Reportes/ReporteDeudasClientes';
-import MonitorSunat from './pages/Reportes/MonitorSunat';
+const AppLauncher = lazy(() => import('./pages/Home/AppLauncher'));
+const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
+const Empleados = lazy(() => import('./pages/Empleados/Empleados'));
+const Flota = lazy(() => import('./pages/Flota/Flota'));
+const Proveedores = lazy(() => import('./pages/Proveedores/Proveedores'));
+const Clientes = lazy(() => import('./pages/Clientes/Clientes'));
+const ClienteDetalle = lazy(() => import('./pages/Clientes/ClienteDetalle'));
+const SolicitudesCredito = lazy(() => import('./pages/SolicitudesCredito/SolicitudesCredito'));
+const Productos = lazy(() => import('./pages/Productos/Productos'));
+const ProductoDetalle = lazy(() => import('./pages/Productos/ProductoDetalle'));
+const ListaProductosSimple = lazy(() => import('./pages/Productos/ListaProductosSimple'));
+const Entradas = lazy(() => import('./pages/Inventario/Entradas'));
+const Salidas = lazy(() => import('./pages/Inventario/Salidas'));
+const Transferencias = lazy(() => import('./pages/Inventario/Transferencias'));
+const StockInventario = lazy(() => import('./pages/Inventario/StockInventario'));
+const OrdenesProduccion = lazy(() => import('./pages/Produccion/OrdenesProduccion'));
+const OrdenDetalle = lazy(() => import('./pages/Produccion/OrdenDetalle'));
+const CrearOrden = lazy(() => import('./pages/Produccion/CrearOrden'));
+const CalendarioProduccion = lazy(() => import('./pages/Produccion/CalendarioProduccion'));
+const TableroSupervisor = lazy(() => import('./pages/Produccion/TableroSupervisor'));
+const Incidencias = lazy(() => import('./pages/Calidad/Incidencias'));
+const IncidenciaDetalle = lazy(() => import('./pages/Calidad/IncidenciaDetalle'));
+const IncidenciasPorProducto = lazy(() => import('./pages/Calidad/IncidenciasPorProducto'));
+const Cotizaciones = lazy(() => import('./pages/Ventas/Cotizaciones'));
+const NuevaCotizacion = lazy(() => import('./pages/Ventas/NuevaCotizacion'));
+const DetalleCotizacion = lazy(() => import('./pages/Ventas/DetalleCotizacion'));
+const ListaPrecios = lazy(() => import('./pages/Ventas/ListaPrecios'));
+const OrdenesVenta = lazy(() => import('./pages/Ventas/OrdenesVenta'));
+const NuevaOrdenVenta = lazy(() => import('./pages/Ventas/NuevaOrdenVenta'));
+const DetalleOrdenVenta = lazy(() => import('./pages/Ventas/DetalleOrdenVenta'));
+const VerificarOrdenes = lazy(() => import('./pages/Ventas/VerificarOrdenes'));
+const GuiasRemision = lazy(() => import('./pages/Ventas/GuiasRemision'));
+const NuevaGuiaRemision = lazy(() => import('./pages/Ventas/NuevaGuiaRemision'));
+const DetalleGuiaRemision = lazy(() => import('./pages/Ventas/DetalleGuiaRemision'));
+const GuiasTransportista = lazy(() => import('./pages/Ventas/GuiasTransportista'));
+const NuevaGuiaTransportista = lazy(() => import('./pages/Ventas/NuevaGuiaTransportista'));
+const DetalleGuiaTransportista = lazy(() => import('./pages/Ventas/DetalleGuiaTransportista'));
+const ReporteVentas = lazy(() => import('./pages/Ventas/ReporteVentas'));
+const SeguimientoVentas = lazy(() => import('./pages/Ventas/SeguimientoVentas'));
+const SeguimientoVentaDetalle = lazy(() => import('./pages/Ventas/SeguimientoVentaDetalle'));
+const Prospectos = lazy(() => import('./pages/Ventas/Prospectos'));
+const Compras = lazy(() => import('./pages/Compras/Compras'));
+const NuevaCompra = lazy(() => import('./pages/Compras/NuevaCompra'));
+const RegistrarCompraXml = lazy(() => import('./pages/Compras/RegistrarCompraXml'));
+const DetalleCompra = lazy(() => import('./pages/Compras/DetalleCompra'));
+const CuentasPago = lazy(() => import('./pages/Finanzas/CuentasPago'));
+const DetalleCuenta = lazy(() => import('./pages/Finanzas/DetalleCuenta'));
+const PagosCobranzas = lazy(() => import('./pages/Finanzas/PagosCobranzas'));
+const HistorialTipoCambio = lazy(() => import('./pages/Finanzas/HistorialTipoCambio'));
+const ReportesSIRE = lazy(() => import('./pages/Reportes/ReportesSIRE'));
+const ReporteProductoDespachos = lazy(() => import('./pages/Reportes/ReporteProductoDespachos'));
+const ReporteDeudasClientes = lazy(() => import('./pages/Reportes/ReporteDeudasClientes'));
+const MonitorSunat = lazy(() => import('./pages/Reportes/MonitorSunat'));
 
 function App() {
   return (
@@ -85,6 +78,7 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
+                    <Suspense fallback={<Loading />}>
                     <Routes>
                       <Route path="/" element={<AppLauncher />} />
                       
@@ -564,6 +558,7 @@ function App() {
 
                       <Route path="*" element={<RedirectToFirstAvailable />} />
                     </Routes>
+                    </Suspense>
                   </Layout>
                 </ProtectedRoute>
               }

@@ -417,8 +417,16 @@ function DetalleOrdenVenta() {
       // endpoint financiero responde 403; así la página no se rompe.
       const vacio = (data) => Promise.resolve({ data: { success: true, data } });
 
-      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes, facturasRes, guiasRes] = await Promise.all([
-        ordenesVentaAPI.getById(id),
+      const ordenRes = await ordenesVentaAPI.getById(id);
+      if (!ordenRes.data.success) {
+        throw new Error(ordenRes.data.error || 'No se pudo cargar la orden');
+      }
+
+      const ordenData = ordenRes.data.data;
+      setOrden(ordenData);
+      setLoading(false);
+
+      const [pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes, facturasRes, guiasRes, creditoRes] = await Promise.all([
         verFinanzas ? ordenesVentaAPI.getPagos(id).catch(() => vacio([])) : vacio([]),
         verFinanzas ? ordenesVentaAPI.getResumenPagos(id).catch(() => vacio(null)) : vacio(null),
         ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } })),
@@ -426,17 +434,12 @@ function DetalleOrdenVenta() {
         verFinanzas ? ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } })) : vacio([]),
         ordenesVentaAPI.getDocumentosAdicionales(id).catch(() => ({ data: { success: true, data: [] } })),
         verFinanzas ? ordenesVentaAPI.getFacturas(id).catch(() => ({ data: { success: true, data: { facturas: [], resumen: null } } })) : vacio({ facturas: [], resumen: null }),
-        guiasRemisionAPI.getAll({ id_orden_venta: id }).catch(() => ({ data: { success: true, data: [] } }))
+        guiasRemisionAPI.getAll({ id_orden_venta: id }).catch(() => ({ data: { success: true, data: [] } })),
+        verFinanzas ? clientesAPI.getEstadoCredito(ordenData.id_cliente).catch(() => null) : null
       ]);
 
-      if (ordenRes.data.success) {
-        setOrden(ordenRes.data.data);
-        if (verFinanzas) {
-          const creditoRes = await clientesAPI.getEstadoCredito(ordenRes.data.data.id_cliente).catch(() => null);
-          if (creditoRes?.data?.success) {
-            setEstadoCredito(creditoRes.data.data);
-          }
-        }
+      if (creditoRes?.data?.success) {
+        setEstadoCredito(creditoRes.data.data);
       }
       
       if (pagosRes.data.success) setPagos(pagosRes.data.data);

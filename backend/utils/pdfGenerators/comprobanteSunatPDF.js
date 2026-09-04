@@ -207,9 +207,9 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       for (const it of detalle) {
         const desc = it.descripcion || it.nombre || it.codigo || '-';
         const cant = Number(it.cantidad || 0);
-        // "Valor Unitario" = valor unitario SIN IGV, ya con el descuento de línea aplicado
-        // (precio_unitario se almacena sin IGV; ver calcularComprobante en ubl.service.js).
-        const valorUnit = Number(it.precio_unitario || 0) * (1 - Number(it.descuento_porcentaje || 0) / 100);
+        // "Valor Unitario" = precio_unitario SIN IGV, tal cual. `descuento_porcentaje` es el MARGEN
+        // (markup), NO un descuento — no debe restarse (ver calcularComprobante en ubl.service.js).
+        const valorUnit = Number(it.precio_unitario || 0);
         const und = it.unidad || it.codigo_unidad_sunat || 'NIU';
         const undTxt = UNIDAD_NOMBRE[und] || und;
         const hDesc = doc.heightOfString(desc, { width: 262, lineGap: 1 });

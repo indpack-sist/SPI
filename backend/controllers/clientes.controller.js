@@ -636,25 +636,33 @@ export async function getHistorialOrdenesVentaCliente(req, res) {
 export async function getEstadoCreditoCliente(req, res) {
   try {
     const { id } = req.params;
-    // Al editar una orden, se excluye su propia deuda para no contarla dos veces
     const excluirOrden = req.query.excluir_orden ? parseInt(req.query.excluir_orden) : null;
-    
+
+    const excluirSql = excluirOrden ? 'AND ov.id_orden_venta != ?' : '';
+    const params = excluirOrden ? [id, excluirOrden] : [id];
     const clienteResult = await executeQuery(`
       SELECT 
-        id_cliente,
-        razon_social,
-        ruc,
-        tipo_documento,
-        limite_credito_pen,
-        limite_credito_usd,
-        usar_limite_credito,
-        credito_utilizado_pen,
-        credito_utilizado_usd,
-        condicion_pago,
-        dias_credito
-      FROM clientes 
-      WHERE id_cliente = ?
-    `, [id]);
+        cl.id_cliente,
+        cl.razon_social,
+        cl.ruc,
+        cl.tipo_documento,
+        cl.limite_credito_pen,
+        cl.limite_credito_usd,
+        cl.usar_limite_credito,
+        cl.condicion_pago,
+        cl.dias_credito,
+        COALESCE(SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total - ov.monto_pagado ELSE 0 END), 0) AS deuda_pen,
+        COALESCE(SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total - ov.monto_pagado ELSE 0 END), 0) AS deuda_usd
+      FROM clientes cl
+      LEFT JOIN ordenes_venta ov
+        ON ov.id_cliente = cl.id_cliente
+        AND ov.tipo_venta = 'Crédito'
+        AND ov.estado != 'Cancelada'
+        AND ov.estado_pago != 'Pagado'
+        ${excluirSql}
+      WHERE cl.id_cliente = ?
+      GROUP BY cl.id_cliente
+    `, excluirOrden ? [excluirOrden, id] : params);
     
     if (!clienteResult.success || clienteResult.data.length === 0) {
       return res.status(404).json({
@@ -664,35 +672,8 @@ export async function getEstadoCreditoCliente(req, res) {
     }
     
     const cliente = clienteResult.data[0];
-    
-    const filtroExcluir = excluirOrden ? 'AND id_orden_venta != ?' : '';
-    const paramsPen = excluirOrden ? [id, excluirOrden] : [id];
-    const paramsUsd = excluirOrden ? [id, excluirOrden] : [id];
-
-    const deudaPenResult = await executeQuery(`
-      SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_pen
-      FROM ordenes_venta
-      WHERE id_cliente = ?
-      AND moneda = 'PEN'
-      AND tipo_venta = 'Crédito'
-      AND estado NOT IN ('Cancelada')
-      AND estado_pago != 'Pagado'
-      ${filtroExcluir}
-    `, paramsPen);
-
-    const deudaUsdResult = await executeQuery(`
-      SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_usd
-      FROM ordenes_venta
-      WHERE id_cliente = ?
-      AND moneda = 'USD'
-      AND tipo_venta = 'Crédito'
-      AND estado NOT IN ('Cancelada')
-      AND estado_pago != 'Pagado'
-      ${filtroExcluir}
-    `, paramsUsd);
-    
-    const deudaPen = parseFloat(deudaPenResult.data[0]?.deuda_pen || 0);
-    const deudaUsd = parseFloat(deudaUsdResult.data[0]?.deuda_usd || 0);
+    const deudaPen = parseFloat(cliente.deuda_pen || 0);
+    const deudaUsd = parseFloat(cliente.deuda_usd || 0);
     
     const limitePen = parseFloat(cliente.limite_credito_pen || 0);
     const limiteUsd = parseFloat(cliente.limite_credito_usd || 0);

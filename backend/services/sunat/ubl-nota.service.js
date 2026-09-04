@@ -96,8 +96,10 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);
+    // `descuento_porcentaje` es el MARGEN (markup), NO un descuento: precio_unitario ya es el
+    // precio final. No se resta, para que la nota cuadre con la OV/factura (ver ubl.service.js).
     const desc = Number(d.descuento_porcentaje || 0);
-    const netUnit = Number(d.precio_unitario) * (1 - desc / 100);
+    const netUnit = Number(d.precio_unitario);
     const lineExt = round2(cantidad * netUnit);
     const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;

@@ -235,12 +235,16 @@ function OrdenesVenta() {
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
   const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
+  const [busquedaAplicada, setBusquedaAplicada] = useState(busqueda);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [resumen, setResumen] = useState(null);
   
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
   const [currentPage, setCurrentPage] = useState(initPage);
   const [inputPage, setInputPage] = useState(initPage.toString());
   const itemsPerPage = 20;
   const tablaRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -265,13 +269,14 @@ function OrdenesVenta() {
   }, [currentPage]);
 
   useEffect(() => {
-    cargarDatos(false);
-    cargarTCDesdeSession();
-  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin]);
+    const timeout = setTimeout(() => setBusquedaAplicada(busqueda.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [busqueda]);
 
   useEffect(() => {
-    cargarDatos(true);
-  }, []);
+    cargarDatos(ordenes.length === 0);
+    cargarTCDesdeSession();
+  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin, busquedaAplicada, currentPage]);
 
   const cargarTCDesdeSession = () => {
     try {
@@ -324,6 +329,7 @@ function OrdenesVenta() {
   };
 
   const cargarDatos = async (isInitial = false) => {
+    const requestId = ++requestIdRef.current;
     try {
       if (isInitial) {
         setLoading(true);
@@ -342,19 +348,26 @@ function OrdenesVenta() {
       if (filtroMoneda.length > 0) filtros.moneda = filtroMoneda;
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;
       if (fechaFin) filtros.fecha_fin = fechaFin;
+      if (busquedaAplicada) filtros.search = busquedaAplicada;
+      filtros.page = currentPage;
+      filtros.limit = itemsPerPage;
       
       const response = await ordenesVentaAPI.getAll(filtros);
       
-      if (response.data.success) {
+      if (response.data.success && requestId === requestIdRef.current) {
         setOrdenes(response.data.data || []);
+        setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
+        setResumen(response.data.summary || null);
       }
       
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
+      if (requestId === requestIdRef.current) setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
     } finally {
-      setLoading(false);
-      setIsFiltering(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setIsFiltering(false);
+      }
     }
   };
 
@@ -373,6 +386,8 @@ function OrdenesVenta() {
     if (fechaInicio && fechaFin) {
       // Si el usuario aplicó filtro de fechas manual
       setTextoFechaPeriodo(`${formatearFechaVisual(fechaInicio)} — ${formatearFechaVisual(fechaFin)}`);
+    } else if (resumen?.fecha_minima) {
+      setTextoFechaPeriodo(`${formatearFechaVisual(resumen.fecha_minima)} — ${formatearFechaVisual(resumen.fecha_maxima || resumen.fecha_minima)}`);
     } else if (ordenes.length > 0) {
       // Si no hay filtro manual, buscamos la orden válida más antigua
       const ordenesValidas = ordenes.filter(o => o.estado !== 'Cancelada' && o.fecha_emision);
@@ -397,7 +412,7 @@ function OrdenesVenta() {
     } else {
        setTextoFechaPeriodo('CARGANDO...');
     }
-  }, [ordenes, fechaInicio, fechaFin]);
+  }, [ordenes, resumen, fechaInicio, fechaFin]);
   // ---------------------------------------------------------
 
   const limpiarFiltros = () => {
@@ -414,22 +429,9 @@ function OrdenesVenta() {
     setCurrentPage(1);
   };
 
-  const ordenesFiltradas = ordenes.filter(orden => {
-    if (!busqueda) return true;
-    const term = busqueda.toLowerCase();
-    return (
-      orden.numero_orden?.toLowerCase().includes(term) ||
-      orden.numero_comprobante?.toLowerCase().includes(term) ||
-      orden.numero_comprobante_sunat?.toLowerCase().includes(term) ||
-      orden.numero_cotizacion?.toLowerCase().includes(term) ||
-      orden.cliente?.toLowerCase().includes(term) ||
-      orden.ruc_cliente?.toLowerCase().includes(term) ||
-      orden.comercial?.toLowerCase().includes(term) ||
-      orden.registrado_por?.toLowerCase().includes(term)
-    );
-  });
+  const ordenesFiltradas = ordenes;
 
-  const estadisticas = ordenesFiltradas.reduce((acc, orden) => {
+  const estadisticasPagina = ordenesFiltradas.reduce((acc, orden) => {
     if (
       orden.estado === 'Cancelada' || 
       orden.estado_verificacion === 'Pendiente' || 
@@ -466,11 +468,12 @@ function OrdenesVenta() {
     notas_venta_pen: 0, notas_venta_usd: 0,
     sin_comprobante_pen: 0, sin_comprobante_usd: 0 
   });
+  const estadisticas = resumen || estadisticasPagina;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
+  const currentItems = ordenesFiltradas;
+  const totalPages = Math.max(1, pagination.totalPages || 1);
 
   useEffect(() => {
     const idsFiltrados = ordenesFiltradas.map(o => o.id_orden_venta);
@@ -1013,7 +1016,7 @@ function OrdenesVenta() {
 
         <div className="card shadow-2xl relative" ref={tablaRef}>
           <div className="card-header flex items-center justify-between border-b border-steel/20">
-            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{ordenesFiltradas.length}</span></h2>
+            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{pagination.total}</span></h2>
             <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
           </div>
           
@@ -1031,7 +1034,7 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          {ordenesFiltradas.length > itemsPerPage && (
+          {pagination.total > itemsPerPage && (
             <div className="mt-20 px-6 py-10 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] relative z-20">
               <div className="flex items-center gap-3">
                 <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToPrevPage} disabled={currentPage === 1}><ChevronLeft size={20} /> ANTERIOR</button>

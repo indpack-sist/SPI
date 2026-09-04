@@ -112,8 +112,12 @@ export function calcularComprobante({ ov, detalle }) {
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);
+    // OJO: en ventas, `descuento_porcentaje` guarda el MARGEN (markup sobre costo), NO un descuento.
+    // `precio_unitario` ya es el precio final; el total de la OV es cantidad × precio_unitario sin
+    // restar nada. Restar el margen aquí (sobre todo si es negativo) descuadraba la factura respecto
+    // a la OV y saldría a SUNAT con un valor equivocado. Se factura el precio unitario tal cual.
     const desc = Number(d.descuento_porcentaje || 0);
-    const netUnit = Number(d.precio_unitario) * (1 - desc / 100);       // valor unitario sin IGV
+    const netUnit = Number(d.precio_unitario);                          // valor unitario sin IGV (precio final)
     const lineExt = round2(cantidad * netUnit);                         // valor de venta de la línea
     const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;

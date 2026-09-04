@@ -34,18 +34,13 @@ export async function testConnection() {
 
 export async function executeQuery(sql, params = []) {
   const performQuery = async () => {
-    console.log('='.repeat(80));
-    console.log('EXECUTEQUERY INICIADO');
-    console.log('SQL (primeros 300 chars):', sql.substring(0, 300));
-    console.log('Params:', params);
-    console.log('='.repeat(80));
-
+    const startedAt = Date.now();
     const [rows] = await pool.execute(sql, params);
-
-    console.log('Query ejecutada exitosamente');
-    console.log('Filas afectadas:', rows.affectedRows || rows.length);
-    console.log('='.repeat(80));
-
+    const duration = Date.now() - startedAt;
+    const slowQueryMs = Number.parseInt(process.env.SLOW_QUERY_MS || '500', 10);
+    if (duration >= slowQueryMs) {
+      console.warn(`Consulta lenta: ${duration}ms`, sql.replace(/\s+/g, ' ').trim().substring(0, 200));
+    }
     return rows;
   };
 
@@ -56,32 +51,25 @@ export async function executeQuery(sql, params = []) {
     const retryCodes = ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'CANNOT_CONNECT'];
     
     if (retryCodes.includes(error.code)) {
-      console.warn(`⚠️ Error de conexión detectado (${error.code}). Reintentando consulta...`);
+      console.warn(`Error de conexión ${error.code}. Reintentando consulta.`);
       try {
         const rows = await performQuery();
-        console.log('✅ Reintento exitoso');
         return { success: true, data: rows };
       } catch (retryError) {
-        return handleExecuteError(retryError, sql, params);
+        return handleExecuteError(retryError, sql);
       }
     }
 
-    return handleExecuteError(error, sql, params);
+    return handleExecuteError(error, sql);
   }
 }
 
-function handleExecuteError(error, sql, params) {
-  console.error('='.repeat(80));
-  console.error('ERROR EN EXECUTEQUERY');
-  console.error('SQL completo:', sql);
-  console.error('Params:', params);
-  console.error('Error message:', error.message);
-  console.error('Error code:', error.code);
-  console.error('SQL State:', error.sqlState);
-  console.error('SQL original del error:', error.sql);
-  console.error('Stack trace:');
-  console.error(error.stack);
-  console.error('='.repeat(80));
+function handleExecuteError(error, sql) {
+  console.error('Error de base de datos:', error.code || error.message);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(sql);
+    console.error(error.stack);
+  }
 
   return { 
     success: false, 
@@ -95,44 +83,31 @@ function handleExecuteError(error, sql, params) {
 export async function executeTransaction(queries) {
   const connection = await pool.getConnection();
   try {
-    console.log('='.repeat(80));
-    console.log('🔵 TRANSACCIÓN INICIADA');
-    console.log('📊 Número de queries:', queries.length);
-    console.log('='.repeat(80));
-    
+    const startedAt = Date.now();
     await connection.beginTransaction();
     
     const results = [];
     for (let i = 0; i < queries.length; i++) {
       const { sql, params } = queries[i];
-      
-      console.log(`Query ${i + 1}/${queries.length}:`);
-      console.log('SQL (primeros 200 chars):', sql.substring(0, 200));
-      console.log('Params:', params);
-      
       const [rows] = await connection.execute(sql, params);
       results.push(rows);
-      
-      console.log(`Query ${i + 1} ejecutada - Filas afectadas:`, rows.affectedRows || 0);
     }
     
     await connection.commit();
-    console.log('TRANSACCIÓN COMMIT EXITOSO');
-    console.log('='.repeat(80));
+    const duration = Date.now() - startedAt;
+    const slowQueryMs = Number.parseInt(process.env.SLOW_TRANSACTION_MS || '1000', 10);
+    if (duration >= slowQueryMs) {
+      console.warn(`Transacción lenta: ${duration}ms, ${queries.length} consultas`);
+    }
     
     return { success: true, data: results };
   } catch (error) {
     await connection.rollback();
 
-    console.error('='.repeat(80));
-    console.error('ERROR EN TRANSACCIÓN - ROLLBACK EJECUTADO');
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
-    console.error('SQL State:', error.sqlState);
-    console.error('SQL del error:', error.sql);
-    console.error('Stack trace:');
-    console.error(error.stack);
-    console.error('='.repeat(80));
+    console.error('Error en transacción:', error.code || error.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(error.stack);
+    }
     
     return { 
       success: false, 

@@ -768,6 +768,10 @@ export const cotizacionesAPI = {
     if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+    if (filtros.search) params.append('search', filtros.search);
+    if (filtros.page) params.append('page', filtros.page);
+    if (filtros.limit) params.append('limit', filtros.limit);
+    if (filtros.orden) params.append('orden', filtros.orden);
     
     return api.get(`/cotizaciones?${params.toString()}`);
   },
@@ -825,6 +829,9 @@ export const ordenesVentaAPI = {
     appendFilter('filtro_moneda', filtros.moneda);
     appendFilter('fecha_inicio', filtros.fecha_inicio);
     appendFilter('fecha_fin', filtros.fecha_fin);
+    appendFilter('search', filtros.search);
+    appendFilter('page', filtros.page);
+    appendFilter('limit', filtros.limit);
     
     return api.get(`/ordenes-venta?${params.toString()}`);
   },
@@ -1141,6 +1148,7 @@ export const cuentasPagoAPI = {
 
 export const listasPreciosAPI = {
   getByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}`),
+  getCompletasByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}/completas`),
   getDetalle: (idLista) => api.get(`/listas-precios/${idLista}/detalle`),
   create: (data) => api.post('/listas-precios', data),
   update: (id, data) => api.put(`/listas-precios/${id}`, data),

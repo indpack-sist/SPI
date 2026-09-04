@@ -26,10 +26,14 @@ function Cotizaciones() {
   
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaAplicada, setBusquedaAplicada] = useState('');
   const [ordenAscendente, setOrdenAscendente] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [resumen, setResumen] = useState(null);
   const itemsPerPage = 20;
   const tablaRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -44,9 +48,14 @@ function Cotizaciones() {
   }, []);
 
   useEffect(() => {
+    const timeout = setTimeout(() => setBusquedaAplicada(busqueda.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [busqueda]);
+
+  useEffect(() => {
     cargarDatos();
     cargarTCDesdeSession();
-  }, [filtroEstado]);
+  }, [filtroEstado, busquedaAplicada, ordenAscendente, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -118,6 +127,7 @@ function Cotizaciones() {
   };
 
   const cargarDatos = async (silencioso = false) => {
+    const requestId = ++requestIdRef.current;
     try {
       if (!silencioso) setLoading(true);
       setRefreshing(silencioso);
@@ -125,47 +135,47 @@ function Cotizaciones() {
       
       const filtros = {};
       if (filtroEstado) filtros.estado = filtroEstado;
+      if (busquedaAplicada) filtros.search = busquedaAplicada;
+      filtros.page = currentPage;
+      filtros.limit = itemsPerPage;
+      filtros.orden = ordenAscendente ? 'asc' : 'desc';
       
       const response = await cotizacionesAPI.getAll(filtros);
       
-      if (response.data.success) {
+      if (response.data.success && requestId === requestIdRef.current) {
         setCotizaciones(response.data.data || []);
+        setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
+        setResumen(response.data.summary || null);
       }
       
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al cargar cotizaciones');
+      if (requestId === requestIdRef.current) setError(err.response?.data?.error || 'Error al cargar cotizaciones');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
-  const cotizacionesFiltradas = (() => {
-    const filtradas = cotizaciones.filter(item => {
-      if (!busqueda) return true;
-      const term = busqueda.toLowerCase();
-      return (
-        item.numero_cotizacion?.toLowerCase().includes(term) ||
-        item.cliente?.toLowerCase().includes(term) ||
-        item.ruc_cliente?.toLowerCase().includes(term) ||
-        item.comercial?.toLowerCase().includes(term)
-      );
-    });
-
-    if (ordenAscendente) {
-      return [...filtradas].reverse();
-    }
-    return filtradas;
-  })();
+  const cotizacionesFiltradas = cotizaciones;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = cotizacionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(cotizacionesFiltradas.length / itemsPerPage);
+  const currentItems = cotizacionesFiltradas;
+  const totalPages = Math.max(1, pagination.totalPages || 1);
 
   const estadisticas = (() => {
-    const base = {
+    const base = resumen ? {
+      total: Number(resumen.total || 0),
+      pendientes: Number(resumen.pendientes || 0),
+      aprobadas: Number(resumen.aprobadas || 0),
+      convertidas: Number(resumen.convertidas || 0),
+      montoTotalPEN: Number(resumen.monto_total_pen || 0),
+      montoTotalUSD: Number(resumen.monto_total_usd || 0),
+      montoUSDenPEN: 0
+    } : {
       total: cotizaciones.length,
       pendientes: cotizaciones.filter(c => c.estado === 'Pendiente').length,
       aprobadas: cotizaciones.filter(c => c.estado === 'Aprobada').length,
@@ -175,7 +185,7 @@ function Cotizaciones() {
       montoUSDenPEN: 0
     };
 
-    cotizaciones.forEach(c => {
+    if (!resumen) cotizaciones.forEach(c => {
       const total = parseFloat(c.total || 0);
       if (c.moneda === 'USD') {
         base.montoTotalUSD += total;
@@ -186,6 +196,8 @@ function Cotizaciones() {
         base.montoTotalPEN += total;
       }
     });
+
+    if (tipoCambio) base.montoUSDenPEN = base.montoTotalUSD * tipoCambio.venta;
 
     return base;
   })();
@@ -709,14 +721,10 @@ function Cotizaciones() {
         <div className="card-header">
           <div className="flex items-center gap-2">
             <h2 className="card-title">Lista de Cotizaciones</h2>
-            {cotizacionesFiltradas.length !== cotizaciones.length && (
-              <span className="badge badge-info">
-                {cotizacionesFiltradas.length} de {cotizaciones.length}
-              </span>
-            )}
+            <span className="badge badge-info">{pagination.total}</span>
           </div>
           <div className="text-sm text-muted">
-            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, pagination.total)}
           </div>
         </div>
         
@@ -734,7 +742,7 @@ function Cotizaciones() {
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={cotizacionesFiltradas.length}
+          totalItems={pagination.total}
           itemsPerPage={itemsPerPage}
           setCurrentPage={setCurrentPage}
         />

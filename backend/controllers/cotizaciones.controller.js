@@ -10,7 +10,12 @@ function getFechaPeru() {
 
 export async function getAllCotizaciones(req, res) {
   try {
-    const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
+    const { estado, prioridad, fecha_inicio, fecha_fin, search, orden } = req.query;
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const paginated = Number.isInteger(requestedPage) && Number.isInteger(requestedLimit);
+    const page = paginated ? Math.max(requestedPage, 1) : 1;
+    const limit = paginated ? Math.min(Math.max(requestedLimit, 1), 100) : null;
     
     let sql = `
       SELECT 
@@ -22,11 +27,7 @@ export async function getAllCotizaciones(req, res) {
         c.prioridad,
         c.subtotal,
         c.igv,
-        (
-            SELECT COALESCE(SUM(dc.cantidad * dc.precio_unitario), 0)
-            FROM detalle_cotizacion dc
-            WHERE dc.id_cotizacion = c.id_cotizacion
-        ) * CASE 
+        COALESCE(dc_stats.subtotal, 0) * CASE
             WHEN c.tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1
             ELSE (1 + (COALESCE(c.porcentaje_impuesto, 18) / 100))
         END AS total,
@@ -43,7 +44,20 @@ export async function getAllCotizaciones(req, res) {
         cl.ruc AS ruc_cliente,
         e.id_empleado AS id_comercial,
         e.nombre_completo AS comercial,
-        (SELECT COUNT(*) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) AS total_items
+        COALESCE(dc_stats.total_items, 0) AS total_items
+      FROM cotizaciones c
+      LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
+      LEFT JOIN (
+        SELECT id_cotizacion, COUNT(*) AS total_items, COALESCE(SUM(cantidad * precio_unitario), 0) AS subtotal
+        FROM detalle_cotizacion
+        GROUP BY id_cotizacion
+      ) dc_stats ON dc_stats.id_cotizacion = c.id_cotizacion
+      WHERE 1=1
+    `;
+
+    let countSql = `
+      SELECT COUNT(*) AS total
       FROM cotizaciones c
       LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
       LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
@@ -63,18 +77,45 @@ export async function getAllCotizaciones(req, res) {
     }
     
     if (fecha_inicio) {
-      sql += ` AND DATE(c.fecha_emision) >= ?`;
+      sql += ` AND c.fecha_emision >= ?`;
       params.push(fecha_inicio);
     }
     
     if (fecha_fin) {
-      sql += ` AND DATE(c.fecha_emision) <= ?`;
+      sql += ` AND c.fecha_emision < DATE_ADD(?, INTERVAL 1 DAY)`;
       params.push(fecha_fin);
     }
+
+    if (search) {
+      sql += ` AND (c.numero_cotizacion LIKE ? OR cl.razon_social LIKE ? OR cl.ruc LIKE ? OR e.nombre_completo LIKE ?)`;
+      const term = `%${search}%`;
+      params.push(term, term, term, term);
+    }
+
+    const whereStart = sql.indexOf('      WHERE 1=1');
+    countSql += sql.slice(whereStart + '      WHERE 1=1'.length);
+    const summarySql = countSql.replace(
+      'SELECT COUNT(*) AS total',
+      `SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN c.estado = 'Pendiente' THEN 1 ELSE 0 END), 0) AS pendientes,
+        COALESCE(SUM(CASE WHEN c.estado = 'Aprobada' THEN 1 ELSE 0 END), 0) AS aprobadas,
+        COALESCE(SUM(CASE WHEN c.estado = 'Convertida' THEN 1 ELSE 0 END), 0) AS convertidas,
+        COALESCE(SUM(CASE WHEN c.moneda = 'PEN' THEN c.total ELSE 0 END), 0) AS monto_total_pen,
+        COALESCE(SUM(CASE WHEN c.moneda = 'USD' THEN c.total ELSE 0 END), 0) AS monto_total_usd`
+    );
     
-    sql += ` ORDER BY c.fecha_creacion DESC`;
+    sql += ` ORDER BY c.fecha_creacion ${orden === 'asc' ? 'ASC' : 'DESC'}, c.id_cotizacion ${orden === 'asc' ? 'ASC' : 'DESC'}`;
+    if (paginated) {
+      sql += ` LIMIT ? OFFSET ?`;
+    }
     
-    const result = await executeQuery(sql, params);
+    const dataParams = paginated ? [...params, limit, (page - 1) * limit] : params;
+    const [result, countResult, summaryResult] = await Promise.all([
+      executeQuery(sql, dataParams),
+      paginated ? executeQuery(countSql, params) : Promise.resolve(null),
+      paginated ? executeQuery(summarySql, params) : Promise.resolve(null)
+    ]);
     
     if (!result.success) {
       return res.status(500).json({ 
@@ -82,10 +123,20 @@ export async function getAllCotizaciones(req, res) {
         error: result.error 
       });
     }
+    if (paginated && (!countResult?.success || !summaryResult?.success)) {
+      return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
+    }
     
     res.json({
       success: true,
-      data: result.data
+      data: result.data,
+      summary: paginated ? summaryResult.data[0] : undefined,
+      pagination: paginated ? {
+        page,
+        limit,
+        total: Number(countResult?.data?.[0]?.total || 0),
+        totalPages: Math.ceil(Number(countResult?.data?.[0]?.total || 0) / limit)
+      } : undefined
     });
     
   } catch (error) {
@@ -101,19 +152,50 @@ export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
 
-    const cotizacionResult = await executeQuery(`
-      SELECT 
-        c.*,
-        cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        cl.direccion_despacho AS direccion_cliente,
-        e.nombre_completo AS comercial,
-        e.email AS email_comercial
-      FROM cotizaciones c
-      LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
-      WHERE c.id_cotizacion = ?
-    `, [id]);
+    const [cotizacionResult, detalleResult] = await Promise.all([
+      executeQuery(`
+        SELECT
+          c.*,
+          cl.razon_social AS cliente,
+          cl.ruc AS ruc_cliente,
+          cl.direccion_despacho AS direccion_cliente,
+          e.nombre_completo AS comercial,
+          e.email AS email_comercial
+        FROM cotizaciones c
+        LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
+        LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
+        WHERE c.id_cotizacion = ?
+      `, [id]),
+      executeQuery(`
+        SELECT
+          dc.id_detalle,
+          dc.id_cotizacion,
+          dc.id_producto,
+          dc.cantidad,
+          dc.precio_unitario,
+          dc.precio_base,
+          dc.porcentaje_comision,
+          dc.monto_comision,
+          dc.descuento_porcentaje,
+          dc.es_producto_libre,
+          dc.codigo_producto_libre,
+          dc.nombre_producto_libre,
+          dc.unidad_medida_libre,
+          (dc.cantidad * dc.precio_unitario) AS valor_venta,
+          (dc.cantidad * dc.precio_unitario) AS subtotal,
+          dc.orden,
+          COALESCE(p.codigo, dc.codigo_producto_libre) AS codigo_producto,
+          COALESCE(p.nombre, dc.nombre_producto_libre) AS producto,
+          COALESCE(p.unidad_medida, dc.unidad_medida_libre) AS unidad_medida,
+          p.stock_actual AS stock_disponible,
+          p.requiere_receta,
+          p.peso_unitario
+        FROM detalle_cotizacion dc
+        LEFT JOIN productos p ON dc.id_producto = p.id_producto
+        WHERE dc.id_cotizacion = ?
+        ORDER BY dc.orden
+      `, [id])
+    ]);
 
     if (!cotizacionResult.success) {
       return res.status(500).json({ success: false, error: cotizacionResult.error });
@@ -123,42 +205,11 @@ export async function getCotizacionById(req, res) {
       return res.status(404).json({ success: false, error: 'Cotizacion no encontrada' });
     }
 
-    const cotizacion = cotizacionResult.data[0];
-
-    const detalleResult = await executeQuery(`
-      SELECT 
-        dc.id_detalle,
-        dc.id_cotizacion,
-        dc.id_producto,
-        dc.cantidad,
-        dc.precio_unitario,
-        dc.precio_base,
-        dc.porcentaje_comision,
-        dc.monto_comision,
-        dc.descuento_porcentaje,
-        dc.es_producto_libre,
-        dc.codigo_producto_libre,
-        dc.nombre_producto_libre,
-        dc.unidad_medida_libre,
-        (dc.cantidad * dc.precio_unitario) AS valor_venta,
-        (dc.cantidad * dc.precio_unitario) AS subtotal,
-        dc.orden,
-        COALESCE(p.codigo, dc.codigo_producto_libre)      AS codigo_producto,
-        COALESCE(p.nombre, dc.nombre_producto_libre)      AS producto,
-        COALESCE(p.unidad_medida, dc.unidad_medida_libre) AS unidad_medida,
-        p.stock_actual AS stock_disponible,
-         p.requiere_receta,
-        p.peso_unitario
-      FROM detalle_cotizacion dc
-      LEFT JOIN productos p ON dc.id_producto = p.id_producto
-      WHERE dc.id_cotizacion = ?
-      ORDER BY dc.orden
-    `, [id]);
-
     if (!detalleResult.success) {
       return res.status(500).json({ success: false, error: detalleResult.error });
     }
 
+    const cotizacion = cotizacionResult.data[0];
     cotizacion.detalle = detalleResult.data || [];
 
     res.json({ success: true, data: cotizacion });
@@ -210,20 +261,21 @@ export async function createCotizacion(req, res) {
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
 
-    // Restriccion de cartera: si el usuario esta restringido, solo sus clientes asignados
-    if (req.user?.id_empleado && !(await clientePermitido(req.user.id_empleado, id_cliente))) {
-      return res.status(403).json({ success: false, error: 'Este cliente no forma parte de tu cartera asignada. Contacta al administrador para que te lo asigne.' });
-    }
-
-    // Validación anti-doble clic: buscar cotización reciente
-    if (registradorTemporal) {
-      const resultDoble = await executeQuery(`
+    const [permitido, resultDoble] = await Promise.all([
+      req.user?.id_empleado ? clientePermitido(req.user.id_empleado, id_cliente) : Promise.resolve(true),
+      registradorTemporal ? executeQuery(`
         SELECT id_cotizacion FROM cotizaciones 
         WHERE id_cliente = ? 
         AND id_comercial = ? 
         AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
-      `, [id_cliente, registradorTemporal]);
-      
+      `, [id_cliente, registradorTemporal]) : Promise.resolve(null)
+    ]);
+
+    if (!permitido) {
+      return res.status(403).json({ success: false, error: 'Este cliente no forma parte de tu cartera asignada. Contacta al administrador para que te lo asigne.' });
+    }
+
+    if (registradorTemporal) {
       if (resultDoble.success && resultDoble.data.length > 0) {
         return res.status(429).json({ success: false, error: 'Se detectó una creación duplicada. Por favor espere unos segundos.' });
       }
@@ -333,27 +385,27 @@ if (moneda !== 'PEN') {
 
     if (plazoPagoFinal !== 'Contado') {
       const clienteInfo = await executeQuery(
-        `SELECT usar_limite_credito, 
-                COALESCE(limite_credito_pen, 0) as limite_pen, 
-                COALESCE(limite_credito_usd, 0) as limite_usd 
-         FROM clientes WHERE id_cliente = ?`,
-        [id_cliente]
+        `SELECT
+          cl.usar_limite_credito,
+          COALESCE(cl.limite_credito_pen, 0) AS limite_pen,
+          COALESCE(cl.limite_credito_usd, 0) AS limite_usd,
+          COALESCE(SUM(ov.total - ov.monto_pagado), 0) AS deuda_actual
+        FROM clientes cl
+        LEFT JOIN ordenes_venta ov
+          ON ov.id_cliente = cl.id_cliente
+          AND ov.moneda = ?
+          AND ov.estado NOT IN ('Cancelada', 'Entregada')
+          AND ov.estado_pago != 'Pagado'
+        WHERE cl.id_cliente = ?
+        GROUP BY cl.id_cliente`,
+        [moneda, id_cliente]
       );
 
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
         if (cliente.usar_limite_credito == 1) {
-          const deudaRes = await executeQuery(`
-            SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
-            FROM ordenes_venta
-            WHERE id_cliente = ? 
-            AND moneda = ? 
-            AND estado NOT IN ('Cancelada', 'Entregada') 
-            AND estado_pago != 'Pagado'
-          `, [id_cliente, moneda]);
-
           const limite = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
-          const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
+          const deudaActual = parseFloat(cliente.deuda_actual || 0);
           if ((deudaActual + total) > limite) {
             console.warn(`Cliente ${id_cliente} excede limite de credito.`);
           }
@@ -361,14 +413,18 @@ if (moneda !== 'PEN') {
       }
     }
 
-    const result = await executeQuery(`
+    const connection = await pool.getConnection();
+    let idCotizacion;
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.execute(`
       INSERT INTO cotizaciones (
         numero_cotizacion, id_cliente, id_comercial, fecha_emision, fecha_vencimiento,
         prioridad, moneda, tipo_impuesto, porcentaje_impuesto, tipo_cambio,
         plazo_pago, forma_pago, direccion_entrega, observaciones, validez_dias,
         plazo_entrega, lugar_entrega, subtotal, igv, total, estado, id_creado_por, es_muestra
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?, ?)
-    `, [
+      `, [
       numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
       prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,
       plazoPagoFinal, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
@@ -376,41 +432,48 @@ if (moneda !== 'PEN') {
       subtotal, igv, total,
       comercialFinal,
       esMuestra
-    ]);
+      ]);
 
-    if (!result.success) return res.status(500).json({ success: false, error: result.error });
+      idCotizacion = result.insertId;
+      const values = [];
+      const placeholders = detalle.map((item, index) => {
+        const esProductoLibre = item.es_producto_libre ? 1 : 0;
+        const cantidad = parseFloat(item.cantidad || 0);
+        const precioVenta = parseFloat(item.precio_venta || 0);
+        const precioBase = parseFloat(item.precio_base || 0);
+        const valorVentaCalculado = cantidad * precioVenta;
 
-    const idCotizacion = result.data.insertId;
+        values.push(
+          idCotizacion,
+          esProductoLibre ? null : item.id_producto,
+          cantidad,
+          precioVenta,
+          precioBase,
+          parseFloat(item.descuento_porcentaje || 0),
+          index + 1,
+          valorVentaCalculado,
+          valorVentaCalculado,
+          esProductoLibre,
+          esProductoLibre ? item.codigo_producto_libre?.trim() : null,
+          esProductoLibre ? item.nombre_producto_libre?.trim() : null,
+          esProductoLibre ? item.unidad_medida?.trim() || null : null
+        );
+        return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      }).join(',');
 
-    for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
-      const esProductoLibre = item.es_producto_libre ? 1 : 0;
-      const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || 0);
-      const precioBase = parseFloat(item.precio_base || 0);
-      const valorVentaCalculado = cantidad * precioVenta;
-
-      await executeQuery(`
+      await connection.execute(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
           descuento_porcentaje, orden, valor_venta, subtotal,
           es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        idCotizacion,
-        esProductoLibre ? null : item.id_producto,
-        cantidad,
-        precioVenta,
-        precioBase,
-        parseFloat(item.descuento_porcentaje || 0),
-        i + 1,
-        valorVentaCalculado,
-        valorVentaCalculado,
-        esProductoLibre,
-        esProductoLibre ? item.codigo_producto_libre?.trim() : null,
-        esProductoLibre ? item.nombre_producto_libre?.trim() : null,
-        esProductoLibre ? item.unidad_medida?.trim() || null : null
-      ]);
+        ) VALUES ${placeholders}
+      `, values);
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
 
     res.status(201).json({
@@ -473,11 +536,21 @@ export async function updateCotizacion(req, res) {
     const comercialFinal = id_comercial || req.user?.id_empleado;
     if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
 
-    // --- RE-FETCH NUEVO CLIENTE INFO (CRITICO PARA CAMBIO DE CLIENTE) ---
-    const clienteInfoResult = await executeQuery(
-      'SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?',
-      [id_cliente]
-    );
+    const clienteInfoResult = await executeQuery(`
+      SELECT
+        cl.usar_limite_credito,
+        cl.limite_credito_pen,
+        cl.limite_credito_usd,
+        COALESCE(SUM(ov.total - ov.monto_pagado), 0) AS deuda_actual
+      FROM clientes cl
+      LEFT JOIN ordenes_venta ov
+        ON ov.id_cliente = cl.id_cliente
+        AND ov.moneda = ?
+        AND ov.estado != 'Cancelada'
+        AND ov.estado_pago != 'Pagado'
+      WHERE cl.id_cliente = ?
+      GROUP BY cl.id_cliente
+    `, [moneda, id_cliente]);
 
     if (!clienteInfoResult.success || clienteInfoResult.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Información del nuevo cliente no encontrada' });
@@ -543,15 +616,9 @@ if (moneda !== 'PEN') {
     igv = round2(igv);
     const total = round2(subtotal + igv);
 
-    if (cotActual.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
-      const deudaRes = await executeQuery(`
-        SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
-        FROM ordenes_venta
-        WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
-      `, [id_cliente, moneda]);
-
-      const limite = moneda === 'USD' ? parseFloat(cotActual.limite_credito_usd || 0) : parseFloat(cotActual.limite_credito_pen || 0);
-      const deudaActual = parseFloat(deudaRes.data[0].deuda_actual);
+    if (clienteInfo.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
+      const limite = moneda === 'USD' ? parseFloat(clienteInfo.limite_credito_usd || 0) : parseFloat(clienteInfo.limite_credito_pen || 0);
+      const deudaActual = parseFloat(clienteInfo.deuda_actual || 0);
 
       if ((deudaActual + total) > limite) {
         console.warn(`Cliente ${id_cliente} excede limite de credito en edicion.`);
@@ -576,8 +643,7 @@ if (moneda !== 'PEN') {
       params: [id]
     });
 
-    for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
+    const detalleCotizacionValues = detalle.map((item, i) => {
       const esProductoLibre = item.es_producto_libre ? 1 : 0;
       const cantidad = parseFloat(item.cantidad || 0);
       const precioBase = parseFloat(item.precio_base || 0);
@@ -586,25 +652,28 @@ if (moneda !== 'PEN') {
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
       const montoComision = precioBase * (pctComision / 100);
       const valorVentaCalculado = cantidad * precioVenta;
+      return [
+        id,
+        esProductoLibre ? null : item.id_producto,
+        cantidad, precioVenta, precioBase,
+        pctComision, montoComision, pctDescuento, i + 1,
+        valorVentaCalculado, valorVentaCalculado,
+        esProductoLibre,
+        esProductoLibre ? item.codigo_producto_libre?.trim() : null,
+        esProductoLibre ? item.nombre_producto_libre?.trim() : null,
+        esProductoLibre ? item.unidad_medida?.trim() || null : null
+      ];
+    });
 
+    if (detalleCotizacionValues.length > 0) {
       queries.push({
         sql: `INSERT INTO detalle_cotizacion (
                 id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
                 porcentaje_comision, monto_comision, descuento_porcentaje, orden,
                 valor_venta, subtotal,
                 es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          id,
-          esProductoLibre ? null : item.id_producto,
-          cantidad, precioVenta, precioBase,
-          pctComision, montoComision, pctDescuento, i + 1,
-          valorVentaCalculado, valorVentaCalculado,
-          esProductoLibre,
-          esProductoLibre ? item.codigo_producto_libre?.trim() : null,
-          esProductoLibre ? item.nombre_producto_libre?.trim() : null,
-          esProductoLibre ? item.unidad_medida?.trim() || null : null
-        ]
+              ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+        params: detalleCotizacionValues.flat()
       });
     }
 
@@ -614,17 +683,22 @@ if (moneda !== 'PEN') {
       const ordenCheck = await executeQuery('SELECT stock_reservado FROM ordenes_venta WHERE id_orden_venta = ?', [idOrden]);
       const stockReservado = ordenCheck.data.length > 0 && ordenCheck.data[0].stock_reservado === 1;
 
-      if (stockReservado) {
-        const detalleAnteriorOV = await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [idOrden]);
-        for (const itemAnt of detalleAnteriorOV.data) {
-          const prodInfo = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [itemAnt.id_producto]);
-          if (prodInfo.data.length > 0 && prodInfo.data[0].requiere_receta === 0) {
-            queries.push({
-              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-              params: [parseFloat(itemAnt.cantidad), itemAnt.id_producto]
-            });
-          }
-        }
+      const detalleAnteriorOV = stockReservado
+        ? (await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [idOrden])).data
+        : [];
+      const detalleOrden = detalle.filter(item => !item.es_producto_libre);
+      const productIds = [...new Set([
+        ...detalleAnteriorOV.map(item => item.id_producto),
+        ...detalleOrden.map(item => item.id_producto)
+      ].filter(Boolean))];
+      let productosSinReceta = new Set();
+
+      if (stockReservado && productIds.length > 0) {
+        const productosResult = await executeQuery(
+          `SELECT id_producto FROM productos WHERE requiere_receta = 0 AND id_producto IN (${productIds.map(() => '?').join(', ')})`,
+          productIds
+        );
+        productosSinReceta = new Set(productosResult.data.map(item => Number(item.id_producto)));
       }
 
       queries.push({
@@ -643,30 +717,43 @@ if (moneda !== 'PEN') {
         params: [idOrden]
       });
 
-      for (let i = 0; i < detalle.length; i++) {
-        const item = detalle[i];
-        if (item.es_producto_libre) continue;
-
+      const detalleOrdenValues = detalleOrden.map(item => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioBase = parseFloat(item.precio_base || 0);
         const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
         const pctComision = parseFloat(item.porcentaje_comision || 0);
         const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
         const montoComision = precioBase * (pctComision / 100);
+        return [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0];
+      });
 
+      if (detalleOrdenValues.length > 0) {
         queries.push({
-          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          params: [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0]
+          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+          params: detalleOrdenValues.flat()
         });
+      }
 
-        if (stockReservado) {
-          const prodCheck = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
-          if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
-            queries.push({
-              sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-              params: [cantidad, item.id_producto]
-            });
+      if (stockReservado && productosSinReceta.size > 0) {
+        const variaciones = new Map();
+        for (const item of detalleAnteriorOV) {
+          const productId = Number(item.id_producto);
+          if (productosSinReceta.has(productId)) {
+            variaciones.set(productId, (variaciones.get(productId) || 0) + parseFloat(item.cantidad || 0));
           }
+        }
+        for (const item of detalleOrden) {
+          const productId = Number(item.id_producto);
+          if (productosSinReceta.has(productId)) {
+            variaciones.set(productId, (variaciones.get(productId) || 0) - parseFloat(item.cantidad || 0));
+          }
+        }
+        const ajustes = [...variaciones.entries()].filter(([, cantidad]) => cantidad !== 0);
+        if (ajustes.length > 0) {
+          queries.push({
+            sql: `UPDATE productos SET stock_actual = stock_actual + CASE id_producto ${ajustes.map(() => 'WHEN ? THEN ?').join(' ')} ELSE 0 END WHERE id_producto IN (${ajustes.map(() => '?').join(', ')})`,
+            params: [...ajustes.flatMap(([productId, cantidad]) => [productId, cantidad]), ...ajustes.map(([productId]) => productId)]
+          });
         }
       }
     }

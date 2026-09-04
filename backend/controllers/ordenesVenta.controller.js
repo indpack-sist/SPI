@@ -1,4 +1,4 @@
-import { executeQuery, executeTransaction } from '../config/database.js';
+import pool, { executeQuery, executeTransaction } from '../config/database.js';
 import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
@@ -38,7 +38,12 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, filtro_moneda } = req.query;
+    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, filtro_moneda, search } = req.query;
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const paginated = Number.isInteger(requestedPage) && Number.isInteger(requestedLimit);
+    const page = paginated ? Math.max(requestedPage, 1) : 1;
+    const limit = paginated ? Math.min(Math.max(requestedLimit, 1), 100) : null;
     
     let sql = `
       SELECT 
@@ -51,8 +56,8 @@ export async function getAllOrdenesVenta(req, res) {
         ov.fecha_entrega_real,
         ov.fecha_vencimiento,
         ov.tipo_venta,
-        ov.tipo_impuesto, /* <--- CAMPO AGREGADO CRÍTICO */
-        ov.porcentaje_impuesto, /* <--- CAMPO AGREGADO */
+        ov.tipo_impuesto,
+        ov.porcentaje_impuesto,
         ov.dias_credito,
         ov.estado,
         ov.estado_verificacion,
@@ -93,12 +98,10 @@ export async function getAllOrdenesVenta(req, res) {
         ov.id_comercial,
         ov.id_registrado_por,
         ov.id_verificador,
-        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
-        (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos,
-        (SELECT COUNT(*) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida'
-           AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat NOT IN ('07','08')) AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'ACEPTADO')) AS total_facturas,
-        (SELECT COALESCE(SUM(fv.total), 0) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida'
-           AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat NOT IN ('07','08')) AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'ACEPTADO')) AS total_facturado
+        COALESCE(dov_stats.total_items, 0) AS total_items,
+        COALESCE(s_stats.total_despachos, 0) AS total_despachos,
+        COALESCE(fv_stats.total_facturas, 0) AS total_facturas,
+        COALESCE(fv_stats.total_facturado, 0) AS total_facturado
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -107,6 +110,35 @@ export async function getAllOrdenesVenta(req, res) {
       LEFT JOIN empleados e_verificador ON ov.id_verificador = e_verificador.id_empleado
       LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
       LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
+      LEFT JOIN (
+        SELECT id_orden_venta, COUNT(*) AS total_items
+        FROM detalle_orden_venta
+        GROUP BY id_orden_venta
+      ) dov_stats ON dov_stats.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN (
+        SELECT id_orden_venta, COUNT(*) AS total_despachos
+        FROM salidas
+        WHERE estado = 'Activo' AND id_orden_venta IS NOT NULL
+        GROUP BY id_orden_venta
+      ) s_stats ON s_stats.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN (
+        SELECT id_orden_venta, COUNT(*) AS total_facturas, COALESCE(SUM(total), 0) AS total_facturado
+        FROM facturas_venta
+        WHERE estado = 'Emitida'
+          AND (codigo_tipo_sunat IS NULL OR codigo_tipo_sunat NOT IN ('07','08'))
+          AND (sunat_estado IS NULL OR sunat_estado = 'ACEPTADO')
+        GROUP BY id_orden_venta
+      ) fv_stats ON fv_stats.id_orden_venta = ov.id_orden_venta
+      WHERE 1=1
+    `;
+
+    let countSql = `
+      SELECT COUNT(*) AS total
+      FROM ordenes_venta ov
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
       WHERE 1=1
     `;
     
@@ -126,7 +158,7 @@ export async function getAllOrdenesVenta(req, res) {
 
     if (filtro_moneda) {
       const monedas = filtro_moneda.split(',').map(m => m.trim().toUpperCase());
-      sql += ` AND TRIM(UPPER(ov.moneda)) IN (${monedas.map(() => '?').join(',')})`;
+      sql += ` AND ov.moneda IN (${monedas.map(() => '?').join(',')})`;
       params.push(...monedas);
     }
     
@@ -139,11 +171,11 @@ export async function getAllOrdenesVenta(req, res) {
       let conditions = [];
       
       if (tieneSinComprobante) {
-        conditions.push("(ov.tipo_comprobante IS NULL OR TRIM(ov.tipo_comprobante) = '')");
+        conditions.push("(ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '')");
       }
       
       if (otrosTipos.length > 0) {
-        conditions.push(`TRIM(ov.tipo_comprobante) IN (${otrosTipos.map(() => '?').join(',')})`);
+        conditions.push(`ov.tipo_comprobante IN (${otrosTipos.map(() => '?').join(',')})`);
         params.push(...otrosTipos);
       }
       
@@ -169,22 +201,22 @@ export async function getAllOrdenesVenta(req, res) {
         sunatConditions.push("(ov.facturado_sunat = 1)");
       }
       if (tienePendiente) {
-        sunatConditions.push("(TRIM(ov.tipo_comprobante) = 'Factura' AND (ov.facturado_sunat IS NULL OR ov.facturado_sunat = 0))");
+        sunatConditions.push("(ov.tipo_comprobante = 'Factura' AND (ov.facturado_sunat IS NULL OR ov.facturado_sunat = 0))");
       }
       if (tieneNoAmerita) {
-        sunatConditions.push("(TRIM(ov.tipo_comprobante) = 'Nota de Venta' OR ov.tipo_comprobante IS NULL OR TRIM(ov.tipo_comprobante) = '')");
+        sunatConditions.push("(ov.tipo_comprobante = 'Nota de Venta' OR ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '')");
       }
 
       sql += sunatConditions.join(' OR ') + ')';
     }
     
     if (fecha_inicio) {
-      sql += ` AND DATE(ov.fecha_emision) >= ?`;
+      sql += ` AND ov.fecha_emision >= ?`;
       params.push(fecha_inicio);
     }
     
     if (fecha_fin) {
-      sql += ` AND DATE(ov.fecha_emision) <= ?`;
+      sql += ` AND ov.fecha_emision < DATE_ADD(?, INTERVAL 1 DAY)`;
       params.push(fecha_fin);
     }
 
@@ -193,10 +225,42 @@ export async function getAllOrdenesVenta(req, res) {
       sql += ` AND ov.estado_verificacion IN (${estadosVerif.map(() => '?').join(',')})`;
       params.push(...estadosVerif);
     }
+
+    if (search) {
+      sql += ` AND (ov.numero_orden LIKE ? OR ov.numero_comprobante LIKE ? OR ov.numero_comprobante_sunat LIKE ? OR c.numero_cotizacion LIKE ? OR cl.razon_social LIKE ? OR cl.ruc LIKE ? OR e_comercial.nombre_completo LIKE ? OR e_registrado.nombre_completo LIKE ?)`;
+      const term = `%${search}%`;
+      params.push(term, term, term, term, term, term, term, term);
+    }
+
+    const whereStart = sql.indexOf('      WHERE 1=1');
+    const orderStart = sql.indexOf(' ORDER BY ', whereStart);
+    const filtersSql = sql.slice(whereStart + '      WHERE 1=1'.length, orderStart === -1 ? sql.length : orderStart);
+    countSql += filtersSql;
+    const summarySql = countSql.replace(
+      'SELECT COUNT(*) AS total',
+      `SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN ov.total ELSE 0 END), 0) AS facturas_pen,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN ov.total ELSE 0 END), 0) AS facturas_usd,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND (ov.tipo_comprobante = 'Nota de Venta' OR (ov.tipo_comprobante = 'Factura' AND ov.tipo_impuesto IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') AND ov.numero_orden NOT IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093'))) THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS notas_venta_pen,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND (ov.tipo_comprobante = 'Nota de Venta' OR (ov.tipo_comprobante = 'Factura' AND ov.tipo_impuesto IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') AND ov.numero_orden NOT IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093'))) THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS notas_venta_usd,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND (ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '' OR ov.tipo_comprobante = 'Sin Comprobante') THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS sin_comprobante_pen,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND (ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '' OR ov.tipo_comprobante = 'Sin Comprobante') THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS sin_comprobante_usd,
+        DATE_FORMAT(MIN(CASE WHEN ov.estado != 'Cancelada' THEN ov.fecha_emision END), '%Y-%m-%d') AS fecha_minima,
+        DATE_FORMAT(MAX(CASE WHEN ov.estado != 'Cancelada' THEN ov.fecha_emision END), '%Y-%m-%d') AS fecha_maxima`
+    );
     
     sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;
+    if (paginated) {
+      sql += ` LIMIT ? OFFSET ?`;
+    }
     
-    const result = await executeQuery(sql, params);
+    const dataParams = paginated ? [...params, limit, (page - 1) * limit] : params;
+    const [result, countResult, summaryResult] = await Promise.all([
+      executeQuery(sql, dataParams),
+      paginated ? executeQuery(countSql, params) : Promise.resolve(null),
+      paginated ? executeQuery(summarySql, params) : Promise.resolve(null)
+    ]);
     
     if (!result.success) {
       return res.status(500).json({ 
@@ -204,10 +268,20 @@ export async function getAllOrdenesVenta(req, res) {
         error: result.error 
       });
     }
+    if (paginated && (!countResult?.success || !summaryResult?.success)) {
+      return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
+    }
     
     res.json({
       success: true,
-      data: result.data
+      data: result.data,
+      summary: paginated ? summaryResult.data[0] : undefined,
+      pagination: paginated ? {
+        page,
+        limit,
+        total: Number(countResult?.data?.[0]?.total || 0),
+        totalPages: Math.ceil(Number(countResult?.data?.[0]?.total || 0) / limit)
+      } : undefined
     });
     
   } catch (error) {
@@ -223,7 +297,7 @@ export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
 
-    const ordenResult = await executeQuery(`
+    const ordenPromise = executeQuery(`
   SELECT 
     ov.*,
     cl.razon_social AS cliente,
@@ -249,6 +323,34 @@ export async function getOrdenVentaById(req, res) {
   WHERE ov.id_orden_venta = ?
 `, [id]);
 
+    const detallePromise = executeQuery(`
+      SELECT 
+        dov.*,
+        dov.cantidad_despachada,
+        (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
+        dov.subtotal AS valor_venta,
+        CASE
+            WHEN dov.precio_base > 0 THEN
+                ROUND(((dov.precio_unitario - dov.precio_base) / dov.precio_base) * 100, 2)
+            ELSE 0.00
+        END AS margen_visual_porcentaje,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        p.requiere_receta,
+        p.stock_actual AS stock_disponible,
+        p.peso_unitario,
+        ti.nombre AS tipo_inventario_nombre,
+        (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto AND estado != 'Cancelada') AS tiene_op
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.id_detalle
+    `, [id, id]);
+
+    const [ordenResult, detalleResult] = await Promise.all([ordenPromise, detallePromise]);
+
     if (!ordenResult.success) {
       return res.status(500).json({
         success: false,
@@ -267,32 +369,6 @@ export async function getOrdenVentaById(req, res) {
 
     const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
     const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
-
-    const detalleResult = await executeQuery(`
-      SELECT 
-        dov.*,
-        dov.cantidad_despachada, 
-        (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
-        dov.subtotal AS valor_venta,
-        CASE 
-            WHEN dov.precio_base > 0 THEN 
-                ROUND(((dov.precio_unitario - dov.precio_base) / dov.precio_base) * 100, 2)
-            ELSE 0.00 
-        END AS margen_visual_porcentaje,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida,
-        p.requiere_receta,
-        p.stock_actual AS stock_disponible,
-        p.peso_unitario,
-        ti.nombre AS tipo_inventario_nombre,
-        (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto AND estado != 'Cancelada') AS tiene_op
-      FROM detalle_orden_venta dov
-      INNER JOIN productos p ON dov.id_producto = p.id_producto
-      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
-      WHERE dov.id_orden_venta = ?
-      ORDER BY dov.id_detalle
-    `, [id, id]);
 
     if (!detalleResult.success) {
       return res.status(500).json({
@@ -563,22 +639,12 @@ export async function createOrdenVenta(req, res) {
     let comprobanteUrl = null;
 
     if (req.files) {
-      if (req.files.orden_compra && req.files.orden_compra.length > 0) {
-        const urls = [];
-        for (const file of req.files.orden_compra) {
-          const resultadoOC = await subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra');
-          urls.push(resultadoOC.secure_url);
-        }
-        ordenCompraUrl = JSON.stringify(urls);
-      }
-      if (req.files.comprobante && req.files.comprobante.length > 0) {
-        const urls = [];
-        for (const file of req.files.comprobante) {
-          const resultadoComp = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes');
-          urls.push(resultadoComp.secure_url);
-        }
-        comprobanteUrl = JSON.stringify(urls);
-      }
+      const [ordenesCompra, comprobantes] = await Promise.all([
+        Promise.all((req.files.orden_compra || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra'))),
+        Promise.all((req.files.comprobante || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/comprobantes')))
+      ]);
+      if (ordenesCompra.length > 0) ordenCompraUrl = JSON.stringify(ordenesCompra.map(resultado => resultado.secure_url));
+      if (comprobantes.length > 0) comprobanteUrl = JSON.stringify(comprobantes.map(resultado => resultado.secure_url));
     }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
@@ -589,19 +655,20 @@ export async function createOrdenVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     }
 
-    // Restriccion de cartera: si el usuario esta restringido, solo sus clientes asignados
-    if (!(await clientePermitido(id_registrado_por, id_cliente))) {
+    const [permitido, resultDoble] = await Promise.all([
+      clientePermitido(id_registrado_por, id_cliente),
+      executeQuery(`
+        SELECT id_orden_venta FROM ordenes_venta
+        WHERE id_cliente = ?
+        AND id_registrado_por = ?
+        AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
+      `, [id_cliente, id_registrado_por])
+    ]);
+
+    if (!permitido) {
       return res.status(403).json({ success: false, error: 'Este cliente no forma parte de tu cartera asignada. Contacta al administrador para que te lo asigne.' });
     }
 
-    // Validación anti-doble clic: buscar orden reciente
-    const resultDoble = await executeQuery(`
-      SELECT id_orden_venta FROM ordenes_venta 
-      WHERE id_cliente = ? 
-      AND id_registrado_por = ? 
-      AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
-    `, [id_cliente, id_registrado_por]);
-    
     if (resultDoble.success && resultDoble.data.length > 0) {
       return res.status(429).json({ success: false, error: 'Se detectó una creación duplicada. Por favor espere unos segundos.' });
     }
@@ -617,21 +684,24 @@ export async function createOrdenVenta(req, res) {
       idVehiculoFinal = id_vehiculo || null;
       idConductorFinal = id_conductor || null;
 
-      if (idVehiculoFinal) {
-        const vehiculoResult = await executeQuery(
+      const [vehiculoResult, conductorResult] = await Promise.all([
+        idVehiculoFinal ? executeQuery(
           'SELECT * FROM flota WHERE id_vehiculo = ? AND estado IN ("Disponible", "En Uso")',
           [idVehiculoFinal]
-        );
+        ) : Promise.resolve(null),
+        idConductorFinal ? executeQuery(
+          'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
+          [idConductorFinal]
+        ) : Promise.resolve(null)
+      ]);
+
+      if (idVehiculoFinal) {
         if (!vehiculoResult.success || vehiculoResult.data.length === 0) {
           return res.status(404).json({ success: false, error: 'Vehículo no encontrado o no disponible' });
         }
       }
 
       if (idConductorFinal) {
-        const conductorResult = await executeQuery(
-          'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
-          [idConductorFinal]
-        );
         if (!conductorResult.success || conductorResult.data.length === 0) {
           return res.status(404).json({ success: false, error: 'Conductor no encontrado o no activo' });
         }
@@ -676,22 +746,32 @@ export async function createOrdenVenta(req, res) {
     subtotal = Math.round(subtotal * 100) / 100;
     impuesto = Math.round(impuesto * 100) / 100;
     const total = Math.round((subtotal + impuesto) * 100) / 100;
+    const ultimaOrdenPromise = executeQuery(`
+      SELECT numero_orden FROM ordenes_venta ORDER BY id_orden_venta DESC LIMIT 1
+    `);
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
-        'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?',
-        [id_cliente]
+        `SELECT
+          cl.usar_limite_credito,
+          COALESCE(cl.limite_credito_pen, 0) AS limite_pen,
+          COALESCE(cl.limite_credito_usd, 0) AS limite_usd,
+          COALESCE(SUM(ov.total - ov.monto_pagado), 0) AS deuda_actual
+        FROM clientes cl
+        LEFT JOIN ordenes_venta ov
+          ON ov.id_cliente = cl.id_cliente
+          AND ov.moneda = ?
+          AND ov.estado != 'Cancelada'
+          AND ov.estado_pago != 'Pagado'
+        WHERE cl.id_cliente = ?
+        GROUP BY cl.id_cliente`,
+        [moneda, id_cliente]
       );
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
         if (cliente.usar_limite_credito == 1) {
-          const deudaResult = await executeQuery(`
-            SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
-            FROM ordenes_venta
-            WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
-          `, [id_cliente, moneda]);
           const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
-          const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
+          const deudaActual = parseFloat(cliente.deuda_actual || 0);
           const nuevaDeudaTotal = deudaActual + total;
           
           if (nuevaDeudaTotal > limiteAsignado) {
@@ -705,9 +785,7 @@ export async function createOrdenVenta(req, res) {
       }
     }
 
-    const ultimaResult = await executeQuery(`
-      SELECT numero_orden FROM ordenes_venta ORDER BY id_orden_venta DESC LIMIT 1
-    `);
+    const ultimaResult = await ultimaOrdenPromise;
 
     let numeroSecuencia = 1;
     if (ultimaResult.success && ultimaResult.data.length > 0) {
@@ -724,65 +802,68 @@ export async function createOrdenVenta(req, res) {
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
 
-    const result = await executeQuery(`
-      INSERT INTO ordenes_venta (
-        numero_orden, tipo_comprobante, numero_comprobante, id_cliente, id_cotizacion,
-        fecha_emision, fecha_entrega_estimada, fecha_vencimiento, prioridad, moneda,
-        tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_venta, dias_credito,
-        plazo_pago, forma_pago, orden_compra_cliente, orden_compra_url, comprobante_url,
-        id_vehiculo, id_conductor, tipo_entrega, transporte_nombre, transporte_placa,
-        transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
-        contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
-        subtotal, igv, total, estado, estado_verificacion, stock_reservado,
-        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion
-      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?)
-    `, [
-      numeroOrden, id_cliente, id_cotizacion || null,
-      fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
-      parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje, tipo_venta || 'Contado', parseInt(dias_credito || 0),
-      plazo_pago, forma_pago, orden_compra_cliente || null, ordenCompraUrl, comprobanteUrl,
-      idVehiculoFinal, idConductorFinal, tipo_entrega || 'Vehiculo Empresa', transNombreFinal, transPlacaFinal,
-      transCondFinal, transDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
-      contacto_entrega, telefono_entrega, observaciones, id_comercial || null, id_registrado_por,
-      subtotal, impuesto, total,
-      estado_verificacion_oc || 'Sin verificar',
-      estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
-      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null,
-      esExport ? 1 : 0
-    ]);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
-
-    const idOrden = result.data.insertId;
-    const queriesDetalle = [];
-
-    for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
+    const detalleValues = detalle.map(item => {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
+      return [item.id_producto, cantidad, precioVenta, precioBase, 0];
+    });
 
-      queriesDetalle.push({
-        sql: `INSERT INTO detalle_orden_venta (
+    const connection = await pool.getConnection();
+    let idOrden;
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.execute(`
+        INSERT INTO ordenes_venta (
+          numero_orden, tipo_comprobante, numero_comprobante, id_cliente, id_cotizacion,
+          fecha_emision, fecha_entrega_estimada, fecha_vencimiento, prioridad, moneda,
+          tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_venta, dias_credito,
+          plazo_pago, forma_pago, orden_compra_cliente, orden_compra_url, comprobante_url,
+          id_vehiculo, id_conductor, tipo_entrega, transporte_nombre, transporte_placa,
+          transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
+          contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
+          subtotal, igv, total, estado, estado_verificacion, stock_reservado,
+          estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion
+        ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?)
+      `, [
+        numeroOrden, id_cliente, id_cotizacion || null,
+        fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
+        parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje, tipo_venta || 'Contado', parseInt(dias_credito || 0),
+        plazo_pago, forma_pago, orden_compra_cliente || null, ordenCompraUrl, comprobanteUrl,
+        idVehiculoFinal, idConductorFinal, tipo_entrega || 'Vehiculo Empresa', transNombreFinal, transPlacaFinal,
+        transCondFinal, transDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
+        contacto_entrega, telefono_entrega, observaciones, id_comercial || null, id_registrado_por,
+        subtotal, impuesto, total,
+        estado_verificacion_oc || 'Sin verificar',
+        estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
+        estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null,
+        esExport ? 1 : 0
+      ]);
+      idOrden = result.insertId;
+      await connection.query(
+        `INSERT INTO detalle_orden_venta (
           id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
           descuento_porcentaje, stock_reservado
-        ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
-        params: [idOrden, item.id_producto, cantidad, precioVenta, precioBase, 0]
-      });
+        ) VALUES ?`,
+        [detalleValues.map(values => [idOrden, ...values])]
+      );
+      if (id_cotizacion) {
+        await connection.execute(`
+          UPDATE cotizaciones SET estado = 'Convertida', convertida_venta = 1, id_orden_venta = ?
+          WHERE id_cotizacion = ?
+        `, [idOrden, id_cotizacion]);
+      }
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
 
-    await executeTransaction(queriesDetalle);
-
-    if (id_cotizacion) {
-      await executeQuery(`
-        UPDATE cotizaciones SET estado = 'Convertida', convertida_venta = 1, id_orden_venta = ?
-        WHERE id_cotizacion = ?
-      `, [idOrden, id_cotizacion]);
-    }
-
-    await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
+    notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req)).catch(error => {
+      console.error('Error al notificar nueva orden:', error.message);
+    });
 
     res.status(201).json({
       success: true,
@@ -907,22 +988,12 @@ export async function updateOrdenVenta(req, res) {
     };
 
     if (req.files) {
-      if (req.files.orden_compra && req.files.orden_compra.length > 0) {
-        const urls = [];
-        for (const file of req.files.orden_compra) {
-          const resultadoOC = await subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra');
-          urls.push(resultadoOC.secure_url);
-        }
-        nuevaOrdenCompraUrl = appendUrls(ordenActual.orden_compra_url, urls);
-      }
-      if (req.files.comprobante && req.files.comprobante.length > 0) {
-        const urls = [];
-        for (const file of req.files.comprobante) {
-          const resultadoComp = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes');
-          urls.push(resultadoComp.secure_url);
-        }
-        nuevoComprobanteUrl = appendUrls(ordenActual.comprobante_url, urls);
-      }
+      const [ordenesCompra, comprobantes] = await Promise.all([
+        Promise.all((req.files.orden_compra || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra'))),
+        Promise.all((req.files.comprobante || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/comprobantes')))
+      ]);
+      if (ordenesCompra.length > 0) nuevaOrdenCompraUrl = appendUrls(ordenActual.orden_compra_url, ordenesCompra.map(resultado => resultado.secure_url));
+      if (comprobantes.length > 0) nuevoComprobanteUrl = appendUrls(ordenActual.comprobante_url, comprobantes.map(resultado => resultado.secure_url));
     }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
@@ -930,42 +1001,19 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const stockReservado = ordenActual.stock_reservado === 1;
-
-    if (stockReservado) {
-      const detalleAnterior = await executeQuery(
-        'SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?',
-        [id]
-      );
-
-      for (const itemAnterior of detalleAnterior.data) {
-        const productoCheck = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [itemAnterior.id_producto]
-        );
-
-        if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
-          await executeQuery(
-            'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            [parseFloat(itemAnterior.cantidad), itemAnterior.id_producto]
-          );
-        }
-      }
-    }
-
-    const detalleAnteriorDespacho = await executeQuery(
-      'SELECT id_producto, cantidad_despachada, cantidad_reservada FROM detalle_orden_venta WHERE id_orden_venta = ?',
+    const detalleAnteriorResult = await executeQuery(
+      'SELECT id_producto, cantidad, cantidad_despachada, cantidad_reservada FROM detalle_orden_venta WHERE id_orden_venta = ?',
       [id]
     );
+    const detalleAnterior = detalleAnteriorResult.success ? detalleAnteriorResult.data : [];
 
     const mapaDespachos = {};
-    if (detalleAnteriorDespacho.success) {
-      detalleAnteriorDespacho.data.forEach(row => {
-        mapaDespachos[row.id_producto] = {
-          cantidad_despachada: parseFloat(row.cantidad_despachada || 0),
-          cantidad_reservada: parseFloat(row.cantidad_reservada || 0)
-        };
-      });
-    }
+    detalleAnterior.forEach(row => {
+      mapaDespachos[row.id_producto] = {
+        cantidad_despachada: parseFloat(row.cantidad_despachada || 0),
+        cantidad_reservada: parseFloat(row.cantidad_reservada || 0)
+      };
+    });
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
@@ -1015,32 +1063,33 @@ export async function updateOrdenVenta(req, res) {
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
-        'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?',
-        [id_cliente]
+        `SELECT
+          cl.usar_limite_credito,
+          COALESCE(cl.limite_credito_pen, 0) AS limite_pen,
+          COALESCE(cl.limite_credito_usd, 0) AS limite_usd,
+          COALESCE(current_ov.monto_pagado, 0) AS monto_pagado,
+          COALESCE(SUM(other_ov.total - other_ov.monto_pagado), 0) AS deuda_otras
+        FROM clientes cl
+        LEFT JOIN ordenes_venta current_ov ON current_ov.id_orden_venta = ?
+        LEFT JOIN ordenes_venta other_ov
+          ON other_ov.id_cliente = cl.id_cliente
+          AND other_ov.moneda = ?
+          AND other_ov.estado != 'Cancelada'
+          AND other_ov.estado_pago != 'Pagado'
+          AND other_ov.id_orden_venta != ?
+        WHERE cl.id_cliente = ?
+        GROUP BY cl.id_cliente, current_ov.monto_pagado`,
+        [id, moneda, id, id_cliente]
       );
 
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
 
         if (cliente.usar_limite_credito == 1) {
-          const deudaResult = await executeQuery(`
-            SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_otras
-            FROM ordenes_venta
-            WHERE id_cliente = ?
-            AND moneda = ?
-            AND estado != 'Cancelada'
-            AND estado_pago != 'Pagado'
-            AND id_orden_venta != ?
-          `, [id_cliente, moneda, id]);
-
-          const ordenPagosResult = await executeQuery(
-            'SELECT COALESCE(monto_pagado, 0) as monto_pagado FROM ordenes_venta WHERE id_orden_venta = ?',
-            [id]
-          );
-          const montoPagadoActual = parseFloat(ordenPagosResult.data[0]?.monto_pagado || 0);
+          const montoPagadoActual = parseFloat(cliente.monto_pagado || 0);
 
           const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
-          const deudaOtrasOrdenes = parseFloat(deudaResult.data[0]?.deuda_otras || 0);
+          const deudaOtrasOrdenes = parseFloat(cliente.deuda_otras || 0);
           const deudaEstaOrden = Math.max(0, total - montoPagadoActual);
           const nuevaDeudaTotal = deudaOtrasOrdenes + deudaEstaOrden;
 
@@ -1084,79 +1133,89 @@ export async function updateOrdenVenta(req, res) {
     const nuevoEstadoVerifOC = estado_verificacion_oc || 'Sin verificar';
     const idUsuarioActual = req.user?.id_empleado || null;
 
-    const updateResult = await executeQuery(`
-      UPDATE ordenes_venta
-      SET
-        id_cliente = ?, fecha_emision = ?, fecha_entrega_estimada = ?, fecha_vencimiento = ?,
-        prioridad = ?, moneda = ?, tipo_cambio = ?, tipo_impuesto = ?, porcentaje_impuesto = ?,
-        tipo_venta = ?, dias_credito = ?, plazo_pago = ?, forma_pago = ?, orden_compra_cliente = ?,
-        orden_compra_url = ?, comprobante_url = ?, id_vehiculo = ?, id_conductor = ?, tipo_entrega = ?,
-        transporte_nombre = ?, transporte_placa = ?, transporte_conductor = ?, transporte_dni = ?,
-        direccion_entrega = ?, lugar_entrega = ?, ciudad_entrega = ?, contacto_entrega = ?,
-        telefono_entrega = ?, observaciones = ?, id_comercial = ?, subtotal = ?, igv = ?, total = ?,
-        total_comision = ?, porcentaje_comision_promedio = ?,
-        estado_verificacion_oc = ?,
-        verificado_oc_por = ?,
-        fecha_verificacion_oc = ?,
-        es_exportacion = ?
-      WHERE id_orden_venta = ?
-    `, [
-      id_cliente, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
-      prioridad || 'Media', moneda, parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje,
-      tipo_venta || 'Contado', parseInt(dias_credito || 0), plazo_pago, forma_pago || null,
-      orden_compra_cliente || null, nuevaOrdenCompraUrl, nuevoComprobanteUrl, idVehiculoFinal,
-      idConductorFinal, tipoEntregaFinal, transporteNombreFinal, transportePlacaFinal,
-      transporteConductorFinal, transporteDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
-      contacto_entrega, telefono_entrega, observaciones, id_comercial || null, subtotal, impuesto,
-      total, totalComision, porcentajeComisionPromedio,
-      nuevoEstadoVerifOC,
-      nuevoEstadoVerifOC === 'Verificado' ? idUsuarioActual : null,
-      nuevoEstadoVerifOC === 'Verificado' ? getFechaPeru() : null,
-      esExport ? 1 : 0,
-      id
-    ]);
+    const queriesNuevoDetalle = [{
+      sql: `UPDATE ordenes_venta
+        SET
+          id_cliente = ?, fecha_emision = ?, fecha_entrega_estimada = ?, fecha_vencimiento = ?,
+          prioridad = ?, moneda = ?, tipo_cambio = ?, tipo_impuesto = ?, porcentaje_impuesto = ?,
+          tipo_venta = ?, dias_credito = ?, plazo_pago = ?, forma_pago = ?, orden_compra_cliente = ?,
+          orden_compra_url = ?, comprobante_url = ?, id_vehiculo = ?, id_conductor = ?, tipo_entrega = ?,
+          transporte_nombre = ?, transporte_placa = ?, transporte_conductor = ?, transporte_dni = ?,
+          direccion_entrega = ?, lugar_entrega = ?, ciudad_entrega = ?, contacto_entrega = ?,
+          telefono_entrega = ?, observaciones = ?, id_comercial = ?, subtotal = ?, igv = ?, total = ?,
+          total_comision = ?, porcentaje_comision_promedio = ?, estado_verificacion_oc = ?,
+          verificado_oc_por = ?, fecha_verificacion_oc = ?, es_exportacion = ?
+        WHERE id_orden_venta = ?`,
+      params: [
+        id_cliente, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
+        prioridad || 'Media', moneda, parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje,
+        tipo_venta || 'Contado', parseInt(dias_credito || 0), plazo_pago, forma_pago || null,
+        orden_compra_cliente || null, nuevaOrdenCompraUrl, nuevoComprobanteUrl, idVehiculoFinal,
+        idConductorFinal, tipoEntregaFinal, transporteNombreFinal, transportePlacaFinal,
+        transporteConductorFinal, transporteDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
+        contacto_entrega, telefono_entrega, observaciones, id_comercial || null, subtotal, impuesto,
+        total, totalComision, porcentajeComisionPromedio, nuevoEstadoVerifOC,
+        nuevoEstadoVerifOC === 'Verificado' ? idUsuarioActual : null,
+        nuevoEstadoVerifOC === 'Verificado' ? getFechaPeru() : null,
+        esExport ? 1 : 0, id
+      ]
+    }, {
+      sql: 'DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?',
+      params: [id]
+    }];
 
-    if (!updateResult.success) {
-      return res.status(500).json({ success: false, error: updateResult.error });
-    }
-
-    await executeQuery('DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
-
-    const queriesNuevoDetalle = [];
-
-    for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
+    const detalleOrdenValues = detalle.map(item => {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
       const infoDespacho = mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 };
+      return [
+        id, item.id_producto, cantidad, precioVenta, precioBase,
+        pctComision, montoComision, 0, stockReservado ? 1 : 0,
+        infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada
+      ];
+    });
 
-      queriesNuevoDetalle.push({
-        sql: `INSERT INTO detalle_orden_venta (
-          id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
-          porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
-          cantidad_despachada, cantidad_reservada
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          id, item.id_producto, cantidad, precioVenta, precioBase,
-          pctComision, montoComision, 0, stockReservado ? 1 : 0,
-          infoDespacho.cantidad_despachada,
-          infoDespacho.cantidad_reservada
-        ]
-      });
+    queriesNuevoDetalle.push({
+      sql: `INSERT INTO detalle_orden_venta (
+        id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
+        porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
+        cantidad_despachada, cantidad_reservada
+      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+      params: detalleOrdenValues.flat()
+    });
 
-      if (stockReservado) {
-        const productoCheck = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
+    if (stockReservado) {
+      const productIds = [...new Set([
+        ...detalleAnterior.map(item => item.id_producto),
+        ...detalle.map(item => item.id_producto)
+      ].filter(Boolean))];
+      if (productIds.length > 0) {
+        const productosResult = await executeQuery(
+          `SELECT id_producto FROM productos WHERE requiere_receta = 0 AND id_producto IN (${productIds.map(() => '?').join(', ')})`,
+          productIds
         );
-
-        if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
+        const productosSinReceta = new Set(productosResult.data.map(item => Number(item.id_producto)));
+        const variaciones = new Map();
+        for (const item of detalleAnterior) {
+          const productId = Number(item.id_producto);
+          if (productosSinReceta.has(productId)) {
+            variaciones.set(productId, (variaciones.get(productId) || 0) + parseFloat(item.cantidad || 0));
+          }
+        }
+        for (const item of detalle) {
+          const productId = Number(item.id_producto);
+          if (productosSinReceta.has(productId)) {
+            variaciones.set(productId, (variaciones.get(productId) || 0) - parseFloat(item.cantidad || 0));
+          }
+        }
+        const ajustes = [...variaciones.entries()].filter(([, cantidad]) => cantidad !== 0);
+        if (ajustes.length > 0) {
           queriesNuevoDetalle.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [cantidad, item.id_producto]
+            sql: `UPDATE productos SET stock_actual = stock_actual + CASE id_producto ${ajustes.map(() => 'WHEN ? THEN ?').join(' ')} ELSE 0 END WHERE id_producto IN (${ajustes.map(() => '?').join(', ')})`,
+            params: [...ajustes.flatMap(([productId, cantidad]) => [productId, cantidad]), ...ajustes.map(([productId]) => productId)]
           });
         }
       }
@@ -1168,23 +1227,20 @@ export async function updateOrdenVenta(req, res) {
         params: [ordenActual.id_cotizacion]
       });
 
-      for (let i = 0; i < detalle.length; i++) {
-        const item = detalle[i];
+      const detalleCotizacionValues = detalle.map((item, i) => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
         const precioBase = parseFloat(item.precio_base || 0);
+        return [ordenActual.id_cotizacion, item.id_producto, cantidad, precioVenta, precioBase, 0, i + 1];
+      });
 
-        queriesNuevoDetalle.push({
-          sql: `INSERT INTO detalle_cotizacion (
-            id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, 
-            descuento_porcentaje, orden
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          params: [
-            ordenActual.id_cotizacion, item.id_producto, cantidad,
-            precioVenta, precioBase, 0, i + 1
-          ]
-        });
-      }
+      queriesNuevoDetalle.push({
+        sql: `INSERT INTO detalle_cotizacion (
+          id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+          descuento_porcentaje, orden
+        ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+        params: detalleCotizacionValues.flat()
+      });
 
       queriesNuevoDetalle.push({
         sql: `UPDATE cotizaciones 
@@ -1201,7 +1257,10 @@ export async function updateOrdenVenta(req, res) {
       });
     }
 
-    await executeTransaction(queriesNuevoDetalle);
+    const resultUpdate = await executeTransaction(queriesNuevoDetalle);
+    if (!resultUpdate.success) {
+      return res.status(500).json({ success: false, error: resultUpdate.error });
+    }
 
     res.json({ success: true, message: 'Orden de venta actualizada exitosamente' });
 

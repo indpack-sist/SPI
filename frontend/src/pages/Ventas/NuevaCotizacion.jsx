@@ -212,18 +212,17 @@ function NuevaCotizacion() {
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      const resClientes = await clientesAPI.getAll({ estado: 'Activo' });
+      const [resClientes, resProductos, resComerciales] = await Promise.all([
+        clientesAPI.getAll({ estado: 'Activo' }),
+        productosAPI.getAll({ id_tipo_inventario: 3, estado: 'Activo' }),
+        empleadosAPI.getAll({ estado: 'Activo' })
+      ]);
       if (resClientes.data.success) {
         setClientes(resClientes.data.data || []);
       }
-      const resProductos = await productosAPI.getAll({ 
-        id_tipo_inventario: 3,
-        estado: 'Activo'
-      });
       if (resProductos.data.success) {
         setProductos(resProductos.data.data || []);
       }
-      const resComerciales = await empleadosAPI.getAll({ estado: 'Activo' });
       if (resComerciales.data.success) {
         const vendedores = (resComerciales.data.data || []).filter(
           emp => ['ventas', 'comercial'].includes(emp.rol?.toLowerCase())
@@ -320,17 +319,10 @@ function NuevaCotizacion() {
   const cargarListasPrecios = async (idCliente) => {
     try {
       setLoadingListas(true);
-      const res = await listasPreciosAPI.getByCliente(idCliente);
+      const res = await listasPreciosAPI.getCompletasByCliente(idCliente);
       if (res.data.success) {
         setListasPreciosCliente(res.data.data);
-        
-        const detalles = {};
-        for (const lista of res.data.data) {
-          const resDetalle = await listasPreciosAPI.getDetalle(lista.id_lista);
-          if (resDetalle.data.success) {
-            detalles[lista.id_lista] = resDetalle.data.data;
-          }
-        }
+        const detalles = Object.fromEntries(res.data.data.map(lista => [lista.id_lista, lista.detalle || []]));
         setDetallesListas(detalles);
       }
     } catch (err) {

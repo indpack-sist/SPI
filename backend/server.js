@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -72,12 +73,14 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3000;
 
+app.use(compression());
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // ✅ agregado PATCH
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  exposedHeaders: ['Content-Disposition']
+  exposedHeaders: ['Content-Disposition'],
+  maxAge: 86400
 }));
 app.options('*', cors());
 
@@ -85,7 +88,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - startedAt;
+    const slowRequestMs = Number.parseInt(process.env.SLOW_REQUEST_MS || '1000', 10);
+    if (duration >= slowRequestMs) {
+      console.warn(`Solicitud lenta: ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+    }
+  });
   next();
 });
 

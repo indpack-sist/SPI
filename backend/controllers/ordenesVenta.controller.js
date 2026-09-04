@@ -806,7 +806,7 @@ export async function createOrdenVenta(req, res) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
-      return [item.id_producto, cantidad, precioVenta, precioBase, 0];
+      return [item.id_producto, cantidad, precioVenta, precioBase, 0, 0];
     });
 
     const connection = await pool.getConnection();

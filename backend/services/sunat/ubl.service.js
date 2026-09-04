@@ -238,11 +238,13 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   }
 
   // ── Cliente (receptor) ──────────────────────────────────────────────────────
-  const cliScheme = esExport ? '0' : schemeIdDocumento(cliente.tipo_documento);
-  // Export: receptor no domiciliado = "SIN DOCUMENTO". schemeID '0' (cat.06 DOC.TRIB.NO.DOM.SIN.RUC)
-  // + número '0'. Reglas de Validación CPE 26.08.2026: r94/2802 pide alfanumérico ≤15 sin espacios;
-  // r97/2800 prohíbe schemeID '6' (RUC) en op. 0200. Solo se usa la razón social del no domiciliado.
-  const cliNumDoc = esExport ? '0' : (cliente.ruc || '0');
+  const cliScheme = esExport ? '-' : schemeIdDocumento(cliente.tipo_documento);
+  // Export: receptor no domiciliado = "SIN DOCUMENTO". El portal SUNAT distingue "SIN DOCUMENTO"
+  // (schemeID/número '-') de "DOC.TRIB.NO.DOM.SIN.RUC" (cat.06 '0', que EXIGE número). Clavamos el
+  // molde real aceptado E001-1997 (docs/FACTURA_EXPORT_E001-1997.xml): schemeID='-', número='-',
+  // schemeName="Documento de Identidad". r97/2800 solo prohíbe schemeID '6' (RUC) en op. 0200.
+  const cliNumDoc = esExport ? '-' : (cliente.ruc || '0');
+  const cliSchemeName = esExport ? ' schemeName="Documento de Identidad"' : '';
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 
@@ -322,7 +324,7 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   <cac:AccountingCustomerParty>
     <cac:Party>
       <cac:PartyIdentification>
-        <cbc:ID schemeID="${cliScheme}" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06">${cliNumDoc}</cbc:ID>
+        <cbc:ID schemeID="${cliScheme}" schemeAgencyName="PE:SUNAT"${cliSchemeName} schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06">${cliNumDoc}</cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>${cdata(cliente.razon_social)}</cbc:RegistrationName>

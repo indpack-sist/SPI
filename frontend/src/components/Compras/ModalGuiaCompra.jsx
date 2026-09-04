@@ -11,6 +11,7 @@ import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
 // y deja la guía lista para emitir la GRE a SUNAT desde su detalle.
 export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) {
   const [error, setError] = useState(null);
+  const [okMsg, setOkMsg] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
@@ -29,6 +30,7 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
+    setOkMsg(null);
     setForm((f) => ({ ...f, fecha_traslado: hoy }));
     setItems((compra?.detalle || [])
       .filter((d) => d.id_producto)
@@ -89,7 +91,9 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         detalle,
       });
       if (data.success) {
-        onCreated?.(data.data?.id_guia, data.data?.numero_guia);
+        const d = data.data || {};
+        setOkMsg(data.message || 'Guía de compra creada.');
+        setTimeout(() => onCreated?.(d.id_guia, d.numero_guia), 1600);
       } else {
         setError(data.error || 'No se pudo crear la guía.');
       }
@@ -103,6 +107,7 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Emitir Guía de Remisión (Compra)" size="lg">
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {okMsg && <Alert type="success" message={okMsg} />}
 
       <div className="text-sm text-muted mb-3 flex items-start gap-2">
         <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -198,9 +203,9 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
       </div>
 
       <div className="flex justify-end gap-2">
-        <button className="btn btn-ghost" onClick={onClose} disabled={submitting}>Cancelar</button>
-        <button className="btn btn-primary" onClick={crear} disabled={submitting || items.length === 0}>
-          <Truck size={18} /> {submitting ? 'Creando…' : 'Crear Guía e Ingresar Stock'}
+        <button className="btn btn-ghost" onClick={onClose} disabled={submitting || !!okMsg}>Cancelar</button>
+        <button className="btn btn-primary" onClick={crear} disabled={submitting || !!okMsg || items.length === 0}>
+          <Truck size={18} /> {submitting ? 'Creando…' : okMsg ? 'Creada ✓' : 'Crear Guía e Ingresar Stock'}
         </button>
       </div>
     </Modal>

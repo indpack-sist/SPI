@@ -2953,7 +2953,7 @@ function DetalleOrdenVenta() {
                 <div>
                     <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
                     <button
-                        className="btn btn-link btn-xs text-muted -mt-2 mb-4"
+                        className="btn btn-ghost btn-xs -mt-2 mb-4 hover:underline"
                         onClick={() => navigate(`/ventas/guias-remision/${guiaDetalleSee.id_guia}`)}
                     >
                         Ver guía completa (despacho / entrega) →

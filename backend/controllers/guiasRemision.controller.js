@@ -766,19 +766,33 @@ export async function createGuiaCompra(req, res) {
           [idGuia, it.id_producto, it.cantidad, it.unidad_medida || 'UND', it.descripcion || '', it.peso_unitario_kg || 0, pesoTotal]);
       }
 
-      // Ingreso de stock (entrada por tipo_inventario) en la MISMA transacción.
-      const docSoporte = (oc.serie_documento && oc.numero_documento)
-        ? `${oc.serie_documento}-${oc.numero_documento}` : oc.numero_orden;
-      const idsEntrada = await ingresarStockCompra(conn, {
-        idOrdenCompra: id_orden_compra, idProveedor: oc.id_proveedor, docSoporte,
-        moneda: oc.moneda, tipoCambio: oc.tipo_cambio, porcentajeIgv: oc.porcentaje_impuesto,
-        idRegistradoPor, observaciones: `Ingreso por guía de compra ${numeroGuia}`, items,
-      });
+      // ¿La compra YA ingresó su mercadería en la recepción (Total/Parcial)? Entonces la guía es
+      // SOLO documento (no vuelve a sumar stock) → evita el doble conteo. Señal limpia:
+      // detalle_orden_compra.cantidad_recibida > 0 (lo pone createCompra en su recepción; la guía no).
+      const [[rec]] = await conn.query(
+        'SELECT COALESCE(SUM(cantidad_recibida), 0) AS recibido FROM detalle_orden_compra WHERE id_orden_compra = ?',
+        [id_orden_compra]);
+      const yaRecibio = parseFloat(rec.recibido || 0) > 0.0001;
 
-      return { id_guia: idGuia, numero_guia: numeroGuia, ids_entrada: idsEntrada };
+      // Ingreso de stock (entrada por tipo_inventario) en la MISMA transacción — solo si no se ingresó ya.
+      let idsEntrada = [];
+      if (!yaRecibio) {
+        const docSoporte = (oc.serie_documento && oc.numero_documento)
+          ? `${oc.serie_documento}-${oc.numero_documento}` : oc.numero_orden;
+        idsEntrada = await ingresarStockCompra(conn, {
+          idOrdenCompra: id_orden_compra, idProveedor: oc.id_proveedor, docSoporte,
+          moneda: oc.moneda, tipoCambio: oc.tipo_cambio, porcentajeIgv: oc.porcentaje_impuesto,
+          idRegistradoPor, observaciones: `Ingreso por guía de compra ${numeroGuia}`, items,
+        });
+      }
+
+      return { id_guia: idGuia, numero_guia: numeroGuia, ids_entrada: idsEntrada, stock_ingresado: !yaRecibio };
     });
 
-    return res.status(201).json({ success: true, data: result, message: 'Guía de compra creada e inventario ingresado' });
+    const msg = result.stock_ingresado
+      ? 'Guía de compra creada e inventario ingresado'
+      : 'Guía de compra creada (el stock ya se había ingresado en la recepción de la compra; no se volvió a sumar)';
+    return res.status(201).json({ success: true, data: result, message: msg });
   } catch (error) {
     console.error('Error al crear guía de compra:', error);
     return res.status(error?.status || 500).json({ success: false, error: error.message });

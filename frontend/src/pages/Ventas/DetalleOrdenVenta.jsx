@@ -4335,10 +4335,19 @@ function DetalleOrdenVenta() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Conductor</label>
-                  <select 
+                  <select
                     className="form-select"
                     value={transporteForm.id_conductor}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
+                    onChange={(e) => {
+                      // Al elegir un conductor de la flota se autocompleta su Nº de licencia desde
+                      // la ficha del empleado (empleados.licencia_conducir). Queda editable.
+                      const sel = conductores.find(c => String(c.id_empleado) === String(e.target.value));
+                      setTransporteForm({
+                        ...transporteForm,
+                        id_conductor: e.target.value,
+                        transporte_licencia: sel?.licencia_conducir || '',
+                      });
+                    }}
                   >
                     <option value="">Seleccione conductor</option>
                     {conductores.map(c => (

@@ -108,6 +108,22 @@ function NuevaGuiaRemision() {
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
         if (rt.data?.success) setTransportistas(rt.data.data || []);
+        // Punto de partida = domicilio fiscal de la empresa (empresa_config). Siempre es el mismo,
+        // así que se prellena la dirección/ubigeo de partida (queda editable por si el traslado sale
+        // de otro local). El backend ya lo autocompleta desde empresa_config, esto solo lo muestra.
+        try {
+          const re = await guiasRemisionAPI.getEmpresaRemitente();
+          const emp = re.data?.data;
+          if (emp) {
+            setFormData((prev) => ({
+              ...prev,
+              direccion_partida: prev.direccion_partida || emp.direccion || '',
+              ubigeo_partida: prev.ubigeo_partida || emp.ubigeo || '',
+            }));
+          }
+        } catch (e) {
+          console.warn('No se pudo cargar el punto de partida de la empresa:', e.message);
+        }
         // Catálogo comex aparte: un fallo (endpoint nuevo aún no desplegado) NO debe romper los
         // catálogos de transporte de las guías normales.
         try {
@@ -875,7 +891,7 @@ function NuevaGuiaRemision() {
                   onChange={(e) => setFormData({ ...formData, direccion_partida: e.target.value })}
                   placeholder="Vacío = se usará tu dirección fiscal"
                 />
-                <small className="text-gray-500">Si lo dejas vacío se tomará la dirección fiscal de la empresa.</small>
+                <small className="text-gray-500">Prellenado con el domicilio fiscal de la empresa. Edítalo solo si el traslado sale de otro local.</small>
               </div>
               
               <div className="form-group">

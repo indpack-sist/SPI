@@ -616,6 +616,8 @@ body {
 .border-blue-500  { border-color: #5dade2; }
 .border-green-200 { border-color: rgba(46,204,113,0.25); }
 .border-green-500 { border-color: #2ecc71; }
+.border-amber-200 { border-color: rgba(184,121,31,0.30); }
+.border-amber-300 { border-color: rgba(184,121,31,0.45); }
 .border-yellow-200 { border-color: rgba(232,184,75,0.25); }
 .border-orange-200 { border-color: rgba(243,156,18,0.25); }
 .border-orange-300 { border-color: rgba(243,156,18,0.4); }
@@ -695,9 +697,18 @@ body {
 .text-gray-700  { color: #999; }
 .text-gray-800  { color: var(--mist); }
 .text-amber-500 { color: var(--accent); }
+/* Ámbar de advertencia legible en AMBOS temas (evita el dorado sobre fondos claros).
+   text-amber-700 estaba sin definir: al usarse heredaba el color del contenedor (a veces verde). */
+.text-amber-700 { color: #b7791f; }
 .text-indigo-600 { color: #5dade2; }
 .text-indigo-700 { color: #4a9fc4; }
 .text-teal-700  { color: #1abc9c; }
+
+/* Texto SIEMPRE oscuro para usar SOBRE fondos dorados (bg-primary / acento).
+   El dorado es claro en los dos temas, así que el texto debe ser oscuro fijo
+   (text-white daba blanco-sobre-dorado, ilegible; card-title usa var(--white) que
+   se aclara en modo oscuro). Legible en claro y oscuro. */
+.text-on-accent { color: #1a1a1a !important; }
 
 /* =====================================================
    FONDOS
@@ -731,6 +742,10 @@ body {
 .bg-cyan-50    { background-color: rgba(26,188,156,0.08); }
 .bg-info-light { background-color: rgba(93,173,226,0.08); }
 .bg-white      { background-color: var(--bg-primary); }
+/* Backdrop de modales inline (estaba sin definir → los modales salían sin oscurecer el fondo).
+   Negro translúcido: correcto en ambos temas. */
+.bg-black\/50  { background-color: rgba(0,0,0,0.5); }
+.bg-black\/40  { background-color: rgba(0,0,0,0.4); }
 .bg-primary\/5  { background-color: rgba(232,184,75,0.05); }
 .bg-primary\/10 { background-color: rgba(232,184,75,0.1); }
 .bg-blue-50\/50 { background-color: rgba(93,173,226,0.04); }

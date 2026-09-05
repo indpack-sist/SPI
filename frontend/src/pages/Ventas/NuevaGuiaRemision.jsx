@@ -783,7 +783,7 @@ function NuevaGuiaRemision() {
                     </div>
                   ) : ovTransportista ? (
                     // Orden por tercero pero sin RUC: no se puede emitir la GRE pública.
-                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
                       La orden se entrega por tercero pero <b>no tiene el RUC del transportista</b>.
                       Complétalo en "Transporte y Logística" de la orden antes de crear la guía.
                     </div>

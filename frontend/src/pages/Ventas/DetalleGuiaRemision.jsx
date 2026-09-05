@@ -484,22 +484,22 @@ function DetalleGuiaRemision() {
           </div>
         </div>
 
-        <div className="card bg-gradient-to-br from-primary to-blue-600 text-white">
+        <div className="card bg-gradient-to-br from-primary to-blue-600 text-on-accent">
           <div className="card-header border-white/20">
-            <h2 className="card-title text-white">
+            <h2 className="card-title text-on-accent">
               <Package size={20} />
               Carga
             </h2>
           </div>
           <div className="card-body space-y-3">
             <div>
-              <label className="text-xs text-white/80 uppercase font-semibold">Peso Bruto</label>
+              <label className="text-xs text-on-accent opacity-80 uppercase font-semibold">Peso Bruto</label>
               <p className="font-bold text-3xl">
                 {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} <span className="text-lg">kg</span>
               </p>
             </div>
             <div>
-              <label className="text-xs text-white/80 uppercase font-semibold">Bultos</label>
+              <label className="text-xs text-on-accent opacity-80 uppercase font-semibold">Bultos</label>
               <p className="font-bold text-2xl">{guia.numero_bultos || 0}</p>
             </div>
           </div>
@@ -600,7 +600,7 @@ function DetalleGuiaRemision() {
                   <span className="font-medium">Total Items:</span>
                   <span className="font-bold">{guia.detalle?.length || 0}</span>
                 </div>
-                <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
+                <div className="flex justify-between py-3 bg-primary text-on-accent px-4 rounded-lg mt-2">
                   <span className="font-bold text-lg">PESO TOTAL:</span>
                   <span className="font-bold text-2xl">
                     {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg

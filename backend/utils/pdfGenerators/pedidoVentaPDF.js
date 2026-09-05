@@ -197,9 +197,9 @@ export async function generarPedidoVentaPDF(orden) {
       detalle.forEach((item, i) => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioUnitario = parseFloat(item.precio_unitario || 0);
-        const descuento = parseFloat(item.descuento_porcentaje || 0);
+        // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
         const brutoLinea = cantidad * precioUnitario;
-        const importeLinea = brutoLinea * (1 - descuento / 100);
+        const importeLinea = brutoLinea;
 
         importeBruto += brutoLinea;
         descuentoTotal += brutoLinea - importeLinea;

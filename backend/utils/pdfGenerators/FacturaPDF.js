@@ -257,8 +257,8 @@ export async function generarFacturaPDF(orden) {
       orden.detalle.forEach((item, idx) => {
         const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        const descuento = parseFloat(item.descuento_porcentaje || 0);
-        const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
+        // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
+        const totalLinea = (item.cantidad * item.precio_unitario);
         const valorVenta = parseFloat(totalLinea).toFixed(2);
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);

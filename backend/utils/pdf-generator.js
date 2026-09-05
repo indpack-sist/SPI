@@ -1592,7 +1592,7 @@ export async function generarPDFOrdenVenta(orden) {
       orden.detalle.forEach((item, idx) => {
         const cantidad = fmtCantidad(item.cantidad);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        const valorVenta = parseFloat(item.valor_venta || (item.cantidad * item.precio_unitario * (1 - (item.descuento_porcentaje || 0)/100))).toFixed(2);
+        const valorVenta = parseFloat(item.valor_venta || (item.cantidad * item.precio_unitario)).toFixed(2);
         
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);

@@ -364,7 +364,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           <div className="flex items-center gap-1 text-xs">
             {PASOS.map((p, i) => (
               <div key={p} className="flex items-center gap-1">
-                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${i === wizStep ? 'bg-primary text-white' : i < wizStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${i === wizStep ? 'bg-primary text-on-accent' : i < wizStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {i < wizStep ? <Check size={12} /> : i + 1}
                 </span>
                 <span className={i === wizStep ? 'font-semibold' : 'text-muted'}>{p}</span>
@@ -580,7 +580,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                         {!guia?.ov_transporte_dni && <div className="text-amber-700">Falta el conductor en la orden.</div>}
                       </div>
                     ) : (
-                      <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800">
+                      <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-700">
                         No se declaran vehículos ni conductores: la GRE declara solo al transportista.
                       </div>
                     )}

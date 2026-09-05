@@ -98,8 +98,11 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   // ── Datos derivados para el preliminar (paso 2): lo que realmente se enviará a SUNAT ──
   // La OC viaja como campo propio; si la observación solo la repite, no se muestra (evita duplicado).
   const normTxt = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const obsRepiteOC = !!normTxt(ordenCompra)
-    && normTxt(observaciones).replace(/^(O\/?C|ORDENDECOMPRA)/, '') === normTxt(ordenCompra);
+  // Se quita el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede escribirse con ese
+  // prefijo dentro del propio campo (p. ej. "OC - 4600144796"); sin quitárselo también a la OC la
+  // comparación no casaba y la observación se mostraba duplicada.
+  const stripOC = (s) => normTxt(s).replace(/^(O\/?C|ORDENDECOMPRA)/, '');
+  const obsRepiteOC = !!normTxt(ordenCompra) && stripOC(observaciones) === stripOC(ordenCompra);
   const obsPreliminar = obsRepiteOC ? '' : observaciones.trim();
   // Guías declaradas en la factura: las del sistema (auto) + las agregadas a mano en el buscador.
   const guiasPreliminar = [...guiasSistema, ...guiasRef];

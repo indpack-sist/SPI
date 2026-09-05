@@ -149,9 +149,12 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // repite (dato heredado de cuando la OC viajaba embebida en cbc:Note, p. ej. "OC: <número>"),
       // no se vuelve a mostrar como "Observación" para no duplicarla.
       const normOC = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      // Se compara sin el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede venir
+      // escrita con ese prefijo dentro del propio campo (p. ej. "OC - 4600144796"), y sin quitarlo
+      // también de la OC la comparación nunca casaba y la observación se duplicaba.
+      const stripOC = (s) => normOC(s).replace(/^(O\/?C|ORDENDECOMPRA)/, '');
       const ocNorm = normOC(c.orden_compra);
-      const obsRepiteOC = !!ocNorm && !motivoTxt
-        && normOC(obsHeader).replace(/^(O\/?C|ORDENDECOMPRA)/, '') === ocNorm;
+      const obsRepiteOC = !!ocNorm && !motivoTxt && stripOC(obsHeader) === stripOC(c.orden_compra);
 
       filaSunat('Fecha de Emisión', c.fecha_emision);
       if (c.docAfectado) {

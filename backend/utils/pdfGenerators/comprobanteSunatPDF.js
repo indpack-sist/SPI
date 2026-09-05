@@ -152,7 +152,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // Se compara sin el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede venir
       // escrita con ese prefijo dentro del propio campo (p. ej. "OC - 4600144796"), y sin quitarlo
       // también de la OC la comparación nunca casaba y la observación se duplicaba.
-      const stripOC = (s) => normOC(s).replace(/^(O\/?C|ORDENDECOMPRA)/, '');
+      const stripOC = (s) => normOC(s).replace(/^(OC|ORDENDECOMPRA)+/, '');
       const ocNorm = normOC(c.orden_compra);
       const obsRepiteOC = !!ocNorm && !motivoTxt && stripOC(obsHeader) === stripOC(c.orden_compra);
 

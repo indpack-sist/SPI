@@ -348,10 +348,19 @@ function DetalleGuiaRemision() {
           
           {puedeEditar && (
             <>
+              {/* Acción principal cuando la guía aún no ha salido: ponerla En Tránsito (despacho).
+                  Botón primario destacado que lleva directo al despacho, en vez de esconderlo
+                  dentro del modal genérico de "Estado". */}
+              {estadoConfig.siguientes.includes('En Tránsito') && (
+                <button className="btn btn-primary btn-lg" onClick={() => handleCambiarEstado('En Tránsito')}>
+                  <Truck size={20} /> Poner En Tránsito
+                </button>
+              )}
+
               <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
                 <Edit size={20} /> Estado
               </button>
-              
+
               {guia.estado === 'En Tránsito' && !guia.guia_transportista && (
                 <button className="btn btn-primary" onClick={handleGenerarGuiaTransportista}>
                   <Plus size={20} /> Guía Transportista

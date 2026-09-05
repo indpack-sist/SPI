@@ -255,32 +255,35 @@ export async function getAllOrdenesVenta(req, res) {
       sql += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     }
 
+    // Al solo cambiar de página, el conteo y el resumen no cambian: se omiten
+    const incluirMeta = paginated && req.query.solo_datos !== '1';
+
     const dataParams = params;
     const [result, countResult, summaryResult] = await Promise.all([
       executeQuery(sql, dataParams),
-      paginated ? executeQuery(countSql, params) : Promise.resolve(null),
-      paginated ? executeQuery(summarySql, params) : Promise.resolve(null)
+      incluirMeta ? executeQuery(countSql, params) : Promise.resolve(null),
+      incluirMeta ? executeQuery(summarySql, params) : Promise.resolve(null)
     ]);
-    
+
     if (!result.success) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: result.error 
+        error: result.error
       });
     }
-    if (paginated && (!countResult?.success || !summaryResult?.success)) {
+    if (incluirMeta && (!countResult?.success || !summaryResult?.success)) {
       return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
     }
-    
+
     res.json({
       success: true,
       data: result.data,
-      summary: paginated ? summaryResult.data[0] : undefined,
+      summary: incluirMeta ? summaryResult.data[0] : undefined,
       pagination: paginated ? {
         page,
         limit,
-        total: Number(countResult?.data?.[0]?.total || 0),
-        totalPages: Math.ceil(Number(countResult?.data?.[0]?.total || 0) / limit)
+        total: incluirMeta ? Number(countResult?.data?.[0]?.total || 0) : undefined,
+        totalPages: incluirMeta ? Math.ceil(Number(countResult?.data?.[0]?.total || 0) / limit) : undefined
       } : undefined
     });
     

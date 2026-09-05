@@ -772,7 +772,8 @@ export const cotizacionesAPI = {
     if (filtros.page) params.append('page', filtros.page);
     if (filtros.limit) params.append('limit', filtros.limit);
     if (filtros.orden) params.append('orden', filtros.orden);
-    
+    if (filtros.solo_datos) params.append('solo_datos', '1');
+
     return api.get(`/cotizaciones?${params.toString()}`);
   },
 
@@ -832,7 +833,8 @@ export const ordenesVentaAPI = {
     appendFilter('search', filtros.search);
     appendFilter('page', filtros.page);
     appendFilter('limit', filtros.limit);
-    
+    if (filtros.solo_datos) params.append('solo_datos', '1');
+
     return api.get(`/ordenes-venta?${params.toString()}`);
   },
 

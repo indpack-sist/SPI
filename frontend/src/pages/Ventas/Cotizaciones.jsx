@@ -31,9 +31,10 @@ function Cotizaciones() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   const [resumen, setResumen] = useState(null);
-  const itemsPerPage = 20;
+  const itemsPerPage = 50;
   const tablaRef = useRef(null);
   const requestIdRef = useRef(0);
+  const firmaFiltrosRef = useRef(null);
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -53,13 +54,23 @@ function Cotizaciones() {
   }, [busqueda]);
 
   useEffect(() => {
-    cargarDatos();
+    const firma = JSON.stringify([filtroEstado, busquedaAplicada, ordenAscendente]);
+    const primeraVez = firmaFiltrosRef.current === null;
+    const firmaCambio = !primeraVez && firma !== firmaFiltrosRef.current;
+
+    // Si cambió un filtro estando en otra página, resetear a la 1 y dejar que el
+    // re-render dispare la carga completa (evita pedir la página vieja del filtro nuevo)
+    if (firmaCambio && currentPage !== 1) {
+      setCurrentPage(1);
+      return;
+    }
+
+    // Solo se movió la página: no recalcular conteo/resumen
+    const soloPagina = !primeraVez && !firmaCambio;
+    firmaFiltrosRef.current = firma;
+    cargarDatos(!primeraVez, soloPagina); // silencioso salvo la primera carga
     cargarTCDesdeSession();
   }, [filtroEstado, busquedaAplicada, ordenAscendente, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filtroEstado, busqueda, ordenAscendente]);
 
   useEffect(() => {
     const paginaGuardada = sessionStorage.getItem('cotizaciones_pagina');
@@ -126,26 +137,32 @@ function Cotizaciones() {
     return parseFloat(montoUSD) * tipoCambio.venta;
   };
 
-  const cargarDatos = async (silencioso = false) => {
+  const cargarDatos = async (silencioso = false, soloDatos = false) => {
     const requestId = ++requestIdRef.current;
     try {
       if (!silencioso) setLoading(true);
       setRefreshing(silencioso);
       setError(null);
-      
+
       const filtros = {};
       if (filtroEstado) filtros.estado = filtroEstado;
       if (busquedaAplicada) filtros.search = busquedaAplicada;
       filtros.page = currentPage;
       filtros.limit = itemsPerPage;
       filtros.orden = ordenAscendente ? 'asc' : 'desc';
-      
+      if (soloDatos) filtros.solo_datos = true;
+
       const response = await cotizacionesAPI.getAll(filtros);
-      
+
       if (response.data.success && requestId === requestIdRef.current) {
         setCotizaciones(response.data.data || []);
-        setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
-        setResumen(response.data.summary || null);
+        if (soloDatos) {
+          // Solo cambió la página: se conserva el total/resumen ya conocidos
+          setPagination(prev => ({ ...prev, page: response.data.pagination?.page ?? prev.page }));
+        } else {
+          setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
+          setResumen(response.data.summary || null);
+        }
       }
       
     } catch (err) {

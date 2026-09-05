@@ -10,12 +10,22 @@ export async function getAllClientes(req, res) {
 
     let sql = `
       SELECT clientes.*,
-        (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente) AS total_ordenes,
-        (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente AND ov.estado IN (${ATENCION_PLACEHOLDERS})) AS atenciones,
-        (SELECT GROUP_CONCAT(CONCAT(t.estado, ':', t.cnt) ORDER BY t.cnt DESC SEPARATOR '|')
-           FROM (SELECT estado, COUNT(*) AS cnt FROM ordenes_venta WHERE id_cliente = clientes.id_cliente GROUP BY estado) t
-        ) AS ordenes_desglose
+        COALESCE(ov_stats.total_ordenes, 0) AS total_ordenes,
+        COALESCE(ov_stats.atenciones, 0) AS atenciones,
+        ov_stats.ordenes_desglose AS ordenes_desglose
       FROM clientes
+      LEFT JOIN (
+        SELECT id_cliente,
+          SUM(cnt) AS total_ordenes,
+          SUM(CASE WHEN estado IN (${ATENCION_PLACEHOLDERS}) THEN cnt ELSE 0 END) AS atenciones,
+          GROUP_CONCAT(CONCAT(estado, ':', cnt) ORDER BY cnt DESC SEPARATOR '|') AS ordenes_desglose
+        FROM (
+          SELECT id_cliente, estado, COUNT(*) AS cnt
+          FROM ordenes_venta
+          GROUP BY id_cliente, estado
+        ) por_estado
+        GROUP BY id_cliente
+      ) ov_stats ON ov_stats.id_cliente = clientes.id_cliente
       WHERE 1=1`;
     const params = [...ESTADOS_ATENCION];
 

@@ -100,14 +100,24 @@ export async function getAllOrdenes(req, res) {
           WHEN p.id_producto IS NULL THEN 1
           ELSE 0
         END AS producto_eliminado,
-        (SELECT COUNT(*) FROM op_adjuntos oa WHERE oa.id_orden = op.id_orden) AS total_adjuntos,
-        (SELECT COUNT(*) FROM op_registros_produccion orp WHERE orp.id_orden = op.id_orden) AS total_registros_parciales
+        COALESCE(adj_stats.total_adjuntos, 0) AS total_adjuntos,
+        COALESCE(reg_stats.total_registros_parciales, 0) AS total_registros_parciales
       FROM ordenes_produccion op
       LEFT JOIN productos p ON op.id_producto_terminado = p.id_producto
       LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
       LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
       LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
       LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN (
+        SELECT id_orden, COUNT(*) AS total_adjuntos
+        FROM op_adjuntos
+        GROUP BY id_orden
+      ) adj_stats ON adj_stats.id_orden = op.id_orden
+      LEFT JOIN (
+        SELECT id_orden, COUNT(*) AS total_registros_parciales
+        FROM op_registros_produccion
+        GROUP BY id_orden
+      ) reg_stats ON reg_stats.id_orden = op.id_orden
       WHERE 1=1
     `;
     

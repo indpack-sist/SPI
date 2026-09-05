@@ -242,9 +242,10 @@ function OrdenesVenta() {
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
   const [currentPage, setCurrentPage] = useState(initPage);
   const [inputPage, setInputPage] = useState(initPage.toString());
-  const itemsPerPage = 20;
+  const itemsPerPage = 50;
   const tablaRef = useRef(null);
   const requestIdRef = useRef(0);
+  const firmaFiltrosRef = useRef(null);
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -274,7 +275,11 @@ function OrdenesVenta() {
   }, [busqueda]);
 
   useEffect(() => {
-    cargarDatos(ordenes.length === 0);
+    const firma = JSON.stringify([filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin, busquedaAplicada]);
+    // Si los filtros no cambiaron, solo se movió la página: no recalcular conteo/resumen
+    const soloPagina = firmaFiltrosRef.current !== null && firma === firmaFiltrosRef.current;
+    firmaFiltrosRef.current = firma;
+    cargarDatos(ordenes.length === 0, soloPagina);
     cargarTCDesdeSession();
   }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin, busquedaAplicada, currentPage]);
 
@@ -328,7 +333,7 @@ function OrdenesVenta() {
     }
   };
 
-  const cargarDatos = async (isInitial = false) => {
+  const cargarDatos = async (isInitial = false, soloDatos = false) => {
     const requestId = ++requestIdRef.current;
     try {
       if (isInitial) {
@@ -337,7 +342,7 @@ function OrdenesVenta() {
         setIsFiltering(true);
       }
       setError(null);
-      
+
       const filtros = {};
       if (filtroEstado.length > 0) filtros.estado = filtroEstado;
       if (filtroEstadoPago.length > 0) filtros.estado_pago = filtroEstadoPago;
@@ -351,13 +356,19 @@ function OrdenesVenta() {
       if (busquedaAplicada) filtros.search = busquedaAplicada;
       filtros.page = currentPage;
       filtros.limit = itemsPerPage;
-      
+      if (soloDatos) filtros.solo_datos = true;
+
       const response = await ordenesVentaAPI.getAll(filtros);
-      
+
       if (response.data.success && requestId === requestIdRef.current) {
         setOrdenes(response.data.data || []);
-        setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
-        setResumen(response.data.summary || null);
+        if (soloDatos) {
+          // Solo cambió la página: se conserva el total/resumen ya conocidos
+          setPagination(prev => ({ ...prev, page: response.data.pagination?.page ?? prev.page }));
+        } else {
+          setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
+          setResumen(response.data.summary || null);
+        }
       }
       
     } catch (err) {

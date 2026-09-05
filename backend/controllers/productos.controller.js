@@ -8,15 +8,21 @@ export async function getAllProductos(req, res) {
     const { estado, id_tipo_inventario, id_categoria, requiere_receta } = req.query;
     
     let sql = `
-      SELECT 
+      SELECT
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
         c.id_tipo_insumo_sugerido,  -- <<<< ¡ESTA LÍNEA ES OBLIGATORIA! >>>>
-        (SELECT COUNT(*) FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_activa = 1) AS total_recetas
+        COALESCE(rp_stats.total_recetas, 0) AS total_recetas
       FROM productos p
       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+      LEFT JOIN (
+        SELECT id_producto_terminado, COUNT(*) AS total_recetas
+        FROM recetas_productos
+        WHERE es_activa = 1
+        GROUP BY id_producto_terminado
+      ) rp_stats ON rp_stats.id_producto_terminado = p.id_producto
       WHERE 1=1
     `;
     const params = [];

@@ -388,7 +388,7 @@ export async function previewComprobante(req, res, next) {
       // Se quita el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede venir con ese
       // prefijo dentro del propio campo (p. ej. "OC - 4600144796") y sin quitárselo tampoco a la OC
       // la observación no se detectaba como repetida y se prellenaba duplicando la OC.
-      const strip = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(O\/?C|ORDENDECOMPRA)/, '');
+      const strip = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(OC|ORDENDECOMPRA)+/, '');
       if (strip(obsRaw) === strip(ocRaw)) obsRaw = '';
     }
 

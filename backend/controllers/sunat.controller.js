@@ -385,8 +385,11 @@ export async function previewComprobante(req, res, next) {
     const ocRaw = String(ov.orden_compra_cliente || '').trim();
     let obsRaw = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
     if (ocRaw) {
-      const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (norm(obsRaw).replace(/^(O\/?C|ORDENDECOMPRA)/, '') === norm(ocRaw)) obsRaw = '';
+      // Se quita el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede venir con ese
+      // prefijo dentro del propio campo (p. ej. "OC - 4600144796") y sin quitárselo tampoco a la OC
+      // la observación no se detectaba como repetida y se prellenaba duplicando la OC.
+      const strip = (s) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(O\/?C|ORDENDECOMPRA)/, '');
+      if (strip(obsRaw) === strip(ocRaw)) obsRaw = '';
     }
 
     // GRE del sistema ya ACEPTADAS de esta OV: se declararán automáticamente en la factura (además

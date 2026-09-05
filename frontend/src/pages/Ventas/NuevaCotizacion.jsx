@@ -51,6 +51,8 @@ function NuevaCotizacion() {
   const { id } = useParams();
   const location = useLocation();
   const { user } = useAuth();
+  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
+  const esAdmin = user?.rol === 'Administrador';
     
   const modoDuplicar = location.pathname.endsWith('/duplicar') || location.state?.duplicar === true;
   const modoEdicion = !!id && !modoDuplicar;
@@ -1416,7 +1418,7 @@ setFormCabecera(prev => ({
     <th className="text-right">Peso Total</th>
     <th className="text-right">P. Base</th>
     <th className="text-right">P. Venta</th>
-    <th className="text-right">Margen %</th>
+    {esAdmin && <th className="text-right">Margen %</th>}
     <th className="text-right">Subtotal</th>
     <th></th>
   </tr>
@@ -1529,6 +1531,7 @@ setFormCabecera(prev => ({
   required={!esMuestra}
 />
                           </td>
+                          {esAdmin && (
                           <td>
                             <input
   type="text"
@@ -1539,6 +1542,7 @@ setFormCabecera(prev => ({
   style={{ cursor: 'default' }}
 />
                           </td>
+                          )}
                           <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>
                           <td>
                             <button

@@ -32,7 +32,9 @@ function NuevaOrdenVenta() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const idCotizacionParam = searchParams.get('cotizacion');
-  
+  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
+  const esAdmin = user?.rol === 'Administrador';
+
   const modoEdicion = !!id;
   
   const [loading, setLoading] = useState(false);
@@ -1114,14 +1116,14 @@ useEffect(() => {
     <th className="text-right w-24">Peso</th>
     <th className="text-right w-28">P. Base</th>
     <th className="text-right w-28">P. Venta</th>
-    <th className="text-center w-20">Margen %</th>
+    {esAdmin && <th className="text-center w-20">Margen %</th>}
     <th className="text-right w-28">Subtotal</th>
     <th className="w-10"></th>
   </tr>
 </thead>
                   <tbody>
                     {detalle.length === 0 ? (
-                      <tr><td colSpan="8" className="text-center py-8 text-muted">No hay productos agregados</td></tr>
+                      <tr><td colSpan={esAdmin ? 8 : 7} className="text-center py-8 text-muted">No hay productos agregados</td></tr>
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -1183,8 +1185,9 @@ useEffect(() => {
   placeholder="0.000"
 />
                             </td>
+                            {esAdmin && (
                             <td>
-                              <input 
+                              <input
   type="text"
   className={`form-input text-center p-1 h-8 bg-gray-100 ${margenColor}`}
   value={parseFloat(item.descuento_porcentaje).toFixed(2)}
@@ -1193,6 +1196,7 @@ useEffect(() => {
   style={{ cursor: 'default' }}
 />
                             </td>
+                            )}
                             <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
                             <td>
                               <button type="button" className="text-danger hover:bg-red-50 p-1 rounded" onClick={() => handleEliminarItem(index)}>

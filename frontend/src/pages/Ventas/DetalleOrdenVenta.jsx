@@ -24,7 +24,9 @@ const TC_SESSION_KEY = 'indpack_tipo_cambio';
 function DetalleOrdenVenta() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tienePermiso } = usePermisos();
+  const { tienePermiso, rol } = usePermisos();
+  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
+  const esAdmin = rol === 'Administrador';
   // Calidad/Supervisor: acceso de solo lectura sin datos financieros.
   const verFinanzas = tienePermiso('verFinanzasVentas');
   const soloLectura = !verFinanzas;
@@ -1963,9 +1965,10 @@ function DetalleOrdenVenta() {
 
   // Calidad/Supervisor: sin precio unitario, margen, subtotal ni acciones (mutaciones).
   const columnasProductoFinancieras = ['precio_unitario', 'descuento_porcentaje', 'valor_venta', 'id_producto'];
-  const columnsDetalleVisibles = verFinanzas
+  const columnsDetalleVisibles = (verFinanzas
     ? columns
-    : columns.filter((c) => !columnasProductoFinancieras.includes(c.accessor));
+    : columns.filter((c) => !columnasProductoFinancieras.includes(c.accessor))
+  ).filter((c) => esAdmin || c.accessor !== 'descuento_porcentaje');
 
   const columnsPagos = [
     {

@@ -13,6 +13,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { cotizacionesAPI, clientesAPI, tipoCambioAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
@@ -20,6 +21,9 @@ function DetalleCotizacion() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { rol } = usePermisos();
+  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
+  const esAdmin = rol === 'Administrador';
   
   const [cotizacion, setCotizacion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1086,7 +1090,7 @@ function DetalleCotizacion() {
         </div>
         <div className="card-body p-0">
           <Table
-            columns={columns}
+            columns={columns.filter((c) => esAdmin || c.accessor !== 'descuento_porcentaje')}
             data={cotizacion.detalle || []}
             emptyMessage="No hay productos en esta cotizacion"
           />
@@ -1125,6 +1129,14 @@ function DetalleCotizacion() {
               <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: 'var(--border)' }}>
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: 'var(--border)' }}>
+                <span className="text-muted">
+                  {['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes((cotizacion.tipo_impuesto || 'IGV').toUpperCase())
+                    ? (String(cotizacion.tipo_impuesto).toUpperCase().startsWith('EXO') ? 'Exonerado (0%):' : 'Inafecto (0%):')
+                    : `IGV (${parseFloat(cotizacion.porcentaje_impuesto || 18)}%):`}
+                </span>
+                <span className="font-bold text-lg">{formatearMoneda(igvReal)}</span>
               </div>
               <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-none">
                 <span className="font-bold text-xl">TOTAL:</span>

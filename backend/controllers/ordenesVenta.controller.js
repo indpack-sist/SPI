@@ -3379,7 +3379,8 @@ export async function rectificarCantidadProducto(req, res) {
     
     ordenCompletaDetalle.data.forEach(d => {
       const cant = (d.id_producto == id_producto) ? cantidadNueva : parseFloat(d.cantidad);
-      nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
+      // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
+      nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario));
     });
 
     const esSinImpuesto = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
@@ -3436,10 +3437,10 @@ export async function rectificarCantidadProducto(req, res) {
         queries.push({
             sql: `UPDATE cotizaciones c
                   SET 
-                    subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion),
-                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                    subtotal = (SELECT SUM(cantidad * precio_unitario) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion),
+                    igv = (SELECT SUM(cantidad * precio_unitario) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) *
                           (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 0 ELSE (COALESCE(porcentaje_impuesto,18)/100) END),
-                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                    total = (SELECT SUM(cantidad * precio_unitario) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) *
                             (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1 ELSE (1 + COALESCE(porcentaje_impuesto,18)/100) END)
                   WHERE c.id_cotizacion = ?`,
             params: [orden.id_cotizacion]

@@ -217,10 +217,11 @@ export async function generarOrdenVentaPDF(orden) {
             yTable = 40;
           }
 
-          const descuento = parseFloat(item.descuento_porcentaje || 0);
+          // En ventas, descuento_porcentaje es el MARGEN (informativo), NO un descuento:
+          // precio_unitario ya es el precio final. Ver DetalleOrdenVenta / ubl.service.js.
           const precioUnitario = parseFloat(item.precio_unitario || 0);
           const cantidad = parseFloat(item.cantidad || 0);
-          const precioFinal = precioUnitario * (1 - descuento / 100);
+          const precioFinal = precioUnitario;
           const totalLinea = cantidad * precioFinal;
 
           if (i % 2 === 0) {

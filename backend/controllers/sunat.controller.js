@@ -16,7 +16,7 @@ import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
-import { generarQr, qrPng } from '../services/sunat/qr.service.js';
+import { generarQr, generarQrGre, qrPng } from '../services/sunat/qr.service.js';
 import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
@@ -1249,7 +1249,8 @@ export async function generarPdfComprobante(req, res, next) {
 }
 
 // GET /api/sunat/guias/:id/pdf → Representación impresa de la GRE Remitente (09). FASE 13.
-// Requiere estado ACEPTADO y el QR-URL de SUNAT (solo existe en PROD; en BETA la GRE es mock sin QR).
+// Requiere estado ACEPTADO. SUNAT devuelve el CDR, no un campo qrUrl; si una guía legacy no tiene
+// sunat_qr_url se construye el contenido del QR con los datos de identificación del XML firmado.
 export async function generarPdfGuia(req, res, next) {
   const idGuia = Number(req.params.id);
   try {
@@ -1278,9 +1279,6 @@ export async function generarPdfGuia(req, res, next) {
     // con marca de agua (SIN EFECTO / REEMPLAZADA) para dejar constancia — nunca PENDIENTE/ENVIADO.
     if (!['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(g.sunat_estado)) {
       throw new AppError(`El PDF de la GRE solo se genera desde estado ACEPTADO (estado actual: ${g.sunat_estado || 'sin enviar'})`, 409);
-    }
-    if (!g.sunat_qr_url) {
-      throw new AppError('La GRE no tiene QR-URL de SUNAT: la representación impresa válida solo existe en PROD (Fase 16)', 409);
     }
 
     // Si fue reemplazada, resolver el serie-número de la guía de reemplazo para el pie del PDF.
@@ -1373,7 +1371,20 @@ export async function generarPdfGuia(req, res, next) {
       };
     }
 
-    const qrBuffer = await qrPng(g.sunat_qr_url);
+    if (!g.sunat_qr_url && !g.sunat_digest_value) {
+      throw new AppError('La GRE aceptada no tiene el DigestValue de su XML firmado; no se puede generar un QR verificable', 409);
+    }
+    const fechaQr = String(g.fecha_emision_fmt || '').split(' ')[0];
+    const qrData = g.sunat_qr_url || generarQrGre({
+      ruc: emisor.ruc,
+      tipo: '09',
+      serie: g.serie_sunat,
+      numero: g.numero_sunat,
+      fechaEmision: fechaQr,
+      numDocDestinatario: destinatarioPdf?.ruc || destinatarioPdf?.numero_documento || '',
+      hash: g.sunat_digest_value
+    }).data;
+    const qrBuffer = await qrPng(qrData);
     const pdf = await generarGuiaRemisionSunatPDF({
       guia: {
         serie_sunat: g.serie_sunat, numero_sunat: g.numero_sunat,
@@ -1428,6 +1439,34 @@ export async function jobTick(req, res, next) {
 // GET /api/sunat/monitor — FASE 15: datos del panel "Monitor SUNAT" (solo lectura, gated facturacion).
 export async function monitorSunat(req, res, next) {
   try {
+    // Universo único de telemetría: solo logs cuyo documento relacionado todavía existe. Evita que
+    // pruebas beta eliminadas distorsionen KPIs, gráfica, desglose y bandeja de errores.
+    const filtroLogsVigentes = `(
+      (l.origen = 'FACTURA' AND EXISTS (
+        SELECT 1 FROM facturas_venta fv
+         WHERE fv.id_factura = l.referencia_id
+           AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01')
+      ))
+      OR (l.origen = 'NOTA' AND EXISTS (
+        SELECT 1 FROM facturas_venta fv
+         WHERE fv.id_factura = l.referencia_id
+           AND fv.codigo_tipo_sunat IN ('07','08')
+      ))
+      OR (l.origen = 'GRE_REMITENTE' AND EXISTS (
+        SELECT 1 FROM guias_remision gr WHERE gr.id_guia = l.referencia_id
+      ))
+      OR (l.origen = 'GRE_TRANSPORTISTA' AND EXISTS (
+        SELECT 1 FROM guias_transportista gt WHERE gt.id_guia = l.referencia_id
+      ))
+      OR (l.origen = 'BAJA' AND EXISTS (
+        SELECT 1 FROM sunat_bajas sb WHERE sb.id_baja = l.referencia_id
+      ))
+      OR (l.origen = 'CONSULTA' AND EXISTS (
+        SELECT 1 FROM facturas_venta fv WHERE fv.id_factura = l.referencia_id
+      ))
+      OR l.origen IN ('TOKEN','RESUMEN')
+    )`;
+
     // El monitor es una vista operativa: se resuelve en paralelo para no convertirlo en una
     // sucesión de consultas y todos los cortes temporales salen de sunat_log (la fuente de auditoría).
     const [
@@ -1511,32 +1550,34 @@ export async function monitorSunat(req, res, next) {
            FROM sunat_bajas WHERE estado IN ('RECHAZADO','ERROR')
           ORDER BY fecha_registro DESC LIMIT 20`),
       pool.query(
-        `SELECT origen, referencia_id, evento, http_status, detalle, duracion_ms,
-                UNIX_TIMESTAMP(fecha) * 1000 AS fecha_ms
-           FROM sunat_log WHERE exito = 0 ORDER BY id_log DESC LIMIT 30`),
+        `SELECT l.origen, l.referencia_id, l.evento, l.http_status, l.detalle, l.duracion_ms,
+                UNIX_TIMESTAMP(l.fecha) * 1000 AS fecha_ms
+           FROM sunat_log l
+          WHERE l.exito = 0 AND ${filtroLogsVigentes}
+          ORDER BY l.id_log DESC LIMIT 30`),
       pool.query(
         `SELECT
-           SUM(fecha >= NOW() - INTERVAL 24 HOUR) AS total_24h,
-           SUM(fecha >= NOW() - INTERVAL 24 HOUR AND exito = 1) AS exitos_24h,
-           SUM(fecha >= NOW() - INTERVAL 24 HOUR AND exito = 0) AS errores_24h,
-           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 24 HOUR THEN duracion_ms END)) AS latencia_24h,
-           SUM(fecha >= NOW() - INTERVAL 7 DAY) AS total_7d,
-           SUM(fecha >= NOW() - INTERVAL 7 DAY AND exito = 1) AS exitos_7d,
-           SUM(fecha >= NOW() - INTERVAL 7 DAY AND exito = 0) AS errores_7d,
-           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 7 DAY THEN duracion_ms END)) AS latencia_7d,
-           SUM(fecha >= NOW() - INTERVAL 30 DAY) AS total_30d,
-           SUM(fecha >= NOW() - INTERVAL 30 DAY AND exito = 1) AS exitos_30d,
-           SUM(fecha >= NOW() - INTERVAL 30 DAY AND exito = 0) AS errores_30d,
-           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 30 DAY THEN duracion_ms END)) AS latencia_30d
-         FROM sunat_log`),
+           SUM(l.fecha >= NOW() - INTERVAL 24 HOUR) AS total_24h,
+           SUM(l.fecha >= NOW() - INTERVAL 24 HOUR AND l.exito = 1) AS exitos_24h,
+           SUM(l.fecha >= NOW() - INTERVAL 24 HOUR AND l.exito = 0) AS errores_24h,
+           ROUND(AVG(CASE WHEN l.fecha >= NOW() - INTERVAL 24 HOUR THEN l.duracion_ms END)) AS latencia_24h,
+           SUM(l.fecha >= NOW() - INTERVAL 7 DAY) AS total_7d,
+           SUM(l.fecha >= NOW() - INTERVAL 7 DAY AND l.exito = 1) AS exitos_7d,
+           SUM(l.fecha >= NOW() - INTERVAL 7 DAY AND l.exito = 0) AS errores_7d,
+           ROUND(AVG(CASE WHEN l.fecha >= NOW() - INTERVAL 7 DAY THEN l.duracion_ms END)) AS latencia_7d,
+           SUM(l.fecha >= NOW() - INTERVAL 30 DAY) AS total_30d,
+           SUM(l.fecha >= NOW() - INTERVAL 30 DAY AND l.exito = 1) AS exitos_30d,
+           SUM(l.fecha >= NOW() - INTERVAL 30 DAY AND l.exito = 0) AS errores_30d,
+           ROUND(AVG(CASE WHEN l.fecha >= NOW() - INTERVAL 30 DAY THEN l.duracion_ms END)) AS latencia_30d
+         FROM sunat_log l WHERE ${filtroLogsVigentes}`),
       pool.query(
         `SELECT periodo, COUNT(*) AS total,
                 SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
                 ROUND(AVG(duracion_ms)) AS latencia_ms
            FROM (
-             SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS periodo, exito, duracion_ms
-               FROM sunat_log
-              WHERE fecha >= NOW() - INTERVAL 30 DAY
+             SELECT DATE_FORMAT(l.fecha, '%Y-%m-%d') AS periodo, l.exito, l.duracion_ms
+               FROM sunat_log l
+              WHERE l.fecha >= NOW() - INTERVAL 30 DAY AND ${filtroLogsVigentes}
            ) AS actividad_por_dia
           GROUP BY periodo ORDER BY periodo`),
       pool.query(
@@ -1544,10 +1585,10 @@ export async function monitorSunat(req, res, next) {
                 SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
                 ROUND(AVG(duracion_ms)) AS latencia_ms
            FROM (
-             SELECT FLOOR(UNIX_TIMESTAMP(fecha) / 3600) * 3600000 AS periodo_ms,
-                    exito, duracion_ms
-               FROM sunat_log
-              WHERE fecha >= NOW() - INTERVAL 48 HOUR
+             SELECT FLOOR(UNIX_TIMESTAMP(l.fecha) / 3600) * 3600000 AS periodo_ms,
+                    l.exito, l.duracion_ms
+               FROM sunat_log l
+              WHERE l.fecha >= NOW() - INTERVAL 48 HOUR AND ${filtroLogsVigentes}
            ) AS actividad_por_hora
           GROUP BY periodo_ms ORDER BY periodo_ms`),
       pool.query(
@@ -1565,29 +1606,7 @@ export async function monitorSunat(req, res, next) {
                 SUM(l.exito = 0) AS errores_30d,
                 ROUND(AVG(l.duracion_ms)) AS latencia_30d
            FROM sunat_log l
-          WHERE l.fecha >= NOW() - INTERVAL 30 DAY
-            AND (
-              (l.origen = 'FACTURA' AND EXISTS (
-                SELECT 1 FROM facturas_venta fv
-                 WHERE fv.id_factura = l.referencia_id
-                   AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01')
-              ))
-              OR (l.origen = 'NOTA' AND EXISTS (
-                SELECT 1 FROM facturas_venta fv
-                 WHERE fv.id_factura = l.referencia_id
-                   AND fv.codigo_tipo_sunat IN ('07','08')
-              ))
-              OR (l.origen IN ('GRE_REMITENTE','GRE_TRANSPORTISTA') AND EXISTS (
-                SELECT 1 FROM guias_remision gr WHERE gr.id_guia = l.referencia_id
-              ))
-              OR (l.origen = 'BAJA' AND EXISTS (
-                SELECT 1 FROM sunat_bajas sb WHERE sb.id_baja = l.referencia_id
-              ))
-              OR (l.origen = 'CONSULTA' AND EXISTS (
-                SELECT 1 FROM facturas_venta fv WHERE fv.id_factura = l.referencia_id
-              ))
-              OR l.origen IN ('TOKEN','RESUMEN')
-            )
+          WHERE l.fecha >= NOW() - INTERVAL 30 DAY AND ${filtroLogsVigentes}
           GROUP BY l.origen ORDER BY total_30d DESC`),
       pool.query(
         `SELECT

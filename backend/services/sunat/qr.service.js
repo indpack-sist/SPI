@@ -17,9 +17,25 @@ export function generarQr({ ruc, tipo, serie, numero, igv, total, fechaEmision, 
 }
 
 /**
+ * Contenido de respaldo del QR para una GRE emitida desde el SEE del contribuyente.
+ * SUNAT no devuelve un `qrUrl` al consultar el ticket GRE: devuelve el CDR en
+ * `arcCdr`. La identificación verificable de la guía se arma con los datos del
+ * XML firmado y su ds:DigestValue.
+ *
+ * data = RUC|TIPO|SERIE|NUMERO(8)|FECHA|DOC_DESTINATARIO|DIGEST|
+ */
+export function generarQrGre({ ruc, tipo = '09', serie, numero, fechaEmision, numDocDestinatario, hash }) {
+  const correlativo = String(numero ?? '').trim().padStart(8, '0');
+  const data = [
+    String(ruc ?? '').trim(), String(tipo ?? '09').trim(), String(serie ?? '').trim(), correlativo,
+    String(fechaEmision ?? '').trim(), String(numDocDestinatario ?? '').trim(), String(hash ?? '').trim(), ''
+  ].join('|');
+  return { data, png: () => QRCode.toBuffer(data, { width: 220, margin: 1 }) };
+}
+
+/**
  * PNG de un QR a partir de una cadena arbitraria. FASE 13.
- * Sirve tanto para la cadena pipe de comprobantes (sunat_qr_data) como para la
- * URL que devuelve SUNAT en la GRE (sunat_qr_url).
+ * Sirve tanto para cadenas pipe de comprobantes/GRE como para una URL legacy.
  * @returns {Promise<Buffer>}
  */
 export function qrPng(data, opts = {}) {

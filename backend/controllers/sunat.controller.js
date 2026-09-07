@@ -1478,17 +1478,26 @@ export async function monitorSunat(req, res, next) {
            ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 30 DAY THEN duracion_ms END)) AS latencia_30d
          FROM sunat_log`),
       pool.query(
-        `SELECT CAST(DATE(fecha) AS CHAR) AS periodo,
-                COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
+        `SELECT periodo, COUNT(*) AS total,
+                SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
                 ROUND(AVG(duracion_ms)) AS latencia_ms
-           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 30 DAY
-          GROUP BY CAST(DATE(fecha) AS CHAR) ORDER BY periodo`),
+           FROM (
+             SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS periodo, exito, duracion_ms
+               FROM sunat_log
+              WHERE fecha >= NOW() - INTERVAL 30 DAY
+           ) AS actividad_por_dia
+          GROUP BY periodo ORDER BY periodo`),
       pool.query(
-        `SELECT FLOOR(UNIX_TIMESTAMP(fecha) / 3600) * 3600000 AS periodo_ms,
-                COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
+        `SELECT periodo_ms, COUNT(*) AS total,
+                SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
                 ROUND(AVG(duracion_ms)) AS latencia_ms
-           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 48 HOUR
-          GROUP BY FLOOR(UNIX_TIMESTAMP(fecha) / 3600) ORDER BY periodo_ms`),
+           FROM (
+             SELECT FLOOR(UNIX_TIMESTAMP(fecha) / 3600) * 3600000 AS periodo_ms,
+                    exito, duracion_ms
+               FROM sunat_log
+              WHERE fecha >= NOW() - INTERVAL 48 HOUR
+           ) AS actividad_por_hora
+          GROUP BY periodo_ms ORDER BY periodo_ms`),
       pool.query(
         `SELECT origen, COUNT(*) AS total, SUM(exito = 1) AS exitos,
                 SUM(exito = 0) AS errores, ROUND(AVG(duracion_ms)) AS latencia_ms

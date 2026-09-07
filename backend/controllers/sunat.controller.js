@@ -1431,31 +1431,33 @@ export async function monitorSunat(req, res, next) {
     // El monitor es una vista operativa: se resuelve en paralelo para no convertirlo en una
     // sucesión de consultas y todos los cortes temporales salen de sunat_log (la fuente de auditoría).
     const [
-      [comprobantes], [guias], [bajas], [ultimosRechazos], [erroresLog],
+      [comprobantes], [guias], [bajas], [rechazosComprobantes], [rechazosGuias],
+      [rechazosBajas], [erroresLog],
       [ventanas], [actividadDiaria], [actividadHoraria], [porOrigen], [antiguedad]
     ] = await Promise.all([
       pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE sunat_estado IS NOT NULL GROUP BY sunat_estado"),
       pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM guias_remision GROUP BY sunat_estado"),
       pool.query("SELECT estado, COUNT(*) AS n FROM sunat_bajas GROUP BY estado"),
       pool.query(
-        `SELECT * FROM (
-           SELECT 'COMPROBANTE' AS origen, id_factura AS id,
-                  CONCAT(serie,'-',numero) AS comprobante, sunat_estado AS estado,
-                  sunat_response_code AS codigo, sunat_response_desc AS detalle,
-                  UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
-             FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
-           UNION ALL
-           SELECT 'GUIA' AS origen, id_guia AS id,
-                  COALESCE(CONCAT(serie_sunat,'-',numero_sunat), numero_guia) AS comprobante,
-                  sunat_estado AS estado, sunat_response_code AS codigo,
-                  sunat_response_desc AS detalle, UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
-             FROM guias_remision WHERE sunat_estado IN ('RECHAZADO','ERROR')
-           UNION ALL
-           SELECT 'BAJA' AS origen, id_baja AS id, identificador AS comprobante,
-                  estado, response_code AS codigo, response_desc AS detalle,
-                  UNIX_TIMESTAMP(fecha_registro) * 1000 AS fecha_ms
-             FROM sunat_bajas WHERE estado IN ('RECHAZADO','ERROR')
-         ) incidencias ORDER BY fecha_ms DESC LIMIT 20`),
+        `SELECT 'COMPROBANTE' AS origen, id_factura AS id,
+                CONCAT(serie,'-',numero) AS comprobante, sunat_estado AS estado,
+                sunat_response_code AS codigo, sunat_response_desc AS detalle,
+                UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
+           FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
+          ORDER BY sunat_fecha_envio DESC LIMIT 20`),
+      pool.query(
+        `SELECT 'GUIA' AS origen, id_guia AS id,
+                COALESCE(CONCAT(serie_sunat,'-',numero_sunat), numero_guia) AS comprobante,
+                sunat_estado AS estado, sunat_response_code AS codigo,
+                sunat_response_desc AS detalle, UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
+           FROM guias_remision WHERE sunat_estado IN ('RECHAZADO','ERROR')
+          ORDER BY sunat_fecha_envio DESC LIMIT 20`),
+      pool.query(
+        `SELECT 'BAJA' AS origen, id_baja AS id, identificador AS comprobante,
+                estado, response_code AS codigo, response_desc AS detalle,
+                UNIX_TIMESTAMP(fecha_registro) * 1000 AS fecha_ms
+           FROM sunat_bajas WHERE estado IN ('RECHAZADO','ERROR')
+          ORDER BY fecha_registro DESC LIMIT 20`),
       pool.query(
         `SELECT origen, referencia_id, evento, http_status, detalle, duracion_ms,
                 UNIX_TIMESTAMP(fecha) * 1000 AS fecha_ms
@@ -1498,6 +1500,14 @@ export async function monitorSunat(req, res, next) {
            (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM guias_remision WHERE sunat_estado = 'ENVIADO') AS guias_min,
            (SELECT MAX(TIMESTAMPDIFF(MINUTE, fecha_registro, NOW())) FROM sunat_bajas WHERE estado = 'ENVIADO') AS bajas_min`)
     ]);
+    // Se combinan fuera de MySQL: las tablas históricas pueden tener collations diferentes y un
+    // UNION entre sus columnas textuales falla en instalaciones con esquemas heredados.
+    const ultimosRechazos = [
+      ...rechazosComprobantes,
+      ...rechazosGuias,
+      ...rechazosBajas
+    ].sort((a, b) => Number(b.fecha_ms || 0) - Number(a.fecha_ms || 0)).slice(0, 20);
+
     // fecha_ms: epoch en milisegundos vía UNIX_TIMESTAMP (independiente de la zona de sesión y
     // del `timezone` del pool). Evita que mysql2 reinterprete el TIMESTAMP UTC como -05:00 y lo
     // desfase +5h. El frontend lo formatea con timeZone America/Lima.

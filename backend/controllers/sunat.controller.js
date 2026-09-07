@@ -1431,15 +1431,67 @@ export async function monitorSunat(req, res, next) {
     // El monitor es una vista operativa: se resuelve en paralelo para no convertirlo en una
     // sucesión de consultas y todos los cortes temporales salen de sunat_log (la fuente de auditoría).
     const [
-      [comprobantes], [guias], [bajas], [rechazosComprobantes], [rechazosGuias],
+      [facturasBase], [manualesSinRegistro], [notasCredito], [notasDebito],
+      [guias], [bajas], [rechazosComprobantes], [rechazosGuias],
       [rechazosBajas], [erroresLog],
       [ventanas], [actividadDiaria], [actividadHoraria], [porOrigen], [antiguedad]
     ] = await Promise.all([
-      pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE sunat_estado IS NOT NULL GROUP BY sunat_estado"),
+      pool.query(
+        `SELECT estado, COUNT(*) AS n, SUM(es_manual) AS manual
+           FROM (
+             SELECT
+               CASE
+                 WHEN EXISTS (
+                   SELECT 1
+                     FROM facturas_venta nc
+                    WHERE nc.id_factura_ref = fv.id_factura
+                      AND nc.codigo_tipo_sunat = '07'
+                      AND nc.motivo_nota_codigo = '01'
+                      AND nc.sunat_estado = 'ACEPTADO'
+                 ) THEN 'ANULADA'
+                 WHEN ov.facturado_sunat = 1
+                  AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'PENDIENTE')
+                   THEN 'ACEPTADO'
+                 ELSE COALESCE(fv.sunat_estado, 'PENDIENTE')
+               END AS estado,
+               CASE
+                 WHEN NOT EXISTS (
+                   SELECT 1
+                     FROM facturas_venta nc
+                    WHERE nc.id_factura_ref = fv.id_factura
+                      AND nc.codigo_tipo_sunat = '07'
+                      AND nc.motivo_nota_codigo = '01'
+                      AND nc.sunat_estado = 'ACEPTADO'
+                 )
+                  AND ov.facturado_sunat = 1
+                  AND (fv.sunat_estado IS NULL OR fv.sunat_estado = 'PENDIENTE')
+                   THEN 1 ELSE 0
+               END AS es_manual
+             FROM facturas_venta fv
+             LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = fv.id_orden_venta
+             WHERE fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01'
+           ) AS facturas_clasificadas
+          GROUP BY estado`),
+      pool.query(
+        `SELECT COUNT(*) AS n
+           FROM ordenes_venta ov
+          WHERE ov.facturado_sunat = 1
+            AND ov.tipo_comprobante = 'Factura'
+            AND NOT EXISTS (
+              SELECT 1 FROM facturas_venta fv
+               WHERE fv.id_orden_venta = ov.id_orden_venta
+                 AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01')
+            )`),
+      pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE codigo_tipo_sunat = '07' AND sunat_estado IS NOT NULL GROUP BY sunat_estado"),
+      pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE codigo_tipo_sunat = '08' AND sunat_estado IS NOT NULL GROUP BY sunat_estado"),
       pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM guias_remision GROUP BY sunat_estado"),
       pool.query("SELECT estado, COUNT(*) AS n FROM sunat_bajas GROUP BY estado"),
       pool.query(
-        `SELECT 'COMPROBANTE' AS origen, id_factura AS id,
+        `SELECT CASE codigo_tipo_sunat
+                  WHEN '07' THEN 'NOTA_CREDITO'
+                  WHEN '08' THEN 'NOTA_DEBITO'
+                  ELSE 'FACTURA'
+                END AS origen, id_factura AS id,
                 CONCAT(serie,'-',numero) AS comprobante, sunat_estado AS estado,
                 sunat_response_code AS codigo, sunat_response_desc AS detalle,
                 UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
@@ -1505,7 +1557,9 @@ export async function monitorSunat(req, res, next) {
           GROUP BY origen ORDER BY total DESC`),
       pool.query(
         `SELECT
-           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO') AS comprobantes_min,
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO' AND (codigo_tipo_sunat IS NULL OR codigo_tipo_sunat = '01')) AS facturas_min,
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO' AND codigo_tipo_sunat = '07') AS notas_credito_min,
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO' AND codigo_tipo_sunat = '08') AS notas_debito_min,
            (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM guias_remision WHERE sunat_estado = 'ENVIADO') AS guias_min,
            (SELECT MAX(TIMESTAMPDIFF(MINUTE, fecha_registro, NOW())) FROM sunat_bajas WHERE estado = 'ENVIADO') AS bajas_min`)
     ]);
@@ -1517,15 +1571,33 @@ export async function monitorSunat(req, res, next) {
       ...rechazosBajas
     ].sort((a, b) => Number(b.fecha_ms || 0) - Number(a.fecha_ms || 0)).slice(0, 20);
 
+    // Algunas facturas históricas solo fueron marcadas en ordenes_venta y nunca generaron una fila
+    // en facturas_venta. Se incorporan como aceptadas manuales sin duplicar las que sí tienen fila.
+    const facturas = facturasBase.map(row => ({ ...row }));
+    const manualesHuerfanas = Number(manualesSinRegistro[0]?.n || 0);
+    if (manualesHuerfanas > 0) {
+      const aceptadas = facturas.find(row => row.estado === 'ACEPTADO');
+      if (aceptadas) {
+        aceptadas.n = Number(aceptadas.n || 0) + manualesHuerfanas;
+        aceptadas.manual = Number(aceptadas.manual || 0) + manualesHuerfanas;
+      } else {
+        facturas.push({ estado: 'ACEPTADO', n: manualesHuerfanas, manual: manualesHuerfanas });
+      }
+    }
+
     // fecha_ms: epoch en milisegundos vía UNIX_TIMESTAMP (independiente de la zona de sesión y
     // del `timezone` del pool). Evita que mysql2 reinterprete el TIMESTAMP UTC como -05:00 y lo
     // desfase +5h. El frontend lo formatea con timeZone America/Lima.
     const abiertos = (rows) => rows.filter(r => r.estado === 'ENVIADO').reduce((s, r) => s + Number(r.n), 0);
     res.json({
       mode: sunatConfig.mode,
-      comprobantes, guias, bajas,
+      // `comprobantes` se conserva como alias para clientes anteriores del endpoint.
+      comprobantes: facturas,
+      facturas, notasCredito, notasDebito, guias, bajas,
       ticketsAbiertos: {
-        comprobantes: abiertos(comprobantes),
+        facturas: abiertos(facturas),
+        notasCredito: abiertos(notasCredito),
+        notasDebito: abiertos(notasDebito),
         guias: abiertos(guias),
         bajas: abiertos(bajas)
       },

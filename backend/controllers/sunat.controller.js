@@ -1280,7 +1280,6 @@ export async function generarPdfGuia(req, res, next) {
     if (!['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(g.sunat_estado)) {
       throw new AppError(`El PDF de la GRE solo se genera desde estado ACEPTADO (estado actual: ${g.sunat_estado || 'sin enviar'})`, 409);
     }
-
     // Si fue reemplazada, resolver el serie-número de la guía de reemplazo para el pie del PDF.
     let reemplazoRef = null;
     if (g.id_guia_reemplazo) {

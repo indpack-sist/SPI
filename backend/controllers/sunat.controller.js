@@ -1428,24 +1428,79 @@ export async function jobTick(req, res, next) {
 // GET /api/sunat/monitor — FASE 15: datos del panel "Monitor SUNAT" (solo lectura, gated facturacion).
 export async function monitorSunat(req, res, next) {
   try {
-    const [comprobantes] = await pool.query(
-      "SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE sunat_estado IS NOT NULL GROUP BY sunat_estado");
-    const [guias] = await pool.query(
-      "SELECT sunat_estado AS estado, COUNT(*) AS n FROM guias_remision GROUP BY sunat_estado");
-    const [bajas] = await pool.query(
-      "SELECT estado, COUNT(*) AS n FROM sunat_bajas GROUP BY estado");
-    const [ultimosRechazos] = await pool.query(
-      `SELECT 'FACTURA' AS origen, id_factura AS id, CONCAT(serie,'-',numero) AS comprobante,
-              sunat_estado AS estado, sunat_response_code AS codigo, sunat_response_desc AS detalle
-         FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
-        ORDER BY id_factura DESC LIMIT 10`);
+    // El monitor es una vista operativa: se resuelve en paralelo para no convertirlo en una
+    // sucesión de consultas y todos los cortes temporales salen de sunat_log (la fuente de auditoría).
+    const [
+      [comprobantes], [guias], [bajas], [ultimosRechazos], [erroresLog],
+      [ventanas], [actividadDiaria], [actividadHoraria], [porOrigen], [antiguedad]
+    ] = await Promise.all([
+      pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM facturas_venta WHERE sunat_estado IS NOT NULL GROUP BY sunat_estado"),
+      pool.query("SELECT sunat_estado AS estado, COUNT(*) AS n FROM guias_remision GROUP BY sunat_estado"),
+      pool.query("SELECT estado, COUNT(*) AS n FROM sunat_bajas GROUP BY estado"),
+      pool.query(
+        `SELECT * FROM (
+           SELECT 'COMPROBANTE' AS origen, id_factura AS id,
+                  CONCAT(serie,'-',numero) AS comprobante, sunat_estado AS estado,
+                  sunat_response_code AS codigo, sunat_response_desc AS detalle,
+                  UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
+             FROM facturas_venta WHERE sunat_estado IN ('RECHAZADO','ERROR')
+           UNION ALL
+           SELECT 'GUIA' AS origen, id_guia AS id,
+                  COALESCE(CONCAT(serie_sunat,'-',numero_sunat), numero_guia) AS comprobante,
+                  sunat_estado AS estado, sunat_response_code AS codigo,
+                  sunat_response_desc AS detalle, UNIX_TIMESTAMP(sunat_fecha_envio) * 1000 AS fecha_ms
+             FROM guias_remision WHERE sunat_estado IN ('RECHAZADO','ERROR')
+           UNION ALL
+           SELECT 'BAJA' AS origen, id_baja AS id, identificador AS comprobante,
+                  estado, response_code AS codigo, response_desc AS detalle,
+                  UNIX_TIMESTAMP(fecha_registro) * 1000 AS fecha_ms
+             FROM sunat_bajas WHERE estado IN ('RECHAZADO','ERROR')
+         ) incidencias ORDER BY fecha_ms DESC LIMIT 20`),
+      pool.query(
+        `SELECT origen, referencia_id, evento, http_status, detalle, duracion_ms,
+                UNIX_TIMESTAMP(fecha) * 1000 AS fecha_ms
+           FROM sunat_log WHERE exito = 0 ORDER BY id_log DESC LIMIT 30`),
+      pool.query(
+        `SELECT
+           SUM(fecha >= NOW() - INTERVAL 24 HOUR) AS total_24h,
+           SUM(fecha >= NOW() - INTERVAL 24 HOUR AND exito = 1) AS exitos_24h,
+           SUM(fecha >= NOW() - INTERVAL 24 HOUR AND exito = 0) AS errores_24h,
+           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 24 HOUR THEN duracion_ms END)) AS latencia_24h,
+           SUM(fecha >= NOW() - INTERVAL 7 DAY) AS total_7d,
+           SUM(fecha >= NOW() - INTERVAL 7 DAY AND exito = 1) AS exitos_7d,
+           SUM(fecha >= NOW() - INTERVAL 7 DAY AND exito = 0) AS errores_7d,
+           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 7 DAY THEN duracion_ms END)) AS latencia_7d,
+           SUM(fecha >= NOW() - INTERVAL 30 DAY) AS total_30d,
+           SUM(fecha >= NOW() - INTERVAL 30 DAY AND exito = 1) AS exitos_30d,
+           SUM(fecha >= NOW() - INTERVAL 30 DAY AND exito = 0) AS errores_30d,
+           ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 30 DAY THEN duracion_ms END)) AS latencia_30d
+         FROM sunat_log`),
+      pool.query(
+        `SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS periodo,
+                COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
+                ROUND(AVG(duracion_ms)) AS latencia_ms
+           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 30 DAY
+          GROUP BY DATE(fecha) ORDER BY DATE(fecha)`),
+      pool.query(
+        `SELECT FLOOR(UNIX_TIMESTAMP(fecha) / 3600) * 3600000 AS periodo_ms,
+                COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
+                ROUND(AVG(duracion_ms)) AS latencia_ms
+           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 48 HOUR
+          GROUP BY FLOOR(UNIX_TIMESTAMP(fecha) / 3600) ORDER BY periodo_ms`),
+      pool.query(
+        `SELECT origen, COUNT(*) AS total, SUM(exito = 1) AS exitos,
+                SUM(exito = 0) AS errores, ROUND(AVG(duracion_ms)) AS latencia_ms
+           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 30 DAY
+          GROUP BY origen ORDER BY total DESC`),
+      pool.query(
+        `SELECT
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO') AS comprobantes_min,
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM guias_remision WHERE sunat_estado = 'ENVIADO') AS guias_min,
+           (SELECT MAX(TIMESTAMPDIFF(MINUTE, fecha_registro, NOW())) FROM sunat_bajas WHERE estado = 'ENVIADO') AS bajas_min`)
+    ]);
     // fecha_ms: epoch en milisegundos vía UNIX_TIMESTAMP (independiente de la zona de sesión y
     // del `timezone` del pool). Evita que mysql2 reinterprete el TIMESTAMP UTC como -05:00 y lo
     // desfase +5h. El frontend lo formatea con timeZone America/Lima.
-    const [erroresLog] = await pool.query(
-      `SELECT origen, referencia_id, evento, http_status, detalle,
-              UNIX_TIMESTAMP(fecha) * 1000 AS fecha_ms
-         FROM sunat_log WHERE exito = 0 ORDER BY id_log DESC LIMIT 20`);
     const abiertos = (rows) => rows.filter(r => r.estado === 'ENVIADO').reduce((s, r) => s + Number(r.n), 0);
     res.json({
       mode: sunatConfig.mode,
@@ -1454,6 +1509,13 @@ export async function monitorSunat(req, res, next) {
         comprobantes: abiertos(comprobantes),
         guias: abiertos(guias),
         bajas: abiertos(bajas)
+      },
+      antiguedadTickets: antiguedad[0] || {},
+      analitica: {
+        ventanas: ventanas[0] || {},
+        actividadDiaria,
+        actividadHoraria,
+        porOrigen
       },
       ultimosRechazos, erroresLog
     });

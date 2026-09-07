@@ -1551,10 +1551,44 @@ export async function monitorSunat(req, res, next) {
            ) AS actividad_por_hora
           GROUP BY periodo_ms ORDER BY periodo_ms`),
       pool.query(
-        `SELECT origen, COUNT(*) AS total, SUM(exito = 1) AS exitos,
-                SUM(exito = 0) AS errores, ROUND(AVG(duracion_ms)) AS latencia_ms
-           FROM sunat_log WHERE fecha >= NOW() - INTERVAL 30 DAY
-          GROUP BY origen ORDER BY total DESC`),
+        `SELECT l.origen,
+                SUM(l.fecha >= NOW() - INTERVAL 24 HOUR) AS total_24h,
+                SUM(l.fecha >= NOW() - INTERVAL 24 HOUR AND l.exito = 1) AS exitos_24h,
+                SUM(l.fecha >= NOW() - INTERVAL 24 HOUR AND l.exito = 0) AS errores_24h,
+                ROUND(AVG(CASE WHEN l.fecha >= NOW() - INTERVAL 24 HOUR THEN l.duracion_ms END)) AS latencia_24h,
+                SUM(l.fecha >= NOW() - INTERVAL 7 DAY) AS total_7d,
+                SUM(l.fecha >= NOW() - INTERVAL 7 DAY AND l.exito = 1) AS exitos_7d,
+                SUM(l.fecha >= NOW() - INTERVAL 7 DAY AND l.exito = 0) AS errores_7d,
+                ROUND(AVG(CASE WHEN l.fecha >= NOW() - INTERVAL 7 DAY THEN l.duracion_ms END)) AS latencia_7d,
+                COUNT(*) AS total_30d,
+                SUM(l.exito = 1) AS exitos_30d,
+                SUM(l.exito = 0) AS errores_30d,
+                ROUND(AVG(l.duracion_ms)) AS latencia_30d
+           FROM sunat_log l
+          WHERE l.fecha >= NOW() - INTERVAL 30 DAY
+            AND (
+              (l.origen = 'FACTURA' AND EXISTS (
+                SELECT 1 FROM facturas_venta fv
+                 WHERE fv.id_factura = l.referencia_id
+                   AND (fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01')
+              ))
+              OR (l.origen = 'NOTA' AND EXISTS (
+                SELECT 1 FROM facturas_venta fv
+                 WHERE fv.id_factura = l.referencia_id
+                   AND fv.codigo_tipo_sunat IN ('07','08')
+              ))
+              OR (l.origen IN ('GRE_REMITENTE','GRE_TRANSPORTISTA') AND EXISTS (
+                SELECT 1 FROM guias_remision gr WHERE gr.id_guia = l.referencia_id
+              ))
+              OR (l.origen = 'BAJA' AND EXISTS (
+                SELECT 1 FROM sunat_bajas sb WHERE sb.id_baja = l.referencia_id
+              ))
+              OR (l.origen = 'CONSULTA' AND EXISTS (
+                SELECT 1 FROM facturas_venta fv WHERE fv.id_factura = l.referencia_id
+              ))
+              OR l.origen IN ('TOKEN','RESUMEN')
+            )
+          GROUP BY l.origen ORDER BY total_30d DESC`),
       pool.query(
         `SELECT
            (SELECT MAX(TIMESTAMPDIFF(MINUTE, sunat_fecha_envio, NOW())) FROM facturas_venta WHERE sunat_estado = 'ENVIADO' AND (codigo_tipo_sunat IS NULL OR codigo_tipo_sunat = '01')) AS facturas_min,

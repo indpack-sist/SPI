@@ -1476,11 +1476,11 @@ export async function monitorSunat(req, res, next) {
            ROUND(AVG(CASE WHEN fecha >= NOW() - INTERVAL 30 DAY THEN duracion_ms END)) AS latencia_30d
          FROM sunat_log`),
       pool.query(
-        `SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS periodo,
+        `SELECT CAST(DATE(fecha) AS CHAR) AS periodo,
                 COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,
                 ROUND(AVG(duracion_ms)) AS latencia_ms
            FROM sunat_log WHERE fecha >= NOW() - INTERVAL 30 DAY
-          GROUP BY DATE(fecha) ORDER BY DATE(fecha)`),
+          GROUP BY CAST(DATE(fecha) AS CHAR) ORDER BY periodo`),
       pool.query(
         `SELECT FLOOR(UNIX_TIMESTAMP(fecha) / 3600) * 3600000 AS periodo_ms,
                 COUNT(*) AS total, SUM(exito = 1) AS exitos, SUM(exito = 0) AS errores,

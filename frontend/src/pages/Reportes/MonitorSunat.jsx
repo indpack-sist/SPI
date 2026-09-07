@@ -37,7 +37,7 @@ function EmptyState({ icon: Icon = CheckCircle2, title, text }) {
 
 function EstadoBar({ titulo, icon: Icon, rows = [], totalAbiertos = 0, href, indicador = 'aceptación' }) {
   const total = rows.reduce((acc, row) => acc + numero(row.n), 0);
-  const manuales = rows.reduce((acc, row) => acc + numero(row.manual), 0);
+  const manuales = rows.reduce((acc, row) => acc + numero(row.manuales ?? row.manual), 0);
   const mapa = Object.fromEntries(rows.map((row) => [String(row.estado).toUpperCase(), numero(row.n)]));
   const visibles = ESTADOS.filter((estado) => mapa[estado.id] > 0);
   const tasa = total ? (numero(mapa.ACEPTADO) / total) * 100 : 0;

@@ -1437,7 +1437,7 @@ export async function monitorSunat(req, res, next) {
       [ventanas], [actividadDiaria], [actividadHoraria], [porOrigen], [antiguedad]
     ] = await Promise.all([
       pool.query(
-        `SELECT estado, COUNT(*) AS n, SUM(es_manual) AS manual
+        `SELECT estado, COUNT(*) AS n, SUM(es_manual) AS manuales
            FROM (
              SELECT
                CASE
@@ -1579,9 +1579,9 @@ export async function monitorSunat(req, res, next) {
       const aceptadas = facturas.find(row => row.estado === 'ACEPTADO');
       if (aceptadas) {
         aceptadas.n = Number(aceptadas.n || 0) + manualesHuerfanas;
-        aceptadas.manual = Number(aceptadas.manual || 0) + manualesHuerfanas;
+        aceptadas.manuales = Number(aceptadas.manuales || 0) + manualesHuerfanas;
       } else {
-        facturas.push({ estado: 'ACEPTADO', n: manualesHuerfanas, manual: manualesHuerfanas });
+        facturas.push({ estado: 'ACEPTADO', n: manualesHuerfanas, manuales: manualesHuerfanas });
       }
     }
 

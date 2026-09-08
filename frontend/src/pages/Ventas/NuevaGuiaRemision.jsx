@@ -26,6 +26,7 @@ function NuevaGuiaRemision() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
   
   const [orden, setOrden] = useState(null);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
@@ -108,9 +109,8 @@ function NuevaGuiaRemision() {
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
         if (rt.data?.success) setTransportistas(rt.data.data || []);
-        // Punto de partida = domicilio fiscal de la empresa (empresa_config). Siempre es el mismo,
-        // así que se prellena la dirección/ubigeo de partida (queda editable por si el traslado sale
-        // de otro local). El backend ya lo autocompleta desde empresa_config, esto solo lo muestra.
+        // Punto de partida = domicilio fiscal de la empresa (empresa_config). Es informativo y el
+        // backend lo vuelve a tomar de esta configuración para que no pueda alterarse en el request.
         try {
           const re = await guiasRemisionAPI.getEmpresaRemitente();
           const emp = re.data?.data;
@@ -223,6 +223,15 @@ function NuevaGuiaRemision() {
           licencia: ordenData.transporte_licencia || ''
         } : null);
 
+        const esComexOV = Number(ordenData.es_exportacion) === 1;
+        // En exportación la llegada y su ubigeo proceden del puerto seleccionado, no de la
+        // dirección doméstica que pudiera conservar la OV.
+        const ubicacionOV = esComexOV
+          ? null
+          : resolverUbigeoDesdeDireccion(ordenData.direccion_entrega);
+        const ubigeoInicial = ordenData.ubigeo_llegada || ubicacionOV?.codigo || '';
+        setUbigeoDetectado(!ordenData.ubigeo_llegada ? ubicacionOV : null);
+
         setFormData(prev => ({
           ...prev,
           id_orden_venta: id,
@@ -231,12 +240,10 @@ function NuevaGuiaRemision() {
           // El backend igual lo fuerza desde ordenes_venta.es_exportacion (fuente única).
           motivo_traslado: Number(ordenData.es_exportacion) === 1 ? 'Exportación' : prev.motivo_traslado,
           direccion_llegada: ordenData.direccion_entrega || '',
-          ciudad_llegada: ordenData.ciudad_entrega || '',
+          ciudad_llegada: ordenData.ciudad_entrega || ubicacionOV?.distrito || '',
           // Ubigeo: si la OV no lo trae, se intenta derivar de la cola de la dirección de entrega
           // ("..., DISTRITO, PROVINCIA, DEPARTAMENTO"). El usuario siempre puede corregirlo en el selector.
-          ubigeo_llegada: ordenData.ubigeo_llegada
-            || resolverUbigeoDesdeDireccion(ordenData.direccion_entrega)?.codigo
-            || '',
+          ubigeo_llegada: ubigeoInicial,
           // Si la OV es por tercero, la guía nace en modalidad pública.
           modalidad_transporte: ovEsTercero ? 'Transporte Público' : prev.modalidad_transporte,
           tipo_traslado: ovEsTercero ? 'Público' : prev.tipo_traslado,
@@ -316,6 +323,24 @@ function NuevaGuiaRemision() {
     setDetalle(newDetalle);
   };
 
+  const handleDireccionLlegada = (direccion) => {
+    const ubicacion = resolverUbigeoDesdeDireccion(direccion);
+    setFormData((prev) => {
+      return {
+        ...prev,
+        direccion_llegada: direccion,
+        ...(ubicacion ? {
+          ubigeo_llegada: ubicacion.codigo,
+          ciudad_llegada: ubicacion.distrito || ''
+        } : {
+          ubigeo_llegada: '',
+          ciudad_llegada: ''
+        })
+      };
+    });
+    setUbigeoDetectado(ubicacion);
+  };
+
   // ── Comercio exterior (exportación): handlers ──────────────────────────────────────────────
   // Subpartida nacional / nº serie DAM por ítem.
   const handleComexDetalle = (index, field, value) => {
@@ -331,6 +356,7 @@ function NuevaGuiaRemision() {
   // Puerto de llegada → arma dirección + ubigeo de llegada desde el catálogo estático.
   const handlePuerto = (codigo) => {
     const p = puertos.find((x) => x.codigo === codigo);
+    setUbigeoDetectado(null);
     setFormData((prev) => ({
       ...prev,
       puerto_codigo: codigo,
@@ -548,8 +574,6 @@ function NuevaGuiaRemision() {
         tipo_traslado: formData.tipo_traslado,
         motivo_traslado: formData.motivo_traslado,
         modalidad_transporte: formData.modalidad_transporte,
-        direccion_partida: formData.direccion_partida,
-        ubigeo_partida: formData.ubigeo_partida,
         direccion_llegada: formData.direccion_llegada,
         ubigeo_llegada: formData.ubigeo_llegada,
         ciudad_llegada: formData.ciudad_llegada,
@@ -888,10 +912,11 @@ function NuevaGuiaRemision() {
                   type="text"
                   className="form-input"
                   value={formData.direccion_partida}
-                  onChange={(e) => setFormData({ ...formData, direccion_partida: e.target.value })}
-                  placeholder="Vacío = se usará tu dirección fiscal"
+                  readOnly
+                  aria-readonly="true"
+                  placeholder="Dirección fiscal configurada en la empresa"
                 />
-                <small className="text-gray-500">Prellenado con el domicilio fiscal de la empresa. Edítalo solo si el traslado sale de otro local.</small>
+                <small className="text-gray-500">Se obtiene de la configuración de empresa y no se puede modificar desde la guía.</small>
               </div>
               
               <div className="form-group">
@@ -900,8 +925,9 @@ function NuevaGuiaRemision() {
                   type="text"
                   className="form-input"
                   value={formData.ubigeo_partida}
-                  onChange={(e) => setFormData({ ...formData, ubigeo_partida: e.target.value })}
-                  placeholder="Vacío = ubigeo fiscal"
+                  readOnly
+                  aria-readonly="true"
+                  placeholder="Ubigeo fiscal configurado en la empresa"
                   maxLength="6"
                 />
               </div>
@@ -939,7 +965,7 @@ function NuevaGuiaRemision() {
                       type="text"
                       className="form-input"
                       value={formData.direccion_llegada}
-                      onChange={(e) => setFormData({ ...formData, direccion_llegada: e.target.value })}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, direccion_llegada: e.target.value }))}
                       placeholder="Se completa con el puerto; puedes ajustarla"
                       required
                     />
@@ -954,21 +980,34 @@ function NuevaGuiaRemision() {
                       type="text"
                       className="form-input"
                       value={formData.direccion_llegada}
-                      onChange={(e) => setFormData({ ...formData, direccion_llegada: e.target.value })}
-                      placeholder="Dirección completa de entrega"
+                      onChange={(e) => handleDireccionLlegada(e.target.value)}
+                      placeholder="Dirección detallada, distrito, provincia, departamento"
                       required
                     />
+                    {ubigeoDetectado && (
+                      <small className="text-emerald-700">
+                        Ubigeo detectado automáticamente: {ubigeoDetectado.departamento} / {ubigeoDetectado.provincia} / {ubigeoDetectado.distrito} ({ubigeoDetectado.codigo})
+                      </small>
+                    )}
+                    {!ubigeoDetectado && formData.direccion_llegada && !formData.ubigeo_llegada && (
+                      <small className="text-amber-700">
+                        No se pudo identificar el ubigeo. Incluye distrito, provincia y departamento o selecciónalos debajo.
+                      </small>
+                    )}
                   </div>
 
                   <UbigeoSelector
                     value={formData.ubigeo_llegada}
                     required
-                    onChange={(codigo, meta) => setFormData({
-                      ...formData,
-                      ubigeo_llegada: codigo,
-                      // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
-                      ciudad_llegada: meta?.distrito || '',
-                    })}
+                    onChange={(codigo, meta) => {
+                      setUbigeoDetectado(null);
+                      setFormData((prev) => ({
+                        ...prev,
+                        ubigeo_llegada: codigo,
+                        // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
+                        ciudad_llegada: meta?.distrito || '',
+                      }));
+                    }}
                   />
                 </>
               )}

@@ -297,8 +297,6 @@ export async function createGuiaRemision(req, res) {
       tipo_traslado,
       motivo_traslado,
       modalidad_transporte,
-      direccion_partida,
-      ubigeo_partida,
       direccion_llegada,
       ubigeo_llegada,
       ciudad_llegada,
@@ -468,15 +466,25 @@ export async function createGuiaRemision(req, res) {
     const guiaTransporteDni = esParticular ? (orden.transporte_dni || null) : null;
     const guiaTransporteLicencia = esParticular ? (orden.transporte_licencia || null) : null;
 
-    // Punto de partida por defecto = dirección fiscal de la empresa (empresa_config). El origen
-    // real de un traslado por venta es el domicilio fiscal; si el request llega sin dirección/ubigeo
-    // de partida se toman los fiscales (antes quedaba vacío o con el literal 'Almacén Central').
+    // En guías de venta el punto de partida es autoritativamente el domicilio fiscal configurado.
+    // No se aceptan valores del navegador: así una manipulación o estado viejo del formulario no
+    // puede enviar a SUNAT un origen distinto de empresa_config.
     const empresaResult = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
     const empresaCfg = (empresaResult.success && empresaResult.data[0]) || {};
-    const direccionPartidaFinal = (direccion_partida && String(direccion_partida).trim())
-      || empresaCfg.direccion || 'Almacén Central';
-    const ubigeoPartidaFinal = (ubigeo_partida && String(ubigeo_partida).trim())
-      || empresaCfg.ubigeo || null;
+    const direccionPartidaFinal = String(empresaCfg.direccion || '').trim();
+    const ubigeoPartidaFinal = String(empresaCfg.ubigeo || '').trim();
+    if (!direccionPartidaFinal) {
+      return res.status(400).json({
+        success: false,
+        error: 'Falta la dirección fiscal en la configuración de la empresa'
+      });
+    }
+    if (!/^\d{6}$/.test(ubigeoPartidaFinal)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Falta un ubigeo fiscal válido (6 dígitos) en la configuración de la empresa'
+      });
+    }
     
     // Validar cada producto del detalle
     for (const item of detalle) {

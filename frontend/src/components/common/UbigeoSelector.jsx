@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ubigeos from '../../data/ubigeos.json';
 
 /**
@@ -13,13 +13,26 @@ export default function UbigeoSelector({ value = '', onChange, required = false 
   const [dep, setDep] = useState('');
   const [prov, setProv] = useState('');
   const [dist, setDist] = useState('');
+  const ultimoCambioEmitido = useRef(null);
 
-  // Sincroniza desde un value externo completo (p. ej. prellenado desde la orden).
+  // Sincroniza desde un value externo (p. ej. autocompletado desde la dirección). Si el propio
+  // selector emitió '' al cambiar departamento/provincia, conserva esa selección parcial.
   useEffect(() => {
+    const cambioEmitido = ultimoCambioEmitido.current;
+    ultimoCambioEmitido.current = null;
+    if (cambioEmitido
+      && cambioEmitido.desde !== cambioEmitido.hacia
+      && value === cambioEmitido.hacia) {
+      return;
+    }
     if (value && value.length === 6 && value !== dist) {
       setDep(value.slice(0, 2));
       setProv(value.slice(0, 4));
       setDist(value);
+    } else if (!value) {
+      setDep('');
+      setProv('');
+      setDist('');
     }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -28,6 +41,7 @@ export default function UbigeoSelector({ value = '', onChange, required = false 
 
   const emit = (codigo) => {
     if (!onChange) return;
+    ultimoCambioEmitido.current = { desde: value, hacia: codigo };
     const meta = codigo
       ? {
           departamento: ubigeos.departamentos.find((d) => d.codigo === codigo.slice(0, 2))?.nombre,

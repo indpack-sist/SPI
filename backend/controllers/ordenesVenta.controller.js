@@ -329,6 +329,13 @@ export async function getOrdenVentaById(req, res) {
     cl.razon_social AS cliente,
     cl.ruc AS ruc_cliente,
     cl.direccion_despacho AS direccion_cliente,
+    (SELECT cd.ubigeo
+       FROM clientes_direcciones cd
+      WHERE cd.id_cliente = ov.id_cliente
+        AND cd.estado = 'Activo'
+        AND TRIM(cd.direccion) = TRIM(ov.direccion_entrega)
+      ORDER BY cd.es_principal DESC, cd.id_direccion DESC
+      LIMIT 1) AS ubigeo_llegada,
     cl.telefono AS telefono_cliente,
     e.nombre_completo AS comercial,
     e_conductor.nombre_completo AS conductor_nombre,
@@ -3322,7 +3329,7 @@ export async function actualizarDatosTransporte(req, res) {
 
 export async function agregarDireccionClienteDesdeOrden(req, res) {
   try {
-    const { id_cliente, direccion, referencia } = req.body;
+    const { id_cliente, direccion, ubigeo, referencia } = req.body;
 
     if (!id_cliente) {
       return res.status(400).json({ 
@@ -3335,6 +3342,14 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
       return res.status(400).json({ 
         success: false, 
         error: 'La dirección es requerida' 
+      });
+    }
+
+
+    if (!/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({
+        success: false,
+        error: 'El ubigeo es obligatorio y debe tener 6 dígitos'
       });
     }
 
@@ -3354,11 +3369,12 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
       `INSERT INTO clientes_direcciones (
         id_cliente, 
         direccion, 
+        ubigeo,
         referencia, 
         es_principal, 
         estado
-      ) VALUES (?, ?, ?, 0, 'Activo')`,
-      [id_cliente, direccion, referencia || null]
+      ) VALUES (?, ?, ?, ?, 0, 'Activo')`,
+      [id_cliente, direccion, String(ubigeo).trim(), referencia || null]
     );
 
     if (!result.success) {
@@ -3375,6 +3391,7 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
         id_direccion: result.data.insertId,
         id_cliente: id_cliente,
         direccion: direccion,
+        ubigeo: String(ubigeo).trim(),
         referencia: referencia || null
       }
     });

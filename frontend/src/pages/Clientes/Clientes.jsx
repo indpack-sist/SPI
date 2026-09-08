@@ -13,6 +13,7 @@ import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import AtencionesBadge from '../../components/UI/AtencionesBadge';
+import UbigeoSelector from '../../components/common/UbigeoSelector';
 
 function Clientes() {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ function Clientes() {
     telefono: '',
     email: '',
     direccion_despacho: '',
+    ubigeo: '',
     limite_credito_pen: 0,
     limite_credito_usd: 0,
     usar_limite_credito: false,
@@ -103,6 +105,7 @@ function Clientes() {
         telefono: cliente.telefono || '',
         email: cliente.email || '',
         direccion_despacho: cliente.direccion_despacho || '',
+        ubigeo: cliente.ubigeo || '',
         limite_credito_pen: parseFloat(cliente.limite_credito_pen || 0),
         limite_credito_usd: parseFloat(cliente.limite_credito_usd || 0),
         usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
@@ -130,6 +133,7 @@ function Clientes() {
         telefono: '',
         email: '',
         direccion_despacho: '',
+        ubigeo: '',
         limite_credito_pen: 0,
         limite_credito_usd: 0,
         usar_limite_credito: false,
@@ -251,6 +255,7 @@ function Clientes() {
             response.data.datos.departamento
           ].filter(Boolean).join(', ');
           nuevosValores.direccion_despacho = direccionCompleta;
+          nuevosValores.ubigeo = response.data.datos.ubigeo || '';
         }
         setFormData(nuevosValores);
         if (response.data.ya_registrado) {
@@ -569,6 +574,18 @@ function Clientes() {
             />
             <small className="text-muted">Las direcciones adicionales se pueden gestionar desde el detalle del cliente.</small>
           </div>
+
+          {formData.direccion_despacho && (
+            <div className="form-group">
+              <label className="form-label">Ubigeo de la Dirección Principal *</label>
+              <UbigeoSelector
+                value={formData.ubigeo}
+                onChange={(codigo) => setFormData({ ...formData, ubigeo: codigo })}
+                required
+              />
+              <small className="text-muted">Este código se reutilizará como ubigeo de llegada al emitir la guía.</small>
+            </div>
+          )}
 
           <div className="card bg-gray-50 border p-4 mb-4">
             <p className="text-sm font-bold uppercase text-muted mb-3 flex items-center gap-2">

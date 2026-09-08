@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, FileText, ShoppingCart, Eye, Download, Building2, 
   DollarSign, CreditCard, AlertTriangle, TrendingUp, Plus, Trash2, MapPin,
-  History, User, Clock
+  History, User, Clock, Edit
 } from 'lucide-react';
 import { clientesAPI, cotizacionesAPI, ordenesVentaAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import UbigeoSelector from '../../components/common/UbigeoSelector';
 
 function ClienteDetalle() {
   const { id } = useParams();
@@ -26,7 +27,8 @@ function ClienteDetalle() {
   const [tabActiva, setTabActiva] = useState('cotizaciones');
 
   const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
-  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '', es_principal: false });
+  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', ubigeo: '', referencia: '', es_principal: false });
+  const [direccionEditando, setDireccionEditando] = useState(null);
   const [procesandoDireccion, setProcesandoDireccion] = useState(false);
 
   useEffect(() => {
@@ -63,11 +65,14 @@ function ClienteDetalle() {
     if (!nuevaDireccion.direccion.trim()) return;
     try {
       setProcesandoDireccion(true);
-      const response = await clientesAPI.addDireccion(id, nuevaDireccion);
+      const response = direccionEditando
+        ? await clientesAPI.updateDireccion(direccionEditando.id_direccion, nuevaDireccion)
+        : await clientesAPI.addDireccion(id, nuevaDireccion);
       if (response.data.success) {
-        setSuccess('Dirección agregada exitosamente');
+        setSuccess(direccionEditando ? 'Dirección actualizada exitosamente' : 'Dirección agregada exitosamente');
         setModalDireccionOpen(false);
-        setNuevaDireccion({ direccion: '', referencia: '', es_principal: false });
+        setNuevaDireccion({ direccion: '', ubigeo: '', referencia: '', es_principal: false });
+        setDireccionEditando(null);
         const clienteRes = await clientesAPI.getById(id);
         setCliente(clienteRes.data.data);
       }
@@ -76,6 +81,17 @@ function ClienteDetalle() {
     } finally {
       setProcesandoDireccion(false);
     }
+  };
+
+  const abrirModalDireccion = (direccion = null) => {
+    setDireccionEditando(direccion);
+    setNuevaDireccion(direccion ? {
+      direccion: direccion.direccion || '',
+      ubigeo: direccion.ubigeo || '',
+      referencia: direccion.referencia || '',
+      es_principal: Number(direccion.es_principal) === 1
+    } : { direccion: '', ubigeo: '', referencia: '', es_principal: false });
+    setModalDireccionOpen(true);
   };
 
   const handleEliminarDireccion = async (idDireccion) => {
@@ -358,7 +374,7 @@ function ClienteDetalle() {
             <div className="col-span-3">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-xs text-muted uppercase font-semibold">Direcciones de Despacho</p>
-                <button className="btn btn-xs btn-outline" onClick={() => setModalDireccionOpen(true)}>
+                <button className="btn btn-xs btn-outline" onClick={() => abrirModalDireccion()}>
                   <Plus size={12} /> Agregar Dirección
                 </button>
               </div>
@@ -367,16 +383,36 @@ function ClienteDetalle() {
                   <MapPin size={16} className="text-primary mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{cliente.direccion_despacho || 'Sin dirección principal registrada'}</p>
+                    {cliente.direcciones?.find(d => d.es_principal)?.ubigeo && (
+                      <p className="text-xs text-muted font-mono">Ubigeo: {cliente.direcciones.find(d => d.es_principal).ubigeo}</p>
+                    )}
                     <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">Principal</span>
                   </div>
+                  {cliente.direcciones?.find(d => d.es_principal) && (
+                    <button
+                      className="text-primary p-1 hover:bg-blue-100 rounded"
+                      onClick={() => abrirModalDireccion(cliente.direcciones.find(d => d.es_principal))}
+                      title="Editar dirección y ubigeo"
+                    >
+                      <Edit size={14} />
+                    </button>
+                  )}
                 </div>
                 {cliente.direcciones && cliente.direcciones.filter(d => !d.es_principal).map(dir => (
                   <div key={dir.id_direccion} className="flex items-start gap-2 bg-gray-50 p-2 rounded border border-gray-200 group">
                     <MapPin size={16} className="text-gray-400 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-sm">{dir.direccion}</p>
+                      <p className="text-xs text-muted font-mono">Ubigeo: {dir.ubigeo || 'Pendiente'}</p>
                       {dir.referencia && <p className="text-xs text-muted">{dir.referencia}</p>}
                     </div>
+                    <button
+                      className="text-primary opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-50 rounded"
+                      onClick={() => abrirModalDireccion(dir)}
+                      title="Editar dirección y ubigeo"
+                    >
+                      <Edit size={14} />
+                    </button>
                     <button
                       className="text-danger opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-50 rounded"
                       onClick={() => handleEliminarDireccion(dir.id_direccion)}
@@ -617,7 +653,12 @@ function ClienteDetalle() {
         </div>
       </div>
 
-      <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Agregar Dirección de Despacho" size="md">
+      <Modal
+        isOpen={modalDireccionOpen}
+        onClose={() => { setModalDireccionOpen(false); setDireccionEditando(null); }}
+        title={direccionEditando ? 'Editar Dirección de Despacho' : 'Agregar Dirección de Despacho'}
+        size="md"
+      >
         <form onSubmit={handleAgregarDireccion}>
           <div className="space-y-4">
             <div className="form-group">
@@ -642,6 +683,15 @@ function ClienteDetalle() {
               />
             </div>
             <div className="form-group">
+              <label className="form-label">Ubigeo *</label>
+              <UbigeoSelector
+                value={nuevaDireccion.ubigeo}
+                onChange={(codigo) => setNuevaDireccion({ ...nuevaDireccion, ubigeo: codigo })}
+                required
+              />
+              <p className="text-xs text-muted mt-1">Se usará como punto de llegada en la guía de remisión.</p>
+            </div>
+            {!direccionEditando && <div className="form-group">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -654,12 +704,12 @@ function ClienteDetalle() {
               {nuevaDireccion.es_principal && (
                 <p className="text-xs text-warning mt-1 ml-5">Esta dirección reemplazará a la actual como predeterminada.</p>
               )}
-            </div>
+            </div>}
           </div>
           <div className="flex gap-2 justify-end mt-4">
-            <button type="button" className="btn btn-outline" onClick={() => setModalDireccionOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={procesandoDireccion || !nuevaDireccion.direccion}>
-              {procesandoDireccion ? 'Guardando...' : 'Guardar Dirección'}
+            <button type="button" className="btn btn-outline" onClick={() => { setModalDireccionOpen(false); setDireccionEditando(null); }}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={procesandoDireccion || !nuevaDireccion.direccion || !/^\d{6}$/.test(nuevaDireccion.ubigeo)}>
+              {procesandoDireccion ? 'Guardando...' : direccionEditando ? 'Actualizar Dirección' : 'Guardar Dirección'}
             </button>
           </div>
         </form>

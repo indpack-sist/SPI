@@ -863,6 +863,7 @@ export async function despacharGuiaRemision(req, res) {
       SELECT 
         gr.*,
         ov.id_cliente,
+        ov.numero_orden AS numero_orden_venta,
         ov.estado AS estado_orden
       FROM guias_remision gr
       INNER JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
@@ -964,7 +965,7 @@ export async function despacharGuiaRemision(req, res) {
       totalPrecio,
       'PEN',
       id_usuario,
-      `Despacho Guía ${guia.numero_guia} - Orden ${guia.id_orden_venta}`,
+      `Despacho Guía ${guia.numero_guia} - Orden ${guia.numero_orden_venta}`,
       'Activo',
       fecha_despacho || getFechaPeru()
     ]);

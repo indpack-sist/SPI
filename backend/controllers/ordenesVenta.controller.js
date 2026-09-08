@@ -48,6 +48,17 @@ function esFechaISOValida(value) {
     && date.getUTCDate() === day;
 }
 
+// Las primeras salidas creadas desde una GRE guardaban el id interno de la OV en el texto
+// (p. ej. "Orden 666"). La FK sigue siendo la fuente de vinculación; al presentar esos registros
+// antiguos sustituimos el id técnico por el correlativo visible de la orden.
+function normalizarObservacionOrden(observaciones, numeroOrden) {
+  if (!observaciones || !numeroOrden) return observaciones;
+  return String(observaciones).replace(
+    /(Despacho Gu[ií]a\s+\S+\s+-\s+Orden\s+)\d+(?=\s*(?:-|$))/i,
+    (_, prefijo) => `${prefijo}${numeroOrden}`
+  );
+}
+
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, filtro_moneda, search } = req.query;
@@ -1642,9 +1653,10 @@ export async function anularDespacho(req, res) {
     }
 
     // ¿Este despacho proviene de una guía de remisión? El vínculo es por el texto de la
-    // observación ("Despacho Guía <numero_guia> - Orden <id>"). Si el usuario pidió anular
+    // observación ("Despacho Guía <numero_guia> - Orden <correlativo>"). Si el usuario pidió anular
     // también la guía, la resolvemos y validamos precondiciones ANTES de tocar el stock.
     const salida = salidaResult.data[0];
+    salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
     let guiaVinculada = null;
     const mGuia = /Despacho Gu[ií]a\s+(\S+)/i.exec(salida.observaciones || '');
     if (mGuia) {
@@ -2177,6 +2189,7 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
     }
 
     const salida = salidaResult.data[0];
+    salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
 
     // Extraer el correlativo GI de las observaciones
     const matchGI = salida.observaciones.match(/GI-\d{4}-\d+/);
@@ -2385,6 +2398,7 @@ export async function descargarPDFDespacho(req, res) {
     }
 
     const salida = salidaResult.data[0];
+    salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
 
     // El precio unitario se toma de detalle_orden_venta (precisión completa, hasta 6
     // decimales), no de detalle_salidas (que puede estar truncado a 2). Fallback a ds.
@@ -2937,6 +2951,9 @@ export async function getSalidasOrden(req, res) {
     }
 
     const salidas = result.data;
+    salidas.forEach((salida) => {
+      salida.observaciones = normalizarObservacionOrden(salida.observaciones, numeroOrden);
+    });
     const ids = salidas.map(s => s.id_salida);
 
     // Anidar factura (1 por despacho) y documentos adicionales de cada despacho.

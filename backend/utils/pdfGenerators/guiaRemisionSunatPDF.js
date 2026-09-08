@@ -168,10 +168,16 @@ export async function generarGuiaRemisionSunatPDF({
         resetText();
       };
 
-      const sectionStart = (title, subtitle = '', requiredHeight = 42) => {
+      const sectionStart = (title, subtitle = '', requiredHeight = 42, options = {}) => {
         ensureSpace(requiredHeight);
         const top = y;
-        doc.roundedRect(X, top, W, 17, 4).fill(COLOR.header);
+        if (options.whiteHeader) {
+          doc.rect(X, top, W, 17).fill(COLOR.panel);
+          doc.moveTo(X, top + 17).lineTo(X + W, top + 17)
+            .lineWidth(0.45).strokeColor(COLOR.line).stroke();
+        } else {
+          doc.roundedRect(X, top, W, 17, 4).fill(COLOR.header);
+        }
         doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.ink)
           .text(title.toUpperCase(), X + 9, top + 4.5, { width: 330 });
         if (subtitle) {
@@ -189,8 +195,16 @@ export async function generarGuiaRemisionSunatPDF({
         resetText();
       };
 
+      // Los anchos configurados son topes para etiquetas largas, no espacios fijos.
+      // Así el valor comienza inmediatamente después del rótulo cuando este es corto.
+      const effectiveLabelWidth = (label, width, options = {}) => {
+        const maxLabelWidth = Math.min(options.labelWidth || 105, width - 24);
+        doc.font('Helvetica-Bold').fontSize(6.5);
+        return Math.min(maxLabelWidth, Math.ceil(doc.widthOfString(label)) + 7);
+      };
+
       const measureLabelValue = (label, value, width, options = {}) => {
-        const labelWidth = options.labelWidth || 105;
+        const labelWidth = effectiveLabelWidth(label, width, options);
         const valueWidth = width - labelWidth;
         const safe = limpio(value);
         doc.font('Helvetica-Bold').fontSize(6.5);
@@ -201,7 +215,7 @@ export async function generarGuiaRemisionSunatPDF({
       };
 
       const labelValue = (label, value, x, atY, width, options = {}) => {
-        const labelWidth = options.labelWidth || 105;
+        const labelWidth = effectiveLabelWidth(label, width, options);
         const valueWidth = width - labelWidth;
         const safe = limpio(value);
         const height = measureLabelValue(label, safe, width, options);
@@ -329,13 +343,13 @@ export async function generarGuiaRemisionSunatPDF({
         const cols = [
           { key: 'n', label: 'N°', width: 22, align: 'center' },
           { key: 'normalizado', label: 'BIEN\nNORMAL.', width: 40, align: 'center' },
-          { key: 'codigo', label: 'CÓDIGO\nDE BIEN', width: 62 },
+          { key: 'codigo', label: 'CÓDIGO\nDE BIEN', width: 62, align: 'center' },
           { key: 'codigoSunat', label: 'CÓDIGO PROD.\nSUNAT', width: 54, align: 'center' },
           { key: 'partida', label: 'PARTIDA\nARANCEL.', width: 49, align: 'center' },
           { key: 'gtin', label: 'CÓDIGO\nGTIN', width: 43, align: 'center' },
-          { key: 'descripcion', label: 'DESCRIPCIÓN DETALLADA', width: 147 },
+          { key: 'descripcion', label: 'DESCRIPCIÓN DETALLADA', width: 147, align: 'center' },
           { key: 'unidad', label: 'UNIDAD DE\nMEDIDA', width: 66, align: 'center' },
-          { key: 'cantidad', label: 'CANTIDAD', width: 46, align: 'right' }
+          { key: 'cantidad', label: 'CANTIDAD', width: 46, align: 'center' }
         ];
 
         const tableHeader = () => {
@@ -343,8 +357,14 @@ export async function generarGuiaRemisionSunatPDF({
           let x = X;
           doc.rect(X, topTable, W, 30).fill(COLOR.header);
           cols.forEach((col) => {
+            doc.font('Helvetica-Bold').fontSize(5.2);
+            const headerTextHeight = doc.heightOfString(col.label, { width: col.width - 6, lineGap: 0.5 });
             doc.font('Helvetica-Bold').fontSize(5.2).fillColor(COLOR.ink)
-              .text(col.label, x + 3, topTable + 7, { width: col.width - 6, align: col.align || 'left', lineGap: 0.5 });
+              .text(col.label, x + 3, topTable + Math.max(3, (30 - headerTextHeight) / 2), {
+                width: col.width - 6,
+                align: 'center',
+                lineGap: 0.5
+              });
             x += col.width;
             if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor(COLOR.panel).stroke();
           });
@@ -382,13 +402,13 @@ export async function generarGuiaRemisionSunatPDF({
           }
           if (index % 2 === 0) doc.rect(X, y, W, rowH).fill(COLOR.stripe);
           let x = X;
-          cols.forEach((col) => {
+          cols.forEach((col, colIndex) => {
             doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
               .fontSize(col.key === 'unidad' ? 5.3 : 6).fillColor(COLOR.ink)
-              .text(values[col.key], x + 3, y + 7, {
+              .text(values[col.key], x + 3, y + Math.max(3, (rowH - cellHeights[colIndex]) / 2), {
                 width: col.width - 6,
-                height: rowH - 9,
-                align: col.align || 'left',
+                height: rowH - 6,
+                align: 'center',
                 lineGap: 1
               });
             x += col.width;
@@ -412,7 +432,7 @@ export async function generarGuiaRemisionSunatPDF({
           ['Peso bruto total de la carga:', numero(g.peso_bruto_kg), { labelWidth: 148, boldValue: true }]
         ]
       ];
-      top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)));
+      top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)), { whiteHeader: true });
       twoColumnRows(cargaRows);
       sectionEnd(top);
 
@@ -440,7 +460,7 @@ export async function generarGuiaRemisionSunatPDF({
       let trasladoBodyHeight = twoColumnHeight(trasladoRows);
       if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
       if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
-      top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight));
+      top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight), { whiteHeader: true });
       twoColumnRows(trasladoRows);
       if (transportista?.ruc) {
         fullWidthRow('Empresa transportista:', transportistaText, { labelWidth: 125 });
@@ -470,7 +490,7 @@ export async function generarGuiaRemisionSunatPDF({
           })
           : [['Número de placa:', '—', { labelWidth: 105 }]];
         const vehicleBodyHeight = vehicleRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
-        top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight));
+        top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight), { whiteHeader: true });
         vehicleRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
         sectionEnd(top);
       }
@@ -486,7 +506,7 @@ export async function generarGuiaRemisionSunatPDF({
           })
           : [['Conductor principal:', '—', { labelWidth: 105 }]];
         const driverBodyHeight = driverRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
-        top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight));
+        top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight), { whiteHeader: true });
         driverRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
         sectionEnd(top);
       }
@@ -495,7 +515,7 @@ export async function generarGuiaRemisionSunatPDF({
       if (observacion) {
         doc.font('Helvetica').fontSize(7.1);
         const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });
-        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2));
+        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2), { whiteHeader: true });
         doc.font('Helvetica').fontSize(7.1).fillColor(COLOR.ink)
           .text(observacion, X + 9, y + 8, { width: W - 18, height: obsHeight, lineGap: 1.5 });
         y += 8 + obsHeight + 2;

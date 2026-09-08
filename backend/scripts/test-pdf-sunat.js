@@ -6,7 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { PDFParse } from 'pdf-parse';
-import { qrPng } from '../services/sunat/qr.service.js';
+import { generarQrGre, qrPng } from '../services/sunat/qr.service.js';
 import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 
@@ -276,6 +276,42 @@ async function main() {
   check('Comex NO imprime la tabla de ítems (traslado total: bienes importados de la DAM)',
     !txtExp.includes('CÓDIGO') && !txtExp.includes('LAMINA BURBUPACK EXPORTACION'));
   await fs.writeFile(path.join(outDir, 'test-EG07-273-comex.pdf'), pdfGreExp);
+
+  // 4f) GRE de COMPRA — mismo caso del XML SUNAT aceptado EG07-333. Cubre el QR pipe de GRE,
+  //     destinatario = empresa, proveedor y factura relacionada en la representación impresa.
+  const digestCompra = digestPara('EG07-333-compra');
+  const qrDataCompra = generarQrGre({
+    ruc: emisor.ruc, tipo: '09', serie: 'EG07', numero: 333,
+    fechaEmision: '01/09/2026', numDocDestinatario: emisor.ruc, hash: digestCompra
+  }).data;
+  const qrCompra = await qrPng(qrDataCompra);
+  check('GRE Compra: QR contiene emisor, tipo 09, correlativo de 8 dígitos y destinatario SPI',
+    qrDataCompra.startsWith(`${emisor.ruc}|09|EG07|00000333|01/09/2026|${emisor.ruc}|`) && Buffer.isBuffer(qrCompra));
+  const pdfGreCompra = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'EG07', numero_sunat: 333, fecha_emision: '01/09/2026 16:48:25', fecha_traslado: '01/09/2026',
+      motivo_traslado_cod: '02', peso_bruto_kg: 3000,
+      ubigeo_partida: '150103', direccion_partida: 'AV. SEPARADORA INDUSTRIAL 2295 - ATE - LIMA',
+      ubigeo_llegada: '150142', direccion_llegada: emisor.direccion,
+      sunat_estado: 'ACEPTADO', sunat_digest_value: digestCompra
+    },
+    emisor, cliente: emisor,
+    proveedor: { razon_social: 'DISPERCOL S A', ruc: '20100064490' },
+    docRelacionado: { tipo_desc: 'Factura', serie: 'F001', numero: '115256' },
+    detalle: [
+      { codigo: '01002098F', nombre: 'EXXONMOBIL LD 2022.AC', cantidad: 1500, codigo_unidad_sunat: 'KGM' },
+      { codigo: '02002057F', nombre: 'BRASKEM LL4405S', cantidad: 1500, codigo_unidad_sunat: 'KGM' }
+    ],
+    modalidad: '02', vehiculos: [{ placa: 'ANA848' }],
+    conductores: [{ nombre_completo: 'RODRIGUEZ SANANCINO MAX ALEX', dni: '75336849', licencia_conducir: 'Q75336849' }],
+    qrBuffer: qrCompra
+  });
+  check('GRE Compra genera PDF válido con QR', esPdf(pdfGreCompra), `${pdfGreCompra.length} bytes`);
+  const txtCompra = await textoDe(pdfGreCompra);
+  check('GRE Compra imprime empresa destinataria, proveedor y factura asociada',
+    txtCompra.includes(emisor.ruc) && txtCompra.includes('DISPERCOL S A') &&
+    txtCompra.includes('20100064490') && txtCompra.includes('F001-115256'));
+  await fs.writeFile(path.join(outDir, 'test-EG07-333-compra.pdf'), pdfGreCompra);
 
   // 5) Rótulo de operación por afectación (catálogo 07) — impreso en la línea "Tipo de operación".
   //    Gravada: el IGV del bloque de totales es != 0 (180.00); exonerada/inafecta/exportación: IGV 0.

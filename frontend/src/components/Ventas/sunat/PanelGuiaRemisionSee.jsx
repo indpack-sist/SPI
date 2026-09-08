@@ -44,8 +44,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Catálogos de flota para el modo "vehículo propio de la empresa".
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
-  // Punto de partida por defecto = domicilio fiscal (empresa_config). Se usa como respaldo cuando
-  // la guía no tiene partida guardada (guías antiguas o config poblada después de crearlas).
+  // empresa_config es la fuente autoritativa del punto de partida en ventas y del punto de llegada
+  // en compras.
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
@@ -90,11 +90,21 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     ? (guia?.ubigeo_partida || '')
     : (empresaRemitente?.ubigeo || guia?.ubigeo_partida || '');
 
-  // Prerrequisito global que se muestra como aviso ANTES de abrir el wizard: el ubigeo de partida
-  // viene de empresa_config (si falta, es un problema de configuración de la empresa). El resto de
-  // datos (llegada, peso, motivo, transporte) se editan y validan dentro del wizard.
+  const llegadaDireccion = esCompra
+    ? (empresaRemitente?.direccion || '')
+    : (guia?.direccion_llegada || guia?.punto_llegada || '');
+  const llegadaUbigeo = esCompra
+    ? (empresaRemitente?.ubigeo || '')
+    : (guia?.ubigeo_llegada || '');
+
+  // Prerrequisitos autoritativos: empresa_config aporta partida en ventas y llegada en compras.
   const faltantes = [];
-  if (puedeEmitir && !/^\d{6}$/.test(String(partidaUbigeo || ''))) faltantes.push('ubigeo de partida en la configuración de la empresa (6 dígitos)');
+  if (puedeEmitir && (!partidaDireccion || !/^\d{6}$/.test(String(partidaUbigeo || '')))) {
+    faltantes.push(esCompra ? 'dirección/ubigeo de partida del proveedor' : 'dirección/ubigeo de partida en la configuración de la empresa');
+  }
+  if (puedeEmitir && esCompra && (!llegadaDireccion || !/^\d{6}$/.test(String(llegadaUbigeo || '')))) {
+    faltantes.push('dirección/ubigeo de llegada en la configuración de la empresa');
+  }
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
   const tras = async (fn, okMsg) => {
@@ -134,14 +144,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Abre el wizard de emisión, prellenando TODOS los campos editables desde la guía/OV.
   const abrirEmitir = () => {
     const comex = !!guia?.es_comercio_exterior;
-    const direccionLlegada = guia?.direccion_llegada || guia?.punto_llegada || '';
+    const direccionLlegada = llegadaDireccion;
     // En comercio exterior manda el ubigeo fijo elegido con el puerto; no se recalcula desde texto.
     const ubicacion = comex ? null : resolverUbigeoDesdeDireccion(direccionLlegada);
-    const ubigeoGuardado = guia?.ubigeo_llegada || '';
+    const ubigeoGuardado = llegadaUbigeo;
     setUbigeoDetectado(!ubigeoGuardado ? ubicacion : null);
     setEmitForm({
       es_comercio_exterior: comex,
-      motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : '01'),
+      motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : (esCompra ? '02' : '01')),
       peso_bruto_kg: guia?.peso_bruto_kg ?? '',
       direccion_llegada: direccionLlegada,
       // Fallback para guías legacy sin ubigeo: derivarlo de la cola de la dirección de llegada.
@@ -330,7 +340,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
         </h3>
         {!soloLectura && puedeEmitir && (
-          <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando}>
+          <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando || faltantes.length > 0}>
             <Zap size={14} className="mr-1" /> Emitir GRE
           </button>
         )}
@@ -643,13 +653,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{partidaUbigeo || '—'}</span></div>
                 </div>
                 <div className="border border-gray-200 rounded p-3 space-y-2">
-                  <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada (editable)</div>
+                  <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada {esCompra ? '(empresa_config)' : '(editable)'}</div>
                   <div>
                     <label className="block text-[11px] text-muted mb-1">Dirección *</label>
                     <input
                       className="form-input w-full text-sm"
                       value={f.direccion_llegada}
                       onChange={(e) => handleDireccionLlegada(e.target.value)}
+                      readOnly={esCompra}
                       placeholder="Dirección detallada, distrito, provincia, departamento"
                     />
                     {ubigeoDetectado && (
@@ -660,18 +671,23 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   </div>
                   <div>
                     <label className="block text-[11px] text-muted mb-1">Ubigeo * (Departamento / Provincia / Distrito)</label>
-                    <UbigeoSelector
-                      value={f.ubigeo_llegada}
-                      required
-                      onChange={(codigo, meta) => {
-                        setUbigeoDetectado(null);
-                        setEmitForm((prev) => prev ? {
-                          ...prev,
-                          ubigeo_llegada: codigo,
-                          ciudad_llegada: meta?.distrito || ''
-                        } : prev);
-                      }}
-                    />
+                    {esCompra ? (
+                      <input className="form-input w-full text-sm font-mono bg-gray-50" value={f.ubigeo_llegada} readOnly />
+                    ) : (
+                      <UbigeoSelector
+                        value={f.ubigeo_llegada}
+                        required
+                        onChange={(codigo, meta) => {
+                          setUbigeoDetectado(null);
+                          setEmitForm((prev) => prev ? {
+                            ...prev,
+                            ubigeo_llegada: codigo,
+                            ciudad_llegada: meta?.distrito || ''
+                          } : prev);
+                        }}
+                      />
+                    )}
+                    {esCompra && <p className="text-[11px] text-muted mt-1">Se usa la dirección fiscal configurada para la empresa.</p>}
                   </div>
                   {!ubigeoDetectado && f.direccion_llegada && !f.ubigeo_llegada && (
                     <p className="text-[11px] text-amber-700">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
@@ -696,10 +712,18 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               <div className="border border-gray-200 rounded p-3">
                 <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{guia?.cliente || '-'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{guia?.ruc_cliente || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{(esCompra ? empresaRemitente?.razon_social : guia?.cliente) || '-'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{(esCompra ? empresaRemitente?.ruc : guia?.ruc_cliente) || '-'}</span></div>
                 </div>
               </div>
+
+              {esCompra && guia?.oc_serie_documento && guia?.oc_numero_documento && (
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Factura asociada</div>
+                  <div className="font-mono font-semibold">{guia.oc_serie_documento}-{guia.oc_numero_documento}</div>
+                  <div className="text-xs text-muted mt-1">Se declarará como documento relacionado, con el RUC del proveedor emisor.</div>
+                </div>
+              )}
 
               <div className="border border-gray-200 rounded p-3">
                 <div className="text-[10px] text-muted uppercase mb-1">Traslado</div>

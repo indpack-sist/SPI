@@ -84,7 +84,8 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-app.use(express.json());
+// Una factura UBL firmada puede superar fácilmente el límite predeterminado de 100 KB.
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {

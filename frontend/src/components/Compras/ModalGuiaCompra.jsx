@@ -46,7 +46,7 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         setVehiculos(v.data?.data || v.data || []);
       })
       .catch(() => {});
-    // Llegada = tu almacén: se prellena con la dirección/ubigeo de la empresa (editable).
+    // Llegada = tu almacén: empresa_config es la fuente autoritativa (solo lectura).
     guiasRemisionAPI.getEmpresaRemitente()
       .then((r) => {
         const e = r.data?.data || {};
@@ -66,8 +66,8 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
     setError(null);
     if (!form.direccion_partida.trim()) return setError('Ingresa la dirección de partida (proveedor).');
     if (!/^\d{6}$/.test(form.ubigeo_partida)) return setError('Selecciona el ubigeo de partida (proveedor).');
-    if (!form.direccion_llegada.trim()) return setError('Ingresa la dirección de llegada (tu almacén).');
-    if (!/^\d{6}$/.test(form.ubigeo_llegada)) return setError('Selecciona el ubigeo de llegada.');
+    if (!form.direccion_llegada.trim()) return setError('Falta la dirección de llegada en la configuración de empresa.');
+    if (!/^\d{6}$/.test(form.ubigeo_llegada)) return setError('Falta un ubigeo válido en la configuración de empresa.');
     if (!(parseFloat(form.peso_bruto_kg) > 0)) return setError('El peso bruto (kg) debe ser mayor a 0.');
     if (!form.id_conductor || !form.id_vehiculo) return setError('Selecciona el conductor y el vehículo de la flota.');
     const detalle = items.filter((it) => parseFloat(it.cantidad) > 0)
@@ -82,8 +82,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         fecha_traslado: form.fecha_traslado,
         direccion_partida: form.direccion_partida,
         ubigeo_partida: form.ubigeo_partida,
-        direccion_llegada: form.direccion_llegada,
-        ubigeo_llegada: form.ubigeo_llegada,
         peso_bruto_kg: parseFloat(form.peso_bruto_kg),
         numero_bultos: parseInt(form.numero_bultos) || 0,
         id_conductor: parseInt(form.id_conductor),
@@ -153,11 +151,12 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
           <UbigeoSelector value={form.ubigeo_partida} onChange={(cod) => set('ubigeo_partida', cod)} required />
         </div>
         <div>
-          <h3 className="font-semibold flex items-center gap-2 mb-2"><MapPin size={16} /> Llegada (tu almacén)</h3>
+          <h3 className="font-semibold flex items-center gap-2 mb-2"><MapPin size={16} /> Llegada (empresa_config)</h3>
           <label className="form-label">Dirección</label>
-          <input className="form-input mb-2" placeholder="Dirección de tu almacén" value={form.direccion_llegada} onChange={(e) => set('direccion_llegada', e.target.value)} />
+          <input className="form-input mb-2 bg-gray-50" value={form.direccion_llegada} readOnly placeholder="Configura la dirección de la empresa" />
           <label className="form-label">Ubigeo</label>
-          <UbigeoSelector value={form.ubigeo_llegada} onChange={(cod) => set('ubigeo_llegada', cod)} required />
+          <input className="form-input bg-gray-50 font-mono" value={form.ubigeo_llegada} readOnly placeholder="Configura el ubigeo de la empresa" />
+          <small className="text-gray-500">Se toma de la configuración de empresa y no se puede modificar desde la guía.</small>
         </div>
       </div>
 

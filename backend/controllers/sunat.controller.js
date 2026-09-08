@@ -1394,7 +1394,7 @@ export async function generarPdfGuia(req, res, next) {
       }
     }
     const [detalle] = await pool.query(
-      'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
+      'SELECT d.cantidad, d.subpartida_nacional, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
 
     // Comercio exterior (exportación): documentos relacionados (DAM) + contenedores/precintos, en el

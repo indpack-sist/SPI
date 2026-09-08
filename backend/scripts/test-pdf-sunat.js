@@ -41,6 +41,7 @@ const digestPara = (semilla) => DIGEST_REAL || digestSimulado(semilla);
 let pass = 0, fail = 0;
 const check = (n, cond, extra = '') => { const ok = !!cond; ok ? pass++ : fail++; console.log(`  ${ok ? '✅' : '❌'} ${n}${extra ? '  —  ' + extra : ''}`); };
 const esPdf = (buf) => Buffer.isBuffer(buf) && buf.slice(0, 5).toString() === '%PDF-';
+const paginasDe = (buf) => (buf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
 
 async function main() {
   await fs.mkdir(outDir, { recursive: true });
@@ -97,24 +98,47 @@ async function main() {
 
   // 4) GRE 09 con QR-URL de SUNAT
   const qrGre = await qrPng('https://ww1.sunat.gob.pe/ol-ti-itconsultaunificadalibre/consultaUnificadaLibre/consulta?...');
+  const clienteRipley = {
+    razon_social: 'TIENDAS POR DEPARTAMENTO RIPLEY S.A.C.',
+    ruc: '20337564373'
+  };
   const pdfGre = await generarGuiaRemisionSunatPDF({
     guia: {
-      serie_sunat: 'TE01', numero_sunat: 1, fecha_emision: '24/08/2026', fecha_traslado: '24/08/2026',
-      motivo_traslado_cod: '01', peso_bruto_kg: 100.50,
-      ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VILLA EL SALVADOR',
-      ubigeo_llegada: '150101', direccion_llegada: 'AV. ARGENTINA 1234 - LIMA',
-      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-1'), placa: 'ABC123',
-      observaciones: 'Entrega en almacen central | OC: 260610043'
+      serie_sunat: 'TE01', numero_sunat: 1, fecha_emision: '07/09/2026 17:57:25', fecha_traslado: '08/09/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 108,
+      ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZA. LL-1 LOTE. 4 B - COO. LAS VERTIENTES - VILLA EL SALVADOR - LIMA - LIMA',
+      ubigeo_llegada: '150142', direccion_llegada: 'AV. EL SOL NRO. 2241 - ASOCIACIÓN AGROPECUARIA VILLA RICA (ALT. KM 19.5 PANAMERICANA SUR) - VILLA EL SALVADOR - LIMA - LIMA',
+      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-1'),
+      observaciones: 'OC: 4530143647'
     },
-    emisor, cliente,
-    detalle: [{ codigo: 'PROD-001', nombre: 'CAJA DE CARTON 30x30x30', cantidad: 100, codigo_unidad_sunat: 'NIU' }],
-    conductor: { nombre_completo: 'MAX ALEX SANANCINO', dni: '75336849', licencia_conducir: 'Q75336849' },
+    emisor, cliente: clienteRipley,
+    detalle: [{ codigo: 'RBT60G006', nombre: 'ROLLO BURBUPACK 1.00 x 100 MTS', cantidad: 18, codigo_unidad_sunat: 'NIU' }],
+    vehiculos: [{ placa: 'AVZ890' }],
+    conductor: { nombre_completo: 'RODRIGUEZ SANANCINO MAX ALEX', dni: '75336849', licencia_conducir: 'Q75336849' },
     qrBuffer: qrGre
   });
   check('GRE (09) genera PDF válido (QR = URL SUNAT)', esPdf(pdfGre), `${pdfGre.length} bytes`);
+  check('GRE (09) del caso Ripley se mantiene en una sola página A4', paginasDe(pdfGre) === 1);
   const txtGre = await textoDe(pdfGre);
   check('GRE (09) imprime Observaciones (texto libre + OC)',
-    txtGre.includes('Observaciones') && txtGre.includes('OC: 260610043'));
+    txtGre.includes('OBSERVACIONES') && txtGre.includes('OC: 4530143647'));
+  check('GRE (09) contiene todas las secciones SUNAT del caso privado',
+    txtGre.includes('DATOS DE EMISIÓN Y RUTA') &&
+    txtGre.includes('DATOS DEL DESTINATARIO') &&
+    txtGre.includes('BIENES POR TRANSPORTAR') &&
+    txtGre.includes('RESUMEN DE CARGA') &&
+    txtGre.includes('DATOS DEL TRASLADO') &&
+    txtGre.includes('DATOS DE LOS VEHÍCULOS') &&
+    txtGre.includes('DATOS DE LOS CONDUCTORES'));
+  check('GRE (09) imprime tabla extendida e indicadores SÍ/NO',
+    txtGre.includes('BIEN') && txtGre.includes('NORMAL.') && txtGre.includes('CÓDIGO PROD.') &&
+    txtGre.includes('PARTIDA') && txtGre.includes('GTIN') && txtGre.includes('Indicador de transbordo programado:'));
+  check('GRE (09) imprime la leyenda legal completa',
+    txtGre.includes('sin valor tributario') && txtGre.includes('clave SOL'));
+  check('GRE (09) conserva los datos del caso Ripley',
+    txtGre.includes('TIENDAS POR DEPARTAMENTO RIPLEY') && txtGre.includes('20337564373') &&
+    txtGre.includes('RBT60G006') && txtGre.includes('ROLLO BURBUPACK 1.00 x 100 MTS') &&
+    txtGre.includes('AVZ890') && txtGre.includes('Q75336849'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
   // 4b) GRE Caso 1 (tercero público SIN registrar veh/cond) — solo transportista (espeja EG07-81).

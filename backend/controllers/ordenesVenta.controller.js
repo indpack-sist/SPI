@@ -333,7 +333,7 @@ export async function getOrdenVentaById(req, res) {
        FROM clientes_direcciones cd
       WHERE cd.id_cliente = ov.id_cliente
         AND cd.estado = 'Activo'
-        AND TRIM(cd.direccion) = TRIM(ov.direccion_entrega)
+        AND TRIM(cd.direccion) COLLATE utf8mb4_unicode_ci = TRIM(ov.direccion_entrega) COLLATE utf8mb4_unicode_ci
       ORDER BY cd.es_principal DESC, cd.id_direccion DESC
       LIMIT 1) AS ubigeo_llegada,
     cl.telefono AS telefono_cliente,

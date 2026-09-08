@@ -135,6 +135,8 @@ async function main() {
     txtGre.includes('PARTIDA') && txtGre.includes('GTIN') && txtGre.includes('Indicador de transbordo programado:'));
   check('GRE (09) imprime la leyenda legal completa',
     txtGre.includes('sin valor tributario') && txtGre.includes('clave SOL'));
+  check('GRE (09) no imprime estado positivo ni numeración de páginas',
+    !txtGre.includes('ACEPTADA POR SUNAT') && !/Página\s+\d+\s+de\s+\d+/i.test(txtGre));
   check('GRE (09) conserva los datos del caso Ripley',
     txtGre.includes('TIENDAS POR DEPARTAMENTO RIPLEY') && txtGre.includes('20337564373') &&
     txtGre.includes('RBT60G006') && txtGre.includes('ROLLO BURBUPACK 1.00 x 100 MTS') &&
@@ -194,7 +196,42 @@ async function main() {
     txtC3.includes('Fecha entrega al transportista') && txtC3.includes('27/08/2026'));
   await fs.writeFile(path.join(outDir, 'test-TE01-C3.pdf'), pdfGreC3);
 
-  // 4d) GRE de EXPORTACIÓN (comex) — espeja el molde real aceptado EG07-273 (INDPACK→VILLAS OQUENDO,
+  // 4d) Estrés de paginación: direcciones y observación largas, 45 productos, 2 placas y 1 chofer.
+  // Debe conservar el último producto y colocar Observaciones después de toda la tabla.
+  const detalleStress = Array.from({ length: 45 }, (_, index) => ({
+    codigo: `STRESS-${String(index + 1).padStart(3, '0')}`,
+    nombre: `PRODUCTO EXTENSO ${index + 1} CON DESCRIPCIÓN PARA VALIDAR EL AJUSTE AUTOMÁTICO DE ALTURA Y EL SALTO DE PÁGINA`,
+    cantidad: index + 1,
+    codigo_unidad_sunat: 'NIU'
+  }));
+  const pdfGreStress = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 999, fecha_emision: '07/09/2026 18:27:00', fecha_traslado: '08/09/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 999.99,
+      ubigeo_partida: '150142',
+      direccion_partida: 'AV. EL SOL MZA. LL-1 LOTE 4 B COOPERATIVA LAS VERTIENTES DE TABLADA DE LURÍN, REFERENCIA MEDIA CUADRA DE LA PANAMERICANA SUR, VILLA EL SALVADOR, LIMA, LIMA',
+      ubigeo_llegada: '150142',
+      direccion_llegada: 'AV. EL SOL NRO. 2241 ASOCIACIÓN AGROPECUARIA VILLA RICA, ALTURA DEL KM 19.5 DE LA PANAMERICANA SUR, PUERTA POSTERIOR DEL ALMACÉN CENTRAL, VILLA EL SALVADOR, LIMA, LIMA',
+      sunat_estado: 'ACEPTADO',
+      observaciones: 'OC: 4530143647. ENTREGA COORDINADA CON ALMACÉN; PRESENTAR DOCUMENTACIÓN COMPLETA Y ESPERAR LA VALIDACIÓN DEL RESPONSABLE DE RECEPCIÓN ANTES DE DESCARGAR LOS BIENES.'
+    },
+    emisor, cliente: clienteRipley, detalle: detalleStress,
+    transportista: { razon: 'TRANSPORTES DE PRUEBA S.A.C.', ruc: '20600000001', mtc: '15123456CNG' },
+    registrar: true, modalidad: '01',
+    vehiculos: [{ placa: 'ABC123' }, { placa: 'DEF456' }],
+    conductores: [{ nombre: 'CONDUCTOR ÚNICO DE PRUEBA', dni: '75336849', licencia: 'Q75336849' }],
+    qrBuffer: qrGre
+  });
+  const txtStress = await textoDe(pdfGreStress);
+  check('GRE multipágina conserva 45 productos, 2 placas, 1 chofer y observaciones',
+    paginasDe(pdfGreStress) > 1 && txtStress.includes('STRESS-045') &&
+    txtStress.includes('ABC123') && txtStress.includes('DEF456') &&
+    txtStress.includes('CONDUCTOR ÚNICO DE PRUEBA') && txtStress.includes('OC: 4530143647'));
+  check('GRE multipágina ubica Observaciones después del último producto',
+    txtStress.indexOf('STRESS-045') >= 0 && txtStress.indexOf('OBSERVACIONES') > txtStress.indexOf('STRESS-045'));
+  await fs.writeFile(path.join(outDir, 'test-TE01-stress.pdf'), pdfGreStress);
+
+  // 4e) GRE de EXPORTACIÓN (comex) — espeja el molde real aceptado EG07-273 (INDPACK→VILLAS OQUENDO,
   //     DAM 118-2026-40-70727). Valida las secciones comex, el destinatario del catálogo (no el
   //     cliente de la OV) y que NO se imprime la tabla de ítems (traslado total de la DAM).
   const pdfGreExp = await generarGuiaRemisionSunatPDF({

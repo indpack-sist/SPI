@@ -9,14 +9,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, '../../../frontend/images/indpack.png');
 
 const COLOR = {
-  navy: '#20588D',
-  cyan: '#35B5D6',
-  pale: '#EFF7FB',
-  pale2: '#F7FAFC',
-  line: '#B9CFDD',
-  ink: '#183247',
-  muted: '#607789',
-  white: '#FFFFFF',
+  header: '#CCCCCC',
+  headerDark: '#AFAFAF',
+  panel: '#FFFFFF',
+  stripe: '#F7F7F7',
+  line: '#BDBDBD',
+  ink: '#000000',
+  muted: '#333333',
   danger: '#D32F2F'
 };
 
@@ -108,18 +107,17 @@ export async function generarGuiaRemisionSunatPDF({
       const W = 529;
       const CONTENT_BOTTOM = 790;
       let y = 28;
-      let pageNumber = 1;
 
       const resetText = () => doc.fillColor(COLOR.ink).font('Helvetica').fontSize(7.4);
 
       const drawContinuationHeader = () => {
-        doc.rect(X, 28, 5, 35).fill(COLOR.cyan);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR.navy)
+        doc.rect(X, 28, 5, 35).fill(COLOR.headerDark);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR.ink)
           .text(limpio(emisor.razon_social, 'INDPACK S.A.C.'), X + 14, 31, { width: 300 });
         doc.fontSize(8).fillColor(COLOR.muted)
           .text(`GUÍA DE REMISIÓN ELECTRÓNICA · ${g.serie_sunat}-${g.numero_sunat}`, X + 14, 47, { width: 360 });
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.navy)
-          .text(`CONTINUACIÓN · PÁGINA ${pageNumber}`, 420, 39, { width: 142, align: 'right' });
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.ink)
+          .text('CONTINUACIÓN', 420, 39, { width: 142, align: 'right' });
         doc.moveTo(X, 69).lineTo(X + W, 69).lineWidth(0.7).strokeColor(COLOR.line).stroke();
         y = 79;
         resetText();
@@ -127,7 +125,6 @@ export async function generarGuiaRemisionSunatPDF({
 
       const newPage = () => {
         doc.addPage();
-        pageNumber += 1;
         drawContinuationHeader();
       };
 
@@ -140,39 +137,39 @@ export async function generarGuiaRemisionSunatPDF({
         if (logo) {
           try { doc.image(logo, X, 30, { fit: [195, 53], align: 'left', valign: 'center' }); } catch { /* logo opcional */ }
         } else {
-          doc.font('Helvetica-Bold').fontSize(20).fillColor(COLOR.navy).text('IndPack', X, 40);
+          doc.font('Helvetica-Bold').fontSize(20).fillColor(COLOR.ink).text('IndPack', X, 40);
         }
 
         doc.font('Helvetica-Bold').fontSize(9.2).fillColor(COLOR.ink)
           .text(limpio(emisor.razon_social, 'INDPACK S.A.C.'), X, 88, { width: 300 });
         const dirEmisor = [emisor.direccion, emisor.urbanizacion].filter(Boolean).join(' - ');
         doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.muted)
-          .text(limpio(dirEmisor, ''), X, 102, { width: 320, height: 24, ellipsis: true });
+          .text(limpio(dirEmisor, ''), X, 102, { width: 320, lineGap: 1 });
+        const emisorBottom = doc.y;
 
         const bx = 368;
         const bw = 194;
-        doc.roundedRect(bx, 28, bw, 93, 7).fillAndStroke(COLOR.pale, COLOR.navy);
-        doc.rect(bx, 28, 6, 93).fill(COLOR.cyan);
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR.navy)
+        doc.roundedRect(bx, 28, bw, 93, 7).fillAndStroke(COLOR.panel, COLOR.ink);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR.ink)
           .text(`RUC N° ${limpio(emisor.ruc)}`, bx + 12, 40, { width: bw - 20, align: 'center' });
         doc.moveTo(bx + 16, 57).lineTo(bx + bw - 10, 57).lineWidth(0.6).strokeColor(COLOR.line).stroke();
         doc.fontSize(10).fillColor(COLOR.ink)
           .text('GUÍA DE REMISIÓN', bx + 12, 65, { width: bw - 20, align: 'center' })
           .text('ELECTRÓNICA · REMITENTE', bx + 12, 79, { width: bw - 20, align: 'center' });
-        doc.fontSize(13).fillColor(COLOR.navy)
+        doc.fontSize(13).fillColor(COLOR.ink)
           .text(`${g.serie_sunat}-${g.numero_sunat}`, bx + 12, 98, { width: bw - 20, align: 'center' });
-        y = 128;
+        y = Math.max(128, emisorBottom + 7);
         resetText();
       };
 
-      const sectionStart = (title, subtitle = '') => {
-        ensureSpace(42);
+      const sectionStart = (title, subtitle = '', requiredHeight = 42) => {
+        ensureSpace(requiredHeight);
         const top = y;
-        doc.roundedRect(X, top, W, 17, 4).fill(COLOR.navy);
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.white)
+        doc.roundedRect(X, top, W, 17, 4).fill(COLOR.header);
+        doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.ink)
           .text(title.toUpperCase(), X + 9, top + 4.5, { width: 330 });
         if (subtitle) {
-          doc.font('Helvetica').fontSize(6.7).fillColor('#DCEBF5')
+          doc.font('Helvetica').fontSize(6.7).fillColor(COLOR.muted)
             .text(subtitle, X + 330, top + 5, { width: W - 339, align: 'right' });
         }
         y = top + 17;
@@ -186,21 +183,42 @@ export async function generarGuiaRemisionSunatPDF({
         resetText();
       };
 
+      const measureLabelValue = (label, value, width, options = {}) => {
+        const labelWidth = options.labelWidth || 105;
+        const valueWidth = width - labelWidth;
+        const safe = limpio(value);
+        doc.font('Helvetica-Bold').fontSize(7);
+        const labelHeight = doc.heightOfString(label, { width: labelWidth - 5, lineGap: 1 });
+        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7.5);
+        const valueHeight = doc.heightOfString(safe, { width: valueWidth, lineGap: 1 });
+        return Math.max(labelHeight, valueHeight, options.minHeight || 10);
+      };
+
       const labelValue = (label, value, x, atY, width, options = {}) => {
         const labelWidth = options.labelWidth || 105;
         const valueWidth = width - labelWidth;
         const safe = limpio(value);
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.muted);
-        const labelHeight = doc.heightOfString(label, { width: labelWidth - 5, lineGap: 1 });
-        doc.text(label, x, atY, { width: labelWidth - 5, lineGap: 1 });
+        const height = measureLabelValue(label, safe, width, options);
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.muted)
+          .text(label, x, atY, { width: labelWidth - 5, height, lineGap: 1 });
         doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7.5).fillColor(COLOR.ink)
-          .text(safe, x + labelWidth, atY, { width: valueWidth, lineGap: 1 });
-        const valueHeight = doc.heightOfString(safe, { width: valueWidth, lineGap: 1 });
-        const height = Math.max(labelHeight, valueHeight,
-          options.minHeight || 10
-        );
+          .text(safe, x + labelWidth, atY, { width: valueWidth, height, lineGap: 1 });
         return height;
       };
+
+      const twoColumnHeight = (rows) => {
+        const colW = (W - 27) / 2;
+        return 5 + rows.reduce((total, [left, right]) => {
+          const leftHeight = left ? measureLabelValue(left[0], left[1], colW, left[2] || {}) : 10;
+          const rightHeight = right ? measureLabelValue(right[0], right[1], colW, right[2] || {}) : 10;
+          return total + Math.max(leftHeight, rightHeight, 11) + 4;
+        }, 0);
+      };
+
+      const fullWidthHeight = (label, value, options = {}) =>
+        5 + measureLabelValue(label, value, W - 18, options) + 3;
+
+      const sectionHeight = (bodyHeight, bottomPad = 4) => 17 + bodyHeight + bottomPad + 4;
 
       const twoColumnRows = (rows) => {
         const leftX = X + 9;
@@ -213,7 +231,7 @@ export async function generarGuiaRemisionSunatPDF({
           const rowH = Math.max(leftHeight, rightHeight, 11) + 4;
           if (index < rows.length - 1) {
             doc.moveTo(leftX, cursor + rowH - 3).lineTo(X + W - 9, cursor + rowH - 3)
-              .lineWidth(0.35).strokeColor('#DCE7EE').stroke();
+              .lineWidth(0.35).strokeColor(COLOR.line).stroke();
           }
           cursor += rowH;
         });
@@ -229,8 +247,7 @@ export async function generarGuiaRemisionSunatPDF({
       drawMainHeader();
 
       // Datos principales: mismo contenido de la representación SUNAT, con mayor jerarquía visual.
-      let top = sectionStart('Datos de emisión y ruta', 'GRE Remitente · Documento 09');
-      twoColumnRows([
+      const routeRows = [
         [
           ['Fecha y hora de emisión:', fechaConPeriodo(g.fecha_emision),  { labelWidth: 126, boldValue: true }],
           ['Fecha de inicio de traslado:', g.fecha_traslado, { labelWidth: 133, boldValue: true }]
@@ -239,20 +256,36 @@ export async function generarGuiaRemisionSunatPDF({
           ['Motivo de traslado:', MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO', { labelWidth: 104 }],
           null
         ]
-      ]);
-      fullWidthRow('Punto de partida:', `[${limpio(g.ubigeo_partida)}] ${limpio(g.direccion_partida)}`, { labelWidth: 105, fontSize: 7.7 });
-      fullWidthRow('Punto de llegada:', `[${limpio(g.ubigeo_llegada)}] ${limpio(g.direccion_llegada)}`, { labelWidth: 105, fontSize: 7.7 });
+      ];
+      const partida = `[${limpio(g.ubigeo_partida)}] ${limpio(g.direccion_partida)}`;
+      const llegada = `[${limpio(g.ubigeo_llegada)}] ${limpio(g.direccion_llegada)}`;
+      const routeAddressOptions = { labelWidth: 105, fontSize: 7.7 };
+      const routeBodyHeight = twoColumnHeight(routeRows)
+        + fullWidthHeight('Punto de partida:', partida, routeAddressOptions)
+        + fullWidthHeight('Punto de llegada:', llegada, routeAddressOptions);
+      let top = sectionStart('Datos de emisión y ruta', 'GRE Remitente · Documento 09', sectionHeight(routeBodyHeight));
+      twoColumnRows(routeRows);
+      fullWidthRow('Punto de partida:', partida, routeAddressOptions);
+      fullWidthRow('Punto de llegada:', llegada, routeAddressOptions);
       sectionEnd(top);
 
       const esComex = !!comex;
       const destinatario = (esComex && comex.destinatario) ? comex.destinatario : (cliente || {});
-      top = sectionStart('Datos del destinatario');
-      twoColumnRows([
+      const destinatarioRows = [
         [
           ['Razón social / nombres:', destinatario.razon_social || destinatario.nombre, { labelWidth: 118, boldValue: true }],
           ['RUC / Documento:', destinatario.ruc || destinatario.numero_documento, { labelWidth: 100, boldValue: true }]
         ]
-      ]);
+      ];
+      let destinatarioBodyHeight = twoColumnHeight(destinatarioRows);
+      if (destinatario.direccion) destinatarioBodyHeight += fullWidthHeight('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
+      if (proveedor?.ruc) destinatarioBodyHeight += fullWidthHeight('Proveedor:', `${limpio(proveedor.razon_social)} · RUC ${limpio(proveedor.ruc)}`, { labelWidth: 105 });
+      if (docRelacionado?.numero) {
+        const relatedNumber = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
+        destinatarioBodyHeight += fullWidthHeight('Documento relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${relatedNumber}`, { labelWidth: 125 });
+      }
+      top = sectionStart('Datos del destinatario', '', sectionHeight(destinatarioBodyHeight));
+      twoColumnRows(destinatarioRows);
       if (destinatario.direccion) fullWidthRow('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
       if (proveedor?.ruc) {
         fullWidthRow('Proveedor:', `${limpio(proveedor.razon_social)} · RUC ${limpio(proveedor.ruc)}`, { labelWidth: 105 });
@@ -266,19 +299,25 @@ export async function generarGuiaRemisionSunatPDF({
       if (esComex) {
         const docsRelacionados = (comex.docsRelacionados || []).filter((item) => item?.numero);
         const contenedores = (comex.contenedores || []).filter((item) => item?.numero_contenedor);
-        top = sectionStart('Comercio exterior');
-        fullWidthRow('Documentos Relacionados:', docsRelacionados.length
+        const docsText = docsRelacionados.length
           ? docsRelacionados.map((item) => `${item.tipo_desc || 'Documento'} N° ${item.serie ? `${item.serie}-` : ''}${item.numero}`).join(' · ')
-          : '—', { labelWidth: 135 });
-        fullWidthRow('Bienes por transportar:', 'Datos importados del/los documento(s) relacionado(s)', { labelWidth: 135 });
-        twoColumnRows([
+          : '—';
+        const contenedoresText = contenedores.length
+          ? contenedores.map((item) => `${item.numero_contenedor}${item.numero_precinto ? ` / precinto ${item.numero_precinto}` : ''}`).join(' · ')
+          : '—';
+        const comexRows = [
           [
             ['Indicador de traslado total de la DAM o DS:', siNo(comex.trasladoTotalDam), { labelWidth: 190, boldValue: true }],
-            ['Contenedor(es):', contenedores.length
-              ? contenedores.map((item) => `${item.numero_contenedor}${item.numero_precinto ? ` / precinto ${item.numero_precinto}` : ''}`).join(' · ')
-              : '—', { labelWidth: 87 }]
+            ['Contenedor(es):', contenedoresText, { labelWidth: 87 }]
           ]
-        ]);
+        ];
+        const comexBodyHeight = fullWidthHeight('Documentos Relacionados:', docsText, { labelWidth: 135 })
+          + fullWidthHeight('Bienes por transportar:', 'Datos importados del/los documento(s) relacionado(s)', { labelWidth: 135 })
+          + twoColumnHeight(comexRows);
+        top = sectionStart('Comercio exterior', '', sectionHeight(comexBodyHeight));
+        fullWidthRow('Documentos Relacionados:', docsText, { labelWidth: 135 });
+        fullWidthRow('Bienes por transportar:', 'Datos importados del/los documento(s) relacionado(s)', { labelWidth: 135 });
+        twoColumnRows(comexRows);
         sectionEnd(top);
       } else {
         const cols = [
@@ -296,17 +335,18 @@ export async function generarGuiaRemisionSunatPDF({
         const tableHeader = () => {
           const topTable = y;
           let x = X;
-          doc.rect(X, topTable, W, 30).fill(COLOR.navy);
+          doc.rect(X, topTable, W, 30).fill(COLOR.header);
           cols.forEach((col) => {
-            doc.font('Helvetica-Bold').fontSize(5.7).fillColor(COLOR.white)
+            doc.font('Helvetica-Bold').fontSize(5.7).fillColor(COLOR.ink)
               .text(col.label, x + 3, topTable + 7, { width: col.width - 6, align: col.align || 'left', lineGap: 0.5 });
             x += col.width;
-            if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor('#73A1C4').stroke();
+            if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor(COLOR.panel).stroke();
           });
           y += 30;
         };
 
-        ensureSpace(70);
+        // Reserva título + cabecera + al menos una fila, para no dejar una cabecera huérfana.
+        ensureSpace(84);
         top = sectionStart('Bienes por transportar', `${detalle.length} ${detalle.length === 1 ? 'ítem' : 'ítems'}`);
         tableHeader();
         detalle.forEach((item, index) => {
@@ -322,17 +362,19 @@ export async function generarGuiaRemisionSunatPDF({
             unidad: UNIDADES[unidadCode] || unidadCode,
             cantidad: numero(item.cantidad)
           };
-          const descHeight = doc.font('Helvetica').fontSize(6.6)
-            .heightOfString(values.descripcion, { width: 141, lineGap: 1 });
-          const codeHeight = doc.heightOfString(values.codigo, { width: 56, lineGap: 1 });
-          const rowH = Math.max(29, descHeight + 10, codeHeight + 10);
+          const cellHeights = cols.map((col) => {
+            doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
+              .fontSize(col.key === 'unidad' ? 5.8 : 6.5);
+            return doc.heightOfString(values[col.key], { width: col.width - 6, lineGap: 1 });
+          });
+          const rowH = Math.max(29, Math.ceil(Math.max(...cellHeights)) + 10);
           if (y + rowH > CONTENT_BOTTOM) {
             sectionEnd(top, 0);
             newPage();
             top = sectionStart('Bienes por transportar', 'continuación');
             tableHeader();
           }
-          if (index % 2 === 0) doc.rect(X, y, W, rowH).fill(COLOR.pale2);
+          if (index % 2 === 0) doc.rect(X, y, W, rowH).fill(COLOR.stripe);
           let x = X;
           cols.forEach((col) => {
             doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
@@ -341,8 +383,7 @@ export async function generarGuiaRemisionSunatPDF({
                 width: col.width - 6,
                 height: rowH - 9,
                 align: col.align || 'left',
-                lineGap: 1,
-                ellipsis: true
+                lineGap: 1
               });
             x += col.width;
             if (x < X + W) doc.moveTo(x, y).lineTo(x, y + rowH).lineWidth(0.25).strokeColor(COLOR.line).stroke();
@@ -359,19 +400,19 @@ export async function generarGuiaRemisionSunatPDF({
 
       }
 
-      top = sectionStart('Resumen de carga');
-      twoColumnRows([
+      const cargaRows = [
         [
           ['Unidad de medida del peso bruto:', comex?.unidadPeso || 'KGM', { labelWidth: 163, boldValue: true }],
           ['Peso bruto total de la carga:', numero(g.peso_bruto_kg), { labelWidth: 148, boldValue: true }]
         ]
-      ]);
+      ];
+      top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)));
+      twoColumnRows(cargaRows);
       sectionEnd(top);
 
       const esTercero = !!transportista?.ruc;
       const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
-      top = sectionStart('Datos del traslado');
-      twoColumnRows([
+      const trasladoRows = [
         [
           ['Modalidad de traslado:', modalidadTexto, { labelWidth: 116, boldValue: true }],
           ['Indicador de transbordo programado:', siNo(indicadores.transbordo), { labelWidth: 174, boldValue: true }]
@@ -386,9 +427,17 @@ export async function generarGuiaRemisionSunatPDF({
             ? ['Indicador de registrar vehículos/conductores:', siNo(registrar), { labelWidth: 198, boldValue: true }]
             : null
         ]
-      ]);
+      ];
+      const transportistaText = transportista?.ruc
+        ? `${limpio(transportista.razon)} · RUC ${limpio(transportista.ruc)}${transportista.mtc ? ` · Registro MTC ${transportista.mtc}` : ''}`
+        : '';
+      let trasladoBodyHeight = twoColumnHeight(trasladoRows);
+      if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
+      if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
+      top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight));
+      twoColumnRows(trasladoRows);
       if (transportista?.ruc) {
-        fullWidthRow('Empresa transportista:', `${limpio(transportista.razon)} · RUC ${limpio(transportista.ruc)}${transportista.mtc ? ` · Registro MTC ${transportista.mtc}` : ''}`, { labelWidth: 125 });
+        fullWidthRow('Empresa transportista:', transportistaText, { labelWidth: 125 });
       }
       if (fechaEntrega) fullWidthRow('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
       sectionEnd(top);
@@ -401,69 +450,66 @@ export async function generarGuiaRemisionSunatPDF({
         : (g.placa ? [{ placa: g.placa }] : []);
 
       if (normalizedVehiculos.length || !esTercero) {
-        top = sectionStart('Datos de los vehículos');
-        if (normalizedVehiculos.length) {
-          normalizedVehiculos.forEach((vehicle, index) => {
+        const vehicleRows = normalizedVehiculos.length
+          ? normalizedVehiculos.map((vehicle, index) => {
             const extras = [
               vehicle.tuce ? `TUCE ${vehicle.tuce}` : null,
               vehicle.autorizacion ? `Autorización MTC ${vehicle.autorizacion}` : null
             ].filter(Boolean).join(' · ');
-            fullWidthRow(index === 0 ? 'Principal · N° de placa:' : 'Secundario · N° de placa:',
+            return [
+              index === 0 ? 'Principal · N° de placa:' : 'Secundario · N° de placa:',
               `${limpio(vehicle.placa)}${extras ? ` · ${extras}` : ''}`,
-              { labelWidth: 145, boldValue: true });
-          });
-        } else {
-          fullWidthRow('Número de placa:', '—', { labelWidth: 105 });
-        }
+              { labelWidth: 145, boldValue: true }
+            ];
+          })
+          : [['Número de placa:', '—', { labelWidth: 105 }]];
+        const vehicleBodyHeight = vehicleRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
+        top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight));
+        vehicleRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
         sectionEnd(top);
       }
 
       if (normalizedConductores.length || !esTercero) {
-        top = sectionStart('Datos de los conductores');
-        if (normalizedConductores.length) {
-          normalizedConductores.forEach((driver, index) => {
+        const driverRows = normalizedConductores.length
+          ? normalizedConductores.map((driver, index) => {
             const nombre = driver.nombre_completo || driver.nombre;
             const licencia = driver.licencia_conducir || driver.licencia;
-            fullWidthRow(index === 0 ? 'Conductor principal:' : 'Conductor secundario:',
+            return [index === 0 ? 'Conductor principal:' : 'Conductor secundario:',
               `${limpio(nombre)} · DOCUMENTO NACIONAL DE IDENTIDAD N° ${limpio(driver.dni)} · LICENCIA N° ${limpio(licencia)}`,
-              { labelWidth: 112, fontSize: 7.3, boldValue: true });
-          });
-        } else {
-          fullWidthRow('Conductor principal:', '—', { labelWidth: 105 });
-        }
+              { labelWidth: 112, fontSize: 7.3, boldValue: true }];
+          })
+          : [['Conductor principal:', '—', { labelWidth: 105 }]];
+        const driverBodyHeight = driverRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
+        top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight));
+        driverRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
         sectionEnd(top);
       }
 
       const observacion = limpio(g.observaciones, '');
       if (observacion) {
-        top = sectionStart('Observaciones');
+        doc.font('Helvetica').fontSize(7.6);
+        const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });
+        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2));
         doc.font('Helvetica').fontSize(7.6).fillColor(COLOR.ink)
-          .text(observacion, X + 9, y + 8, { width: W - 18, lineGap: 1.5 });
-        y = doc.y + 2;
+          .text(observacion, X + 9, y + 8, { width: W - 18, height: obsHeight, lineGap: 1.5 });
+        y += 8 + obsHeight + 2;
         sectionEnd(top);
       }
 
       // Pie legal completo. Si no cabe, pasa a una página limpia en lugar de superponerse al detalle.
       if (y + 94 > 800) newPage();
       const footerY = Math.max(y + 3, 700);
-      doc.roundedRect(X, footerY, W, 90, 6).fillAndStroke(COLOR.pale, COLOR.line);
-      doc.rect(X, footerY, 6, 90).fill(COLOR.cyan);
+      doc.roundedRect(X, footerY, W, 90, 6).fillAndStroke(COLOR.panel, COLOR.line);
       if (qrBuffer) {
         try { doc.image(qrBuffer, X + 15, footerY + 9, { width: 72, height: 72 }); } catch { /* QR opcional */ }
       }
       const legalX = X + 101;
-      doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.navy)
+      doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.ink)
         .text('REPRESENTACIÓN IMPRESA', legalX, footerY + 10, { width: 205 });
       doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.ink)
         .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 25, { width: 407, lineGap: 1.2 });
       doc.font('Helvetica-Bold').fontSize(6.8).fillColor(COLOR.muted)
         .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 58, { width: 407 });
-      const estado = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
-        : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : 'ACEPTADA POR SUNAT';
-      doc.roundedRect(legalX, footerY + 70, 118, 14, 7).fill(g.sunat_estado === 'ACEPTADO' ? COLOR.navy : COLOR.danger);
-      doc.font('Helvetica-Bold').fontSize(6.5).fillColor(COLOR.white)
-        .text(estado, legalX + 5, footerY + 74, { width: 108, align: 'center' });
-
       // Marca de agua para guías invalidadas.
       const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
         : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : null;
@@ -480,15 +526,7 @@ export async function generarGuiaRemisionSunatPDF({
         const nota = g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref
           ? `Reemplazada por la guía ${g.reemplazo_ref}`
           : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}` : '');
-        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX + 126, footerY + 74, { width: 275 });
-      }
-
-      // Numeración discreta en todas las páginas.
-      const range = doc.bufferedPageRange();
-      for (let i = range.start; i < range.start + range.count; i += 1) {
-        doc.switchToPage(i);
-        doc.font('Helvetica').fontSize(6.5).fillColor(COLOR.muted)
-          .text(`Página ${i - range.start + 1} de ${range.count}`, 465, 805, { width: 97, align: 'right', lineBreak: false });
+        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX, footerY + 74, { width: 401 });
       }
 
       doc.end();

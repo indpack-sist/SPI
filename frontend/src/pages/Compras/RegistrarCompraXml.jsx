@@ -6,7 +6,7 @@ import { comprasAPI, proveedoresAPI, productosAPI } from '../../config/api';
 
 // Registrar Compra desde el XML de la factura del proveedor.
 // Flujo: subo el .xml → el backend lo parsea (POST /compras/parse-xml) → concilio (mapear/crear
-// productos, elegir su inventario, ajustar cantidades/precios) → "Registrar Compra" (POST /compras).
+// productos y elegir su inventario) → "Registrar Compra" (POST /compras).
 // La compra se crea SIN mover stock (tipo_recepcion 'Ninguna'); el inventario entra luego con la guía.
 export default function RegistrarCompraXml() {
   const navigate = useNavigate();
@@ -30,14 +30,23 @@ export default function RegistrarCompraXml() {
       .catch(() => setTiposInv([]));
   }, []);
 
-  const onFile = (e) => {
+  const onFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setError(null); setSuccess(null);
-    const reader = new FileReader();
-    reader.onload = () => procesarXml(String(reader.result || ''));
-    reader.onerror = () => setError('No se pudo leer el archivo.');
-    reader.readAsText(f);
+    try {
+      const bytes = await f.arrayBuffer();
+      // FileReader usa UTF-8 por defecto e ignora la declaración del XML. Detectarla evita
+      // corromper razones sociales o descripciones en comprobantes ISO-8859-1/Windows-1252.
+      const cabeceraXml = new TextDecoder('ascii').decode(bytes.slice(0, 200));
+      const encodingDeclarado = cabeceraXml.match(/<\?xml[^>]*encoding=["']([^"']+)["']/i)?.[1] || 'utf-8';
+      const xml = new TextDecoder(encodingDeclarado).decode(bytes);
+      await procesarXml(xml);
+    } catch {
+      setError('No se pudo leer el archivo o su codificación no es compatible.');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const procesarXml = async (xml) => {
@@ -52,7 +61,10 @@ export default function RegistrarCompraXml() {
         // Nuevo (sin match): requiere elegir inventario. Vinculado: usa el id_producto del match.
         id_tipo_inventario: '',
       })));
-      if (d.comprobante?.moneda === 'USD') setTipoCambio('3.75');
+      setTipoCompra(d.comprobante?.forma_pago || 'Contado');
+      setTipoCambio(d.comprobante?.moneda === 'USD'
+        ? (d.comprobante?.tipo_cambio ? String(d.comprobante.tipo_cambio) : '')
+        : '1.00');
       setSuccess('XML leído. Revisa la conciliación antes de registrar.');
     } catch (err) {
       setError(err?.error || err?.response?.data?.error || 'No se pudo leer el XML de la factura.');
@@ -80,7 +92,11 @@ export default function RegistrarCompraXml() {
       let idProveedor = proveedor?.id_proveedor;
       if (!idProveedor) {
         if (!proveedor?.ruc) throw new Error('El XML no trae el RUC del proveedor.');
-        const rp = await proveedoresAPI.create({ ruc: proveedor.ruc, razon_social: proveedor.razon_social || proveedor.ruc });
+        const rp = await proveedoresAPI.create({
+          ruc: proveedor.ruc,
+          razon_social: proveedor.razon_social || proveedor.ruc,
+          terminos_pago: cabecera.forma_pago || null,
+        });
         idProveedor = rp.data?.data?.id_proveedor ?? rp.data?.id_proveedor ?? rp.data?.data?.id;
         if (!idProveedor) throw new Error('No se pudo crear el proveedor.');
       }
@@ -98,7 +114,7 @@ export default function RegistrarCompraXml() {
           crear_producto: {
             codigo: l.codigo_xml || '',
             nombre: l.descripcion || l.codigo_xml || 'PRODUCTO',
-            unidad_medida: l.producto_match?.unidad_medida || 'UND',
+            unidad_medida: l.unidad_sunat || 'UND',
             codigo_unidad_sunat: l.unidad_sunat || null,
             id_tipo_inventario: parseInt(l.id_tipo_inventario),
           },
@@ -118,13 +134,27 @@ export default function RegistrarCompraXml() {
         numero_documento: cabecera.numero,
         fecha_emision_documento: cabecera.fecha || hoy,
         fecha_emision: cabecera.fecha || hoy,
+        fecha_vencimiento: cabecera.fecha_vencimiento || cabecera.fecha || hoy,
         tipo_impuesto: 'IGV',
         porcentaje_impuesto: cabecera.porcentaje_igv ?? 18,
         tipo_cambio: parseFloat(tipoCambio || 1) || 1,
         prioridad: 'Media',
-        numero_cuotas: 0,
+        numero_cuotas: tipoCompra === 'Credito' ? (cabecera.cuotas?.length || 1) : 0,
         dias_entre_cuotas: 30,
-        dias_credito: 0,
+        dias_credito: tipoCompra === 'Credito' ? (cabecera.dias_credito || 0) : 0,
+        cronograma: tipoCompra === 'Credito'
+          ? (cabecera.cuotas || []).map((c, i) => ({
+              numero: i + 1,
+              codigo_letra: c.codigo || `Cuota${String(i + 1).padStart(3, '0')}`,
+              monto: c.monto,
+              fecha_vencimiento: c.fecha_vencimiento,
+            }))
+          : [],
+        totales_xml: {
+          subtotal: cabecera.subtotal,
+          igv: cabecera.igv,
+          total: cabecera.total,
+        },
         detalle,
       };
 
@@ -169,7 +199,7 @@ export default function RegistrarCompraXml() {
           </button>
           {cabecera && (
             <span className="text-sm text-muted">
-              Factura <b>{cabecera.serie}-{cabecera.numero}</b> · {cabecera.fecha} · {cabecera.moneda} · IGV {cabecera.porcentaje_igv}%
+              Factura <b>{cabecera.serie}-{cabecera.numero}</b> · {cabecera.fecha} · {cabecera.moneda} · IGV {cabecera.porcentaje_igv}% · Total {Number(cabecera.total).toFixed(2)}
             </span>
           )}
         </div>
@@ -195,15 +225,18 @@ export default function RegistrarCompraXml() {
                 <label className="form-label">Forma de pago</label>
                 <select className="form-select" value={tipoCompra} onChange={(e) => setTipoCompra(e.target.value)}>
                   <option value="Contado">Contado</option>
-                  <option value="Crédito">Crédito</option>
+                  <option value="Credito">Crédito</option>
                   <option value="Letras">Letras</option>
                 </select>
               </div>
               <div>
-                <label className="form-label">Tipo de cambio</label>
+                <label className="form-label">Tipo de cambio (opcional)</label>
                 <input type="number" step="0.001" min="0" className="form-input"
                   value={tipoCambio} onChange={(e) => setTipoCambio(e.target.value)}
                   disabled={cabecera?.moneda !== 'USD'} />
+                {cabecera?.moneda === 'USD' && !cabecera?.tipo_cambio && (
+                  <span className="text-xs text-muted mt-1 block">No viene en el XML. Puedes dejarlo vacío.</span>
+                )}
               </div>
             </div>
           </div>
@@ -211,7 +244,7 @@ export default function RegistrarCompraXml() {
           {/* Paso 2: conciliación de líneas */}
           <div className="card mb-4">
             <h2 className="font-semibold mb-1">Conciliación de productos</h2>
-            <p className="text-muted text-sm mb-3">Los productos que ya existen se vinculan; los nuevos se crearán (elige su inventario). Puedes ajustar cantidades y precios.</p>
+            <p className="text-muted text-sm mb-3">Los productos que ya existen se vinculan; los nuevos se crearán (elige su inventario). Cantidades y precios provienen del XML.</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -232,16 +265,16 @@ export default function RegistrarCompraXml() {
                       <td className="p-2 font-mono text-xs">{l.codigo_xml || '—'}</td>
                       <td className="p-2 min-w-[220px]">
                         <input className="form-input form-input-sm w-full" value={l.descripcion}
-                          onChange={(e) => setLinea(i, 'descripcion', e.target.value)} />
+                          readOnly />
                       </td>
                       <td className="p-2 text-right">
                         <input type="number" step="0.0001" min="0" className="form-input form-input-sm w-24 text-right"
-                          value={l.cantidad} onChange={(e) => setLinea(i, 'cantidad', e.target.value)} />
+                          value={l.cantidad} readOnly />
                       </td>
                       <td className="p-2">{l.unidad_sunat}</td>
                       <td className="p-2 text-right">
                         <input type="number" step="0.0001" min="0" className="form-input form-input-sm w-24 text-right"
-                          value={l.precio_unitario} onChange={(e) => setLinea(i, 'precio_unitario', e.target.value)} />
+                          value={l.precio_unitario} readOnly />
                       </td>
                       <td className="p-2 min-w-[220px]">
                         {l.id_producto ? (

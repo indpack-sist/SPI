@@ -2,7 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarCompraPDF } from '../utils/pdfGenerators/compraPDF.js';
 import pool from '../config/database.js';
 import { PERMISOS_POR_ROL } from '../middleware/auth.js';
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 // --- Control de visibilidad de montos/finanzas en Compras ---
 // Regla: un rol con verPrecios ve todo. Un rol sin verPrecios (ej. Calidad)
@@ -313,7 +313,7 @@ export async function createCompra(req, res) {
       direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
       serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
       accion_pago, monto_adelanto, fecha_primera_cuota,
-      usa_fondos_propios, id_comprador, monto_reembolsar
+      usa_fondos_propios, id_comprador, monto_reembolsar, totales_xml
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -397,6 +397,26 @@ export async function createCompra(req, res) {
     const total = subtotal + impuesto;
     const impuestoRecepcion = subtotalRecepcion * (porcentaje / 100);
     const totalRecepcion = subtotalRecepcion + impuestoRecepcion;
+
+    // En una compra originada desde XML, nunca guardar importes que ya no coincidan con el
+    // comprobante. La tolerancia cubre únicamente redondeos monetarios de uno o dos centavos.
+    if (totales_xml) {
+      const subtotalXml = parseFloat(totales_xml.subtotal);
+      const igvXml = parseFloat(totales_xml.igv);
+      const totalXml = parseFloat(totales_xml.total);
+      if (![subtotalXml, igvXml, totalXml].every(Number.isFinite)) {
+        return res.status(400).json({ success: false, error: 'Los totales del XML son inválidos.' });
+      }
+      const distintos = Math.abs(subtotal - subtotalXml) > 0.02
+        || Math.abs(impuesto - igvXml) > 0.02
+        || Math.abs(total - totalXml) > 0.02;
+      if (distintos) {
+        return res.status(400).json({
+          success: false,
+          error: `El detalle no coincide con el XML. Esperado: subtotal ${subtotalXml.toFixed(2)}, IGV ${igvXml.toFixed(2)}, total ${totalXml.toFixed(2)}.`
+        });
+      }
+    }
 
     let montoAPagarAhora = 0;
 
@@ -2101,6 +2121,10 @@ export async function parsearXmlFactura(req, res) {
     if (!xml || typeof xml !== 'string' || !xml.includes('<')) {
       return res.status(400).json({ success: false, error: 'Debe enviar el contenido del XML de la factura del proveedor (campo "xml").' });
     }
+    const validacionXml = XMLValidator.validate(xml);
+    if (validacionXml !== true) {
+      return res.status(400).json({ success: false, error: 'El XML no se pudo leer (archivo dañado o incompleto).' });
+    }
     const parser = new XMLParser({
       ignoreAttributes: false, attributeNamePrefix: '@', removeNSPrefix: true,
       parseTagValue: false, parseAttributeValue: false
@@ -2125,32 +2149,118 @@ export async function parsearXmlFactura(req, res) {
     const moneda = txt(factura.DocumentCurrencyCode).trim() || 'PEN';
     const tipoComprobante = txt(factura.InvoiceTypeCode).trim() || '01';
 
+    if (tipoComprobante !== '01') {
+      return res.status(400).json({ success: false, error: `El XML debe ser una Factura SUNAT tipo 01 (tipo recibido: ${tipoComprobante || 'vacío'}).` });
+    }
+    if (!/^[A-Z0-9]{1,4}$/.test(serie) || !/^[A-Z0-9]{1,20}$/.test(numero)) {
+      return res.status(400).json({ success: false, error: 'El XML no contiene una serie y número de factura válidos (ejemplo: F001-115256).' });
+    }
+
     const supplier = factura.AccountingSupplierParty?.Party || {};
     const provRuc = txt(supplier.PartyIdentification?.ID).trim();
     const provRazon = (txt(supplier.PartyLegalEntity?.RegistrationName)
       || txt(supplier.PartyName?.Name)).trim();
+    if (!/^\d{11}$/.test(provRuc) || !provRazon) {
+      return res.status(400).json({ success: false, error: 'El XML no contiene un proveedor válido (RUC de 11 dígitos y razón social).' });
+    }
 
-    // % IGV: del TaxCategory/Percent si viene; por defecto 18.
-    const tt = Array.isArray(factura.TaxTotal) ? factura.TaxTotal[0] : factura.TaxTotal;
-    const ts = Array.isArray(tt?.TaxSubtotal) ? tt.TaxSubtotal[0] : tt?.TaxSubtotal;
-    const pct = parseFloat(txt(ts?.TaxCategory?.Percent));
-    const porcentajeIgv = Number.isNaN(pct) ? 18 : pct;
+    // Evita registrar una factura emitida a otra empresa. Este mismo RUC será el destinatario de
+    // la GRE de compra y el listID del punto de llegada.
+    const customer = factura.AccountingCustomerParty?.Party || {};
+    const clienteRuc = txt(customer.PartyIdentification?.ID).trim();
+    const empRes = await executeQuery('SELECT ruc FROM empresa_config WHERE id = 1');
+    const empresaRuc = String((empRes.success && empRes.data[0]?.ruc) || '').trim();
+    if (!/^\d{11}$/.test(empresaRuc)) {
+      return res.status(422).json({ success: false, error: 'Configura un RUC válido en empresa_config antes de registrar facturas XML.' });
+    }
+    if (clienteRuc !== empresaRuc) {
+      return res.status(400).json({ success: false, error: `La factura XML fue emitida para el RUC ${clienteRuc || 'no informado'}, no para el RUC configurado ${empresaRuc}.` });
+    }
+
+    const lista = (n) => n == null ? [] : (Array.isArray(n) ? n : [n]);
+    const num = (n) => {
+      const valor = parseFloat(txt(n));
+      return Number.isFinite(valor) ? valor : null;
+    };
+
+    // Totales e IGV. Algunos emisores solo informan el porcentaje dentro de cada InvoiceLine.
+    const taxTotals = lista(factura.TaxTotal);
+    const taxSubtotals = taxTotals.flatMap((t) => lista(t?.TaxSubtotal));
+    const subtotalIgv = taxSubtotals.find((s) => txt(s?.TaxCategory?.TaxScheme?.ID).trim() === '1000')
+      || taxSubtotals[0];
+    const totalMonetario = factura.LegalMonetaryTotal || {};
+    const subtotalXml = num(totalMonetario.LineExtensionAmount);
+    const totalXml = num(totalMonetario.PayableAmount) ?? num(totalMonetario.TaxInclusiveAmount);
+    const igvXml = num(subtotalIgv?.TaxAmount)
+      ?? num(taxTotals[0]?.TaxAmount)
+      ?? (subtotalXml != null && totalXml != null ? totalXml - subtotalXml : null);
+    const pctXml = num(subtotalIgv?.TaxCategory?.Percent);
+    const porcentajeIgv = pctXml
+      ?? (subtotalXml > 0 && igvXml != null ? Number(((igvXml / subtotalXml) * 100).toFixed(6)) : 18);
+
+    if (![subtotalXml, igvXml, totalXml].every(Number.isFinite)) {
+      return res.status(400).json({ success: false, error: 'El XML no contiene subtotal, IGV y total válidos.' });
+    }
+
+    // Condición de pago y cuotas SUNAT. Para crédito manda la fecha de las cuotas, no el DueDate
+    // genérico, porque varios emisores colocan allí la misma fecha de emisión.
+    const paymentTerms = lista(factura.PaymentTerms);
+    const cuotas = paymentTerms
+      .map((p) => ({
+        codigo: txt(p?.PaymentMeansID).trim(),
+        monto: num(p?.Amount),
+        fecha_vencimiento: txt(p?.PaymentDueDate).trim()
+      }))
+      .filter((p) => /^Cuota\d+$/i.test(p.codigo) && p.monto != null && /^\d{4}-\d{2}-\d{2}$/.test(p.fecha_vencimiento))
+      .sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
+    const formaPagoXml = paymentTerms.some((p) => /credito/i.test(txt(p?.PaymentMeansID))) || cuotas.length
+      ? 'Credito'
+      : 'Contado';
+    const fechaVencimiento = cuotas.at(-1)?.fecha_vencimiento || txt(factura.DueDate).trim() || fecha;
+    const diasCredito = formaPagoXml === 'Credito' && /^\d{4}-\d{2}-\d{2}$/.test(fecha) && /^\d{4}-\d{2}-\d{2}$/.test(fechaVencimiento)
+      ? Math.max(0, Math.round((Date.parse(`${fechaVencimiento}T00:00:00Z`) - Date.parse(`${fecha}T00:00:00Z`)) / 86400000))
+      : 0;
+
+    const exchangeRate = lista(factura.PricingExchangeRate)[0];
+    const tipoCambioXml = num(exchangeRate?.CalculationRate);
 
     const rawLines = factura.InvoiceLine
       ? (Array.isArray(factura.InvoiceLine) ? factura.InvoiceLine : [factura.InvoiceLine])
       : [];
+    if (rawLines.length === 0) {
+      return res.status(400).json({ success: false, error: 'La factura XML no contiene líneas de productos.' });
+    }
     const lineas = rawLines.map((ln, i) => {
       const qtyNode = ln.InvoicedQuantity;
       const item = ln.Item || {};
+      const cantidad = num(qtyNode) ?? 0;
+      const subtotalLinea = num(ln.LineExtensionAmount);
+      const precioXml = num(ln.Price?.PriceAmount);
+      // El precio efectivo garantiza que descuentos incorporados por el emisor conserven el
+      // LineExtensionAmount exacto al crear la compra.
+      const precioEfectivo = cantidad > 0 && subtotalLinea != null ? subtotalLinea / cantidad : precioXml;
+      const impuestoLinea = lista(ln.TaxTotal).reduce((sum, t) => sum + (num(t?.TaxAmount) || 0), 0);
       return {
-        orden: i + 1,
+        orden: parseInt(txt(ln.ID), 10) || i + 1,
         codigo_xml: txt(item.SellersItemIdentification?.ID).trim(),
         descripcion: txt(item.Description).trim(),
-        cantidad: parseFloat(txt(qtyNode)) || 0,
+        cantidad,
         unidad_sunat: String(qtyNode?.['@unitCode'] || 'NIU'),
-        precio_unitario: parseFloat(txt(ln.Price?.PriceAmount)) || 0,
+        precio_unitario: precioEfectivo ?? 0,
+        precio_unitario_xml: precioXml ?? 0,
+        subtotal: subtotalLinea ?? 0,
+        igv: impuestoLinea,
+        total: (subtotalLinea ?? 0) + impuestoLinea,
       };
     });
+
+    if (lineas.some((l) => l.cantidad <= 0 || l.precio_unitario < 0 || !l.descripcion)) {
+      return res.status(400).json({ success: false, error: 'El XML contiene líneas con cantidad, precio o descripción inválidos.' });
+    }
+    const sumaLineas = lineas.reduce((sum, l) => sum + l.subtotal, 0);
+    if (Math.abs(sumaLineas - subtotalXml) > 0.02) {
+      return res.status(400).json({ success: false, error: 'La suma de las líneas no coincide con el subtotal declarado en el XML.' });
+    }
 
     // Auto-match: proveedor por RUC, productos por código y luego por descripción exacta.
     const proveedor = { ruc: provRuc, razon_social: provRazon, id_proveedor: null };
@@ -2179,7 +2289,22 @@ export async function parsearXmlFactura(req, res) {
       success: true,
       data: {
         proveedor,
-        comprobante: { tipo: tipoComprobante, serie, numero, fecha, moneda, porcentaje_igv: porcentajeIgv },
+        comprobante: {
+          tipo: tipoComprobante,
+          serie,
+          numero,
+          fecha,
+          fecha_vencimiento: fechaVencimiento,
+          moneda,
+          tipo_cambio: tipoCambioXml,
+          porcentaje_igv: porcentajeIgv,
+          forma_pago: formaPagoXml,
+          dias_credito: diasCredito,
+          cuotas,
+          subtotal: subtotalXml,
+          igv: igvXml,
+          total: totalXml
+        },
         lineas
       }
     });

@@ -114,6 +114,21 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
     if (!empresa) throw new AppError('Falta la configuración de la empresa remitente', 422);
 
+    // En venta el origen es autoritativamente empresa_config. En compra lo es el destino, porque
+    // SPI recoge los bienes del proveedor y los lleva a su propio establecimiento. Se sincroniza
+    // justo antes de construir y firmar el XML, por lo que ningún cliente puede sobrescribirlo.
+    if (esCompra) {
+      g.direccion_llegada = String(empresa.direccion || '').trim();
+      g.punto_llegada = g.direccion_llegada;
+      g.ubigeo_llegada = String(empresa.ubigeo || '').trim();
+      await conn.query(
+        `UPDATE guias_remision
+            SET direccion_llegada = ?, punto_llegada = ?, ubigeo_llegada = ?
+          WHERE id_guia = ?`,
+        [g.direccion_llegada, g.punto_llegada, g.ubigeo_llegada, idGuia]
+      );
+    }
+
     // En venta el origen es autoritativamente empresa_config. Se sincroniza dentro de esta
     // transacción, después de validar que la guía es emitible, para corregir también borradores
     // antiguos sin alterar documentos que ya fueron aceptados por SUNAT.
@@ -143,7 +158,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       // Compra: destinatario = la propia empresa; el vendedor va en SellerSupplierParty; la factura
       // del proveedor se referencia con IssuerParty. Espeja EG07-333.
       const [[oc]] = await conn.query(
-        'SELECT id_proveedor, serie_documento, numero_documento FROM ordenes_compra WHERE id_orden_compra = ?',
+        'SELECT id_proveedor, tipo_documento, serie_documento, numero_documento FROM ordenes_compra WHERE id_orden_compra = ?',
         [g.id_orden_compra]);
       if (!oc) throw new AppError('Orden de compra de la guía no existe', 404);
       const [[prov]] = await conn.query(
@@ -151,8 +166,15 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       if (!prov?.ruc) throw new AppError('Proveedor de la guía no existe', 404);
       proveedor = { ruc: prov.ruc, razon_social: prov.razon_social };
       destinatario = { ruc: empresa.ruc, razon_social: empresa.razon_social, tipo_documento: 'RUC' };
-      if (oc.serie_documento && oc.numero_documento) {
-        docRelacionado = { tipo: '01', tipo_desc: 'Factura', numero: `${oc.serie_documento}-${oc.numero_documento}`, issuerRuc: prov.ruc };
+      const tipoDocumentoCompra = String(oc.tipo_documento || '').trim().toLowerCase();
+      const esFacturaCompra = tipoDocumentoCompra === '01' || tipoDocumentoCompra.includes('factura');
+      const serieFactura = String(oc.serie_documento || '').trim();
+      const numeroFactura = String(oc.numero_documento || '').trim();
+      if (esFacturaCompra && (!serieFactura || !numeroFactura)) {
+        throw new AppError('La factura asociada de la compra está incompleta: faltan serie y/o número del XML', 422);
+      }
+      if (serieFactura && numeroFactura) {
+        docRelacionado = { tipo: '01', tipo_desc: 'Factura', numero: `${serieFactura}-${numeroFactura}`, issuerRuc: prov.ruc };
       }
     } else {
       const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);

@@ -10,7 +10,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
-import { guiasRemisionAPI } from '../../config/api';
+import { guiasRemisionAPI, sunatAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
 function DetalleGuiaRemision() {
@@ -158,11 +158,14 @@ function DetalleGuiaRemision() {
   const handleDescargarPDF = async () => {
     try {
       setLoading(true);
-      await guiasRemisionAPI.descargarPDF(id);
+      if (!['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(guia?.sunat_estado)) {
+        throw new Error('El PDF fiscal estará disponible cuando SUNAT acepte la GRE.');
+      }
+      await sunatAPI.verPdfGuia(id);
       setSuccess('PDF descargado exitosamente');
     } catch (err) {
       console.error('Error al descargar PDF:', err);
-      setError('Error al descargar el PDF');
+      setError(err?.response?.data?.error || err?.message || 'Error al descargar el PDF');
     } finally {
       setLoading(false);
     }

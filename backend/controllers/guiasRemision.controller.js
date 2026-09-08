@@ -718,7 +718,7 @@ export async function createGuiaCompra(req, res) {
       id_orden_compra,
       fecha_emision, fecha_traslado,
       direccion_partida, ubigeo_partida,
-      direccion_llegada, ubigeo_llegada, ciudad_llegada,
+      ciudad_llegada,
       peso_bruto_kg, numero_bultos, observaciones,
       id_conductor, id_vehiculo,
       detalle
@@ -730,17 +730,18 @@ export async function createGuiaCompra(req, res) {
     if (!id_conductor || !id_vehiculo) throw fail(400, 'Debe seleccionar el conductor y el vehículo de la flota que realiza el traslado');
     if (!(parseFloat(peso_bruto_kg) > 0)) throw fail(422, 'El peso bruto (kg) debe ser mayor a 0');
 
-    // Llegada = tu almacén: si el request no la trae, se toma la dirección/ubigeo fiscal de la empresa
-    // (empresa_config), igual que en las guías de venta la PARTIDA se autocompleta desde ahí.
+    // Llegada = tu almacén y su fuente autoritativa es empresa_config. No se acepta el valor del
+    // request: evita que una UI antigua o un cliente API emita una GRE de compra hacia otro punto.
     const empRes = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
-    const empCfg = (empRes.success && empRes.data[0]) || {};
-    const direccionLlegada = (direccion_llegada && String(direccion_llegada).trim()) || empCfg.direccion || '';
-    const ubigeoLlegada = (ubigeo_llegada && String(ubigeo_llegada).trim()) || empCfg.ubigeo || '';
+    if (!empRes.success) throw fail(500, 'No se pudo leer la configuración de la empresa');
+    const empCfg = empRes.data[0] || {};
+    const direccionLlegada = String(empCfg.direccion || '').trim();
+    const ubigeoLlegada = String(empCfg.ubigeo || '').trim();
 
     if (!direccion_partida || !String(direccion_partida).trim()) throw fail(400, 'La dirección de partida (proveedor) es obligatoria');
     if (!/^\d{6}$/.test(String(ubigeo_partida || ''))) throw fail(400, 'El ubigeo de partida es obligatorio (6 dígitos)');
-    if (!direccionLlegada.trim()) throw fail(400, 'Falta la dirección de llegada (configura la dirección de la empresa o ingrésala).');
-    if (!/^\d{6}$/.test(ubigeoLlegada)) throw fail(400, 'Falta el ubigeo de llegada (configura el ubigeo de la empresa o selecciónalo).');
+    if (!direccionLlegada) throw fail(422, 'Falta la dirección de llegada en empresa_config');
+    if (!/^\d{6}$/.test(ubigeoLlegada)) throw fail(422, 'Falta un ubigeo de llegada válido (6 dígitos) en empresa_config');
 
     const result = await withTransaction(async (conn) => {
       const [[oc]] = await conn.query(

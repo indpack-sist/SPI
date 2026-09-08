@@ -8,7 +8,7 @@ import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.ser
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
 import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
-import { anularGuiaRemision, reemplazarGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
+import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
 import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from '../services/sunat/util.service.js';
@@ -24,6 +24,7 @@ import { subirRaw } from '../services/cloudinary.service.js';
 import { marcarOrdenFacturada, liberarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
 import { ejecutarReintentosSunat } from '../jobs/sunat-reintentos.job.js';
 import AppError from '../utils/AppError.js';
+import fetch from 'node-fetch';
 
 // Tipos de comprobante dentro de alcance (catálogo 01). Boletas (03) y otros: fuera de alcance.
 const TIPOS_PERMITIDOS = ['01', '07', '08'];
@@ -1053,35 +1054,31 @@ export async function verificarEstadoGuia(req, res, next) {
   } catch (e) { next(e); }
 }
 
-// POST /api/sunat/guias/:id/sin-efecto  { motivo }  → FASE 12: deja sin efecto una GRE ACEPTADA.
-// GRE 2.0 no tiene baja por API: es un cambio de estado interno (sin llamada a SUNAT). El override
-// de Administrador permite forzar cuando el traslado ya inició (En Tránsito/Entregada).
+// POST /api/sunat/guias/:id/baja/confirmar
+// SUNAT exige realizar la baja GRE en SOL. Este endpoint sincroniza y audita en SPI una baja que el
+// usuario confirma haber completado allí; no simula una llamada inexistente al API REST de emisión.
 export async function dejarSinEfectoGuia(req, res, next) {
   try {
     const idGuia = Number(req.params.id);
-    const esAdmin = String(req.user?.rol || '').trim().toLowerCase() === 'administrador';
     const r = await anularGuiaRemision(idGuia, {
       motivo: req.body?.motivo,
       idEmpleado: req.user?.id_empleado || null,
-      esAdmin
+      confirmacionSol: req.body?.confirmacion_sol === true,
+      causal: req.body?.causal,
+      fechaBajaSunat: req.body?.fecha_baja_sunat,
+      evidenciaUrl: req.body?.evidencia_url,
+      origen: req.body?.origen || 'SOL_MANUAL'
     });
-    res.json({ ok: true, mensaje: 'Guía dejada sin efecto (SIN EFECTO)', ...r });
+    res.json({ ok: true, mensaje: 'Baja realizada en SUNAT SOL confirmada y sincronizada en SPI.', ...r });
   } catch (e) { next(e); }
 }
 
-// POST /api/sunat/guias/:id/reemplazar  { correcciones? }  → FASE 12: emite una GRE nueva corregida
-// y, si es ACEPTADA, marca la original como REEMPLAZADA (la finalización la hace cerrarTicketGre).
+// Endpoint legado cerrado: emitir otra GRE no deja sin efecto la original en SUNAT.
 export async function reemplazarGuia(req, res, next) {
-  try {
-    const idGuia = Number(req.params.id);
-    const esAdmin = String(req.user?.rol || '').trim().toLowerCase() === 'administrador';
-    const r = await reemplazarGuiaRemision(idGuia, {
-      correcciones: req.body?.correcciones || {},
-      idEmpleado: req.user?.id_empleado || null,
-      esAdmin
-    });
-    res.status(r.httpStatus).json(r.body);
-  } catch (e) { next(e); }
+  next(new AppError(
+    'El reemplazo automático de GRE está deshabilitado: primero realiza la baja de la guía original en SUNAT SOL, sincronízala en SPI y luego emite una nueva guía.',
+    422
+  ));
 }
 
 // GET /api/sunat/gre/token/test → prueba AISLADA del token OAuth GRE (diagnóstico, sin emitir).
@@ -1245,6 +1242,55 @@ export async function generarPdfComprobante(req, res, next) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${nombrePdf}"`);
     res.send(pdf);
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/guias/:id/archivos/:tipo → descarga XML/CDR desde el backend. Evita depender del
+// CORS de Cloudinary en el navegador y conserva un nombre de archivo SUNAT predecible.
+export async function descargarArchivoGuia(req, res, next) {
+  try {
+    const idGuia = Number(req.params.id);
+    const tipo = String(req.params.tipo || '').toLowerCase();
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+    if (!['xml', 'cdr'].includes(tipo)) throw new AppError('Tipo de archivo inválido (xml o cdr)', 400);
+
+    const [[g]] = await pool.query(
+      'SELECT serie_sunat, numero_sunat, xml_url, cdr_url FROM guias_remision WHERE id_guia = ?',
+      [idGuia]
+    );
+    if (!g) throw new AppError('Guía no existe', 404);
+    const url = extraerUrl(tipo === 'xml' ? g.xml_url : g.cdr_url);
+    if (!url) throw new AppError(`La GRE todavía no tiene ${tipo === 'xml' ? 'XML firmado' : 'CDR'} disponible`, 404);
+
+    let remota;
+    try { remota = new URL(url); }
+    catch { throw new AppError('La URL almacenada del archivo no es válida', 500); }
+    if (remota.protocol !== 'https:' || !/(^|\.)cloudinary\.com$/i.test(remota.hostname)) {
+      throw new AppError('El archivo de la GRE no pertenece al almacenamiento autorizado', 403);
+    }
+
+    const controlador = new AbortController();
+    const timeoutId = setTimeout(() => controlador.abort(), 20000);
+    let respuesta;
+    try {
+      respuesta = await fetch(remota.href, {
+        headers: { 'User-Agent': 'SPI-SUNAT/1.0' },
+        signal: controlador.signal
+      });
+    } catch {
+      throw new AppError(`No se pudo conectar al almacenamiento para descargar el ${tipo.toUpperCase()}`, 502);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!respuesta.ok) {
+      throw new AppError(`No se pudo recuperar el ${tipo.toUpperCase()} almacenado (${respuesta.status})`, 502);
+    }
+
+    const base = `${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}`;
+    const nombre = tipo === 'xml' ? `${base}.xml` : `R-${base}.zip`;
+    res.setHeader('Content-Type', tipo === 'xml' ? 'application/xml; charset=utf-8' : 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+    respuesta.body.pipe(res);
   } catch (e) { next(e); }
 }
 

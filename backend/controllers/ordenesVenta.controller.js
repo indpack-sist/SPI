@@ -36,6 +36,18 @@ function getFechaISOPeru() {
     return `${year}-${month}-${day}`;
 }
 
+function esFechaISOValida(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, filtro_moneda, search } = req.query;
@@ -1597,7 +1609,9 @@ export async function anularDespacho(req, res) {
     // El usuario puede pedir anular también la guía de remisión asociada a este despacho.
     const anularGuia = req.body?.anular_guia === true || req.body?.anular_guia === 'true';
     const motivoGuia = (req.body?.motivo_guia || '').trim();
-    const esAdmin = String(req.user?.rol || '').trim().toLowerCase() === 'administrador';
+    const confirmacionBajaSunat = req.body?.confirmacion_baja_sunat === true;
+    const causalBajaSunat = req.body?.causal_baja_sunat;
+    const fechaBajaSunat = req.body?.fecha_baja_sunat || getFechaISOPeru();
 
     if (!id_usuario) {
       return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
@@ -1635,7 +1649,11 @@ export async function anularDespacho(req, res) {
     const mGuia = /Despacho Gu[ií]a\s+(\S+)/i.exec(salida.observaciones || '');
     if (mGuia) {
       const grRes = await executeQuery(
-        'SELECT id_guia, numero_guia, estado, sunat_estado FROM guias_remision WHERE numero_guia = ? LIMIT 1',
+        `SELECT id_guia, numero_guia, estado, sunat_estado,
+                DATE_FORMAT(COALESCE(sunat_fecha_envio, fecha_emision), '%Y-%m-%d') AS fecha_emision_iso
+           FROM guias_remision
+          WHERE numero_guia = ?
+          LIMIT 1`,
         [mGuia[1]]
       );
       if (grRes.success && grRes.data.length > 0) guiaVinculada = grRes.data[0];
@@ -1651,6 +1669,28 @@ export async function anularDespacho(req, res) {
       // Si la GRE fue aceptada por SUNAT, "dejar sin efecto" exige un motivo.
       if (guiaVinculada.sunat_estado === 'ACEPTADO' && !motivoGuia) {
         return res.status(400).json({ error: 'Indica el motivo para dejar sin efecto la GRE aceptada por SUNAT.' });
+      }
+      if (guiaVinculada.sunat_estado === 'ACEPTADO' && !confirmacionBajaSunat) {
+        return res.status(422).json({
+          error: 'Primero da de baja la GRE en SUNAT SOL y confirma esa operación antes de revertir el despacho en SPI.'
+        });
+      }
+      if (guiaVinculada.sunat_estado === 'ACEPTADO') {
+        const causalesPermitidas = ['TRASLADO_NO_INICIADO', 'CAMBIO_DESTINATARIO'];
+        if (!causalesPermitidas.includes(causalBajaSunat)) {
+          return res.status(400).json({ error: 'Selecciona una causal SUNAT válida para la baja de la GRE.' });
+        }
+        if (!esFechaISOValida(fechaBajaSunat)) {
+          return res.status(400).json({ error: 'La fecha de baja SUNAT no es una fecha válida (YYYY-MM-DD).' });
+        }
+        if (fechaBajaSunat > getFechaISOPeru()) {
+          return res.status(400).json({ error: 'La fecha de baja SUNAT no puede ser futura.' });
+        }
+        if (guiaVinculada.fecha_emision_iso && fechaBajaSunat < guiaVinculada.fecha_emision_iso) {
+          return res.status(400).json({
+            error: `La fecha de baja no puede ser anterior a la emisión de la GRE (${guiaVinculada.fecha_emision_iso}).`
+          });
+        }
       }
     }
 
@@ -1724,21 +1764,43 @@ export async function anularDespacho(req, res) {
       await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
     }
 
-    // Anular la guía asociada si el usuario lo pidió. Va DESPUÉS de revertir el stock/estado de
-    // la OV: si la GRE estaba aceptada, "dejar sin efecto" (cambio interno, sin llamada a SUNAT)
-    // exige la guía en 'Emitida', así que primero deshacemos el traslado ('En Tránsito' → 'Emitida').
+    // Sincronizar la guía asociada si el usuario lo pidió. Las precondiciones de la baja SOL ya se
+    // validaron antes de tocar stock, para evitar una reversión parcial por datos inválidos.
     let guiaAnulada = null;
     if (anularGuia && guiaVinculada) {
       try {
         if (guiaVinculada.sunat_estado === 'ACEPTADO') {
-          if (guiaVinculada.estado !== 'Emitida') {
-            await executeQuery(`UPDATE guias_remision SET estado = 'Emitida' WHERE id_guia = ?`, [guiaVinculada.id_guia]);
-          }
-          await anularGuiaRemision(guiaVinculada.id_guia, { motivo: motivoGuia, idEmpleado: id_usuario, esAdmin });
-          guiaAnulada = { numero_guia: guiaVinculada.numero_guia, sin_efecto_sunat: true };
+          await anularGuiaRemision(guiaVinculada.id_guia, {
+            motivo: motivoGuia,
+            idEmpleado: id_usuario,
+            confirmacionSol: confirmacionBajaSunat,
+            causal: causalBajaSunat,
+            fechaBajaSunat,
+            origen: 'SOL_MANUAL'
+          });
+          guiaAnulada = { numero_guia: guiaVinculada.numero_guia, baja_sunat_confirmada: true };
         } else {
           // GRE no emitida/no aceptada: anulación puramente interna.
-          await executeQuery(`UPDATE guias_remision SET estado = 'Anulada' WHERE id_guia = ?`, [guiaVinculada.id_guia]);
+          const fechaAnulacion = getFechaPeru();
+          const motivoAnulacion = motivoGuia || 'Anulación de despacho';
+          const localResult = await executeTransaction([
+            {
+              sql: `UPDATE guias_remision
+                       SET estado = 'Anulada', motivo_anulacion = ?, anulado_por = ?, fecha_anulacion = ?
+                     WHERE id_guia = ?`,
+              params: [motivoAnulacion, id_usuario, fechaAnulacion, guiaVinculada.id_guia]
+            },
+            {
+              sql: `INSERT INTO guias_remision_historial
+                      (id_guia, id_orden_venta, evento, estado_anterior, estado_nuevo,
+                       motivo, origen, id_usuario, evidencia_url, fecha)
+                    VALUES (?, ?, 'ANULACION_LOCAL', ?, 'Anulada', ?, 'SPI', ?, NULL, ?)`,
+              params: [guiaVinculada.id_guia, id,
+                guiaVinculada.sunat_estado || guiaVinculada.estado,
+                motivoAnulacion, id_usuario, fechaAnulacion]
+            }
+          ]);
+          if (!localResult.success) throw new Error(localResult.error || 'No se pudo registrar la anulación local de la guía');
           guiaAnulada = { numero_guia: guiaVinculada.numero_guia, sin_efecto_sunat: false };
         }
       } catch (e) {
@@ -1753,7 +1815,7 @@ export async function anularDespacho(req, res) {
     }
 
     const msgGuia = guiaAnulada
-      ? ` Guía ${guiaAnulada.numero_guia} ${guiaAnulada.sin_efecto_sunat ? 'dejada SIN EFECTO en SUNAT' : 'anulada'}.`
+      ? ` Guía ${guiaAnulada.numero_guia} ${guiaAnulada.baja_sunat_confirmada ? 'sincronizada con la baja confirmada en SUNAT SOL' : 'anulada localmente'}.`
       : '';
 
     res.json({
@@ -2098,9 +2160,17 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
     const orden = ordenResult.data[0];
 
     const salidaResult = await executeQuery(`
-      SELECT * FROM salidas 
-      WHERE id_salida = ? AND observaciones LIKE ?
-    `, [idSalida, `%${orden.numero_orden}%`]);
+      SELECT *
+      FROM salidas
+      WHERE id_salida = ?
+        AND (
+          id_orden_venta = ?
+          OR (
+            id_orden_venta IS NULL
+            AND (observaciones LIKE ? OR observaciones LIKE ?)
+          )
+        )
+    `, [idSalida, id, `%${orden.numero_orden}%`, `%Orden ${id}%`]);
 
     if (!salidaResult.success || salidaResult.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Despacho no encontrado' });
@@ -2295,9 +2365,17 @@ export async function descargarPDFDespacho(req, res) {
     const orden = ordenResult.data[0];
 
     const salidaResult = await executeQuery(`
-      SELECT * FROM salidas 
-      WHERE id_salida = ? AND observaciones LIKE ?
-    `, [idSalida, `%${orden.numero_orden}%`]);
+      SELECT *
+      FROM salidas
+      WHERE id_salida = ?
+        AND (
+          id_orden_venta = ?
+          OR (
+            id_orden_venta IS NULL
+            AND (observaciones LIKE ? OR observaciones LIKE ?)
+          )
+        )
+    `, [idSalida, id, `%${orden.numero_orden}%`, `%Orden ${id}%`]);
 
     if (!salidaResult.success || salidaResult.data.length === 0) {
       return res.status(404).json({

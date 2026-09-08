@@ -48,9 +48,11 @@ router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('factura
 // GRE Remitente (09) por API REST — Fase 10.
 router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirGuiaRemision);
 router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
-// Fase 12: dejar sin efecto una GRE aceptada (traslado no iniciado; Admin puede forzar).
+// Confirma/sincroniza una baja GRE realizada previamente en SUNAT SOL (SUNAT no publica una baja
+// por el API REST de emisión). La ruta antigua se conserva temporalmente, con la misma validación.
+router.post('/guias/:id/baja/confirmar', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.dejarSinEfectoGuia);
 router.post('/guias/:id/sin-efecto', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.dejarSinEfectoGuia);
-// Fase 12: reemplazar una GRE aceptada por una nueva corregida (emite la nueva vía SUNAT).
+// Compatibilidad: el endpoint legado responde con una instrucción segura y no modifica datos.
 router.post('/guias/:id/reemplazar', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.reemplazarGuia);
 // Diagnóstico aislado del token OAuth GRE (Fase 10).
 router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
@@ -58,6 +60,7 @@ router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c
 // Representación impresa (PDF) con QR y hash — Fase 13.
 // El PDF también lo pueden descargar los perfiles de venta en solo lectura (facturacionConsulta).
 router.get('/comprobantes/:id/pdf', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), c.generarPdfComprobante);
+router.get('/guias/:id/archivos/:tipo', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), c.descargarArchivoGuia);
 router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), c.generarPdfGuia);
 
 // Fase 15: cola de reintentos / monitor. /jobs/tick se protege por TOKEN INTERNO (header

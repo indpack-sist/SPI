@@ -38,14 +38,18 @@ api.interceptors.response.use(
     const { status, data } = error.response;
 
     // Si el error es un Blob (común en descargas de PDF), intentamos leerlo
-    if (data instanceof Blob && data.type === 'application/json') {
+    if (data instanceof Blob && data.type.startsWith('application/json')) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
           try {
             const jsonData = JSON.parse(reader.result);
             console.error(`Error ${status}:`, jsonData.error || 'Error en descarga');
-            reject(jsonData);
+            reject({
+              ...jsonData,
+              status,
+              message: jsonData.error || 'Error en descarga'
+            });
           } catch (e) {
             reject({ error: 'Error al procesar respuesta del servidor' });
           }
@@ -1264,6 +1268,25 @@ const descargarPdfSunat = async (path) => {
   dispararDescarga(new File([blob], nombre, { type: 'application/pdf' }), nombre);
 };
 
+// Descarga autenticada y servida por el backend (XML/CDR de GRE). Al pasar por el mismo origen
+// evitamos que una política CORS del almacenamiento bloquee la descarga en producción.
+const descargarArchivoSunat = async (path, nombreFallback) => {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  });
+  if (!response.ok) {
+    let msg = 'No se pudo descargar el archivo';
+    try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
+    throw new Error(msg);
+  }
+  const disp = response.headers.get('Content-Disposition') || '';
+  const nombre = decodeURIComponent(
+    (disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || nombreFallback).trim()
+  );
+  dispararDescarga(await response.blob(), nombre);
+};
+
 // Descarga un archivo público (Cloudinary: XML firmado / CDR .zip) forzando el nombre correcto,
 // en vez de abrirlo en una pestaña. El nombre por defecto sale del último segmento de la URL,
 // que ya es el nombre SUNAT (p. ej. RUC-01-FE01-1.xml, R-RUC-01-FE01-1.zip).
@@ -1310,14 +1333,16 @@ export const sunatAPI = {
   // Descarga directa (blob) del XML firmado / CDR desde su URL pública, con nombre SUNAT.
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
-  // Guías de remisión (GRE Remitente 09) + Fase 12 (sin efecto / reemplazo).
+  // Guías de remisión (GRE Remitente 09). La baja se completa primero en SUNAT SOL y luego se
+  // confirma aquí para sincronizar el estado y conservar su auditoría en SPI.
   // payload del wizard de emisión: { observaciones, direccion_llegada, ubigeo_llegada, ciudad_llegada,
   // peso_bruto_kg, motivo_traslado_cod, es_comercio_exterior, transporte:{ modo, placa, dni, conductor, licencia, id_conductor, id_vehiculo } }
   emitirGuia: (id, payload = {}) => api.post(`/sunat/guias/${id}/emitir`, payload || {}),
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
-  dejarSinEfectoGuia: (id, motivo) => api.post(`/sunat/guias/${id}/sin-efecto`, { motivo }),
-  reemplazarGuia: (id, correcciones = {}) => api.post(`/sunat/guias/${id}/reemplazar`, { correcciones }),
+  confirmarBajaGuia: (id, datos) => api.post(`/sunat/guias/${id}/baja/confirmar`, datos),
   verPdfGuia: (id) => descargarPdfSunat(`/sunat/guias/${id}/pdf`),
+  descargarXmlGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/xml`, 'guia.xml'),
+  descargarCdrGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/cdr`, 'cdr.zip'),
 
   // Monitor SUNAT (Fase 15): conteo por estado, tickets abiertos, rechazos y errores del log.
   monitor: () => api.get('/sunat/monitor'),

@@ -3,7 +3,7 @@
 // Espeja PanelFacturacionSee pero opera sobre UNA sola guía. Coexiste con el flujo manual (no lo
 // reemplaza). Gatear su render con tienePermiso('facturacion') desde el contenedor.
 import { useState, useEffect } from 'react';
-import { Zap, FileText, RefreshCw, Ban, RotateCcw, ChevronLeft, ChevronRight, Check, Truck, MapPin, Package } from 'lucide-react';
+import { Zap, FileText, FileCode, FileCheck, RefreshCw, Ban, ChevronLeft, ChevronRight, Check, Truck, MapPin, Package, ExternalLink } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
@@ -32,8 +32,8 @@ const MOTIVOS_COMEX = [
 ];
 const labelMotivo = (cod) => [...MOTIVOS_DOMESTICO, ...MOTIVOS_COMEX].find((m) => m.cod === cod)?.label || cod;
 
-// `soloLectura`: perfiles de venta (Comercial/Ventas) solo ven/descargan el PDF de la GRE
-// ya emitida. No emiten, ni reemplazan, ni dejan sin efecto.
+// `soloLectura`: perfiles de venta (Comercial/Ventas) ven y descargan PDF/XML/CDR de la GRE
+// ya emitida. No emiten ni registran bajas.
 export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = false }) {
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
@@ -48,10 +48,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // la guía no tiene partida guardada (guías antiguas o config poblada después de crearlas).
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
-  const [modalReemplazo, setModalReemplazo] = useState(false);
-  const [motivo, setMotivo] = useState('');
-  // Correcciones opcionales del reemplazo (prellenadas al abrir el modal). Solo se envían las que cambian.
-  const [correcciones, setCorrecciones] = useState({});
+  const hoyIsoLima = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  const [bajaForm, setBajaForm] = useState({
+    causal: 'TRASLADO_NO_INICIADO', motivo: '', fecha: hoyIsoLima,
+    confirmacionSol: false, evidenciaUrl: '', origen: 'SOL_PREVIA'
+  });
 
   const estado = guia?.sunat_estado || null;               // null = sin emitir (estado SUNAT)
   const estadoNegocio = guia?.estado || null;              // Emitida/En Tránsito/Entregada/Anulada
@@ -74,6 +77,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const puedeEmitir = guiaVigente && sinEmitirSunat && ordenDespachada;
   const enviado = estado === 'ENVIADO';
   const aceptado = estado === 'ACEPTADO';
+  const bajaLocalSinConfirmar = estado === 'ANULADA' && Number(guia?.baja_sunat_confirmada) !== 1;
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
 
   // Punto de partida efectivo: el de la guía o, si falta, el domicilio fiscal de la empresa (empresa_config).
@@ -199,47 +203,42 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
   const handleVerificar = () => tras(() => sunatAPI.estadoGuia(guia.id_guia), 'Estado consultado en SUNAT.');
   const handlePdf = async () => { try { await sunatAPI.verPdfGuia(guia.id_guia); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
+  const archivoUrl = (v) => {
+    if (!v) return null;
+    if (Array.isArray(v)) return archivoUrl(v[0]);
+    if (typeof v === 'object') return v.url || null;
+    if (typeof v === 'string') {
+      try { return archivoUrl(JSON.parse(v)); } catch { return v; }
+    }
+    return null;
+  };
+  const handleArchivo = async (tipo) => {
+    try {
+      if (tipo === 'xml') await sunatAPI.descargarXmlGuia(guia.id_guia);
+      else await sunatAPI.descargarCdrGuia(guia.id_guia);
+    }
+    catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); }
+  };
+
+  const abrirBaja = () => {
+    setBajaForm({ causal: 'TRASLADO_NO_INICIADO', motivo: '', fecha: hoyIsoLima, confirmacionSol: false, evidenciaUrl: '', origen: 'SOL_PREVIA' });
+    setAlerta(null);
+    setModalSinEfecto(true);
+  };
 
   const handleSinEfecto = async () => {
-    if (!motivo.trim()) { setAlerta({ type: 'error', message: 'Indique el motivo para dejar sin efecto la guía.' }); return; }
-    await tras(() => sunatAPI.dejarSinEfectoGuia(guia.id_guia, motivo.trim()), 'Guía dejada sin efecto.');
-    setModalSinEfecto(false); setMotivo('');
+    if (!bajaForm.motivo.trim()) { setAlerta({ type: 'error', message: 'Indique el sustento de la baja.' }); return; }
+    if (!bajaForm.confirmacionSol) { setAlerta({ type: 'error', message: 'Primero complete la baja en SUNAT SOL y marque la confirmación.' }); return; }
+    const r = await tras(() => sunatAPI.confirmarBajaGuia(guia.id_guia, {
+      causal: bajaForm.causal,
+      motivo: bajaForm.motivo.trim(),
+      fecha_baja_sunat: bajaForm.fecha,
+      confirmacion_sol: true,
+      origen: bajaForm.origen,
+      ...(bajaForm.evidenciaUrl.trim() ? { evidencia_url: bajaForm.evidenciaUrl.trim() } : {})
+    }), 'Baja realizada en SUNAT SOL confirmada y sincronizada en SPI.');
+    if (r) setModalSinEfecto(false);
   };
-
-  const abrirReemplazo = () => {
-    setCorrecciones({
-      direccion_llegada: guia?.direccion_llegada || '',
-      ubigeo_llegada: guia?.ubigeo_llegada || '',
-      peso_bruto_kg: guia?.peso_bruto_kg ?? '',
-      observaciones: guia?.observaciones || ''
-    });
-    setModalReemplazo(true);
-  };
-
-  // Envía solo las correcciones que difieren del valor original (el resto se clona en el backend).
-  const handleReemplazar = async () => {
-    const diff = {};
-    const orig = {
-      direccion_llegada: guia?.direccion_llegada || '',
-      ubigeo_llegada: guia?.ubigeo_llegada || '',
-      peso_bruto_kg: String(guia?.peso_bruto_kg ?? ''),
-      observaciones: guia?.observaciones || ''
-    };
-    Object.entries(correcciones).forEach(([k, v]) => {
-      if (String(v ?? '') !== String(orig[k] ?? '')) diff[k] = v;
-    });
-    const r = await tras(() => sunatAPI.reemplazarGuia(guia.id_guia, diff), null);
-    const d = r?.data;
-    if (d) {
-      const rep = d.reemplazo;
-      setAlerta(d.ok
-        ? { type: 'success', message: `Guía reemplazada por ${rep?.numeroGuiaNueva || d.comprobante} (${d.estado}).` }
-        : { type: d.estado === 'RECHAZADO' ? 'error' : 'warning', message: `Reemplazo ${d.estado}. ${d.descripcion || d.error || ''}${rep ? ` La original queda ${rep.estadoOriginal}.` : ''}` });
-    }
-    setModalReemplazo(false);
-  };
-
-  const setC = (k, v) => setCorrecciones((c) => ({ ...c, [k]: v }));
 
   // ── Estado derivado del wizard de emisión (recomputado en cada render; emitForm es null si cerrado) ──
   const f = emitForm;
@@ -316,20 +315,25 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               <FileText size={13} className="mr-1" /> PDF
             </button>
           )}
-          {!soloLectura && (enviado || aceptado) && (
+          {archivoUrl(guia?.xml_url) && (
+            <button className="btn btn-xs btn-outline" onClick={() => handleArchivo('xml')} disabled={procesando} title="Descargar XML firmado">
+              <FileCode size={13} className="mr-1" /> XML
+            </button>
+          )}
+          {archivoUrl(guia?.cdr_url) && (
+            <button className="btn btn-xs btn-outline" onClick={() => handleArchivo('cdr')} disabled={procesando} title="Descargar CDR de SUNAT">
+              <FileCheck size={13} className="mr-1" /> CDR
+            </button>
+          )}
+          {!soloLectura && enviado && (
             <button className="btn btn-xs btn-outline" onClick={handleVerificar} disabled={procesando} title="Reconsultar estado en SUNAT">
               <RefreshCw size={13} className="mr-1" /> Estado
             </button>
           )}
-          {!soloLectura && aceptado && (
-            <>
-              <button className="btn btn-xs btn-outline" onClick={abrirReemplazo} disabled={procesando} title="Reemplazar por una GRE corregida">
-                <RotateCcw size={13} className="mr-1" /> Reemplazar
-              </button>
-              <button className="btn btn-xs btn-danger" onClick={() => { setMotivo(''); setModalSinEfecto(true); }} disabled={procesando} title="Dejar sin efecto (traslado no iniciado)">
-                <Ban size={13} className="mr-1" /> Sin efecto
-              </button>
-            </>
+          {!soloLectura && (aceptado || bajaLocalSinConfirmar) && (
+            <button className="btn btn-xs btn-danger" onClick={abrirBaja} disabled={procesando} title="Registrar una baja realizada en SUNAT SOL">
+              <Ban size={13} className="mr-1" /> {bajaLocalSinConfirmar ? 'Sincronizar baja SUNAT' : 'Baja SUNAT'}
+            </button>
           )}
         </div>
       </div>
@@ -765,49 +769,59 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         )}
       </Modal>
 
-      {/* Modal: dejar sin efecto */}
-      <Modal isOpen={modalSinEfecto} onClose={() => !procesando && setModalSinEfecto(false)} title="Dejar sin efecto la GRE" size="sm">
+      {/* Modal: baja oficial en SOL + sincronización local */}
+      <Modal isOpen={modalSinEfecto} onClose={() => !procesando && setModalSinEfecto(false)} title="Dar de baja la GRE en SUNAT" size="md">
         <div className="space-y-3 text-sm">
-          <p className="text-muted">La guía <strong className="font-mono">{comprobante}</strong> quedará SIN EFECTO. Solo procede si el traslado <strong>no ha iniciado</strong> (un Administrador puede forzarlo).</p>
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+            <p className="font-semibold">La baja oficial se completa en SUNAT SOL.</p>
+            <p className="text-xs mt-1">El API REST de emisión GRE no ofrece una operación de baja. SPI solo registrará la baja después de tu confirmación y conservará la guía en el historial de la OV.</p>
+            <a href="https://www.sunat.gob.pe/sol.html" target="_blank" rel="noreferrer" className="btn btn-sm btn-outline mt-3 inline-flex items-center">
+              Ir a SUNAT SOL <ExternalLink size={13} className="ml-1" />
+            </a>
+          </div>
+          <p>GRE: <strong className="font-mono">{comprobante}</strong></p>
           <div>
-            <label className="block text-xs text-muted mb-1">Motivo</label>
-            <textarea className="form-input w-full" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: Error en la dirección de llegada" />
+            <label className="block text-xs text-muted mb-1">Origen de la sincronización</label>
+            <select className="form-select w-full" value={bajaForm.origen} onChange={(e) => setBajaForm((f) => ({ ...f, origen: e.target.value }))}>
+              <option value="SOL_PREVIA">Inicié el proceso desde SPI y lo completé en SOL</option>
+              <option value="SOL_MANUAL">La baja ya había sido realizada directamente en SOL</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Causal permitida por SUNAT</label>
+            <select className="form-select w-full" value={bajaForm.causal} onChange={(e) => setBajaForm((f) => ({ ...f, causal: e.target.value }))}>
+              <option value="TRASLADO_NO_INICIADO">El traslado todavía no se inició</option>
+              <option value="CAMBIO_DESTINATARIO">Cambio de destinatario antes de llegar</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Sustento</label>
+            <textarea className="form-input w-full" rows={3} value={bajaForm.motivo} onChange={(e) => setBajaForm((f) => ({ ...f, motivo: e.target.value }))} placeholder="Ej: Traslado cancelado antes de su inicio" maxLength={500} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Fecha de la baja en SUNAT</label>
+            <input type="date" className="form-input w-full" value={bajaForm.fecha} max={hoyIsoLima} onChange={(e) => setBajaForm((f) => ({ ...f, fecha: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">URL de evidencia (opcional)</label>
+            <input type="url" className="form-input w-full" value={bajaForm.evidenciaUrl} onChange={(e) => setBajaForm((f) => ({ ...f, evidenciaUrl: e.target.value }))} placeholder="https://..." />
+          </div>
+          <label className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 cursor-pointer">
+            <input type="checkbox" className="mt-1" checked={bajaForm.confirmacionSol} onChange={(e) => setBajaForm((f) => ({ ...f, confirmacionSol: e.target.checked }))} />
+            <span className="text-xs text-red-900">Confirmo que ya realicé la baja de <strong>{comprobante}</strong> en SUNAT SOL y que los datos anteriores son correctos.</span>
+          </label>
+          <div className="rounded-md bg-gray-50 p-2 text-xs text-muted">
+            Si la baja ya fue hecha anteriormente directamente en SUNAT, utiliza este mismo formulario para sincronizar su estado real en SPI.
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn btn-sm btn-outline" onClick={() => setModalSinEfecto(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-danger" onClick={handleSinEfecto} disabled={procesando}>{procesando ? 'Procesando…' : 'Dejar sin efecto'}</button>
+            <button className="btn btn-sm btn-danger" onClick={handleSinEfecto} disabled={procesando || !bajaForm.confirmacionSol || !bajaForm.motivo.trim() || !bajaForm.fecha}>
+              {procesando ? 'Sincronizando…' : 'Confirmar baja y sincronizar'}
+            </button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal: reemplazar por GRE corregida */}
-      <Modal isOpen={modalReemplazo} onClose={() => !procesando && setModalReemplazo(false)} title="Reemplazar por una GRE corregida" size="sm">
-        <div className="space-y-3 text-sm">
-          <p className="text-muted">GRE 2.0 no tiene baja: se emite una <strong>guía nueva corregida</strong> y, si SUNAT la acepta, la original queda REEMPLAZADA. Ajusta solo lo que cambie.</p>
-          <div>
-            <label className="block text-xs text-muted mb-1">Dirección de llegada</label>
-            <input className="form-input w-full" value={correcciones.direccion_llegada || ''} onChange={(e) => setC('direccion_llegada', e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-muted mb-1">Ubigeo de llegada</label>
-              <input className="form-input w-full" value={correcciones.ubigeo_llegada || ''} onChange={(e) => setC('ubigeo_llegada', e.target.value)} maxLength={6} />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1">Peso bruto (kg)</label>
-              <input type="number" step="0.01" min="0" className="form-input w-full" value={correcciones.peso_bruto_kg ?? ''} onChange={(e) => setC('peso_bruto_kg', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1">Observaciones</label>
-            <textarea className="form-input w-full" rows={2} value={correcciones.observaciones || ''} onChange={(e) => setC('observaciones', e.target.value)} />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button className="btn btn-sm btn-outline" onClick={() => setModalReemplazo(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={handleReemplazar} disabled={procesando}>{procesando ? 'Emitiendo…' : 'Emitir reemplazo'}</button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
 import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
-import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI, sunatAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -80,7 +80,11 @@ function DetalleOrdenVenta() {
   const [modalCrearOP, setModalCrearOP] = useState(false);
   const [modalDespacho, setModalDespacho] = useState(false);
   const [modalAnularDespacho, setModalAnularDespacho] = useState(false);
-  const [anularForm, setAnularForm] = useState({ idSalida: null, esGuia: false, anularGuia: false, motivoGuia: '' });
+  const [anularForm, setAnularForm] = useState({
+    idSalida: null, esGuia: false, anularGuia: false, motivoGuia: '',
+    sunatAceptada: false, confirmacionSol: false,
+    causalBaja: 'TRASLADO_NO_INICIADO', fechaBajaSunat: ''
+  });
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
   const [modalAsignarComprobante, setModalAsignarComprobante] = useState(false);
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
@@ -454,7 +458,14 @@ function DetalleOrdenVenta() {
       // Guías de la orden + detalle completo de la activa (para la card SEE embebida).
       const guiasData = guiasRes?.data?.success ? (guiasRes.data.data || []) : [];
       setGuiasRemision(guiasData);
-      const activa = guiasData.find(g => g.estado !== 'Anulada');
+      // Prioriza la GRE activa. Si una versión anterior de SPI la anuló solo localmente, carga esa
+      // fila para permitir confirmar/sincronizar ahora la baja que ya se hizo en SUNAT SOL.
+      const activa = guiasData.find(g => g.estado !== 'Anulada')
+        || guiasData.find(g =>
+          g.estado === 'Anulada'
+          && ['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)
+          && Number(g.baja_sunat_confirmada) !== 1
+        );
       if (activa) {
         const detRes = await guiasRemisionAPI.getById(activa.id_guia).catch(() => null);
         setGuiaDetalleSee(detRes?.data?.success ? detRes.data.data : null);
@@ -570,8 +581,18 @@ function DetalleOrdenVenta() {
   // Abre el modal de anulación. Si la salida proviene de una guía de remisión (su observación
   // lleva "Despacho Guía ..."), el modal ofrece anular también la guía.
   const handleAnularDespacho = (idSalida, row) => {
-    const esGuia = /Despacho Gu[ií]a/i.test(row?.observaciones || '');
-    setAnularForm({ idSalida, esGuia, anularGuia: esGuia, motivoGuia: '' });
+    const guiaMatch = /Despacho Gu[ií]a\s+(\S+)/i.exec(row?.observaciones || '');
+    const esGuia = !!guiaMatch;
+    const guiaDeLaSalida = guiaMatch
+      ? guiasRemision.find((g) => g.numero_guia === guiaMatch[1])
+      : null;
+    setAnularForm({
+      idSalida, esGuia, anularGuia: esGuia, motivoGuia: '',
+      sunatAceptada: guiaDeLaSalida?.sunat_estado === 'ACEPTADO',
+      confirmacionSol: false,
+      causalBaja: 'TRASLADO_NO_INICIADO',
+      fechaBajaSunat: getFechaLocal()
+    });
     setModalAnularDespacho(true);
   };
 
@@ -581,7 +602,13 @@ function DetalleOrdenVenta() {
       setError(null);
 
       const body = anularForm.esGuia
-        ? { anular_guia: anularForm.anularGuia, motivo_guia: anularForm.motivoGuia.trim() || null }
+        ? {
+            anular_guia: anularForm.anularGuia,
+            motivo_guia: anularForm.motivoGuia.trim() || null,
+            confirmacion_baja_sunat: anularForm.confirmacionSol,
+            causal_baja_sunat: anularForm.causalBaja,
+            fecha_baja_sunat: anularForm.fechaBajaSunat || null
+          }
         : {};
 
       const response = await ordenesVentaAPI.anularDespacho(id, anularForm.idSalida, body);
@@ -1191,7 +1218,7 @@ function DetalleOrdenVenta() {
       setSuccess('Guía de Salida descargada');
     } catch (err) {
       console.error(err);
-      setError('Error al descargar la guía de salida');
+      setError(err?.error || err?.message || 'Error al descargar la guía de salida');
     } finally {
       setDescargandoPDF(null);
     }
@@ -1250,7 +1277,7 @@ function DetalleOrdenVenta() {
       setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida${verFinanzas ? ' (valorizada)' : ''} – ${numeroSalidaFormat}`, isObjectUrl: true });
     } catch (err) {
       console.error(err);
-      setError('Error al cargar el PDF de la guía de salida');
+      setError(err?.error || err?.message || 'Error al cargar el PDF de la guía de salida');
     } finally {
       setDescargandoPDF(null);
     }
@@ -1628,6 +1655,28 @@ function DetalleOrdenVenta() {
   // Regla: una GRE activa (no anulada) por orden. Si ya existe, en vez de "Crear Guía"
   // se enlaza a la existente (evita GRE duplicadas; el backend también lo bloquea).
   const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
+  const guiasHistorial = guiasRemision.filter(g =>
+    g.estado === 'Anulada' || ['ANULADA', 'REEMPLAZADA', 'RECHAZADO'].includes(g.sunat_estado)
+  );
+
+  const descargarPdfHistorialGuia = async (guia) => {
+    try {
+      setProcesando(true); setError(null);
+      await sunatAPI.verPdfGuia(guia.id_guia);
+    } catch (e) {
+      setError(e?.message || 'No se pudo descargar el PDF de la GRE.');
+    } finally { setProcesando(false); }
+  };
+
+  const descargarArchivoHistorialGuia = async (guia, tipo) => {
+    try {
+      setProcesando(true); setError(null);
+      if (tipo === 'xml') await sunatAPI.descargarXmlGuia(guia.id_guia);
+      else await sunatAPI.descargarCdrGuia(guia.id_guia);
+    } catch (e) {
+      setError(e?.message || 'No se pudo descargar el archivo de la GRE.');
+    } finally { setProcesando(false); }
+  };
 
   // La GRE Remitente (09) aplica tanto en transporte privado (Vehículo Empresa: conductor +
   // placa propios) como en transporte público (Transporte Privado/Tercero: un transportista con
@@ -2978,6 +3027,50 @@ function DetalleOrdenVenta() {
             )
         )}
 
+        {puedeVerSee && guiasHistorial.length > 0 && (
+          <div className="card p-3 space-y-2 mb-4 border-red-200">
+            <h3 className="flex items-center gap-2 font-semibold text-sm text-red-700">
+              <Ban size={16} /> Historial de Guías de Remisión
+            </h3>
+            {guiasHistorial.map((g) => {
+              const numero = g.serie_sunat && g.numero_sunat
+                ? `${g.serie_sunat}-${g.numero_sunat}`
+                : g.numero_guia;
+              const bajaConfirmada = Number(g.baja_sunat_confirmada) === 1;
+              return (
+                <div key={g.id_guia} className="rounded border border-red-200 bg-red-50/50 p-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-bold text-red-700">{numero}</span>
+                    <span className="badge badge-secondary text-xs">{g.sunat_estado || g.estado}</span>
+                    {bajaConfirmada && <span className="badge badge-success text-xs">Baja SOL confirmada</span>}
+                    <div className="ml-auto flex flex-wrap gap-1">
+                      {['ANULADA', 'REEMPLAZADA'].includes(g.sunat_estado) && (
+                        <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarPdfHistorialGuia(g)}>
+                          <FileText size={12} className="mr-1" /> PDF
+                        </button>
+                      )}
+                      {g.xml_url && (
+                        <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarArchivoHistorialGuia(g, 'xml')}>XML</button>
+                      )}
+                      {g.cdr_url && (
+                        <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarArchivoHistorialGuia(g, 'cdr')}>CDR</button>
+                      )}
+                    </div>
+                  </div>
+                  {g.motivo_anulacion && <p className="mt-1 text-xs text-red-800"><strong>Motivo:</strong> {g.motivo_anulacion}</p>}
+                  <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-red-700/80">
+                    <span>{g.baja_sunat_fecha ? `Baja SUNAT: ${formatearFechaHora(g.baja_sunat_fecha)}` : `Actualización: ${formatearFechaHora(g.fecha_anulacion)}`}</span>
+                    <span>Por: {g.baja_confirmada_por || 'Sistema'}</span>
+                  </div>
+                  {g.baja_sunat_evidencia_url && (
+                    <a href={g.baja_sunat_evidencia_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs underline text-red-700">Ver evidencia de la baja ↗</a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Documentos Adicionales */}
         {verFinanzas && (
         <div className="card h-full">
@@ -4046,21 +4139,39 @@ function DetalleOrdenVenta() {
                 <span className="text-sm">
                   <b>Anular también la guía de remisión asociada</b>
                   <span className="block text-xs text-amber-700">
-                    Este despacho se generó desde una guía. Si la GRE ya fue aceptada por SUNAT, se dejará SIN EFECTO (requiere motivo).
+                    Este despacho se generó desde una guía. Si la GRE fue aceptada, primero debes darla de baja en SUNAT SOL.
                   </span>
                 </span>
               </label>
 
               {anularForm.anularGuia && (
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Motivo (requerido si la GRE ya fue aceptada por SUNAT)</label>
-                  <textarea
-                    className="form-input w-full text-sm"
-                    rows={2}
-                    value={anularForm.motivoGuia}
-                    onChange={(e) => setAnularForm({ ...anularForm, motivoGuia: e.target.value })}
-                    placeholder="Ej. Error en el despacho / traslado no realizado"
-                  />
+                <div className="space-y-2">
+                  {anularForm.sunatAceptada && (
+                    <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-900 space-y-2">
+                      <p><strong>Esta GRE está ACEPTADA.</strong> SPI no puede ejecutar su baja por el API REST. Complétala primero en SUNAT SOL.</p>
+                      <a href="https://www.sunat.gob.pe/sol.html" target="_blank" rel="noreferrer" className="underline font-semibold">Abrir SUNAT SOL ↗</a>
+                      <select className="form-select w-full text-xs" value={anularForm.causalBaja} onChange={(e) => setAnularForm({ ...anularForm, causalBaja: e.target.value })}>
+                        <option value="TRASLADO_NO_INICIADO">El traslado todavía no se inició</option>
+                        <option value="CAMBIO_DESTINATARIO">Cambio de destinatario antes de llegar</option>
+                      </select>
+                      <input type="date" className="form-input w-full text-xs" max={getFechaLocal()} value={anularForm.fechaBajaSunat} onChange={(e) => setAnularForm({ ...anularForm, fechaBajaSunat: e.target.value })} />
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5" checked={anularForm.confirmacionSol} onChange={(e) => setAnularForm({ ...anularForm, confirmacionSol: e.target.checked })} />
+                        <span>Confirmo que ya realicé la baja oficial de la GRE en SUNAT SOL.</span>
+                      </label>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Motivo de anulación/baja</label>
+                    <textarea
+                      className="form-input w-full text-sm"
+                      rows={2}
+                      maxLength={500}
+                      value={anularForm.motivoGuia}
+                      onChange={(e) => setAnularForm({ ...anularForm, motivoGuia: e.target.value })}
+                      placeholder="Ej. Traslado cancelado antes de su inicio"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -4070,7 +4181,14 @@ function DetalleOrdenVenta() {
             <button className="btn btn-outline" onClick={() => setModalAnularDespacho(false)} disabled={procesando}>
               Cancelar
             </button>
-            <button className="btn btn-danger" onClick={confirmAnularDespacho} disabled={procesando}>
+            <button
+              className="btn btn-danger"
+              onClick={confirmAnularDespacho}
+              disabled={procesando || (anularForm.anularGuia && (
+                !anularForm.motivoGuia.trim()
+                || (anularForm.sunatAceptada && (!anularForm.confirmacionSol || !anularForm.fechaBajaSunat))
+              ))}
+            >
               {procesando ? 'Procesando...' : 'Anular Despacho'}
             </button>
           </div>

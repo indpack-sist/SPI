@@ -645,8 +645,10 @@ function DetalleGuiaRemision() {
           </div>
           
           <div className="space-y-2">
-            {estadoConfig.siguientes.length > 0 ? (
-              estadoConfig.siguientes.map(estado => {
+            {estadoConfig.siguientes.filter(estado => !(estado === 'Anulada' && guia.sunat_estado === 'ACEPTADO')).length > 0 ? (
+              estadoConfig.siguientes
+                .filter(estado => !(estado === 'Anulada' && guia.sunat_estado === 'ACEPTADO'))
+                .map(estado => {
                 const config = getEstadoConfig(estado);
                 const Icono = config.icono;
                 return (
@@ -664,6 +666,11 @@ function DetalleGuiaRemision() {
                 <p className="text-sm text-blue-900">
                   No hay estados disponibles desde el estado actual
                 </p>
+              </div>
+            )}
+            {guia.sunat_estado === 'ACEPTADO' && estadoConfig.siguientes.includes('Anulada') && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                Para anular una GRE aceptada, utiliza <strong>Baja SUNAT</strong> en el panel electrónico superior después de completar la baja en SUNAT SOL.
               </div>
             )}
           </div>

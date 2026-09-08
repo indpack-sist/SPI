@@ -15,8 +15,14 @@ export async function copiaLocal(nombre, contenido) {
 /** Las columnas xml_url/cdr_url guardan {url:...} (JSON u objeto según el driver). Devuelve el string. */
 export function extraerUrl(v) {
   if (!v) return null;
-  if (typeof v === 'object') return v.url || null;
-  try { return JSON.parse(v).url || null; } catch { return v; }
+  const desdeValor = (valor) => {
+    if (!valor) return null;
+    if (Array.isArray(valor)) return desdeValor(valor[0]);
+    if (typeof valor === 'object') return valor.url || null;
+    return typeof valor === 'string' ? valor : null;
+  };
+  if (typeof v === 'object') return desdeValor(v);
+  try { return desdeValor(JSON.parse(v)); } catch { return v; }
 }
 
 /**

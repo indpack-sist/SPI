@@ -1,6 +1,6 @@
-import { executeQuery, withTransaction } from '../config/database.js';
+import { executeQuery, executeTransaction, withTransaction } from '../config/database.js';
 import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
-import { componerObservacion } from '../services/sunat/util.service.js';
+import { componerObservacion, extraerUrl } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 
 // Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
@@ -52,14 +52,31 @@ export async function getAllGuiasRemision(req, res) {
         gr.punto_llegada,
         gr.peso_bruto_kg,
         gr.numero_bultos,
+        gr.serie_sunat,
+        gr.numero_sunat,
+        gr.sunat_estado,
+        gr.sunat_response_code,
+        gr.sunat_response_desc,
+        gr.xml_url,
+        gr.cdr_url,
+        gr.url_pdf,
+        gr.motivo_anulacion,
+        gr.fecha_anulacion,
+        gr.baja_sunat_confirmada,
+        gr.baja_sunat_fecha,
+        gr.baja_sunat_origen,
+        gr.baja_sunat_evidencia_url,
+        gr.id_guia_reemplazo,
         ov.numero_orden,
         ov.id_orden_venta,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
+        emp_baja.nombre_completo AS baja_confirmada_por,
         (SELECT COUNT(*) FROM detalle_guia_remision WHERE id_guia = gr.id_guia) AS total_items
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
+      LEFT JOIN empleados emp_baja ON gr.anulado_por = emp_baja.id_empleado
       WHERE 1=1
     `;
     
@@ -98,7 +115,12 @@ export async function getAllGuiasRemision(req, res) {
     
     res.json({
       success: true,
-      data: result.data
+      data: result.data.map((g) => ({
+        ...g,
+        xml_url: extraerUrl(g.xml_url),
+        cdr_url: extraerUrl(g.cdr_url),
+        url_pdf: extraerUrl(g.url_pdf)
+      }))
     });
     
   } catch (error) {
@@ -185,6 +207,9 @@ export async function getGuiaRemisionById(req, res) {
     }
     
     const guia = guiaResult.data[0];
+    guia.xml_url = extraerUrl(guia.xml_url);
+    guia.cdr_url = extraerUrl(guia.cdr_url);
+    guia.url_pdf = extraerUrl(guia.url_pdf);
     // Observación sugerida para el panel de emisión: prellenado editable = texto libre + OC de la OV.
     // Lo que el usuario deje en ese campo es lo que viaja a SUNAT como cbc:Note.
     guia.observacion_sugerida = componerObservacion(guia.observaciones, guia.orden_compra_cliente);
@@ -1117,7 +1142,8 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     }
     
     const guiaResult = await executeQuery(`
-      SELECT estado FROM guias_remision WHERE id_guia = ?
+      SELECT estado, sunat_estado, baja_sunat_confirmada, id_orden_venta
+      FROM guias_remision WHERE id_guia = ?
     `, [id]);
     
     if (!guiaResult.success || guiaResult.data.length === 0) {
@@ -1127,7 +1153,29 @@ export async function actualizarEstadoGuiaRemision(req, res) {
       });
     }
     
-    const estadoActual = guiaResult.data[0].estado;
+    const guiaActual = guiaResult.data[0];
+    const estadoActual = guiaActual.estado;
+
+    // Una GRE aceptada no puede desaparecer mediante el cambio de estado local. Su baja oficial
+    // se realiza en SOL y se confirma desde el panel SUNAT, que además escribe la auditoría.
+    if (estado === 'Anulada' && guiaActual.sunat_estado === 'ACEPTADO') {
+      return res.status(422).json({
+        success: false,
+        error: 'Esta GRE fue aceptada por SUNAT. Realiza primero la baja en SUNAT SOL y luego usa “Baja SUNAT” para sincronizarla en SPI.'
+      });
+    }
+
+    if (estado === estadoActual) {
+      return res.json({ success: true, message: `La guía ya se encuentra en estado ${estado}` });
+    }
+
+    // Una baja SUNAT confirmada es final: el endpoint genérico no puede volver a activar la guía.
+    if (Number(guiaActual.baja_sunat_confirmada) === 1 && estado !== 'Anulada') {
+      return res.status(409).json({
+        success: false,
+        error: 'La guía tiene una baja SUNAT confirmada y no puede reactivarse.'
+      });
+    }
     
     if (estado === 'Anulada' && (estadoActual === 'En Tránsito' || estadoActual === 'Entregada')) {
       return res.status(400).json({
@@ -1136,11 +1184,37 @@ export async function actualizarEstadoGuiaRemision(req, res) {
       });
     }
     
-    await executeQuery(`
-      UPDATE guias_remision
-      SET estado = ?
-      WHERE id_guia = ?
-    `, [estado, id]);
+    if (estado === 'Anulada') {
+      const idUsuario = req.user?.id_empleado || null;
+      const fecha = getFechaPeru();
+      const result = await executeTransaction([
+        {
+          sql: `UPDATE guias_remision
+                   SET estado = 'Anulada', motivo_anulacion = COALESCE(motivo_anulacion, ?),
+                       anulado_por = COALESCE(anulado_por, ?), fecha_anulacion = COALESCE(fecha_anulacion, ?)
+                 WHERE id_guia = ?`,
+          params: ['Anulación local de guía no aceptada por SUNAT', idUsuario, fecha, id]
+        },
+        {
+          sql: `INSERT INTO guias_remision_historial
+                  (id_guia, id_orden_venta, evento, estado_anterior, estado_nuevo,
+                   motivo, origen, id_usuario, evidencia_url, fecha)
+                VALUES (?, ?, 'ANULACION_LOCAL', ?, 'Anulada', ?, 'SPI', ?, NULL, ?)`,
+          params: [id, guiaActual.id_orden_venta || null,
+            guiaActual.sunat_estado || estadoActual,
+            'Anulación local de guía no aceptada por SUNAT', idUsuario, fecha]
+        }
+      ]);
+      if (!result.success) {
+        return res.status(500).json({ success: false, error: result.error });
+      }
+    } else {
+      await executeQuery(`
+        UPDATE guias_remision
+        SET estado = ?
+        WHERE id_guia = ?
+      `, [estado, id]);
+    }
     
     res.json({
       success: true,

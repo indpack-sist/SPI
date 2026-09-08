@@ -1,6 +1,5 @@
 // services/sunat/gre-emision.service.js — FASE 10: core de emisión de GRE Remitente (09).
-// Extraído del controller (move fiel) para que emitirGuiaRemision Y reemplazarGuiaRemision (Fase 12)
-// compartan exactamente el mismo pipeline SUNAT (mock en BETA → real en Fase 16).
+// Extraído del controller para centralizar el pipeline SUNAT (mock en BETA → real en PROD).
 import { pool, withTransaction } from '../../config/database.js';
 import { sunatConfig } from '../../config/sunat.js';
 import { obtenerCorrelativo } from './numeracion.service.js';
@@ -11,15 +10,13 @@ import { obtenerTokenGre, enviarGuia, consultarGuia } from './gre.service.js';
 import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
-import { fechaLima, ahoraLima } from './fecha.service.js';
+import { fechaLima } from './fecha.service.js';
 import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from './util.service.js';
 import AppError from '../../utils/AppError.js';
 
-// ── FASE 12: reconciliación de reemplazo ────────────────────────────────────
-// Punto único: cuando una guía se cierra (ACEPTADA/RECHAZADA), si es el blanco de un reemplazo
-// en curso (otra guía la referencia en id_guia_reemplazo y sigue ACEPTADA), finaliza o aborta el
-// reemplazo. Como cerrarTicketGre lo llaman la emisión inline, verificarEstadoGuia y el job de
-// Fase 15, la reconciliación de un ticket 202 pendiente sale gratis por este mismo camino.
+// Compatibilidad con reemplazos iniciados por versiones anteriores. Aceptar una GRE nueva no
+// invalida la original en SUNAT; por eso esta reconciliación limpia la marca local y mantiene la
+// original ACEPTADA. La baja real debe completarse por separado en SUNAT SOL.
 async function finalizarReemplazoSiAplica(idGuiaCerrada, aceptado) {
   const [[orig]] = await pool.query(
     "SELECT id_guia, numero_guia FROM guias_remision WHERE id_guia_reemplazo = ? AND sunat_estado = 'ACEPTADO'",
@@ -27,15 +24,17 @@ async function finalizarReemplazoSiAplica(idGuiaCerrada, aceptado) {
   if (!orig) return; // la guía cerrada no es un reemplazo en curso: emisión normal.
 
   if (aceptado) {
-    // La guía nueva quedó ACEPTADA → la original pasa a REEMPLAZADA + Anulada (negocio).
+    // Ambas GRE siguen aceptadas por SUNAT. Se elimina la relación local que antes podía marcar
+    // incorrectamente la original como anulada/reemplazada.
     await pool.query(
       `UPDATE guias_remision
-         SET sunat_estado = 'REEMPLAZADA', estado = 'Anulada',
-             motivo_anulacion = ?, fecha_anulacion = ?
+         SET id_guia_reemplazo = NULL, anulado_por = NULL,
+             motivo_anulacion = NULL, fecha_anulacion = NULL
        WHERE id_guia = ?`,
-      [`Reemplazada por la guía id ${idGuiaCerrada}`.slice(0, 500), ahoraLima(), orig.id_guia]);
-    await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: orig.id_guia, evento: 'reemplazoFinalizado',
-      exito: true, httpStatus: 200, detalle: `Original ${orig.numero_guia} → REEMPLAZADA por guía id ${idGuiaCerrada}` });
+      [orig.id_guia]);
+    await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: orig.id_guia, evento: 'reemplazoNoAplicado',
+      exito: false, httpStatus: 200,
+      detalle: `Nueva guía id ${idGuiaCerrada} aceptada; ${orig.numero_guia} permanece ACEPTADA hasta una baja real en SUNAT SOL` });
   } else {
     // La guía nueva fue RECHAZADA → aborta el reemplazo: la original vuelve a quedar intacta (ACEPTADO).
     await pool.query(
@@ -69,7 +68,7 @@ export async function cerrarTicketGre(idGuia, nombre, ticket, st, t0) {
   await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'consultarGuia',
     exito: aceptado, httpStatus: 200, detalle: `${st.codRespuesta} ${descripcion}`.slice(0, 4000),
     duracionMs: Date.now() - t0 });
-  // Fase 12: si esta guía era el reemplazo de otra, finaliza/aborta la original.
+  // Compatibilidad: limpia cualquier reemplazo iniciado por una versión anterior.
   if (estadoFinal === 'ACEPTADO' || estadoFinal === 'RECHAZADO') {
     await finalizarReemplazoSiAplica(idGuia, aceptado);
   }

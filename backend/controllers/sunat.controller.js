@@ -1459,8 +1459,10 @@ export async function generarPdfGuia(req, res, next) {
       } catch (e) { console.warn('[SUNAT] subir PDF GRE falló:', e.message); }
     }
 
-    // Nombre estilo SUNAT (RUC-09-SERIE-NUMERO.pdf), igual que el XML/CDR de la GRE.
-    const nombrePdf = `${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}.pdf`;
+    // El sufijo textual queda DESPUÉS del correlativo para que, al descargar el mismo PDF otra vez,
+    // el navegador no convierta visualmente "...-TE01-1.pdf" en "...-TE01-2.pdf" al resolver la
+    // colisión del nombre local. El documento fiscal sigue siendo inequívocamente TE01-1.
+    const nombrePdf = `${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}-GRE-REMITENTE.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${nombrePdf}"`);
     res.send(pdf);

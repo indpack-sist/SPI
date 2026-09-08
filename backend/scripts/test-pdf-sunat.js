@@ -141,6 +141,8 @@ async function main() {
     txtGre.includes('TIENDAS POR DEPARTAMENTO RIPLEY') && txtGre.includes('20337564373') &&
     txtGre.includes('RBT60G006') && txtGre.includes('ROLLO BURBUPACK 1.00 x 100 MTS') &&
     txtGre.includes('AVZ890') && txtGre.includes('Q75336849'));
+  check('GRE (09) imprime teléfono y correo del emisor en la cabecera',
+    txtGre.includes('Teléfono: 01-312 7858') && txtGre.includes('E-mail: informes@indpackperu.com'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
   // 4b) GRE Caso 1 (tercero público SIN registrar veh/cond) — solo transportista (espeja EG07-81).

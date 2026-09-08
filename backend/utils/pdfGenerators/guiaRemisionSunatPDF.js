@@ -244,7 +244,7 @@ export async function generarGuiaRemisionSunatPDF({
 
       const sectionHeight = (bodyHeight, bottomPad = 4) => 17 + bodyHeight + bottomPad + 4;
 
-      const twoColumnRows = (rows) => {
+      const twoColumnRows = (rows, options = {}) => {
         const leftX = X + 9;
         const colW = (W - 27) / 2;
         const rightX = leftX + colW + 9;
@@ -253,7 +253,7 @@ export async function generarGuiaRemisionSunatPDF({
           const leftHeight = left ? labelValue(left[0], left[1], leftX, cursor, colW, left[2] || {}) : 10;
           const rightHeight = right ? labelValue(right[0], right[1], rightX, cursor, colW, right[2] || {}) : 10;
           const rowH = Math.max(leftHeight, rightHeight, 11) + 4;
-          if (index < rows.length - 1) {
+          if (options.separators !== false && index < rows.length - 1) {
             doc.moveTo(leftX, cursor + rowH - 3).lineTo(X + W - 9, cursor + rowH - 3)
               .lineWidth(0.35).strokeColor(COLOR.line).stroke();
           }
@@ -438,9 +438,9 @@ export async function generarGuiaRemisionSunatPDF({
           ['Peso bruto total de la carga:', numero(g.peso_bruto_kg), { labelWidth: 148, boldValue: true }]
         ]
       ];
-      top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)), { whiteHeader: true });
+      top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)), { whiteHeader: true, borderless: true });
       twoColumnRows(cargaRows);
-      sectionEnd(top);
+      sectionEnd(top, 4, { borderless: true });
 
       const esTercero = !!transportista?.ruc;
       const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
@@ -467,7 +467,7 @@ export async function generarGuiaRemisionSunatPDF({
       if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
       if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
       top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight), { whiteHeader: true, borderless: true });
-      twoColumnRows(trasladoRows);
+      twoColumnRows(trasladoRows, { separators: false });
       if (transportista?.ruc) {
         fullWidthRow('Empresa transportista:', transportistaText, { labelWidth: 125 });
       }

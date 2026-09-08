@@ -111,11 +111,30 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
         throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
       }
     }
+    const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
+    if (!empresa) throw new AppError('Falta la configuración de la empresa remitente', 422);
+
+    // En venta el origen es autoritativamente empresa_config. Se sincroniza dentro de esta
+    // transacción, después de validar que la guía es emitible, para corregir también borradores
+    // antiguos sin alterar documentos que ya fueron aceptados por SUNAT.
+    if (!esCompra) {
+      g.direccion_partida = String(empresa.direccion || '').trim();
+      g.punto_partida = g.direccion_partida;
+      g.ubigeo_partida = String(empresa.ubigeo || '').trim();
+      await conn.query(
+        `UPDATE guias_remision
+            SET direccion_partida = ?, punto_partida = ?, ubigeo_partida = ?
+          WHERE id_guia = ?`,
+        [g.direccion_partida, g.punto_partida, g.ubigeo_partida, idGuia]
+      );
+    }
+
+    if (!g.direccion_partida || !g.direccion_llegada) {
+      throw new AppError('Faltan las direcciones de partida/llegada', 422);
+    }
     if (!g.ubigeo_partida || !g.ubigeo_llegada) throw new AppError('Faltan ubigeos de partida/llegada (6 dígitos)', 422);
     if (!(Number(g.peso_bruto_kg) > 0)) throw new AppError('peso_bruto_kg debe ser > 0', 422);
     if (!g.motivo_traslado_cod) throw new AppError('Falta motivo_traslado_cod (catálogo 20)', 422);
-
-    const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
 
     // Destinatario de la GRE + (solo compra) proveedor y documento relacionado.
     const esComex = Number(g.es_comercio_exterior) === 1;

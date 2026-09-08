@@ -48,6 +48,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // la guía no tiene partida guardada (guías antiguas o config poblada después de crearlas).
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
+  const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
   const hoyIsoLima = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());
@@ -80,9 +81,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const bajaLocalSinConfirmar = estado === 'ANULADA' && Number(guia?.baja_sunat_confirmada) !== 1;
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
 
-  // Punto de partida efectivo: el de la guía o, si falta, el domicilio fiscal de la empresa (empresa_config).
-  const partidaDireccion = guia?.direccion_partida || guia?.punto_partida || empresaRemitente?.direccion || '';
-  const partidaUbigeo = guia?.ubigeo_partida || empresaRemitente?.ubigeo || '';
+  // En venta el punto de partida vigente siempre procede de empresa_config. Las guías de compra
+  // conservan como partida el domicilio del proveedor porque SPI recoge allí la mercadería.
+  const partidaDireccion = esCompra
+    ? (guia?.direccion_partida || guia?.punto_partida || '')
+    : (empresaRemitente?.direccion || guia?.direccion_partida || guia?.punto_partida || '');
+  const partidaUbigeo = esCompra
+    ? (guia?.ubigeo_partida || '')
+    : (empresaRemitente?.ubigeo || guia?.ubigeo_partida || '');
 
   // Prerrequisito global que se muestra como aviso ANTES de abrir el wizard: el ubigeo de partida
   // viene de empresa_config (si falta, es un problema de configuración de la empresa). El resto de
@@ -128,16 +134,19 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // Abre el wizard de emisión, prellenando TODOS los campos editables desde la guía/OV.
   const abrirEmitir = () => {
     const comex = !!guia?.es_comercio_exterior;
+    const direccionLlegada = guia?.direccion_llegada || guia?.punto_llegada || '';
+    // En comercio exterior manda el ubigeo fijo elegido con el puerto; no se recalcula desde texto.
+    const ubicacion = comex ? null : resolverUbigeoDesdeDireccion(direccionLlegada);
+    const ubigeoGuardado = guia?.ubigeo_llegada || '';
+    setUbigeoDetectado(!ubigeoGuardado ? ubicacion : null);
     setEmitForm({
       es_comercio_exterior: comex,
       motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : '01'),
       peso_bruto_kg: guia?.peso_bruto_kg ?? '',
-      direccion_llegada: guia?.direccion_llegada || guia?.punto_llegada || '',
+      direccion_llegada: direccionLlegada,
       // Fallback para guías legacy sin ubigeo: derivarlo de la cola de la dirección de llegada.
-      ubigeo_llegada: guia?.ubigeo_llegada
-        || resolverUbigeoDesdeDireccion(guia?.direccion_llegada || guia?.punto_llegada)?.codigo
-        || '',
-      ciudad_llegada: guia?.ciudad_llegada || '',
+      ubigeo_llegada: ubigeoGuardado || ubicacion?.codigo || '',
+      ciudad_llegada: guia?.ciudad_llegada || ubicacion?.distrito || '',
       observaciones: guia?.observacion_sugerida ?? guia?.observaciones ?? '',
       transporteModo: modoInicial,
       // Modo particular (texto libre): prellena de la guía; si viene vacío, cae a los datos de la OV.
@@ -162,6 +171,30 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   };
 
   const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
+
+  const handleDireccionLlegada = (direccion) => {
+    if (emitForm?.es_comercio_exterior) {
+      setF('direccion_llegada', direccion);
+      setUbigeoDetectado(null);
+      return;
+    }
+    const ubicacion = resolverUbigeoDesdeDireccion(direccion);
+    setEmitForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        direccion_llegada: direccion,
+        ...(ubicacion ? {
+          ubigeo_llegada: ubicacion.codigo,
+          ciudad_llegada: ubicacion.distrito || ''
+        } : {
+          ubigeo_llegada: '',
+          ciudad_llegada: ''
+        })
+      };
+    });
+    setUbigeoDetectado(ubicacion);
+  };
 
   // Al cambiar comercio exterior se reajusta el motivo al primero válido de su lista.
   const toggleComex = (comex) => {
@@ -613,7 +646,17 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada (editable)</div>
                   <div>
                     <label className="block text-[11px] text-muted mb-1">Dirección *</label>
-                    <input className="form-input w-full text-sm" value={f.direccion_llegada} onChange={(e) => setF('direccion_llegada', e.target.value)} />
+                    <input
+                      className="form-input w-full text-sm"
+                      value={f.direccion_llegada}
+                      onChange={(e) => handleDireccionLlegada(e.target.value)}
+                      placeholder="Dirección detallada, distrito, provincia, departamento"
+                    />
+                    {ubigeoDetectado && (
+                      <p className="text-[11px] text-emerald-700 mt-1">
+                        Detectado: {ubigeoDetectado.departamento} / {ubigeoDetectado.provincia} / {ubigeoDetectado.distrito} ({ubigeoDetectado.codigo})
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] text-muted mb-1">Ubigeo * (Departamento / Provincia / Distrito)</label>
@@ -621,11 +664,18 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       value={f.ubigeo_llegada}
                       required
                       onChange={(codigo, meta) => {
-                        setF('ubigeo_llegada', codigo);
-                        setF('ciudad_llegada', meta?.distrito || '');
+                        setUbigeoDetectado(null);
+                        setEmitForm((prev) => prev ? {
+                          ...prev,
+                          ubigeo_llegada: codigo,
+                          ciudad_llegada: meta?.distrito || ''
+                        } : prev);
                       }}
                     />
                   </div>
+                  {!ubigeoDetectado && f.direccion_llegada && !f.ubigeo_llegada && (
+                    <p className="text-[11px] text-amber-700">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
+                  )}
                   {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="text-[11px] text-danger">El ubigeo debe tener 6 dígitos.</p>}
                 </div>
               </div>

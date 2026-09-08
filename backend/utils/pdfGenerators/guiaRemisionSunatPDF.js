@@ -173,8 +173,10 @@ export async function generarGuiaRemisionSunatPDF({
         const top = y;
         if (options.whiteHeader) {
           doc.rect(X, top, W, 17).fill(COLOR.panel);
-          doc.moveTo(X, top + 17).lineTo(X + W, top + 17)
-            .lineWidth(0.45).strokeColor(COLOR.line).stroke();
+          if (!options.borderless) {
+            doc.moveTo(X, top + 17).lineTo(X + W, top + 17)
+              .lineWidth(0.45).strokeColor(COLOR.line).stroke();
+          }
         } else {
           doc.roundedRect(X, top, W, 17, 4).fill(COLOR.header);
         }
@@ -188,9 +190,11 @@ export async function generarGuiaRemisionSunatPDF({
         return top;
       };
 
-      const sectionEnd = (top, bottomPad = 4) => {
+      const sectionEnd = (top, bottomPad = 4, options = {}) => {
         y += bottomPad;
-        doc.roundedRect(X, top, W, y - top, 4).lineWidth(0.65).strokeColor(COLOR.line).stroke();
+        if (!options.borderless) {
+          doc.roundedRect(X, top, W, y - top, 4).lineWidth(0.65).strokeColor(COLOR.line).stroke();
+        }
         y += 4;
         resetText();
       };
@@ -356,6 +360,8 @@ export async function generarGuiaRemisionSunatPDF({
           const topTable = y;
           let x = X;
           doc.rect(X, topTable, W, 30).fill(COLOR.header);
+          doc.moveTo(X, topTable).lineTo(X + W, topTable)
+            .lineWidth(0.65).strokeColor(COLOR.ink).stroke();
           cols.forEach((col) => {
             doc.font('Helvetica-Bold').fontSize(5.2);
             const headerTextHeight = doc.heightOfString(col.label, { width: col.width - 6, lineGap: 0.5 });
@@ -460,13 +466,13 @@ export async function generarGuiaRemisionSunatPDF({
       let trasladoBodyHeight = twoColumnHeight(trasladoRows);
       if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
       if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
-      top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight), { whiteHeader: true });
+      top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight), { whiteHeader: true, borderless: true });
       twoColumnRows(trasladoRows);
       if (transportista?.ruc) {
         fullWidthRow('Empresa transportista:', transportistaText, { labelWidth: 125 });
       }
       if (fechaEntrega) fullWidthRow('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
-      sectionEnd(top);
+      sectionEnd(top, 4, { borderless: true });
 
       const normalizedConductores = Array.isArray(conductores) && conductores.length
         ? conductores
@@ -490,9 +496,9 @@ export async function generarGuiaRemisionSunatPDF({
           })
           : [['Número de placa:', '—', { labelWidth: 105 }]];
         const vehicleBodyHeight = vehicleRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
-        top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight), { whiteHeader: true });
+        top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight), { whiteHeader: true, borderless: true });
         vehicleRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
-        sectionEnd(top);
+        sectionEnd(top, 4, { borderless: true });
       }
 
       if (normalizedConductores.length || !esTercero) {
@@ -506,20 +512,20 @@ export async function generarGuiaRemisionSunatPDF({
           })
           : [['Conductor principal:', '—', { labelWidth: 105 }]];
         const driverBodyHeight = driverRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
-        top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight), { whiteHeader: true });
+        top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight), { whiteHeader: true, borderless: true });
         driverRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
-        sectionEnd(top);
+        sectionEnd(top, 4, { borderless: true });
       }
 
       const observacion = limpio(g.observaciones, '');
       if (observacion) {
         doc.font('Helvetica').fontSize(7.1);
         const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });
-        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2), { whiteHeader: true });
+        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2), { whiteHeader: true, borderless: true });
         doc.font('Helvetica').fontSize(7.1).fillColor(COLOR.ink)
           .text(observacion, X + 9, y + 8, { width: W - 18, height: obsHeight, lineGap: 1.5 });
         y += 8 + obsHeight + 2;
-        sectionEnd(top);
+        sectionEnd(top, 4, { borderless: true });
       }
 
       // Pie legal completo. Si no cabe, pasa a una página limpia en lugar de superponerse al detalle.

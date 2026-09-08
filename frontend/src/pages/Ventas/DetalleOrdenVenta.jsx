@@ -6,7 +6,7 @@ import {
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
   ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye,
-    BadgeCheck, ArrowRightLeft, RefreshCcw, ShieldCheck, ShieldAlert, ShieldOff, X
+    BadgeCheck, ArrowRightLeft, RefreshCcw, ShieldCheck, ShieldAlert, ShieldOff, X, Ban
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';

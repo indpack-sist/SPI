@@ -108,7 +108,7 @@ export async function generarGuiaRemisionSunatPDF({
       const CONTENT_BOTTOM = 790;
       let y = 28;
 
-      const resetText = () => doc.fillColor(COLOR.ink).font('Helvetica').fontSize(7.4);
+      const resetText = () => doc.fillColor(COLOR.ink).font('Helvetica').fontSize(6.9);
 
       const drawContinuationHeader = () => {
         doc.rect(X, 28, 5, 35).fill(COLOR.headerDark);
@@ -145,6 +145,12 @@ export async function generarGuiaRemisionSunatPDF({
         const dirEmisor = [emisor.direccion, emisor.urbanizacion].filter(Boolean).join(' - ');
         doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.muted)
           .text(limpio(dirEmisor, ''), X, 102, { width: 320, lineGap: 1 });
+        if (emisor.telefono) {
+          doc.fontSize(7.2).text(`Teléfono: ${limpio(emisor.telefono)}`, X, doc.y + 1, { width: 320 });
+        }
+        if (emisor.email) {
+          doc.fontSize(7.2).text(`E-mail: ${limpio(emisor.email)}`, X, doc.y + 1, { width: 320 });
+        }
         const emisorBottom = doc.y;
 
         const bx = 368;
@@ -187,9 +193,9 @@ export async function generarGuiaRemisionSunatPDF({
         const labelWidth = options.labelWidth || 105;
         const valueWidth = width - labelWidth;
         const safe = limpio(value);
-        doc.font('Helvetica-Bold').fontSize(7);
+        doc.font('Helvetica-Bold').fontSize(6.5);
         const labelHeight = doc.heightOfString(label, { width: labelWidth - 5, lineGap: 1 });
-        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7.5);
+        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7);
         const valueHeight = doc.heightOfString(safe, { width: valueWidth, lineGap: 1 });
         return Math.max(labelHeight, valueHeight, options.minHeight || 10);
       };
@@ -199,9 +205,9 @@ export async function generarGuiaRemisionSunatPDF({
         const valueWidth = width - labelWidth;
         const safe = limpio(value);
         const height = measureLabelValue(label, safe, width, options);
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.muted)
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor(COLOR.muted)
           .text(label, x, atY, { width: labelWidth - 5, height, lineGap: 1 });
-        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7.5).fillColor(COLOR.ink)
+        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7).fillColor(COLOR.ink)
           .text(safe, x + labelWidth, atY, { width: valueWidth, height, lineGap: 1 });
         return height;
       };
@@ -259,7 +265,7 @@ export async function generarGuiaRemisionSunatPDF({
       ];
       const partida = `[${limpio(g.ubigeo_partida)}] ${limpio(g.direccion_partida)}`;
       const llegada = `[${limpio(g.ubigeo_llegada)}] ${limpio(g.direccion_llegada)}`;
-      const routeAddressOptions = { labelWidth: 105, fontSize: 7.7 };
+      const routeAddressOptions = { labelWidth: 105, fontSize: 7.2 };
       const routeBodyHeight = twoColumnHeight(routeRows)
         + fullWidthHeight('Punto de partida:', partida, routeAddressOptions)
         + fullWidthHeight('Punto de llegada:', llegada, routeAddressOptions);
@@ -337,7 +343,7 @@ export async function generarGuiaRemisionSunatPDF({
           let x = X;
           doc.rect(X, topTable, W, 30).fill(COLOR.header);
           cols.forEach((col) => {
-            doc.font('Helvetica-Bold').fontSize(5.7).fillColor(COLOR.ink)
+            doc.font('Helvetica-Bold').fontSize(5.2).fillColor(COLOR.ink)
               .text(col.label, x + 3, topTable + 7, { width: col.width - 6, align: col.align || 'left', lineGap: 0.5 });
             x += col.width;
             if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor(COLOR.panel).stroke();
@@ -364,7 +370,7 @@ export async function generarGuiaRemisionSunatPDF({
           };
           const cellHeights = cols.map((col) => {
             doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
-              .fontSize(col.key === 'unidad' ? 5.8 : 6.5);
+              .fontSize(col.key === 'unidad' ? 5.3 : 6);
             return doc.heightOfString(values[col.key], { width: col.width - 6, lineGap: 1 });
           });
           const rowH = Math.max(29, Math.ceil(Math.max(...cellHeights)) + 10);
@@ -378,7 +384,7 @@ export async function generarGuiaRemisionSunatPDF({
           let x = X;
           cols.forEach((col) => {
             doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
-              .fontSize(col.key === 'unidad' ? 5.8 : 6.5).fillColor(COLOR.ink)
+              .fontSize(col.key === 'unidad' ? 5.3 : 6).fillColor(COLOR.ink)
               .text(values[col.key], x + 3, y + 7, {
                 width: col.width - 6,
                 height: rowH - 9,
@@ -392,7 +398,7 @@ export async function generarGuiaRemisionSunatPDF({
           y += rowH;
         });
         if (!detalle.length) {
-          doc.font('Helvetica').fontSize(7.5).fillColor(COLOR.muted)
+          doc.font('Helvetica').fontSize(7).fillColor(COLOR.muted)
             .text('No se registraron bienes.', X + 9, y + 8, { width: W - 18, align: 'center' });
           y += 28;
         }
@@ -476,7 +482,7 @@ export async function generarGuiaRemisionSunatPDF({
             const licencia = driver.licencia_conducir || driver.licencia;
             return [index === 0 ? 'Conductor principal:' : 'Conductor secundario:',
               `${limpio(nombre)} · DOCUMENTO NACIONAL DE IDENTIDAD N° ${limpio(driver.dni)} · LICENCIA N° ${limpio(licencia)}`,
-              { labelWidth: 112, fontSize: 7.3, boldValue: true }];
+              { labelWidth: 112, fontSize: 6.8, boldValue: true }];
           })
           : [['Conductor principal:', '—', { labelWidth: 105 }]];
         const driverBodyHeight = driverRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
@@ -487,10 +493,10 @@ export async function generarGuiaRemisionSunatPDF({
 
       const observacion = limpio(g.observaciones, '');
       if (observacion) {
-        doc.font('Helvetica').fontSize(7.6);
+        doc.font('Helvetica').fontSize(7.1);
         const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });
         top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2));
-        doc.font('Helvetica').fontSize(7.6).fillColor(COLOR.ink)
+        doc.font('Helvetica').fontSize(7.1).fillColor(COLOR.ink)
           .text(observacion, X + 9, y + 8, { width: W - 18, height: obsHeight, lineGap: 1.5 });
         y += 8 + obsHeight + 2;
         sectionEnd(top);
@@ -506,9 +512,9 @@ export async function generarGuiaRemisionSunatPDF({
       const legalX = X + 101;
       doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.ink)
         .text('REPRESENTACIÓN IMPRESA', legalX, footerY + 10, { width: 205 });
-      doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.ink)
+      doc.font('Helvetica').fontSize(6.7).fillColor(COLOR.ink)
         .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 25, { width: 407, lineGap: 1.2 });
-      doc.font('Helvetica-Bold').fontSize(6.8).fillColor(COLOR.muted)
+      doc.font('Helvetica-Bold').fontSize(6.3).fillColor(COLOR.muted)
         .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 58, { width: 407 });
       // Marca de agua para guías invalidadas.
       const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'

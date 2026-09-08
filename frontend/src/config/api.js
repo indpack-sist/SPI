@@ -1252,7 +1252,9 @@ const dispararDescarga = (blob, nombre) => {
 const descargarPdfSunat = async (path) => {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    // Cada descarga debe obtener el documento vigente y su Content-Disposition real.
+    cache: 'no-store'
   });
   if (!response.ok) {
     let msg = 'No se pudo generar el PDF';

@@ -10,6 +10,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
+import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -69,7 +70,7 @@ function NuevaOrdenVenta() {
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
   const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
-  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '' });
+  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', ubigeo: '', referencia: '' });
   const [savingDireccion, setSavingDireccion] = useState(false);
   
   const [archivos, setArchivos] = useState({ orden_compra: [], comprobante: [] });
@@ -672,12 +673,13 @@ useEffect(() => {
   };
 
   const handleGuardarDireccion = async () => {
-    if (!nuevaDireccion.direccion.trim()) return;
+    if (!nuevaDireccion.direccion.trim() || !/^\d{6}$/.test(nuevaDireccion.ubigeo)) return;
     try {
       setSavingDireccion(true);
       const payload = {
         id_cliente: formCabecera.id_cliente,
         direccion: nuevaDireccion.direccion,
+        ubigeo: nuevaDireccion.ubigeo,
         referencia: nuevaDireccion.referencia
       };
       const response = await ordenesVentaAPI.addDireccion(payload);
@@ -685,12 +687,13 @@ useEffect(() => {
         const nuevaDir = {
           id_direccion: response.data.data.id_direccion,
           direccion: response.data.data.direccion,
+          ubigeo: response.data.data.ubigeo,
           es_principal: 0
         };
         setDireccionesCliente([...direccionesCliente, nuevaDir]);
         setFormCabecera(prev => ({ ...prev, direccion_entrega: nuevaDir.direccion }));
         setModalDireccionOpen(false);
-        setNuevaDireccion({ direccion: '', referencia: '' });
+        setNuevaDireccion({ direccion: '', ubigeo: '', referencia: '' });
         setSuccess('Dirección agregada correctamente');
       }
     } catch (err) {
@@ -1892,11 +1895,20 @@ useEffect(() => {
               placeholder="Ej. Frente al parque, esquina con..."
             />
           </div>
+          <div className="form-group">
+            <label className="form-label">Ubigeo *</label>
+            <UbigeoSelector
+              value={nuevaDireccion.ubigeo}
+              onChange={(codigo) => setNuevaDireccion({ ...nuevaDireccion, ubigeo: codigo })}
+              required
+            />
+            <p className="text-xs text-muted mt-1">Quedará guardado para las próximas órdenes y guías.</p>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn btn-outline" onClick={() => setModalDireccionOpen(false)} disabled={savingDireccion}>
               Cancelar
             </button>
-            <button type="button" className="btn btn-primary" onClick={handleGuardarDireccion} disabled={savingDireccion || !nuevaDireccion.direccion.trim()}>
+            <button type="button" className="btn btn-primary" onClick={handleGuardarDireccion} disabled={savingDireccion || !nuevaDireccion.direccion.trim() || !/^\d{6}$/.test(nuevaDireccion.ubigeo)}>
               {savingDireccion ? 'Guardando...' : 'Guardar Dirección'}
             </button>
           </div>

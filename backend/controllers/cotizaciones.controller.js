@@ -1206,7 +1206,7 @@ export async function descargarPDFCotizacion(req, res) {
 }
 export async function agregarDireccionClienteDesdeCotizacion(req, res) {
   try {
-    const { id_cliente, direccion, referencia } = req.body;
+    const { id_cliente, direccion, ubigeo, referencia } = req.body;
 
     if (!id_cliente) {
       return res.status(400).json({ 
@@ -1219,6 +1219,14 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
       return res.status(400).json({ 
         success: false, 
         error: 'La dirección es requerida' 
+      });
+    }
+
+
+    if (!/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({
+        success: false,
+        error: 'El ubigeo es obligatorio y debe tener 6 dígitos'
       });
     }
 
@@ -1238,11 +1246,12 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
       `INSERT INTO clientes_direcciones (
         id_cliente, 
         direccion, 
+        ubigeo,
         referencia, 
         es_principal, 
         estado
-      ) VALUES (?, ?, ?, 0, 'Activo')`,
-      [id_cliente, direccion, referencia || null]
+      ) VALUES (?, ?, ?, ?, 0, 'Activo')`,
+      [id_cliente, direccion, String(ubigeo).trim(), referencia || null]
     );
 
     if (!result.success) {
@@ -1259,6 +1268,7 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
         id_direccion: result.data.insertId,
         id_cliente: id_cliente,
         direccion: direccion,
+        ubigeo: String(ubigeo).trim(),
         referencia: referencia || null
       }
     });

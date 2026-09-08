@@ -10,6 +10,13 @@ export async function getAllClientes(req, res) {
 
     let sql = `
       SELECT clientes.*,
+        (SELECT cd.ubigeo
+           FROM clientes_direcciones cd
+          WHERE cd.id_cliente = clientes.id_cliente
+            AND cd.es_principal = 1
+            AND cd.estado = 'Activo'
+          ORDER BY cd.id_direccion DESC
+          LIMIT 1) AS ubigeo,
         COALESCE(ov_stats.total_ordenes, 0) AS total_ordenes,
         COALESCE(ov_stats.atenciones, 0) AS atenciones,
         ov_stats.ordenes_desglose AS ordenes_desglose
@@ -210,6 +217,7 @@ export async function createCliente(req, res) {
       telefono,
       email,
       direccion_despacho,
+      ubigeo,
       usar_limite_credito,
       validar_documento,
       estado,
@@ -221,6 +229,12 @@ export async function createCliente(req, res) {
     if (!ruc || !razon_social) {
       return res.status(400).json({ 
         error: 'Documento de identidad y razón social/nombre son requeridos' 
+      });
+    }
+
+    if (direccion_despacho && !/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({
+        error: 'El ubigeo de la dirección principal es obligatorio y debe tener 6 dígitos'
       });
     }
 
@@ -317,8 +331,8 @@ export async function createCliente(req, res) {
 
     if (direccion_despacho) {
       await executeQuery(
-        `INSERT INTO clientes_direcciones (id_cliente, direccion, es_principal) VALUES (?, ?, 1)`,
-        [idCliente, direccion_despacho]
+        `INSERT INTO clientes_direcciones (id_cliente, direccion, ubigeo, es_principal) VALUES (?, ?, ?, 1)`,
+        [idCliente, direccion_despacho, String(ubigeo).trim()]
       );
     }
 
@@ -359,6 +373,7 @@ export async function updateCliente(req, res) {
       telefono,
       email,
       direccion_despacho,
+      ubigeo,
       limite_credito_pen,
       limite_credito_usd,
       usar_limite_credito,
@@ -376,6 +391,12 @@ export async function updateCliente(req, res) {
     
     if (checkResult.data.length === 0) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    if (direccion_despacho && !/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({
+        error: 'El ubigeo de la dirección principal es obligatorio y debe tener 6 dígitos'
+      });
     }
     
     if (ruc !== checkResult.data[0].ruc) {
@@ -448,6 +469,24 @@ export async function updateCliente(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ error: result.error });
+    }
+
+    if (direccion_despacho) {
+      const principal = await executeQuery(
+        'SELECT id_direccion FROM clientes_direcciones WHERE id_cliente = ? AND es_principal = 1 LIMIT 1',
+        [id]
+      );
+      if (principal.success && principal.data.length > 0) {
+        await executeQuery(
+          'UPDATE clientes_direcciones SET direccion = ?, ubigeo = ?, estado = "Activo" WHERE id_direccion = ?',
+          [direccion_despacho, String(ubigeo).trim(), principal.data[0].id_direccion]
+        );
+      } else {
+        await executeQuery(
+          'INSERT INTO clientes_direcciones (id_cliente, direccion, ubigeo, es_principal) VALUES (?, ?, ?, 1)',
+          [id, direccion_despacho, String(ubigeo).trim()]
+        );
+      }
     }
 
     if (condicionCambio && id_empleado) {
@@ -728,10 +767,14 @@ export async function getEstadoCreditoCliente(req, res) {
 export async function addDireccionCliente(req, res) {
   try {
     const { id } = req.params;
-    const { direccion, referencia, es_principal } = req.body;
+    const { direccion, ubigeo, referencia, es_principal } = req.body;
 
     if (!direccion) {
       return res.status(400).json({ error: 'La dirección es requerida' });
+    }
+
+    if (!/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({ error: 'El ubigeo es obligatorio y debe tener 6 dígitos' });
     }
 
     if (es_principal) {
@@ -747,9 +790,9 @@ export async function addDireccionCliente(req, res) {
     }
 
     const result = await executeQuery(
-      `INSERT INTO clientes_direcciones (id_cliente, direccion, referencia, es_principal) 
-       VALUES (?, ?, ?, ?)`,
-      [id, direccion, referencia || null, es_principal ? 1 : 0]
+      `INSERT INTO clientes_direcciones (id_cliente, direccion, ubigeo, referencia, es_principal)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, direccion, String(ubigeo).trim(), referencia || null, es_principal ? 1 : 0]
     );
 
     if (!result.success) {
@@ -762,6 +805,47 @@ export async function addDireccionCliente(req, res) {
       id_direccion: result.data.insertId
     });
 
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function updateDireccionCliente(req, res) {
+  try {
+    const { id_direccion } = req.params;
+    const { direccion, ubigeo, referencia } = req.body;
+
+    if (!direccion || !direccion.trim()) {
+      return res.status(400).json({ error: 'La dirección es requerida' });
+    }
+    if (!/^\d{6}$/.test(String(ubigeo || '').trim())) {
+      return res.status(400).json({ error: 'El ubigeo es obligatorio y debe tener 6 dígitos' });
+    }
+
+    const actual = await executeQuery(
+      'SELECT id_cliente, es_principal FROM clientes_direcciones WHERE id_direccion = ? AND estado = "Activo"',
+      [id_direccion]
+    );
+    if (!actual.success || actual.data.length === 0) {
+      return res.status(404).json({ error: 'Dirección no encontrada' });
+    }
+
+    const result = await executeQuery(
+      'UPDATE clientes_direcciones SET direccion = ?, ubigeo = ?, referencia = ? WHERE id_direccion = ?',
+      [direccion.trim(), String(ubigeo).trim(), referencia?.trim() || null, id_direccion]
+    );
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    if (Number(actual.data[0].es_principal) === 1) {
+      await executeQuery(
+        'UPDATE clientes SET direccion_despacho = ? WHERE id_cliente = ?',
+        [direccion.trim(), actual.data[0].id_cliente]
+      );
+    }
+
+    res.json({ success: true, message: 'Dirección actualizada exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

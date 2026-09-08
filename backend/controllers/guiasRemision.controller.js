@@ -349,15 +349,6 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // Ubigeo de llegada: 6 dígitos INEI (catálogo 13). SUNAT lo exige en la GRE; se valida aquí
-    // para no crear una guía que luego reviente al emitir (gre-emision valida lo mismo).
-    if (!/^\d{6}$/.test(String(ubigeo_llegada || ''))) {
-      return res.status(400).json({
-        success: false,
-        error: 'El ubigeo de llegada es obligatorio (6 dígitos: Departamento, Provincia y Distrito)'
-      });
-    }
-
     // Obtener información de la orden (incluye el transporte asignado a nivel de OV
     // para que la guía lo herede si el request no envía conductor/vehículo).
     const ordenResult = await executeQuery(`
@@ -365,6 +356,13 @@ export async function createGuiaRemision(req, res) {
         ov.id_cliente,
         ov.estado,
         ov.direccion_entrega,
+        (SELECT cd.ubigeo
+           FROM clientes_direcciones cd
+          WHERE cd.id_cliente = ov.id_cliente
+            AND cd.estado = 'Activo'
+            AND TRIM(cd.direccion) = TRIM(ov.direccion_entrega)
+          ORDER BY cd.es_principal DESC, cd.id_direccion DESC
+          LIMIT 1) AS ubigeo_cliente,
         ov.es_exportacion,
         ov.id_conductor,
         ov.id_vehiculo,
@@ -388,6 +386,16 @@ export async function createGuiaRemision(req, res) {
     }
 
     const orden = ordenResult.data[0];
+    // La selección explícita (por ejemplo, un puerto de exportación) tiene prioridad. Para una
+    // venta nacional, si el formulario no lo envía, se reutiliza el ubigeo del domicilio elegido
+    // en la OV. Así el backend también funciona correctamente sin depender del autocompletado UI.
+    const ubigeoLlegadaFinal = String(ubigeo_llegada || orden.ubigeo_cliente || '').trim();
+    if (!/^\d{6}$/.test(ubigeoLlegadaFinal)) {
+      return res.status(400).json({
+        success: false,
+        error: 'El domicilio de llegada no tiene un ubigeo válido. Regístrelo en la ficha del cliente.'
+      });
+    }
 
     // Comercio exterior: se hereda del checkbox "Factura de exportación" de la OV
     // (ordenes_venta.es_exportacion). Es la fuente única que responde a "¿Es una
@@ -600,7 +608,7 @@ export async function createGuiaRemision(req, res) {
       direccionPartidaFinal,
       ubigeoPartidaFinal,
       direccion_llegada,
-      ubigeo_llegada,
+      ubigeoLlegadaFinal,
       ciudad_llegada,
       parseFloat(peso_bruto_kg) || 0,
       parseInt(numero_bultos) || 0,

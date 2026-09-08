@@ -160,6 +160,7 @@ export const clientesAPI = {
   getHistorialCondicion: (id) => api.get(`/clientes/${id}/historial-condicion`),
   
   addDireccion: (id, data) => api.post(`/clientes/${id}/direcciones`, data),
+  updateDireccion: (idDireccion, data) => api.put(`/clientes/direcciones/${idDireccion}`, data),
   deleteDireccion: (idDireccion) => api.delete(`/clientes/direcciones/${idDireccion}`)
 };
 

@@ -12,6 +12,7 @@ import {
   getHistorialOrdenesVentaCliente,
   getEstadoCreditoCliente,
   addDireccionCliente,
+  updateDireccionCliente,
   deleteDireccionCliente,
   getHistorialCondicionCliente
 } from '../controllers/clientes.controller.js';
@@ -35,6 +36,7 @@ router.put('/:id', updateCliente);
 router.delete('/:id', deleteCliente);
 
 router.post('/:id/direcciones', addDireccionCliente);
+router.put('/direcciones/:id_direccion', updateDireccionCliente);
 router.delete('/direcciones/:id_direccion', deleteDireccionCliente);
 
 export default router;

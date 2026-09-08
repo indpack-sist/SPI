@@ -3059,7 +3059,11 @@ function DetalleOrdenVenta() {
                   </div>
                   {g.motivo_anulacion && <p className="mt-1 text-xs text-red-800"><strong>Motivo:</strong> {g.motivo_anulacion}</p>}
                   <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-red-700/80">
-                    <span>{g.baja_sunat_fecha ? `Baja SUNAT: ${formatearFechaHora(g.baja_sunat_fecha)}` : `Actualización: ${formatearFechaHora(g.fecha_anulacion)}`}</span>
+                    <span>
+                      {g.fecha_anulacion
+                        ? `Baja SUNAT: ${formatearFechaHora(g.fecha_anulacion)}`
+                        : `Baja SUNAT: ${formatearFecha(g.baja_sunat_fecha)}`}
+                    </span>
                     <span>Por: {g.baja_confirmada_por || 'Sistema'}</span>
                   </div>
                   {g.baja_sunat_evidencia_url && (

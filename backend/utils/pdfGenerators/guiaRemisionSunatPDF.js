@@ -1,6 +1,5 @@
-// utils/pdfGenerators/guiaRemisionSunatPDF.js  —  Representación impresa GRE Remitente (09). FASE 13.
-// El QR de la GRE NO es la cadena pipe: es la URL que devuelve SUNAT (sunat_qr_url). Sin montos.
-// Solo debe generarse cuando sunat_estado === 'ACEPTADO' (lo valida el controller).
+// Representación impresa de la GRE Remitente (09).
+// El contenido sigue las secciones de SUNAT y usa la identidad visual de IndPack.
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -8,293 +7,493 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, '../../../frontend/images/indpack.png');
-let _logo;
-function logoBuffer() {
-  if (_logo !== undefined) return _logo;
-  try { _logo = fs.readFileSync(LOGO_PATH); } catch { _logo = null; }
-  return _logo;
-}
+
+const COLOR = {
+  navy: '#20588D',
+  cyan: '#35B5D6',
+  pale: '#EFF7FB',
+  pale2: '#F7FAFC',
+  line: '#B9CFDD',
+  ink: '#183247',
+  muted: '#607789',
+  white: '#FFFFFF',
+  danger: '#D32F2F'
+};
 
 const MOTIVOS_TRASLADO = {
-  '01': 'VENTA', '02': 'COMPRA', '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
-  '08': 'IMPORTACION', '09': 'EXPORTACION', '13': 'OTROS',
-  '14': 'VENTA SUJETA A CONFIRMACION DEL COMPRADOR', '18': 'TRASLADO EMISOR ITINERANTE CP'
+  '01': 'VENTA',
+  '02': 'COMPRA',
+  '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
+  '08': 'IMPORTACIÓN',
+  '09': 'EXPORTACIÓN',
+  '13': 'OTROS',
+  '14': 'VENTA SUJETA A CONFIRMACIÓN DEL COMPRADOR',
+  '18': 'TRASLADO EMISOR ITINERANTE CP'
+};
+
+const UNIDADES = {
+  NIU: 'UNIDAD (NIU)', KGM: 'KILOGRAMO (KGM)', MTR: 'METRO (MTR)',
+  LTR: 'LITRO (LTR)', MIL: 'MILLAR (MIL)', BX: 'CAJA (BX)', PK: 'PAQUETE (PK)'
+};
+
+let logoCache;
+function logoBuffer() {
+  if (logoCache !== undefined) return logoCache;
+  try { logoCache = fs.readFileSync(LOGO_PATH); } catch { logoCache = null; }
+  return logoCache;
+}
+
+const limpio = (value, fallback = '—') => {
+  if (value == null || value === '') return fallback;
+  return String(value).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || fallback;
+};
+
+const siNo = (value) => value ? 'SÍ' : 'NO';
+
+const numero = (value, decimals = 2) => Number(value || 0).toLocaleString('en-US', {
+  minimumFractionDigits: decimals,
+  maximumFractionDigits: decimals
+});
+
+const fechaConPeriodo = (value) => {
+  const raw = limpio(value, '');
+  const match = raw.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return raw || '—';
+  const hour = Number(match[2]);
+  const hour12 = hour % 12 || 12;
+  return `${match[1]} ${String(hour12).padStart(2, '0')}:${match[3]} ${hour >= 12 ? 'PM' : 'AM'}`;
 };
 
 /**
- * @param {object} p
- * @param {object} p.guia      { serie_sunat, numero_sunat, fecha_emision, fecha_traslado, motivo_traslado_cod,
- *                               peso_bruto_kg, ubigeo_partida, direccion_partida, ubigeo_llegada, direccion_llegada,
- *                               sunat_estado, sunat_digest_value, placa, observaciones }
- * @param {object} p.emisor    empresa_config
- * @param {object} p.cliente   destinatario { razon_social, ruc }
- * @param {Array}  p.detalle   [{ codigo, nombre, cantidad, codigo_unidad_sunat }]
- * @param {object|null} p.conductor  { nombre_completo, dni, licencia_conducir } (legacy; usar p.conductores)
- * @param {Array}  [p.conductores] [{ nombre_completo|nombre, dni, licencia_conducir|licencia }] (1-2)
- * @param {Array}  [p.vehiculos]   [{ placa, tuce, autorizacion }] (1-2)
- * @param {object|null} [p.transportista] { razon, ruc, mtc } (solo tercero/público)
- * @param {boolean} [p.registrar=true] tercero: 1=registró veh/cond (Caso 2/3); 0=solo transportista (Caso 1)
- * @param {object} [p.indicadores] { transbordo, m1l, retornoVacio } booleans
- * @param {string|null} [p.modalidad] '01' público | '02' privado
- * @param {string|null} [p.fechaEntrega] fecha entrega de bienes al transportista (dd/mm/yyyy o ISO)
- * @param {object|null} [p.comex]  Comercio exterior (exportación). null = guía doméstica (no imprime nada comex).
- *        { destinatario:{razon_social,ruc}|null, docsRelacionados:[{tipo_desc,serie,numero}],
- *          contenedores:[{numero_contenedor,numero_precinto}], trasladoTotalDam:boolean, unidadPeso:'KGM' }
- * @param {Buffer} p.qrBuffer  PNG del QR con la URL de SUNAT
- * @returns {Promise<Buffer>}
+ * Genera el PDF de una Guía de Remisión Electrónica aceptada por SUNAT.
+ * Las columnas SUNAT que no forman parte del maestro actual de productos se imprimen como “—”.
  */
-export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, detalle, conductor, conductores, vehiculos, transportista = null, registrar = true, indicadores = {}, modalidad = null, fechaEntrega = null, comex = null, proveedor = null, docRelacionado = null, qrBuffer }) {
+export async function generarGuiaRemisionSunatPDF({
+  guia: g,
+  emisor,
+  cliente,
+  detalle = [],
+  conductor,
+  conductores,
+  vehiculos,
+  transportista = null,
+  registrar = true,
+  indicadores = {},
+  modalidad = null,
+  fechaEntrega = null,
+  comex = null,
+  proveedor = null,
+  docRelacionado = null,
+  qrBuffer
+}) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 30, left: 30, right: 30 } });
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: 28, bottom: 28, left: 33, right: 33 },
+        bufferPages: true,
+        info: {
+          Title: `Guía de Remisión Electrónica ${g.serie_sunat}-${g.numero_sunat}`,
+          Author: emisor.razon_social || 'INDPACK S.A.C.',
+          Subject: 'Representación impresa de la GRE Remitente'
+        }
+      });
       const chunks = [];
-      doc.on('data', (ch) => chunks.push(ch));
+      doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ── Cabecera ──
-      const logo = logoBuffer();
-      if (logo) { try { doc.image(logo, 36, 36, { fit: [150, 46] }); } catch { /* noop */ } }
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#000').text(emisor.razon_social || 'INDPACK S.A.C.', 36, 86, { width: 330 });
-      doc.fontSize(8).font('Helvetica').fillColor('#333');
-      const dirEmisor = [emisor.direccion, emisor.urbanizacion].filter(Boolean).join(' - ');
-      doc.text(dirEmisor || '', 36, 102, { width: 330 });
+      const PAGE_W = 595.28;
+      const X = 33;
+      const W = 529;
+      const CONTENT_BOTTOM = 790;
+      let y = 28;
+      let pageNumber = 1;
 
-      doc.roundedRect(380, 40, 182, 70, 5).stroke('#000');
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(`R.U.C. ${emisor.ruc}`, 385, 50, { align: 'center', width: 172 });
-      doc.fontSize(10).text('GUÍA DE REMISIÓN', 385, 68, { align: 'center', width: 172 });
-      doc.fontSize(9).text('REMITENTE ELECTRÓNICA', 385, 82, { align: 'center', width: 172 });
-      doc.fontSize(12).text(`${g.serie_sunat}-${g.numero_sunat}`, 385, 94, { align: 'center', width: 172 });
+      const resetText = () => doc.fillColor(COLOR.ink).font('Helvetica').fontSize(7.4);
 
-      // Helper: "Etiqueta: valor" con el valor envuelto dentro de vw. Devuelve la Y tras la fila.
-      // Mismo layout de flujo dinámico que el comprobante: evita que valores largos (razón social,
-      // direcciones) se taparen entre sí como pasaba con las posiciones Y fijas.
-      const campo = (label, valor, lx, vx, vw, atY) => {
-        const v = valor == null || valor === ''
-          ? '-'
-          : (String(valor).replace(/[\r\n]+/g, ' ').trim() || '-');
-        doc.fontSize(8).fillColor('#000');
-        doc.font('Helvetica-Bold').text(label, lx, atY, { width: vx - lx - 3, lineBreak: false });
-        doc.font('Helvetica').text(v, vx, atY, { width: vw });
-        const h = doc.heightOfString(v, { width: vw });
-        return atY + Math.max(h, 11) + 3;
+      const drawContinuationHeader = () => {
+        doc.rect(X, 28, 5, 35).fill(COLOR.cyan);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR.navy)
+          .text(limpio(emisor.razon_social, 'INDPACK S.A.C.'), X + 14, 31, { width: 300 });
+        doc.fontSize(8).fillColor(COLOR.muted)
+          .text(`GUÍA DE REMISIÓN ELECTRÓNICA · ${g.serie_sunat}-${g.numero_sunat}`, X + 14, 47, { width: 360 });
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.navy)
+          .text(`CONTINUACIÓN · PÁGINA ${pageNumber}`, 420, 39, { width: 142, align: 'right' });
+        doc.moveTo(X, 69).lineTo(X + W, 69).lineWidth(0.7).strokeColor(COLOR.line).stroke();
+        y = 79;
+        resetText();
       };
 
-      // ── Destinatario + datos generales (flujo dinámico anti-desborde) ──
-      // Doble dirección: la fiscal del destinatario va aquí; la de entrega es el "Punto de llegada".
-      // Izquierda (destinatario/RUC/dir.fiscal) x40–311 · derecha (fechas) x322–560.
-      // En exportación el destinatario NO es el cliente de la OV (ese va en la factura), sino el
-      // operador de puerto/depósito (destinatario_ruc/razon). Se usa el comex cuando viene.
-      const esComex = !!comex;
-      const dest = (esComex && comex.destinatario) ? comex.destinatario : cliente;
-      let y = 122;
-      const boxDestTop = y;
-      const pad = 8;
-      let yl = boxDestTop + pad;
-      yl = campo('Destinatario:', dest.razon_social, 40, 118, 193, yl);
-      yl = campo('RUC/Doc:', dest.ruc, 40, 118, 193, yl);
-      // Dir. fiscal: solo si existe (el destinatario comex del catálogo no la captura → se omite).
-      if (dest.direccion) yl = campo('Dir. fiscal:', dest.direccion, 40, 118, 193, yl);
-      // Compra: el vendedor de los bienes (SellerSupplierParty) y la factura relacionada
-      // (AdditionalDocumentReference) van aquí, para que la GRE de compra sea autoexplicativa.
-      if (proveedor && proveedor.ruc) {
-        yl = campo('Proveedor:', proveedor.razon_social, 40, 118, 193, yl);
-        yl = campo('RUC proveedor:', proveedor.ruc, 40, 118, 193, yl);
-      }
-      if (docRelacionado && docRelacionado.numero) {
-        const num = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
-        yl = campo('Doc. relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${num}`, 40, 118, 193, yl);
-      }
-      let yr = boxDestTop + pad;
-      yr = campo('Fecha emisión:', g.fecha_emision, 322, 410, 150, yr);
-      yr = campo('Inicio traslado:', g.fecha_traslado, 322, 410, 150, yr);
-      const boxDestH = (Math.max(yl, yr) + 4) - boxDestTop;
-      doc.roundedRect(33, boxDestTop, 529, boxDestH, 3).stroke('#000');
-      y = boxDestTop + boxDestH + 8;
+      const newPage = () => {
+        doc.addPage();
+        pageNumber += 1;
+        drawContinuationHeader();
+      };
 
-      // ── Normalización de transporte (soporta 3 casos + legacy conductor/placa) ──
-      const esTercero = !!(transportista && transportista.ruc);
-      const conds = (Array.isArray(conductores) && conductores.length)
+      const ensureSpace = (height) => {
+        if (y + height > CONTENT_BOTTOM) newPage();
+      };
+
+      const drawMainHeader = () => {
+        const logo = logoBuffer();
+        if (logo) {
+          try { doc.image(logo, X, 30, { fit: [195, 53], align: 'left', valign: 'center' }); } catch { /* logo opcional */ }
+        } else {
+          doc.font('Helvetica-Bold').fontSize(20).fillColor(COLOR.navy).text('IndPack', X, 40);
+        }
+
+        doc.font('Helvetica-Bold').fontSize(9.2).fillColor(COLOR.ink)
+          .text(limpio(emisor.razon_social, 'INDPACK S.A.C.'), X, 88, { width: 300 });
+        const dirEmisor = [emisor.direccion, emisor.urbanizacion].filter(Boolean).join(' - ');
+        doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.muted)
+          .text(limpio(dirEmisor, ''), X, 102, { width: 320, height: 24, ellipsis: true });
+
+        const bx = 368;
+        const bw = 194;
+        doc.roundedRect(bx, 28, bw, 93, 7).fillAndStroke(COLOR.pale, COLOR.navy);
+        doc.rect(bx, 28, 6, 93).fill(COLOR.cyan);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR.navy)
+          .text(`RUC N° ${limpio(emisor.ruc)}`, bx + 12, 40, { width: bw - 20, align: 'center' });
+        doc.moveTo(bx + 16, 57).lineTo(bx + bw - 10, 57).lineWidth(0.6).strokeColor(COLOR.line).stroke();
+        doc.fontSize(10).fillColor(COLOR.ink)
+          .text('GUÍA DE REMISIÓN', bx + 12, 65, { width: bw - 20, align: 'center' })
+          .text('ELECTRÓNICA · REMITENTE', bx + 12, 79, { width: bw - 20, align: 'center' });
+        doc.fontSize(13).fillColor(COLOR.navy)
+          .text(`${g.serie_sunat}-${g.numero_sunat}`, bx + 12, 98, { width: bw - 20, align: 'center' });
+        y = 128;
+        resetText();
+      };
+
+      const sectionStart = (title, subtitle = '') => {
+        ensureSpace(42);
+        const top = y;
+        doc.roundedRect(X, top, W, 17, 4).fill(COLOR.navy);
+        doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.white)
+          .text(title.toUpperCase(), X + 9, top + 4.5, { width: 330 });
+        if (subtitle) {
+          doc.font('Helvetica').fontSize(6.7).fillColor('#DCEBF5')
+            .text(subtitle, X + 330, top + 5, { width: W - 339, align: 'right' });
+        }
+        y = top + 17;
+        return top;
+      };
+
+      const sectionEnd = (top, bottomPad = 4) => {
+        y += bottomPad;
+        doc.roundedRect(X, top, W, y - top, 4).lineWidth(0.65).strokeColor(COLOR.line).stroke();
+        y += 4;
+        resetText();
+      };
+
+      const labelValue = (label, value, x, atY, width, options = {}) => {
+        const labelWidth = options.labelWidth || 105;
+        const valueWidth = width - labelWidth;
+        const safe = limpio(value);
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.muted);
+        const labelHeight = doc.heightOfString(label, { width: labelWidth - 5, lineGap: 1 });
+        doc.text(label, x, atY, { width: labelWidth - 5, lineGap: 1 });
+        doc.font(options.boldValue ? 'Helvetica-Bold' : 'Helvetica').fontSize(options.fontSize || 7.5).fillColor(COLOR.ink)
+          .text(safe, x + labelWidth, atY, { width: valueWidth, lineGap: 1 });
+        const valueHeight = doc.heightOfString(safe, { width: valueWidth, lineGap: 1 });
+        const height = Math.max(labelHeight, valueHeight,
+          options.minHeight || 10
+        );
+        return height;
+      };
+
+      const twoColumnRows = (rows) => {
+        const leftX = X + 9;
+        const colW = (W - 27) / 2;
+        const rightX = leftX + colW + 9;
+        let cursor = y + 5;
+        rows.forEach(([left, right], index) => {
+          const leftHeight = left ? labelValue(left[0], left[1], leftX, cursor, colW, left[2] || {}) : 10;
+          const rightHeight = right ? labelValue(right[0], right[1], rightX, cursor, colW, right[2] || {}) : 10;
+          const rowH = Math.max(leftHeight, rightHeight, 11) + 4;
+          if (index < rows.length - 1) {
+            doc.moveTo(leftX, cursor + rowH - 3).lineTo(X + W - 9, cursor + rowH - 3)
+              .lineWidth(0.35).strokeColor('#DCE7EE').stroke();
+          }
+          cursor += rowH;
+        });
+        y = cursor;
+      };
+
+      const fullWidthRow = (label, value, options = {}) => {
+        const rowY = y + 5;
+        const height = labelValue(label, value, X + 9, rowY, W - 18, options);
+        y = rowY + height + 3;
+      };
+
+      drawMainHeader();
+
+      // Datos principales: mismo contenido de la representación SUNAT, con mayor jerarquía visual.
+      let top = sectionStart('Datos de emisión y ruta', 'GRE Remitente · Documento 09');
+      twoColumnRows([
+        [
+          ['Fecha y hora de emisión:', fechaConPeriodo(g.fecha_emision),  { labelWidth: 126, boldValue: true }],
+          ['Fecha de inicio de traslado:', g.fecha_traslado, { labelWidth: 133, boldValue: true }]
+        ],
+        [
+          ['Motivo de traslado:', MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO', { labelWidth: 104 }],
+          null
+        ]
+      ]);
+      fullWidthRow('Punto de partida:', `[${limpio(g.ubigeo_partida)}] ${limpio(g.direccion_partida)}`, { labelWidth: 105, fontSize: 7.7 });
+      fullWidthRow('Punto de llegada:', `[${limpio(g.ubigeo_llegada)}] ${limpio(g.direccion_llegada)}`, { labelWidth: 105, fontSize: 7.7 });
+      sectionEnd(top);
+
+      const esComex = !!comex;
+      const destinatario = (esComex && comex.destinatario) ? comex.destinatario : (cliente || {});
+      top = sectionStart('Datos del destinatario');
+      twoColumnRows([
+        [
+          ['Razón social / nombres:', destinatario.razon_social || destinatario.nombre, { labelWidth: 118, boldValue: true }],
+          ['RUC / Documento:', destinatario.ruc || destinatario.numero_documento, { labelWidth: 100, boldValue: true }]
+        ]
+      ]);
+      if (destinatario.direccion) fullWidthRow('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
+      if (proveedor?.ruc) {
+        fullWidthRow('Proveedor:', `${limpio(proveedor.razon_social)} · RUC ${limpio(proveedor.ruc)}`, { labelWidth: 105 });
+      }
+      if (docRelacionado?.numero) {
+        const docNumero = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
+        fullWidthRow('Documento relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${docNumero}`, { labelWidth: 125 });
+      }
+      sectionEnd(top);
+
+      if (esComex) {
+        const docsRelacionados = (comex.docsRelacionados || []).filter((item) => item?.numero);
+        const contenedores = (comex.contenedores || []).filter((item) => item?.numero_contenedor);
+        top = sectionStart('Comercio exterior');
+        fullWidthRow('Documentos Relacionados:', docsRelacionados.length
+          ? docsRelacionados.map((item) => `${item.tipo_desc || 'Documento'} N° ${item.serie ? `${item.serie}-` : ''}${item.numero}`).join(' · ')
+          : '—', { labelWidth: 135 });
+        fullWidthRow('Bienes por transportar:', 'Datos importados del/los documento(s) relacionado(s)', { labelWidth: 135 });
+        twoColumnRows([
+          [
+            ['Indicador de traslado total de la DAM o DS:', siNo(comex.trasladoTotalDam), { labelWidth: 190, boldValue: true }],
+            ['Contenedor(es):', contenedores.length
+              ? contenedores.map((item) => `${item.numero_contenedor}${item.numero_precinto ? ` / precinto ${item.numero_precinto}` : ''}`).join(' · ')
+              : '—', { labelWidth: 87 }]
+          ]
+        ]);
+        sectionEnd(top);
+      } else {
+        const cols = [
+          { key: 'n', label: 'N°', width: 22, align: 'center' },
+          { key: 'normalizado', label: 'BIEN\nNORMAL.', width: 40, align: 'center' },
+          { key: 'codigo', label: 'CÓDIGO\nDE BIEN', width: 62 },
+          { key: 'codigoSunat', label: 'CÓDIGO PROD.\nSUNAT', width: 54, align: 'center' },
+          { key: 'partida', label: 'PARTIDA\nARANCEL.', width: 49, align: 'center' },
+          { key: 'gtin', label: 'CÓDIGO\nGTIN', width: 43, align: 'center' },
+          { key: 'descripcion', label: 'DESCRIPCIÓN DETALLADA', width: 147 },
+          { key: 'unidad', label: 'UNIDAD DE\nMEDIDA', width: 66, align: 'center' },
+          { key: 'cantidad', label: 'CANTIDAD', width: 46, align: 'right' }
+        ];
+
+        const tableHeader = () => {
+          const topTable = y;
+          let x = X;
+          doc.rect(X, topTable, W, 30).fill(COLOR.navy);
+          cols.forEach((col) => {
+            doc.font('Helvetica-Bold').fontSize(5.7).fillColor(COLOR.white)
+              .text(col.label, x + 3, topTable + 7, { width: col.width - 6, align: col.align || 'left', lineGap: 0.5 });
+            x += col.width;
+            if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor('#73A1C4').stroke();
+          });
+          y += 30;
+        };
+
+        ensureSpace(70);
+        top = sectionStart('Bienes por transportar', `${detalle.length} ${detalle.length === 1 ? 'ítem' : 'ítems'}`);
+        tableHeader();
+        detalle.forEach((item, index) => {
+          const unidadCode = limpio(item.codigo_unidad_sunat || item.unidad, 'NIU').toUpperCase();
+          const values = {
+            n: String(index + 1),
+            normalizado: item.bien_normalizado === true || item.bien_normalizado === 1 ? 'SÍ' : 'NO',
+            codigo: limpio(item.codigo),
+            codigoSunat: limpio(item.codigo_producto_sunat),
+            partida: limpio(item.subpartida_nacional || item.partida_arancelaria),
+            gtin: limpio(item.gtin),
+            descripcion: limpio(item.nombre || item.descripcion || item.codigo),
+            unidad: UNIDADES[unidadCode] || unidadCode,
+            cantidad: numero(item.cantidad)
+          };
+          const descHeight = doc.font('Helvetica').fontSize(6.6)
+            .heightOfString(values.descripcion, { width: 141, lineGap: 1 });
+          const codeHeight = doc.heightOfString(values.codigo, { width: 56, lineGap: 1 });
+          const rowH = Math.max(29, descHeight + 10, codeHeight + 10);
+          if (y + rowH > CONTENT_BOTTOM) {
+            sectionEnd(top, 0);
+            newPage();
+            top = sectionStart('Bienes por transportar', 'continuación');
+            tableHeader();
+          }
+          if (index % 2 === 0) doc.rect(X, y, W, rowH).fill(COLOR.pale2);
+          let x = X;
+          cols.forEach((col) => {
+            doc.font(col.key === 'descripcion' || col.key === 'codigo' ? 'Helvetica-Bold' : 'Helvetica')
+              .fontSize(col.key === 'unidad' ? 5.8 : 6.5).fillColor(COLOR.ink)
+              .text(values[col.key], x + 3, y + 7, {
+                width: col.width - 6,
+                height: rowH - 9,
+                align: col.align || 'left',
+                lineGap: 1,
+                ellipsis: true
+              });
+            x += col.width;
+            if (x < X + W) doc.moveTo(x, y).lineTo(x, y + rowH).lineWidth(0.25).strokeColor(COLOR.line).stroke();
+          });
+          doc.moveTo(X, y + rowH).lineTo(X + W, y + rowH).lineWidth(0.35).strokeColor(COLOR.line).stroke();
+          y += rowH;
+        });
+        if (!detalle.length) {
+          doc.font('Helvetica').fontSize(7.5).fillColor(COLOR.muted)
+            .text('No se registraron bienes.', X + 9, y + 8, { width: W - 18, align: 'center' });
+          y += 28;
+        }
+        sectionEnd(top, 0);
+
+      }
+
+      top = sectionStart('Resumen de carga');
+      twoColumnRows([
+        [
+          ['Unidad de medida del peso bruto:', comex?.unidadPeso || 'KGM', { labelWidth: 163, boldValue: true }],
+          ['Peso bruto total de la carga:', numero(g.peso_bruto_kg), { labelWidth: 148, boldValue: true }]
+        ]
+      ]);
+      sectionEnd(top);
+
+      const esTercero = !!transportista?.ruc;
+      const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
+      top = sectionStart('Datos del traslado');
+      twoColumnRows([
+        [
+          ['Modalidad de traslado:', modalidadTexto, { labelWidth: 116, boldValue: true }],
+          ['Indicador de transbordo programado:', siNo(indicadores.transbordo), { labelWidth: 174, boldValue: true }]
+        ],
+        [
+          ['Indicador de traslado en vehículos de categoría M1 o L:', siNo(indicadores.m1l), { labelWidth: 203, boldValue: true }],
+          ['Indicador de retorno de vehículo con envases o embalajes vacíos:', siNo(indicadores.retornoVacio), { labelWidth: 215, boldValue: true }]
+        ],
+        [
+          ['Indicador de retorno de vehículo vacío:', siNo(indicadores.retornoVehiculoVacio), { labelWidth: 181, boldValue: true }],
+          esTercero
+            ? ['Indicador de registrar vehículos/conductores:', siNo(registrar), { labelWidth: 198, boldValue: true }]
+            : null
+        ]
+      ]);
+      if (transportista?.ruc) {
+        fullWidthRow('Empresa transportista:', `${limpio(transportista.razon)} · RUC ${limpio(transportista.ruc)}${transportista.mtc ? ` · Registro MTC ${transportista.mtc}` : ''}`, { labelWidth: 125 });
+      }
+      if (fechaEntrega) fullWidthRow('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
+      sectionEnd(top);
+
+      const normalizedConductores = Array.isArray(conductores) && conductores.length
         ? conductores
         : (conductor ? [conductor] : []);
-      const vehs = (Array.isArray(vehiculos) && vehiculos.length)
+      const normalizedVehiculos = Array.isArray(vehiculos) && vehiculos.length
         ? vehiculos
         : (g.placa ? [{ placa: g.placa }] : []);
-      const si = (b) => (b ? 'SÍ' : 'NO');
-      // Peso con separador de miles, sin decimales redundantes (ej. "1,200"), como el PDF de SUNAT.
-      const pesoFmt = (v) => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
-      const docLabel = (d) => {
-        const desc = (d.tipo_desc && String(d.tipo_desc).trim()) || 'Documento relacionado';
-        const num = d.serie ? `${d.serie}-${d.numero}` : d.numero;
-        return `${desc} N° ${num}`;
-      };
 
-      // ── Comercio exterior (exportación) ──────────────────────────────────────────
-      // Bloque intermedio, en el orden EXACTO del PDF oficial de SUNAT (EG07-273):
-      //   Documentos Relacionados (DAM) → Bienes por transportar (importados del doc.) →
-      //   Indicador de traslado total + contenedor/precinto → Unidad + Peso bruto.
-      // En traslado total de la DAM, SUNAT NO itemiza los bienes (se importan del documento):
-      // por eso la tabla de productos se omite abajo cuando la guía es comex. Todo condicionado
-      // a que el dato exista (no se pinta lo que no vino).
-      if (esComex) {
-        const docsRel = Array.isArray(comex.docsRelacionados) ? comex.docsRelacionados.filter(d => d && d.numero) : [];
-        const conts = Array.isArray(comex.contenedores) ? comex.contenedores.filter(c => c && c.numero_contenedor) : [];
-        const boxCxTop = y;
-        let yc = boxCxTop + pad;
-        const header = (txt, atY) => {
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text(txt, 40, atY, { width: 515 });
-          return atY + 13;
-        };
-        const linea = (txt, atY, x = 48, w = 507) => {
-          doc.fontSize(8).font('Helvetica').fillColor('#000').text(txt, x, atY, { width: w });
-          const h = doc.heightOfString(txt, { width: w });
-          return atY + Math.max(h, 11) + 2;
-        };
-        // Documentos Relacionados
-        if (docsRel.length) {
-          yc = header('Documentos Relacionados:', yc);
-          for (const d of docsRel) yc = linea(docLabel(d), yc);
-          yc += 2;
+      if (normalizedVehiculos.length || !esTercero) {
+        top = sectionStart('Datos de los vehículos');
+        if (normalizedVehiculos.length) {
+          normalizedVehiculos.forEach((vehicle, index) => {
+            const extras = [
+              vehicle.tuce ? `TUCE ${vehicle.tuce}` : null,
+              vehicle.autorizacion ? `Autorización MTC ${vehicle.autorizacion}` : null
+            ].filter(Boolean).join(' · ');
+            fullWidthRow(index === 0 ? 'Principal · N° de placa:' : 'Secundario · N° de placa:',
+              `${limpio(vehicle.placa)}${extras ? ` · ${extras}` : ''}`,
+              { labelWidth: 145, boldValue: true });
+          });
+        } else {
+          fullWidthRow('Número de placa:', '—', { labelWidth: 105 });
         }
-        // Bienes por transportar (importados del/los documento(s) relacionado(s))
-        yc = header('Bienes por transportar:', yc);
-        yc = linea('Datos importados del/los documento(s) relacionado(s)', yc);
-        for (const d of docsRel) yc = linea(docLabel(d), yc);
-        yc += 2;
-        // Indicador de traslado total (izq) + contenedores/precintos (der), a dos columnas.
-        const yIndTop = yc;
-        let yLeft = campo('Ind. traslado total de la DAM o DS (*):', si(comex.trasladoTotalDam), 40, 230, 60, yIndTop);
-        let yRight = yIndTop;
-        conts.forEach((c, i) => {
-          yRight = campo(`N° de contenedor ${i + 1}:`, c.numero_contenedor, 305, 400, 157, yRight);
-          if (c.numero_precinto) yRight = campo(`N° de precinto ${i + 1}:`, c.numero_precinto, 305, 400, 157, yRight);
-        });
-        yc = Math.max(yLeft, yRight) + 2;
-        // Unidad de medida + peso bruto (de la DAM en traslado total).
-        yc = campo('Unidad de medida del peso bruto:', comex.unidadPeso || 'KGM', 40, 200, 340, yc);
-        yc = campo('Peso bruto total de la carga:', pesoFmt(g.peso_bruto_kg), 40, 200, 340, yc);
-        const boxCxH = (yc + 4) - boxCxTop;
-        doc.roundedRect(33, boxCxTop, 529, boxCxH, 3).stroke('#000');
-        y = boxCxTop + boxCxH + 8;
+        sectionEnd(top);
       }
 
-      // ── Datos del traslado (flujo dinámico, full-width) ──
-      const boxTrasTop = y;
-      const motivo = MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO';
-      const modalidadTxt = (modalidad === '01' || esTercero) ? 'PÚBLICO (transporte por tercero)' : 'PRIVADO';
-      let yt = boxTrasTop + pad;
-      yt = campo('Motivo de traslado:', `${g.motivo_traslado_cod} - ${motivo}`, 40, 155, 405, yt);
-      yt = campo('Modalidad de traslado:', modalidadTxt, 40, 155, 405, yt);
-      // El peso bruto ya se muestra en el bloque de comercio exterior (unidad + peso de la DAM).
-      if (!esComex) yt = campo('Peso bruto total:', `${Number(g.peso_bruto_kg || 0).toFixed(2)} KGM`, 40, 155, 405, yt);
-      yt = campo('Punto de partida:', `[${g.ubigeo_partida}] ${g.direccion_partida || '-'}`, 40, 155, 405, yt);
-      yt = campo('Punto de llegada:', `[${g.ubigeo_llegada}] ${g.direccion_llegada || '-'}`, 40, 155, 405, yt);
-
-      if (esTercero) {
-        // Indicadores SUNAT: solo aplican al transporte público (tercero). En privado no se listan.
-        // Todos comparten la misma columna de valor (x=300) para que los SÍ/NO queden alineados
-        // aunque las etiquetas tengan distinto largo.
-        yt = campo('Ind. transbordo programado:', si(indicadores.transbordo), 40, 300, 260, yt);
-        yt = campo('Ind. traslado en vehículo M1/L:', si(indicadores.m1l), 40, 300, 260, yt);
-        yt = campo('Ind. retorno con envases/embalajes vacíos:', si(indicadores.retornoVacio), 40, 300, 260, yt);
-        // Indicador propio del tercero + datos del transportista (Caso 1/2/3).
-        yt = campo('Ind. registrar veh./cond. del transportista:', si(registrar), 40, 300, 260, yt);
-        yt = campo('Transportista:',
-          `${transportista.razon || '-'}  ·  RUC ${transportista.ruc}${transportista.mtc ? `  ·  MTC ${transportista.mtc}` : ''}`,
-          40, 155, 405, yt);
-        if (fechaEntrega) yt = campo('Fecha entrega al transportista:', fechaEntrega, 40, 220, 340, yt);
-      }
-
-      // Datos de los vehículos (principal + secundario, con TUCE/autorización si aplican).
-      vehs.forEach((v, i) => {
-        const partes = [
-          v.placa ? `Placa ${v.placa}` : null,
-          v.tuce ? `TUCE ${v.tuce}` : null,
-          v.autorizacion ? `Autoriz. MTC ${v.autorizacion}` : null,
-        ].filter(Boolean).join('  ·  ');
-        yt = campo(i === 0 ? 'Vehículo principal:' : 'Vehículo secundario:', partes || '-', 40, 155, 405, yt);
-      });
-
-      // Datos de los conductores (principal + secundario).
-      conds.forEach((c, i) => {
-        const nom = c.nombre_completo || c.nombre || '-';
-        const lic = c.licencia_conducir || c.licencia || '-';
-        yt = campo(i === 0 ? 'Conductor principal:' : 'Conductor secundario:',
-          `${nom} (DNI ${c.dni || '-'}, Lic. ${lic})`, 40, 155, 405, yt);
-      });
-
-      const boxTrasH = (yt + 4) - boxTrasTop;
-      doc.roundedRect(33, boxTrasTop, 529, boxTrasH, 3).stroke('#000');
-      y = boxTrasTop + boxTrasH + 8;
-
-      // ── Tabla de bienes (sin montos) ──
-      // En comercio exterior con traslado total de la DAM, SUNAT NO lista los ítems (los bienes se
-      // importan del documento relacionado, ya declarado arriba en "Bienes por transportar"): se
-      // omite la tabla. Esto mantiene la GRE de exportación en una sola hoja sin importar la OV.
-      if (!esComex) {
-        doc.rect(33, y, 529, 18).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
-        doc.text('CÓDIGO', 40, y + 5);
-        doc.text('CANT.', 120, y + 5, { width: 50, align: 'center' });
-        doc.text('UND.', 175, y + 5, { width: 40, align: 'center' });
-        doc.text('DESCRIPCIÓN', 225, y + 5);
-        y += 18;
-
-        doc.font('Helvetica').fontSize(8);
-        for (const it of detalle) {
-          const desc = it.nombre || it.codigo || '-';
-          const hDesc = doc.heightOfString(desc, { width: 320, lineGap: 1 });
-          const hFila = Math.max(16, hDesc + 6);
-          if (y + hFila > 690) { doc.addPage(); y = 40; }
-          doc.fillColor('#000');
-          doc.text(it.codigo || '-', 40, y + 3, { width: 78 });
-          doc.text(Number(it.cantidad || 0).toFixed(2), 120, y + 3, { width: 50, align: 'center' });
-          doc.text(it.codigo_unidad_sunat || 'NIU', 175, y + 3, { width: 40, align: 'center' });
-          doc.text(desc, 225, y + 3, { width: 320, lineGap: 1 });
-          y += hFila;
+      if (normalizedConductores.length || !esTercero) {
+        top = sectionStart('Datos de los conductores');
+        if (normalizedConductores.length) {
+          normalizedConductores.forEach((driver, index) => {
+            const nombre = driver.nombre_completo || driver.nombre;
+            const licencia = driver.licencia_conducir || driver.licencia;
+            fullWidthRow(index === 0 ? 'Conductor principal:' : 'Conductor secundario:',
+              `${limpio(nombre)} · DOCUMENTO NACIONAL DE IDENTIDAD N° ${limpio(driver.dni)} · LICENCIA N° ${limpio(licencia)}`,
+              { labelWidth: 112, fontSize: 7.3, boldValue: true });
+          });
+        } else {
+          fullWidthRow('Conductor principal:', '—', { labelWidth: 105 });
         }
-        doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
-        y += 8;
+        sectionEnd(top);
       }
 
-      // ── Observaciones (texto libre + OC) — texto plano, sin recuadro, posición inteligente ──
-      // Mismo diseño que la factura: fluye bajo la tabla (baja con ella cuando hay muchos ítems) y
-      // el mismo texto viaja a SUNAT en cbc:Note. SUNAT la refleja como "Observaciones".
-      const obsTxt = String(g.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
-      if (obsTxt) {
-        doc.fontSize(8).fillColor('#000')
-          .font('Helvetica-Bold').text('Observaciones: ', 40, y, { continued: true, width: 515 })
-          .font('Helvetica').text(obsTxt);
+      const observacion = limpio(g.observaciones, '');
+      if (observacion) {
+        top = sectionStart('Observaciones');
+        doc.font('Helvetica').fontSize(7.6).fillColor(COLOR.ink)
+          .text(observacion, X + 9, y + 8, { width: W - 18, lineGap: 1.5 });
         y = doc.y + 2;
+        sectionEnd(top);
       }
 
-      // ── Pie legal: QR (URL SUNAT) + leyenda ──
-      // El "Valor resumen (hash)" NO se imprime (consistente con la factura; el digest sigue en el
-      // XML firmado y el CDR). Las representaciones impresas reales no lo muestran.
-      const yPie = Math.max(y + 12, 700);
-      if (qrBuffer) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
-      doc.fontSize(7).font('Helvetica').fillColor('#000');
-      doc.text('Representación impresa de la Guía de Remisión Electrónica.', 145, yPie + 6, { width: 410 });
-      doc.text('El QR contiene la URL de consulta pública de SUNAT.', 145, yPie + 16, { width: 410 });
+      // Pie legal completo. Si no cabe, pasa a una página limpia en lugar de superponerse al detalle.
+      if (y + 94 > 800) newPage();
+      const footerY = Math.max(y + 3, 700);
+      doc.roundedRect(X, footerY, W, 90, 6).fillAndStroke(COLOR.pale, COLOR.line);
+      doc.rect(X, footerY, 6, 90).fill(COLOR.cyan);
+      if (qrBuffer) {
+        try { doc.image(qrBuffer, X + 15, footerY + 9, { width: 72, height: 72 }); } catch { /* QR opcional */ }
+      }
+      const legalX = X + 101;
+      doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.navy)
+        .text('REPRESENTACIÓN IMPRESA', legalX, footerY + 10, { width: 205 });
+      doc.font('Helvetica').fontSize(7.2).fillColor(COLOR.ink)
+        .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 25, { width: 407, lineGap: 1.2 });
+      doc.font('Helvetica-Bold').fontSize(6.8).fillColor(COLOR.muted)
+        .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 58, { width: 407 });
+      const estado = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
+        : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : 'ACEPTADA POR SUNAT';
+      doc.roundedRect(legalX, footerY + 70, 118, 14, 7).fill(g.sunat_estado === 'ACEPTADO' ? COLOR.navy : COLOR.danger);
+      doc.font('Helvetica-Bold').fontSize(6.5).fillColor(COLOR.white)
+        .text(estado, legalX + 5, footerY + 74, { width: 108, align: 'center' });
 
-      // ── Marca de agua Fase 12: guía sin efecto / reemplazada ──
-      const wm = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
+      // Marca de agua para guías invalidadas.
+      const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
         : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : null;
-      if (wm) {
-        doc.save().rotate(-30, { origin: [297, 400] })
-          .fontSize(70).fillColor('#D32F2F').opacity(0.22)
-          .text(wm, 60, 380, { align: 'center', width: 480 }).opacity(1).restore();
-        if (g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref) {
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
-            .text(`Reemplazada por la guía ${g.reemplazo_ref}`, 145, yPie + 30, { width: 410 });
+      if (watermark) {
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i += 1) {
+          doc.switchToPage(i);
+          doc.save().rotate(-30, { origin: [PAGE_W / 2, 410] })
+            .font('Helvetica-Bold').fontSize(64).fillColor(COLOR.danger).opacity(0.17)
+            .text(watermark, 60, 380, { align: 'center', width: 480 })
+            .opacity(1).restore();
         }
-        if (g.sunat_estado === 'ANULADA' && g.motivo_anulacion) {
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#D32F2F')
-            .text(`Sin efecto — motivo: ${g.motivo_anulacion}`, 145, yPie + 30, { width: 410 });
-        }
+        doc.switchToPage(range.start + range.count - 1);
+        const nota = g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref
+          ? `Reemplazada por la guía ${g.reemplazo_ref}`
+          : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}` : '');
+        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX + 126, footerY + 74, { width: 275 });
+      }
+
+      // Numeración discreta en todas las páginas.
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i += 1) {
+        doc.switchToPage(i);
+        doc.font('Helvetica').fontSize(6.5).fillColor(COLOR.muted)
+          .text(`Página ${i - range.start + 1} de ${range.count}`, 465, 805, { width: 97, align: 'right', lineBreak: false });
       }
 
       doc.end();
-    } catch (e) { reject(e); }
+    } catch (error) {
+      reject(error);
+    }
   });
 }

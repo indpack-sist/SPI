@@ -5,7 +5,7 @@ import {
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
   Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin, 
-  Package, Check, ChevronDown, ChevronUp
+  Package, Check, ChevronDown, ChevronUp, GripVertical
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -14,6 +14,7 @@ import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, tipoCambioAPI, listasPreciosAPI } from '../../config/api';
 
 import { useAuth } from '../../context/AuthContext';
+import useReordenarFilas from '../../hooks/useReordenarFilas';
 
 const TIPOS_IMPUESTO = [
   { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
@@ -135,6 +136,15 @@ function NuevaCotizacion() {
   const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
+  const {
+    indiceArrastrado,
+    destinoArrastre,
+    iniciarArrastre,
+    marcarDestino,
+    soltarFila,
+    obtenerPosicionDestino,
+    cancelarArrastre
+  } = useReordenarFilas(setDetalle);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
     
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
@@ -295,6 +305,7 @@ function NuevaCotizacion() {
   setDetalle(cotizacion.detalle.map(item => {
     const prodCatalogo = productos.find(p => p.id_producto === item.id_producto);
     return {
+      id_detalle: item.id_detalle,
       id_producto: item.id_producto || null,
       codigo_producto: item.codigo_producto || item.codigo_producto_libre || '',
       producto: item.producto || item.nombre_producto_libre || '',
@@ -1411,10 +1422,20 @@ setFormCabecera(prev => ({
           </div>
           <div className="card-body">
             {detalle.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div>
+                {modoEdicion && detalle.length > 1 && (
+                  <div className={`mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 bg-gray-50 text-muted'}`}>
+                    <GripVertical size={17} />
+                    {indiceArrastrado !== null
+                      ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong>. Suelta en la posición {obtenerPosicionDestino(detalle.length)}.</>
+                      : <>Arrastra cada producto desde el asa para cambiar el orden que tendrá en el PDF.</>}
+                  </div>
+                )}
+                <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
   <tr>
+    {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
     <th>Codigo</th>
     <th>Descripcion</th>
     <th className="text-right">Cantidad</th>
@@ -1432,7 +1453,38 @@ setFormCabecera(prev => ({
                       const precioVenta = parseFloat(item.precio_venta) || 0;
                       const valorVenta = item.cantidad * precioVenta;
                       return (
-                        <tr key={index} className={item.es_producto_libre ? 'bg-amber-50' : ''}>
+                        <tr
+                          key={item.id_detalle || item.id_producto || `libre-${index}`}
+                          className={item.es_producto_libre ? 'bg-amber-50' : ''}
+                          style={{
+                            ...(indiceArrastrado === index
+                              ? { backgroundColor: '#eff6ff', outline: '2px solid #60a5fa', outlineOffset: '-2px' }
+                              : {}),
+                            ...(destinoArrastre === index
+                              ? { boxShadow: 'inset 0 3px 0 #2563eb' }
+                              : (destinoArrastre === detalle.length && index === detalle.length - 1
+                                ? { boxShadow: 'inset 0 -3px 0 #2563eb' }
+                                : {}))
+                          }}
+                          onDragOver={modoEdicion ? (event) => marcarDestino(event, index) : undefined}
+                          onDrop={modoEdicion ? soltarFila : undefined}
+                        >
+                          {modoEdicion && (
+                            <td>
+                              <span
+                                draggable
+                                role="button"
+                                tabIndex={0}
+                                title="Arrastrar para reordenar"
+                                aria-label={`Mover ${item.producto || 'producto'}`}
+                                className="inline-flex cursor-grab rounded p-1 text-gray-500 hover:bg-blue-100 hover:text-blue-700 active:cursor-grabbing"
+                                onDragStart={(event) => iniciarArrastre(event, index)}
+                                onDragEnd={cancelarArrastre}
+                              >
+                                <GripVertical size={19} />
+                              </span>
+                            </td>
+                          )}
                           <td className="font-mono text-sm">
                             {item.es_producto_libre ? (
                               <input
@@ -1563,6 +1615,7 @@ setFormCabecera(prev => ({
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             ) : (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">

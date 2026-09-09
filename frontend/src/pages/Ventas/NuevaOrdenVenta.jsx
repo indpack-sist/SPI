@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus, Package, ShieldCheck
+  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus, Package, ShieldCheck, GripVertical
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -13,6 +13,7 @@ import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
+import useReordenarFilas from '../../hooks/useReordenarFilas';
 
 const TIPOS_IMPUESTO = [
   { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
@@ -67,6 +68,15 @@ function NuevaOrdenVenta() {
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [cargandoCredito, setCargandoCredito] = useState(false);
   const [detalle, setDetalle] = useState([]);
+  const {
+    indiceArrastrado,
+    destinoArrastre,
+    iniciarArrastre,
+    marcarDestino,
+    soltarFila,
+    obtenerPosicionDestino,
+    cancelarArrastre
+  } = useReordenarFilas(setDetalle);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
   const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
@@ -346,6 +356,7 @@ useEffect(() => {
           setDetalle(orden.detalle.map(item => {
             const prodCatalogo = productos.find(p => p.id_producto === item.id_producto);
             return {
+              id_detalle: item.id_detalle,
               id_producto: item.id_producto,
               codigo_producto: item.codigo_producto,
               producto: item.producto,
@@ -1110,10 +1121,19 @@ useEffect(() => {
                   <Plus size={16} /> Agregar
                 </button>
               </div>
+              {modoEdicion && detalle.length > 1 && (
+                <div className={`mx-4 mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 bg-gray-50 text-muted'}`}>
+                  <GripVertical size={17} />
+                  {indiceArrastrado !== null
+                    ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong>. Suelta en la posición {obtenerPosicionDestino(detalle.length)}.</>
+                    : <>Arrastra cada producto desde el asa para cambiar el orden que tendrá en el PDF.</>}
+                </div>
+              )}
               <div className="card-body p-0 overflow-x-auto">
                 <table className="table">
                   <thead>
   <tr>
+    {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
     <th>Producto</th>
     <th className="text-right w-24">Cant.</th>
     <th className="text-right w-24">Peso</th>
@@ -1126,7 +1146,7 @@ useEffect(() => {
 </thead>
                   <tbody>
                     {detalle.length === 0 ? (
-                      <tr><td colSpan={esAdmin ? 8 : 7} className="text-center py-8 text-muted">No hay productos agregados</td></tr>
+                      <tr><td colSpan={(esAdmin ? 8 : 7) + (modoEdicion ? 1 : 0)} className="text-center py-8 text-muted">No hay productos agregados</td></tr>
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -1135,7 +1155,37 @@ useEffect(() => {
                         const margenColor = margen < 0 ? 'text-red-600 font-bold' : '';
                         
                         return (
-                          <tr key={index}>
+                          <tr
+                            key={item.id_detalle || item.id_producto || index}
+                            style={{
+                              ...(indiceArrastrado === index
+                                ? { backgroundColor: '#eff6ff', outline: '2px solid #60a5fa', outlineOffset: '-2px' }
+                                : {}),
+                              ...(destinoArrastre === index
+                                ? { boxShadow: 'inset 0 3px 0 #2563eb' }
+                                : (destinoArrastre === detalle.length && index === detalle.length - 1
+                                  ? { boxShadow: 'inset 0 -3px 0 #2563eb' }
+                                  : {}))
+                            }}
+                            onDragOver={modoEdicion ? (event) => marcarDestino(event, index) : undefined}
+                            onDrop={modoEdicion ? soltarFila : undefined}
+                          >
+                            {modoEdicion && (
+                              <td>
+                                <span
+                                  draggable
+                                  role="button"
+                                  tabIndex={0}
+                                  title="Arrastrar para reordenar"
+                                  aria-label={`Mover ${item.producto || 'producto'}`}
+                                  className="inline-flex cursor-grab rounded p-1 text-gray-500 hover:bg-blue-100 hover:text-blue-700 active:cursor-grabbing"
+                                  onDragStart={(event) => iniciarArrastre(event, index)}
+                                  onDragEnd={cancelarArrastre}
+                                >
+                                  <GripVertical size={19} />
+                                </span>
+                              </td>
+                            )}
                             <td>
                               <div className="font-medium">{item.producto}</div>
                               <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>

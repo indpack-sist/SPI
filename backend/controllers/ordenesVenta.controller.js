@@ -379,7 +379,7 @@ export async function getOrdenVentaById(req, res) {
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.id_detalle
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle), dov.id_detalle
     `, [id, id]);
 
     const [ordenResult, detalleResult] = await Promise.all([ordenPromise, detallePromise]);
@@ -835,11 +835,11 @@ export async function createOrdenVenta(req, res) {
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
 
-    const detalleValues = detalle.map(item => {
+    const detalleValues = detalle.map((item, index) => {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
-      return [item.id_producto, cantidad, precioVenta, precioBase, 0, 0];
+      return [item.id_producto, cantidad, precioVenta, precioBase, 0, 0, index + 1];
     });
 
     const connection = await pool.getConnection();
@@ -876,7 +876,7 @@ export async function createOrdenVenta(req, res) {
       await connection.query(
         `INSERT INTO detalle_orden_venta (
           id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porcentaje, stock_reservado
+          descuento_porcentaje, stock_reservado, orden
         ) VALUES ?`,
         [detalleValues.map(values => [idOrden, ...values])]
       );
@@ -1197,7 +1197,7 @@ export async function updateOrdenVenta(req, res) {
       params: [id]
     }];
 
-    const detalleOrdenValues = detalle.map(item => {
+    const detalleOrdenValues = detalle.map((item, index) => {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
@@ -1207,7 +1207,7 @@ export async function updateOrdenVenta(req, res) {
       return [
         id, item.id_producto, cantidad, precioVenta, precioBase,
         pctComision, montoComision, 0, stockReservado ? 1 : 0,
-        infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada
+        infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada, index + 1
       ];
     });
 
@@ -1215,8 +1215,8 @@ export async function updateOrdenVenta(req, res) {
       sql: `INSERT INTO detalle_orden_venta (
         id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
         porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
-        cantidad_despachada, cantidad_reservada
-      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+        cantidad_despachada, cantidad_reservada, orden
+      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
       params: detalleOrdenValues.flat()
     });
 
@@ -2287,7 +2287,7 @@ export async function descargarPDFOrdenVenta(req, res) {
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden ASC
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
 
     if (!detalleResult.success) {
@@ -3659,7 +3659,7 @@ export async function descargarPDFGuiaInterna(req, res) {
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden ASC
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
 
     if (!detalleResult.success) {
@@ -3838,7 +3838,7 @@ export async function getDatosVerificacionOrden(req, res) {
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden ASC
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
 
     orden.detalle = detalleResult.data || [];

@@ -720,19 +720,19 @@ if (moneda !== 'PEN') {
         params: [idOrden]
       });
 
-      const detalleOrdenValues = detalleOrden.map(item => {
+      const detalleOrdenValues = detalleOrden.map((item, index) => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioBase = parseFloat(item.precio_base || 0);
         const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
         const pctComision = parseFloat(item.porcentaje_comision || 0);
         const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
         const montoComision = precioBase * (pctComision / 100);
-        return [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0];
+        return [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0, index + 1];
       });
 
       if (detalleOrdenValues.length > 0) {
         queries.push({
-          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado, orden) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
           params: detalleOrdenValues.flat()
         });
       }

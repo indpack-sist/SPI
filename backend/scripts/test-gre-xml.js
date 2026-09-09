@@ -379,13 +379,13 @@ const datosCompra = {
   cliente: { ruc: RUC, razon_social: 'INDPACK S.A.C.', tipo_documento: 'RUC' }, // destinatario = la propia empresa
   proveedor: { ruc: PROV_RUC, razon_social: 'DISPERCOL S A' },
   guia: {
-    motivo_traslado_cod: '02', motivo_traslado: 'COMPRA', peso_bruto_kg: 3000,
+    motivo_traslado_cod: '02', motivo_traslado: 'COMPRA', peso_bruto_kg: 1000,
     ubigeo_partida: '150103', direccion_partida: 'AV. SEPARADORA INDUSTRIAL NRO. 2295 URB. VULCANO LIMA - LIMA - ATE',
     ubigeo_llegada: '150142', direccion_llegada: 'AV. EL SOL MZ. LL-1 LOTE. 4 B COO. LAS VERTIENTES - VILLA EL SALVADOR'
   },
   detalle: [
-    { cantidad: 1500, codigo_unidad_sunat: 'KGM', nombre: 'EXXONMOBIL LD 2022.AC', codigo: '01002098F' },
-    { cantidad: 1500, codigo_unidad_sunat: 'KGM', nombre: 'BRASKEM LL4405S', codigo: '02002057F' }
+    { cantidad: 500, codigo_unidad_sunat: 'KGM', nombre: 'EXXONMOBIL LD 2022.AC (UNSPSC:13102018)', codigo: '01002098F' },
+    { cantidad: 500, codigo_unidad_sunat: 'KGM', nombre: 'BRASKEM LL4405S (UNSPSC:13102018)', codigo: '02002057F' }
   ],
   fecha: { emision: '2026-09-01', hora: '16:48:25' }, fechaTraslado: '2026-09-01',
   modalidad: '02',
@@ -426,6 +426,14 @@ check('COMPRA: llegada (DeliveryAddress) listID = RUC SPI',
 check('COMPRA: 2 DespatchLine (KGM)',
   Array.isArray(dc?.DespatchLine) && dc.DespatchLine.length === 2 &&
   dc.DespatchLine[0]?.DeliveredQuantity?.['@unitCode'] === 'KGM');
+const lineasCompraXml = Array.isArray(dc?.DespatchLine) ? dc.DespatchLine : [dc?.DespatchLine];
+check('COMPRA: conserva descripción documental exacta del proveedor',
+  String(lineasCompraXml[1]?.Item?.Description) === 'BRASKEM LL4405S (UNSPSC:13102018)');
+check('COMPRA: conserva código documental exacto del proveedor',
+  String(lineasCompraXml[1]?.Item?.SellersItemIdentification?.ID) === '02002057F');
+check('COMPRA: conserva cantidad y unidad documentales',
+  Number(lineasCompraXml[1]?.DeliveredQuantity?.['#text']) === 500
+  && lineasCompraXml[1]?.DeliveredQuantity?.['@unitCode'] === 'KGM');
 
 // Regresión: la GRE de VENTA (sin proveedor) NO emite SellerSupplierParty ni IssuerParty.
 check('COMPRA: VENTA no regresiona (sin SellerSupplierParty)', da?.SellerSupplierParty === undefined);

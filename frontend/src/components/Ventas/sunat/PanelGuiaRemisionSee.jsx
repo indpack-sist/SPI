@@ -709,13 +709,34 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Guía interna</div><div className="font-mono text-xs">{guia?.numero_guia}</div></div>
               </div>
 
-              <div className="border border-gray-200 rounded p-3">
-                <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
-                  <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{(esCompra ? empresaRemitente?.razon_social : guia?.cliente) || '-'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{(esCompra ? empresaRemitente?.ruc : guia?.ruc_cliente) || '-'}</span></div>
+              <div className={`grid grid-cols-1 ${esCompra ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-2`}>
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Remitente</div>
+                  <div className="font-medium">{empresaRemitente?.razon_social || '-'}</div>
+                  <div className="font-mono text-xs">RUC {empresaRemitente?.ruc || '-'}</div>
                 </div>
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
+                  <div className="font-medium">{(esCompra ? empresaRemitente?.razon_social : guia?.cliente) || '-'}</div>
+                  <div className="font-mono text-xs">RUC {(esCompra ? empresaRemitente?.ruc : guia?.ruc_cliente) || '-'}</div>
+                </div>
+                {esCompra && (
+                  <div className="border border-gray-200 rounded p-3">
+                    <div className="text-[10px] text-muted uppercase mb-1">Proveedor (vendedor)</div>
+                    <div className="font-medium">{guia?.proveedor || '-'}</div>
+                    <div className="font-mono text-xs">RUC {guia?.ruc_proveedor || '-'}</div>
+                  </div>
+                )}
               </div>
+
+              {esCompra && (
+                <div className="border border-gray-200 rounded p-3 text-xs">
+                  <div className="text-[10px] text-muted uppercase mb-1">Validación de identidad documental</div>
+                  <div>Remitente y destinatario: <span className="font-semibold">{empresaRemitente?.razon_social || '—'}</span></div>
+                  <div>Vendedor e issuer de la factura: <span className="font-semibold">{guia?.proveedor || '—'}</span> · RUC <span className="font-mono">{guia?.ruc_proveedor || '—'}</span></div>
+                  <div>N.º de bultos: <span className="font-semibold">{guia?.numero_bultos ?? 0}</span></div>
+                </div>
+              )}
 
               {esCompra && guia?.oc_serie_documento && guia?.oc_numero_documento && (
                 <div className="border border-gray-200 rounded p-3">

@@ -228,6 +228,7 @@ export async function getCompraById(req, res) {
         COALESCE(p.codigo, 'MANUAL') AS codigo_producto,
         COALESCE(p.nombre, doc.descripcion_manual) AS producto,
         COALESCE(p.unidad_medida, 'UND') AS unidad_medida,
+        p.codigo_unidad_sunat,
         p.stock_actual AS stock_disponible,
         ti.nombre AS tipo_inventario
       FROM detalle_orden_compra doc
@@ -401,6 +402,16 @@ export async function createCompra(req, res) {
     // En una compra originada desde XML, nunca guardar importes que ya no coincidan con el
     // comprobante. La tolerancia cubre únicamente redondeos monetarios de uno o dos centavos.
     if (totales_xml) {
+      const lineaSinTrazabilidad = detalle.find((item) => (
+        !String(item.descripcion_documento || '').trim()
+        || !String(item.unidad_documento_sunat || '').trim()
+      ));
+      if (lineaSinTrazabilidad) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cada línea del XML debe conservar su descripción y unidad SUNAT documentales.'
+        });
+      }
       const subtotalXml = parseFloat(totales_xml.subtotal);
       const igvXml = parseFloat(totales_xml.igv);
       const totalXml = parseFloat(totales_xml.total);
@@ -692,12 +703,18 @@ export async function createCompra(req, res) {
         }
 
         await connection.query(`
-          INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, descripcion_manual, cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO detalle_orden_compra (
+            id_orden_compra, id_producto, descripcion_manual,
+            codigo_documento, descripcion_documento, unidad_documento_sunat,
+            cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           idCompra,
           item.id_producto || null,
           item.id_producto ? null : (item.descripcion_manual || item.producto || 'ITEM MANUAL'),
+          item.codigo_documento ? String(item.codigo_documento).trim().slice(0, 100) : null,
+          item.descripcion_documento ? String(item.descripcion_documento).trim().slice(0, 500) : null,
+          item.unidad_documento_sunat ? String(item.unidad_documento_sunat).trim().slice(0, 20).toUpperCase() : null,
           parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1
         ]);
 
@@ -886,12 +903,18 @@ export async function updateCompra(req, res) {
           const desc = parseFloat(item.descuento_porcentaje || 0);
           const subItem = (item.cantidad * precio) * (1 - desc / 100);
           await connection.query(`
-            INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, descripcion_manual, cantidad, precio_unitario, descuento_porcentaje, subtotal, orden)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO detalle_orden_compra (
+              id_orden_compra, id_producto, descripcion_manual,
+              codigo_documento, descripcion_documento, unidad_documento_sunat,
+              cantidad, precio_unitario, descuento_porcentaje, subtotal, orden
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             id,
             item.id_producto || null,
             item.id_producto ? null : (item.descripcion_manual || item.producto || 'ITEM MANUAL'),
+            item.codigo_documento ? String(item.codigo_documento).trim().slice(0, 100) : null,
+            item.descripcion_documento ? String(item.descripcion_documento).trim().slice(0, 500) : null,
+            item.unidad_documento_sunat ? String(item.unidad_documento_sunat).trim().slice(0, 20).toUpperCase() : null,
             parseFloat(item.cantidad), precio, desc, subItem, i + 1
           ]);
         }
@@ -1313,9 +1336,11 @@ export async function descargarPDFCompra(req, res) {
     const detalleResult = await executeQuery(`
       SELECT
         doc.*,
-        COALESCE(p.codigo, 'MANUAL') AS codigo_producto,
-        COALESCE(p.nombre, doc.descripcion_manual) AS producto,
-        COALESCE(p.unidad_medida, 'UND') AS unidad_medida
+        COALESCE(doc.codigo_documento, p.codigo, 'MANUAL') AS codigo_producto,
+        COALESCE(doc.descripcion_documento, p.nombre, doc.descripcion_manual) AS producto,
+        COALESCE(doc.unidad_documento_sunat, p.unidad_medida, 'UND') AS unidad_medida,
+        p.codigo AS codigo_producto_interno,
+        p.nombre AS producto_interno
       FROM detalle_orden_compra doc
       LEFT JOIN productos p ON doc.id_producto = p.id_producto
       WHERE doc.id_orden_compra = ?

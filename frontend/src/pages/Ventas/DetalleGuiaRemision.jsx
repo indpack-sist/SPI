@@ -227,7 +227,10 @@ function DetalleGuiaRemision() {
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
-          {row.descripcion && row.descripcion !== value && (
+          {row.producto_interno && row.producto_interno !== value && (
+            <div className="text-sm text-muted">Inventario: {row.producto_interno}</div>
+          )}
+          {row.descripcion && row.descripcion !== value && !row.producto_interno && (
             <div className="text-sm text-muted">{row.descripcion}</div>
           )}
         </div>

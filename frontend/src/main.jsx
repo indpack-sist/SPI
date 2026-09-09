@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './app.jsx'
 import './index.css'
+import ResponsiveTables from './components/UI/ResponsiveTables.jsx'
 
 const PRELOAD_RELOAD_KEY = 'indpack_preload_reload_at'
 const PRELOAD_RELOAD_WINDOW_MS = 60_000
@@ -29,6 +30,7 @@ window.addEventListener('vite:preloadError', (event) => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <ResponsiveTables />
     <App />
   </React.StrictMode>,
 )

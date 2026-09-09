@@ -5,8 +5,8 @@ import Navbar from './Navbar';
 import './Layout.css';
 
 function Layout({ children }) {
-  // Inicializar basado en el ancho de pantalla (Desktop: abierto, Móvil: cerrado)
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+  // En móvil y tablet el menú funciona como panel superpuesto y empieza cerrado.
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const location = useLocation();
 
   const isLauncher = location.pathname === '/';
@@ -17,10 +17,19 @@ function Layout({ children }) {
 
   // Lógica 2026: Cerrar menú automáticamente al cambiar de ruta (solo en móvil)
   useEffect(() => {
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
   }, [location.pathname]);
+
+  // Mantiene el comportamiento correcto al rotar el dispositivo o redimensionar.
+  useEffect(() => {
+    const desktopQuery = window.matchMedia('(min-width: 1024px)');
+    const handleBreakpointChange = (event) => setSidebarOpen(event.matches);
+
+    desktopQuery.addEventListener('change', handleBreakpointChange);
+    return () => desktopQuery.removeEventListener('change', handleBreakpointChange);
+  }, []);
 
   return (
     <div className="layout">

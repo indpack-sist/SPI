@@ -1664,3 +1664,317 @@ input.bg-blue-50 {
   appearance: none;
 }
 .section-toggle:hover .card-title { color: var(--accent); }
+
+/* =====================================================
+   RESPONSIVE GLOBAL — móvil y tablet
+   Se limita a < 1024px: la composición de escritorio no cambia.
+   ===================================================== */
+
+@media (max-width: 1023px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .layout-main,
+  .layout-content,
+  .layout-content > *,
+  .card,
+  .card-body,
+  .list-panel,
+  .modal-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .layout-content :where(.flex, .grid) > * {
+    min-width: 0;
+  }
+
+  .layout-content :where(img, video, canvas) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .layout-content :where(pre, code) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Los anchos mínimos inline eran una fuente frecuente de desborde. */
+  .layout-content [style*="min-width"],
+  .modal-content [style*="min-width"] {
+    min-width: 0 !important;
+  }
+
+  .layout-content [style*="width"],
+  .modal-content [style*="width"] {
+    max-width: 100% !important;
+  }
+
+  .grid-cols-3,
+  .grid-cols-4,
+  .grid-cols-5,
+  .md\:grid-cols-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card-header,
+  .card-footer {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .card-header > *,
+  .card-footer > * {
+    min-width: 0;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    max-width: 100%;
+  }
+
+  .layout-content .btn:not(.btn-xs),
+  .modal-content .btn:not(.btn-xs) {
+    min-height: 44px;
+  }
+
+  /* Una tabla legible sin scroll horizontal: cada registro se vuelve tarjeta. */
+  :where(.table-container, .overflow-x-auto):has(> table.responsive-table-cards) {
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  table.responsive-table-cards {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: separate;
+    white-space: normal !important;
+  }
+
+  table.responsive-table-cards > thead {
+    display: none !important;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr));
+    align-items: start;
+    gap: 0.875rem;
+    width: 100%;
+  }
+
+  table.responsive-table-cards > tfoot:not(:empty) {
+    margin-top: 0.875rem;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow);
+  }
+
+  table.responsive-table-cards > tbody > tr:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent-border);
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr > td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 0.75rem;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 44px;
+    padding: 0.625rem 0.75rem !important;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr > td:last-child {
+    border-bottom: 0;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr > td::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    overflow-wrap: break-word;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr > td > * {
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+  }
+
+  table.responsive-table-cards td :where(.flex, .inline-flex) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  table.responsive-table-cards td :where(input, select, textarea) {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  table.responsive-table-cards td[data-mobile-action="true"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    background: var(--bg-tertiary);
+  }
+
+  table.responsive-table-cards td[data-mobile-action="true"]::before,
+  table.responsive-table-cards td[data-mobile-wide="true"]::before,
+  table.responsive-table-cards td[data-label=""]::before {
+    display: none;
+  }
+
+  table.responsive-table-cards td[data-mobile-wide="true"] {
+    display: block;
+    min-height: 0;
+    text-align: right !important;
+  }
+
+  table.responsive-table-cards td[data-mobile-action="true"] > * {
+    width: auto;
+    margin-left: 0;
+  }
+
+  table.responsive-table-cards td[hidden] {
+    display: none !important;
+  }
+
+  /* Fallback para tablas deliberadamente excluidas o sin encabezados. */
+  :where(.table-container, .overflow-x-auto):has(> table.responsive-table-scroll),
+  *:has(> table.responsive-table-scroll) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Paginación: se mantiene dentro del viewport y conserva controles táctiles. */
+  .ui-pagination {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem !important;
+    gap: 1rem !important;
+  }
+
+  .ui-pagination .pagination-nav {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .ui-pagination .pagination-numbers {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.25rem;
+  }
+
+  .ui-pagination .pagination-jump {
+    flex-direction: row;
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  .table-pagination {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout-content {
+    padding: 0.75rem;
+  }
+
+  .container {
+    width: 100%;
+    padding-inline: 0;
+  }
+
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4,
+  .grid-cols-5,
+  .md\:grid-cols-5 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card,
+  .card-body,
+  .p-6 {
+    padding: 0.875rem;
+  }
+
+  .modal-header,
+  .modal-body {
+    padding-inline: 0.875rem;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  table.responsive-table-cards > :where(tbody, tfoot) > tr > td {
+    grid-template-columns: minmax(5.5rem, 0.72fr) minmax(0, 1.28fr);
+    gap: 0.625rem;
+  }
+
+  .ui-pagination .pagination-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ui-pagination .pagination-nav > .btn {
+    min-width: 0;
+    padding-inline: 0.625rem;
+  }
+
+  .ui-pagination .pagination-numbers {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-content: flex-start;
+    order: -1;
+  }
+
+  .table-pagination .pagination-controls {
+    gap: 0.5rem;
+  }
+
+  .table-pagination .pagination-controls .btn {
+    min-width: 0;
+    padding-inline: 0.625rem;
+  }
+}

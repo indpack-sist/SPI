@@ -821,7 +821,7 @@ function DetalleCotizacion() {
         />
       )}
 
-      <div className="card mb-6" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : 'var(--border)' }}>
+      <div className="card mb-6 cotizacion-status-panel" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : 'var(--border)' }}>
         <div className={`card-body rounded-lg border-2 ${estadoConfig.clase}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
@@ -829,7 +829,7 @@ function DetalleCotizacion() {
                 <IconoEstado size={40} />
               </div>
               <div>
-                <p className="text-sm uppercase font-semibold opacity-70 mb-1">Estado Actual</p>
+                <p className="text-sm uppercase font-semibold cotizacion-status-label mb-1">Estado Actual</p>
                 <h3 className="text-3xl font-bold">{cotizacion.estado}</h3>
                 {cotizacion.fecha_vencimiento && cotizacion.estado === 'Pendiente' && (
                   <p className="text-sm mt-1 opacity-70">
@@ -840,9 +840,9 @@ function DetalleCotizacion() {
             </div>
             
             <div className="text-right">
-              <p className="text-sm uppercase font-semibold opacity-70 mb-2">Prioridad</p>
+              <p className="text-sm uppercase font-semibold cotizacion-status-label mb-2">Prioridad</p>
               <button 
-                className={`badge ${cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info'} text-lg px-4 py-2`}
+                className={`badge cotizacion-priority ${cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info'} text-lg px-4 py-2`}
                 onClick={() => !estaConvertida && cotizacion.estado !== 'Vencida' && setModalPrioridadOpen(true)}
                 disabled={estaConvertida || cotizacion.estado === 'Vencida'}
               >
@@ -853,7 +853,7 @@ function DetalleCotizacion() {
           
           {!estaConvertida && cotizacion.estado !== 'Vencida' && (
             <div className="border-t border-black/10 pt-4 mt-2">
-              <p className="text-xs font-bold uppercase opacity-60 mb-3">Cambiar Estado:</p>
+              <p className="text-xs font-bold uppercase cotizacion-status-label mb-3">Cambiar Estado:</p>
               <div className="flex gap-3 flex-wrap">
                 <button
                   className={`btn btn-sm ${

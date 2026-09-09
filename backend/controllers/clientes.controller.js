@@ -232,9 +232,10 @@ export async function createCliente(req, res) {
       });
     }
 
-    if (direccion_despacho && !/^\d{6}$/.test(String(ubigeo || '').trim())) {
+    const ubigeoPrincipal = String(ubigeo || '').trim();
+    if (ubigeoPrincipal && !/^\d{6}$/.test(ubigeoPrincipal)) {
       return res.status(400).json({
-        error: 'El ubigeo de la dirección principal es obligatorio y debe tener 6 dígitos'
+        error: 'El ubigeo de la dirección principal debe tener 6 dígitos'
       });
     }
 
@@ -332,7 +333,7 @@ export async function createCliente(req, res) {
     if (direccion_despacho) {
       await executeQuery(
         `INSERT INTO clientes_direcciones (id_cliente, direccion, ubigeo, es_principal) VALUES (?, ?, ?, 1)`,
-        [idCliente, direccion_despacho, String(ubigeo).trim()]
+        [idCliente, direccion_despacho, ubigeoPrincipal || null]
       );
     }
 

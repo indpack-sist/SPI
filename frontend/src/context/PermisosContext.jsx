@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../config/api';
 
 const PermisosContext = createContext();
 
@@ -32,21 +33,8 @@ export const PermisosProvider = ({ children }) => {
         setRol(user.rol);
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      
-      const response = await fetch(`${API_URL}/auth/permisos`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Error al cargar permisos');
-      }
-
-      const data = await response.json();
+      const response = await api.get('/auth/permisos');
+      const data = response.data;
       
       console.log('📦 Respuesta de permisos:', data);
       
@@ -58,8 +46,8 @@ export const PermisosProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ Error al cargar permisos:', error);
-      setPermisos(null);
-      setRol(null);
+      // Se conservan los últimos permisos ante fallos temporales. El interceptor
+      // central se ocupa del vencimiento real de la sesión.
     } finally {
       setCargando(false);
     }

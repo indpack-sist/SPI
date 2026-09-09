@@ -59,11 +59,14 @@ api.interceptors.response.use(
       });
     }
     
-    // Solo cerramos sesión cuando el token es REALMENTE inválido/expirado.
-    // Un 401 por otra causa (ej. contraseña incorrecta) NO debe cerrar la sesión.
-    // Un fallo de BD/red ahora llega como 500, no como 401, así que tampoco cierra sesión.
-    const CODIGOS_SESION_INVALIDA = ['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'USER_INACTIVE'];
-    const esSesionInvalida = status === 401 && CODIGOS_SESION_INVALIDA.includes(data?.code);
+    // Solo cerramos automáticamente por expiración confirmada o cuenta desactivada.
+    // Un 401 por otra causa (por ejemplo, credenciales de login incorrectas) no debe
+    // borrar una sesión vigente. Los fallos de BD/red tampoco cierran la sesión.
+    // La duración la determina el `exp` del JWT validado por el backend (24 h).
+    // Otros 401, respuestas inválidas o fallos temporales no deben destruir la sesión.
+    const esTokenExpirado = status === 401 && data?.code === 'TOKEN_EXPIRED';
+    const esUsuarioInactivo = status === 401 && data?.code === 'USER_INACTIVE';
+    const esSesionInvalida = esTokenExpirado || esUsuarioInactivo;
 
     if (esSesionInvalida) {
       console.log('Sesión inválida/expirada - cerrando sesión. Código:', data?.code);

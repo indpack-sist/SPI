@@ -50,15 +50,13 @@ export function AuthProvider({ children }) {
         
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
-      } else {
-        limpiarSesion();
       }
     } catch (error) {
       console.error('❌ Error al verificar autenticación:', error);
 
-      // El interceptor ya marca las sesiones realmente inválidas/expiradas.
-      // Solo en ese caso limpiamos y redirigimos a login.
-      if (error?.sessionExpired || error?.status === 401) {
+      // El interceptor marca únicamente una expiración confirmada o una cuenta
+      // desactivada. Solo en esos casos limpiamos y redirigimos a login.
+      if (error?.sessionExpired) {
         console.log('🔒 Sesión inválida/expirada - redirigiendo a login');
         limpiarSesion();
         navigate('/login', { replace: true });

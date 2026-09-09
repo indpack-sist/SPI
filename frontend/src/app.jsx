@@ -9,6 +9,7 @@ import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable'
 import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
 import Loading from './components/UI/Loading';
+import AppErrorBoundary from './components/UI/AppErrorBoundary';
 
 const AppLauncher = lazy(() => import('./pages/Home/AppLauncher'));
 const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
@@ -77,9 +78,10 @@ function App() {
               path="/*"
               element={
                 <ProtectedRoute>
-                  <Layout>
-                    <Suspense fallback={<Loading />}>
-                    <Routes>
+                  <AppErrorBoundary>
+                    <Layout>
+                      <Suspense fallback={<Loading />}>
+                      <Routes>
                       <Route path="/" element={<AppLauncher />} />
                       
                       <Route 
@@ -557,9 +559,10 @@ function App() {
                       />
 
                       <Route path="*" element={<RedirectToFirstAvailable />} />
-                    </Routes>
-                    </Suspense>
-                  </Layout>
+                      </Routes>
+                      </Suspense>
+                    </Layout>
+                  </AppErrorBoundary>
                 </ProtectedRoute>
               }
             />

@@ -556,6 +556,76 @@ body {
 .badge-paid        { background-color: rgba(46,204,113,0.1); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); }
 .badge-overdue     { background-color: rgba(231,76,60,0.1); color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); }
 
+/* Detalle de cotización: el panel hereda el color del estado. Las etiquetas
+   y los botones outline necesitan un primer plano propio para conservar el
+   contraste tanto sobre superficies claras como oscuras. */
+.cotizacion-status-panel .cotizacion-status-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.cotizacion-status-panel .btn-outline.btn-warning {
+  color: #f0ad32;
+  border-color: #b8750a;
+}
+.cotizacion-status-panel .btn-outline.btn-info {
+  color: #5dade2;
+  border-color: #3d8eb5;
+}
+.cotizacion-status-panel .btn-outline.btn-success {
+  color: #2ecc71;
+  border-color: #1e7e4a;
+}
+.cotizacion-status-panel .btn-outline.btn-danger {
+  color: #e76c61;
+  border-color: #b83232;
+}
+
+[data-theme="light"] .cotizacion-status-panel .cotizacion-priority.badge-info {
+  color: #174f73;
+  background-color: rgba(26, 82, 118, 0.12);
+  border-color: rgba(26, 82, 118, 0.35);
+}
+[data-theme="light"] .cotizacion-status-panel .cotizacion-priority.badge-warning {
+  color: #8a5705;
+}
+[data-theme="light"] .cotizacion-status-panel .cotizacion-priority.badge-danger {
+  color: #9b2c2c;
+}
+[data-theme="light"] .cotizacion-status-panel .btn-outline.btn-warning {
+  color: #8a5705;
+  border-color: #b8750a;
+}
+[data-theme="light"] .cotizacion-status-panel .btn-outline.btn-info {
+  color: #174f73;
+  border-color: #1a5276;
+}
+[data-theme="light"] .cotizacion-status-panel .btn-outline.btn-success {
+  color: #17683d;
+  border-color: #1e7e4a;
+}
+[data-theme="light"] .cotizacion-status-panel .btn-outline.btn-danger {
+  color: #8f2929;
+  border-color: #9b2c2c;
+}
+
+.cotizacion-status-panel .btn-outline.btn-warning:hover:not(:disabled) {
+  background-color: #b8750a;
+  color: #fff;
+}
+.cotizacion-status-panel .btn-outline.btn-info:hover:not(:disabled) {
+  background-color: #1a5276;
+  color: #fff;
+}
+.cotizacion-status-panel .btn-outline.btn-success:hover:not(:disabled) {
+  background-color: #1e7e4a;
+  color: #fff;
+}
+.cotizacion-status-panel .btn-outline.btn-danger:hover:not(:disabled) {
+  background-color: #9b2c2c;
+  color: #fff;
+}
+
 /* =====================================================
    ALERTAS
    ===================================================== */

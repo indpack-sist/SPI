@@ -265,11 +265,23 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
 
     const [detalle] = await conn.query(
       `SELECT d.id_detalle_orden, d.id_producto, d.cantidad, d.subpartida_nacional, d.dam_serie,
+              d.codigo_documento, d.descripcion AS descripcion_documento,
+              d.unidad_medida AS unidad_documento_sunat,
               p.codigo, p.nombre, p.codigo_unidad_sunat
          FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
         WHERE d.id_guia = ?`, [idGuia]);
     if (!detalle.length) throw new AppError('La guía no tiene detalle', 422);
-    for (const d of detalle) {
+    // Ventas conserva su comportamiento integrado (catálogo de productos). En compras se emiten
+    // los datos documentales copiados desde la factura/XML del proveedor.
+    const detalleEmision = esCompra
+      ? detalle.map((d) => ({
+          ...d,
+          codigo: d.codigo_documento || d.codigo,
+          nombre: d.descripcion_documento || d.nombre,
+          codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat,
+        }))
+      : detalle;
+    for (const d of detalleEmision) {
       if (!d.codigo_unidad_sunat) throw new AppError(`Producto ${d.codigo} sin codigo_unidad_sunat`, 422);
     }
 
@@ -355,7 +367,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
 
     const numero = await obtenerCorrelativo(conn, tipo, serie);
     const datos = {
-      tipo, serie, numero, empresa, cliente: destinatario, guia: g, detalle,
+      tipo, serie, numero, empresa, cliente: destinatario, guia: g, detalle: detalleEmision,
       fecha: { emision, hora }, fechaTraslado, modalidad,
       transportista: carrier, registrarTransportista: registrar, fechaEntregaTransportista,
       conductores, vehiculos, indicadores,

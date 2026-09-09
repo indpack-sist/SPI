@@ -1394,8 +1394,17 @@ export async function generarPdfGuia(req, res, next) {
       }
     }
     const [detalle] = await pool.query(
-      'SELECT d.cantidad, d.subpartida_nacional, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
+      'SELECT d.cantidad, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento, ' +
+      'd.unidad_medida AS unidad_documento_sunat, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
+    const detallePdf = esCompra
+      ? detalle.map((d) => ({
+          ...d,
+          codigo: d.codigo_documento || d.codigo,
+          nombre: d.descripcion_documento || d.nombre,
+          codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat,
+        }))
+      : detalle;
 
     // Comercio exterior (exportación): documentos relacionados (DAM) + contenedores/precintos, en el
     // MISMO orden de inserción con que se emitió el XML (sin ORDER BY, igual que gre-emision.service.js
@@ -1444,7 +1453,7 @@ export async function generarPdfGuia(req, res, next) {
           : componerObservacionGuia(g.observaciones, g.orden_compra_cliente),
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
-      emisor, cliente: destinatarioPdf, detalle,
+      emisor, cliente: destinatarioPdf, detalle: detallePdf,
       proveedor: proveedorPdf, docRelacionado: docRelacionadoPdf,
       transportista: transportistaPdf, conductores, vehiculos: vehiculosPdf,
       indicadores: indicadoresPdf, registrar: registrarPdf, modalidad: modalidadPdf, fechaEntrega: fechaEntregaPdf,

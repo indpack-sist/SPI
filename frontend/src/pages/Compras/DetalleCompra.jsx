@@ -937,19 +937,25 @@ function DetalleCompra() {
                     {compra.detalle?.map((item, i) => {
                       const porcentaje = (parseFloat(item.cantidad_recibida || 0) / parseFloat(item.cantidad)) * 100;
                       const esCompleto = parseFloat(item.cantidad_recibida || 0) >= parseFloat(item.cantidad);
+                      const nombreDocumento = item.descripcion_documento || item.producto;
+                      const codigoDocumento = item.codigo_documento || item.codigo_producto;
+                      const unidadDocumento = item.unidad_documento_sunat || item.unidad_medida;
                       return (
                         <tr key={i}>
                           <td>
                             <div className="font-medium">
                               {item.id_producto === 1 && item.codigo_producto === 'MANUAL' 
                                 ? <span className="text-indigo-600 font-bold italic">Item de Ingreso Manual</span>
-                                : item.producto
+                                : nombreDocumento
                               }
                             </div>
-                            <div className="text-xs text-muted">{item.codigo_producto}</div>
+                            <div className="text-xs text-muted">{codigoDocumento}</div>
+                            {item.descripcion_documento && item.producto !== nombreDocumento && (
+                              <div className="text-xs text-muted">Inventario: {item.producto} · {item.codigo_producto}</div>
+                            )}
                           </td>
                           <td className="text-right">
-                            {parseFloat(item.cantidad).toFixed(2)} {item.unidad_medida}
+                            {parseFloat(item.cantidad).toFixed(2)} {unidadDocumento}
                           </td>
                           {!esSoloFormato && (
                             <td className="text-right">

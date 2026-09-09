@@ -219,7 +219,7 @@ export async function getGuiaRemisionById(req, res) {
         dgr.*,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
-        p.unidad_medida,
+        p.unidad_medida AS unidad_medida_producto,
         p.stock_actual,
         p.id_tipo_inventario,
         ti.nombre AS tipo_inventario
@@ -238,6 +238,15 @@ export async function getGuiaRemisionById(req, res) {
     }
     
     guia.detalle = detalleResult.data;
+    if (guia.tipo_origen === 'Compra') {
+      guia.detalle = guia.detalle.map((item) => ({
+        ...item,
+        codigo_producto_interno: item.codigo_producto,
+        producto_interno: item.producto,
+        codigo_producto: item.codigo_documento || item.codigo_producto,
+        producto: item.descripcion || item.producto,
+      }));
+    }
 
     // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
     // Se devuelven siempre (arrays vacíos en guías domésticas) para que el front pueda mostrar/editar
@@ -732,7 +741,7 @@ export async function createGuiaCompra(req, res) {
 
     // Llegada = tu almacén y su fuente autoritativa es empresa_config. No se acepta el valor del
     // request: evita que una UI antigua o un cliente API emita una GRE de compra hacia otro punto.
-    const empRes = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const empRes = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo FROM empresa_config WHERE id = 1');
     if (!empRes.success) throw fail(500, 'No se pudo leer la configuración de la empresa');
     const empCfg = empRes.data[0] || {};
     const direccionLlegada = String(empCfg.direccion || '').trim();
@@ -742,6 +751,8 @@ export async function createGuiaCompra(req, res) {
     if (!/^\d{6}$/.test(String(ubigeo_partida || ''))) throw fail(400, 'El ubigeo de partida es obligatorio (6 dígitos)');
     if (!direccionLlegada) throw fail(422, 'Falta la dirección de llegada en empresa_config');
     if (!/^\d{6}$/.test(ubigeoLlegada)) throw fail(422, 'Falta un ubigeo de llegada válido (6 dígitos) en empresa_config');
+    if (!/^\d{11}$/.test(String(empCfg.ruc || '').trim())) throw fail(422, 'Falta un RUC válido en empresa_config');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha_traslado || ''))) throw fail(422, 'La fecha de traslado es inválida');
 
     const result = await withTransaction(async (conn) => {
       const [[oc]] = await conn.query(
@@ -749,29 +760,76 @@ export async function createGuiaCompra(req, res) {
       if (!oc) throw fail(404, 'Orden de compra no encontrada');
       if (oc.estado === 'Cancelada') throw fail(409, 'No se pueden crear guías para una compra cancelada');
 
+      const [[proveedor]] = await conn.query(
+        'SELECT ruc, razon_social FROM proveedores WHERE id_proveedor = ?', [oc.id_proveedor]);
+      if (!proveedor || !/^\d{11}$/.test(String(proveedor.ruc || '').trim())) {
+        throw fail(422, 'El proveedor de la compra no tiene un RUC válido');
+      }
+      if (!String(oc.serie_documento || '').trim() || !String(oc.numero_documento || '').trim()) {
+        throw fail(422, 'La compra no tiene una factura relacionada completa (serie y número)');
+      }
+
+      const [[conductor]] = await conn.query(
+        'SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [id_conductor]);
+      if (!conductor) throw fail(422, 'El conductor seleccionado no existe');
+      if (!/^\d{8}$/.test(String(conductor.dni || '').trim())) throw fail(422, 'El conductor seleccionado no tiene un DNI válido');
+      if (!String(conductor.licencia_conducir || '').trim()) throw fail(422, 'El conductor seleccionado no tiene licencia de conducir registrada');
+
+      const [[vehiculo]] = await conn.query(
+        'SELECT placa FROM flota WHERE id_vehiculo = ?', [id_vehiculo]);
+      const placa = String(vehiculo?.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!vehiculo || !/^[A-Z0-9]{6,8}$/.test(placa)) {
+        throw fail(422, 'El vehículo seleccionado no tiene una placa válida registrada');
+      }
+
       // Precio + tipo de inventario por producto salen de la COMPRA (no de la guía).
       const [lineasCompra] = await conn.query(
-        `SELECT doc.id_producto, doc.precio_unitario, doc.descuento_porcentaje,
-                p.id_tipo_inventario, p.unidad_medida, p.nombre
+        `SELECT doc.id_detalle, doc.id_producto, doc.precio_unitario, doc.descuento_porcentaje,
+                doc.codigo_documento, doc.descripcion_documento, doc.unidad_documento_sunat,
+                p.id_tipo_inventario, p.codigo, p.unidad_medida, p.codigo_unidad_sunat, p.nombre
            FROM detalle_orden_compra doc JOIN productos p ON p.id_producto = doc.id_producto
           WHERE doc.id_orden_compra = ?`, [id_orden_compra]);
-      const mapaCompra = new Map(lineasCompra.map((l) => [Number(l.id_producto), l]));
+      const mapaCompra = new Map(lineasCompra.map((l) => [Number(l.id_detalle), l]));
 
       const items = [];
       for (const it of detalle) {
         const idProd = Number(it.id_producto);
-        const base = mapaCompra.get(idProd);
-        if (!base) throw fail(400, `El producto (id ${idProd}) no pertenece a esta compra`);
+        const idDetalleCompra = Number(it.id_detalle_compra);
+        const base = mapaCompra.get(idDetalleCompra);
+        if (!base || Number(base.id_producto) !== idProd) {
+          throw fail(400, `La línea de compra del producto (id ${idProd}) no es válida`);
+        }
         const cantidad = parseFloat(it.cantidad);
         if (!(cantidad > 0)) throw fail(400, `Cantidad recibida inválida para "${base.nombre}"`);
+        // Las compras anteriores a la trazabilidad documental pueden completar el dato una sola
+        // vez desde el wizard. Para compras nuevas, la copia guardada desde el XML es autoritativa.
+        const codigoDocumento = base.codigo_documento
+          || String(it.codigo_documento || '').trim().slice(0, 100);
+        const descripcionDocumento = base.descripcion_documento
+          || String(it.descripcion_documento || '').trim().slice(0, 500);
+        const unidadDocumento = base.unidad_documento_sunat
+          || String(it.unidad_documento_sunat || '').trim().slice(0, 20).toUpperCase();
+        if (!codigoDocumento || !descripcionDocumento || !unidadDocumento) {
+          throw fail(422, `Faltan los datos documentales del producto "${base.nombre}"`);
+        }
+        if (!base.descripcion_documento || !base.unidad_documento_sunat || !base.codigo_documento) {
+          await conn.query(
+            `UPDATE detalle_orden_compra
+                SET codigo_documento = ?, descripcion_documento = ?, unidad_documento_sunat = ?
+              WHERE id_detalle = ? AND id_orden_compra = ?`,
+            [codigoDocumento, descripcionDocumento, unidadDocumento, base.id_detalle, id_orden_compra]
+          );
+        }
         items.push({
+          id_detalle_compra: base.id_detalle,
           id_producto: idProd,
           id_tipo_inventario: base.id_tipo_inventario,
           cantidad,
           precio_unitario: base.precio_unitario,
           descuento_porcentaje: base.descuento_porcentaje,
-          unidad_medida: base.unidad_medida,
-          descripcion: it.descripcion || base.nombre,
+          codigo_documento: codigoDocumento,
+          unidad_medida: unidadDocumento,
+          descripcion: descripcionDocumento,
           peso_unitario_kg: parseFloat(it.peso_unitario_kg || 0),
         });
       }
@@ -803,9 +861,12 @@ export async function createGuiaCompra(req, res) {
       for (const it of items) {
         const pesoTotal = it.cantidad * (it.peso_unitario_kg || 0);
         await conn.query(
-          `INSERT INTO detalle_guia_remision (id_guia, id_detalle_orden, id_producto, cantidad, unidad_medida, descripcion, peso_unitario_kg, peso_total_kg)
-           VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`,
-          [idGuia, it.id_producto, it.cantidad, it.unidad_medida || 'UND', it.descripcion || '', it.peso_unitario_kg || 0, pesoTotal]);
+          `INSERT INTO detalle_guia_remision (
+             id_guia, id_detalle_orden, id_detalle_compra, id_producto, cantidad, unidad_medida,
+             descripcion, codigo_documento, peso_unitario_kg, peso_total_kg
+           ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [idGuia, it.id_detalle_compra, it.id_producto, it.cantidad, it.unidad_medida || 'NIU',
+            it.descripcion || '', it.codigo_documento || null, it.peso_unitario_kg || 0, pesoTotal]);
       }
 
       // ¿La compra YA ingresó su mercadería en la recepción (Total/Parcial)? Entonces la guía es
@@ -1322,6 +1383,15 @@ export async function descargarPDFGuiaRemision(req, res) {
     `, [id]);
     
     guia.detalle = detalleResult.data;
+    if (guia.tipo_origen === 'Compra') {
+      guia.detalle = guia.detalle.map((item) => ({
+        ...item,
+        codigo_producto_interno: item.codigo_producto,
+        producto_interno: item.producto,
+        codigo_producto: item.codigo_documento || item.codigo_producto,
+        producto: item.descripcion || item.producto,
+      }));
+    }
     
     res.json({
       success: true,

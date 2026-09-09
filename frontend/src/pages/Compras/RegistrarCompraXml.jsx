@@ -106,6 +106,11 @@ export default function RegistrarCompraXml() {
           cantidad: parseFloat(l.cantidad) || 0,
           precio_unitario: parseFloat(l.precio_unitario) || 0,
           descuento_porcentaje: 0,
+          // Trazabilidad documental: estos valores pertenecen al comprobante del
+          // proveedor y no deben sustituirse por el nombre/código del catálogo SPI.
+          codigo_documento: l.codigo_xml || null,
+          descripcion_documento: l.descripcion,
+          unidad_documento_sunat: l.unidad_sunat || 'NIU',
         };
         if (l.id_producto) return { ...base, id_producto: l.id_producto };
         return {

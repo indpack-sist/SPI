@@ -70,11 +70,9 @@ function NuevaOrdenVenta() {
   const [detalle, setDetalle] = useState([]);
   const {
     indiceArrastrado,
-    destinoArrastre,
     iniciarArrastre,
-    marcarDestino,
-    soltarFila,
-    obtenerPosicionDestino,
+    moverDuranteArrastre,
+    finalizarArrastre,
     cancelarArrastre
   } = useReordenarFilas(setDetalle);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
@@ -1122,10 +1120,10 @@ useEffect(() => {
                 </button>
               </div>
               {modoEdicion && detalle.length > 1 && (
-                <div className={`mx-4 mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 bg-gray-50 text-muted'}`}>
+                <div className={`product-reorder-help mx-4 mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'is-active' : ''}`}>
                   <GripVertical size={17} />
                   {indiceArrastrado !== null
-                    ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong>. Suelta en la posición {obtenerPosicionDestino(detalle.length)}.</>
+                    ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong> · Posición {indiceArrastrado + 1} de {detalle.length}</>
                     : <>Arrastra cada producto desde el asa para cambiar el orden que tendrá en el PDF.</>}
                 </div>
               )}
@@ -1157,18 +1155,9 @@ useEffect(() => {
                         return (
                           <tr
                             key={item.id_detalle || item.id_producto || index}
-                            style={{
-                              ...(indiceArrastrado === index
-                                ? { backgroundColor: '#eff6ff', outline: '2px solid #60a5fa', outlineOffset: '-2px' }
-                                : {}),
-                              ...(destinoArrastre === index
-                                ? { boxShadow: 'inset 0 3px 0 #2563eb' }
-                                : (destinoArrastre === detalle.length && index === detalle.length - 1
-                                  ? { boxShadow: 'inset 0 -3px 0 #2563eb' }
-                                  : {}))
-                            }}
-                            onDragOver={modoEdicion ? (event) => marcarDestino(event, index) : undefined}
-                            onDrop={modoEdicion ? soltarFila : undefined}
+                            className={`product-row-draggable ${indiceArrastrado === index ? 'is-dragging' : ''}`}
+                            onDragOver={modoEdicion ? (event) => moverDuranteArrastre(event, index) : undefined}
+                            onDrop={modoEdicion ? finalizarArrastre : undefined}
                           >
                             {modoEdicion && (
                               <td>

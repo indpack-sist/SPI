@@ -138,11 +138,9 @@ function NuevaCotizacion() {
   const [detalle, setDetalle] = useState([]);
   const {
     indiceArrastrado,
-    destinoArrastre,
     iniciarArrastre,
-    marcarDestino,
-    soltarFila,
-    obtenerPosicionDestino,
+    moverDuranteArrastre,
+    finalizarArrastre,
     cancelarArrastre
   } = useReordenarFilas(setDetalle);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
@@ -1424,10 +1422,10 @@ setFormCabecera(prev => ({
             {detalle.length > 0 ? (
               <div>
                 {modoEdicion && detalle.length > 1 && (
-                  <div className={`mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 bg-gray-50 text-muted'}`}>
+                  <div className={`product-reorder-help mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'is-active' : ''}`}>
                     <GripVertical size={17} />
                     {indiceArrastrado !== null
-                      ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong>. Suelta en la posición {obtenerPosicionDestino(detalle.length)}.</>
+                      ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong> · Posición {indiceArrastrado + 1} de {detalle.length}</>
                       : <>Arrastra cada producto desde el asa para cambiar el orden que tendrá en el PDF.</>}
                   </div>
                 )}
@@ -1455,19 +1453,9 @@ setFormCabecera(prev => ({
                       return (
                         <tr
                           key={item.id_detalle || item.id_producto || `libre-${index}`}
-                          className={item.es_producto_libre ? 'bg-amber-50' : ''}
-                          style={{
-                            ...(indiceArrastrado === index
-                              ? { backgroundColor: '#eff6ff', outline: '2px solid #60a5fa', outlineOffset: '-2px' }
-                              : {}),
-                            ...(destinoArrastre === index
-                              ? { boxShadow: 'inset 0 3px 0 #2563eb' }
-                              : (destinoArrastre === detalle.length && index === detalle.length - 1
-                                ? { boxShadow: 'inset 0 -3px 0 #2563eb' }
-                                : {}))
-                          }}
-                          onDragOver={modoEdicion ? (event) => marcarDestino(event, index) : undefined}
-                          onDrop={modoEdicion ? soltarFila : undefined}
+                          className={`${item.es_producto_libre ? 'bg-amber-50' : ''} product-row-draggable ${indiceArrastrado === index ? 'is-dragging' : ''}`}
+                          onDragOver={modoEdicion ? (event) => moverDuranteArrastre(event, index) : undefined}
+                          onDrop={modoEdicion ? finalizarArrastre : undefined}
                         >
                           {modoEdicion && (
                             <td>

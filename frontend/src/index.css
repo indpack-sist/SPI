@@ -475,6 +475,38 @@ body {
 .table tbody tr.clickable { cursor: pointer; }
 .table tbody tr.clickable:hover { background-color: rgba(232, 184, 75, 0.06); }
 
+/* Reordenamiento de productos: usa colores translúcidos para conservar contraste
+   tanto en el tema oscuro como en el claro. */
+.product-reorder-help {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.product-reorder-help.is-active {
+  background-color: rgba(93, 173, 226, 0.14);
+  border-color: #5dade2;
+  color: var(--text-primary);
+}
+
+.product-row-draggable {
+  transition: background-color 0.14s ease, outline-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.table tbody tr.product-row-draggable.is-dragging,
+.table tbody tr.product-row-draggable.is-dragging:hover {
+  background-color: rgba(93, 173, 226, 0.16);
+  outline: 2px solid #5dade2;
+  outline-offset: -2px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.table tbody tr.product-row-draggable.is-dragging td {
+  background-color: rgba(93, 173, 226, 0.16) !important;
+  color: var(--text-primary);
+}
+
 .table td.text-center,
 .table th.text-center { text-align: center; }
 

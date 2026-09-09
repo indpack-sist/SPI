@@ -73,7 +73,7 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
           border-color: var(--primary); color: var(--primary); background-color: var(--carbon-light);
         }
       `}} />
-      <div className="flex items-center gap-3">
+      <div className="pagination-nav flex items-center gap-3">
         <button
           className="btn btn-outline border-steel h-11 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all"
           onClick={goToPrevPage}
@@ -81,7 +81,7 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
         >
           <ChevronLeft size={20} /> ANTERIOR
         </button>
-        <div className="flex items-center gap-2 mx-2">
+        <div className="pagination-numbers flex items-center gap-2 mx-2">
           {getPageNumbers().map((num, idx) => (
             num === '...'
               ? <span key={`ell-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel font-black">...</span>
@@ -96,7 +96,7 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
           SIGUIENTE <ChevronRight size={20} />
         </button>
       </div>
-      <div className="flex items-center gap-4 px-6 py-2.5 bg-carbon border border-steel rounded-lg shadow-inner">
+      <div className="pagination-jump flex items-center gap-4 px-6 py-2.5 bg-carbon border border-steel rounded-lg shadow-inner">
         <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">Página</span>
         <input
           type="number"

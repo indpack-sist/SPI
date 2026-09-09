@@ -403,6 +403,6 @@
    RESPONSIVE
    ===================================================== */
 
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
   .sidebar-close-btn { display: flex; }
 }

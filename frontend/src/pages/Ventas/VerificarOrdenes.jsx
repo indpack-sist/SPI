@@ -29,6 +29,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, archivosAPI } from '../../config/api';
+import './VerificarOrdenes.css';
 
 function VerificarOrdenes() {
   const navigate = useNavigate();
@@ -449,8 +450,16 @@ function VerificarOrdenes() {
 
   if (loading) return <Loading message="Cargando órdenes pendientes..." />;
 
+  const montoTotalPendiente = ordenesPendientes.reduce(
+    (sum, orden) => sum + parseFloat(orden.total || 0),
+    0
+  );
+  const ordenesUrgentes = ordenesPendientes.filter(
+    orden => orden.prioridad === 'Urgente'
+  ).length;
+
   return (
-    <div className="p-6">
+    <div className="p-6 verificar-ordenes-page">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -470,7 +479,7 @@ function VerificarOrdenes() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="tabs-navigation mb-6">
+      <div className="tabs-navigation mb-4">
         <button
           className={`tab-item ${activeTab === 'pendientes' ? 'active' : ''}`}
           onClick={() => setActiveTab('pendientes')}
@@ -487,59 +496,35 @@ function VerificarOrdenes() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="card border-l-4 border-warning">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Pendientes Verificación</p>
-                <h3 className="text-3xl font-bold text-warning">{ordenesPendientes.length}</h3>
-                <p className="text-xs text-muted mt-1">Requieren atención</p>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Clock size={32} className="text-warning" />
-              </div>
+      {activeTab === 'pendientes' && (
+        <section className="verification-summary" aria-label="Resumen de órdenes pendientes">
+          <div className="verification-summary__item verification-summary__item--warning">
+            <Clock size={18} aria-hidden="true" />
+            <div className="verification-summary__content">
+              <span className="verification-summary__label">Pendientes</span>
+              <strong className="verification-summary__value">{ordenesPendientes.length}</strong>
             </div>
           </div>
-        </div>
 
-        <div className="card border-l-4 border-info">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Monto Total Pendiente</p>
-                <h3 className="text-2xl font-bold text-info">
-                  {formatearMoneda(
-                    ordenesPendientes.reduce((sum, o) => sum + parseFloat(o.total || 0), 0),
-                    'PEN'
-                  )}
-                </h3>
-                <p className="text-xs text-muted mt-1">En revisión</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <DollarSign size={32} className="text-info" />
-              </div>
+          <div className="verification-summary__item verification-summary__item--info">
+            <DollarSign size={18} aria-hidden="true" />
+            <div className="verification-summary__content">
+              <span className="verification-summary__label">Monto pendiente</span>
+              <strong className="verification-summary__value">
+                {formatearMoneda(montoTotalPendiente, 'PEN')}
+              </strong>
             </div>
           </div>
-        </div>
 
-        <div className="card border-l-4 border-danger">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Órdenes Urgentes</p>
-                <h3 className="text-3xl font-bold text-danger">
-                  {ordenesPendientes.filter(o => o.prioridad === 'Urgente').length}
-                </h3>
-                <p className="text-xs text-muted mt-1">Alta prioridad</p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-lg">
-                <AlertTriangle size={32} className="text-danger" />
-              </div>
+          <div className="verification-summary__item verification-summary__item--danger">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div className="verification-summary__content">
+              <span className="verification-summary__label">Urgentes</span>
+              <strong className="verification-summary__value">{ordenesUrgentes}</strong>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      )}
 
       {(activeTab === 'pendientes' && ordenesPendientes.length === 0) ? (
         <div className="card">

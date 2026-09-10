@@ -197,3 +197,123 @@
   padding: 16px;
   border-radius: 12px;
 }
+
+@media (max-width: 1023px) {
+  .historial-tc-page {
+    width: 100%;
+    min-width: 0;
+    padding: clamp(12px, 2.5vw, 20px);
+  }
+
+  .historial-tc-page .page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .calendar-grid-header,
+  .calendar-grid {
+    gap: clamp(3px, 1vw, 6px);
+  }
+
+  .calendar-cell {
+    min-width: 0;
+    min-height: 68px;
+    padding: 5px;
+  }
+
+  .tc-row {
+    min-width: 0;
+    gap: 3px;
+  }
+}
+
+@media (max-width: 600px) {
+  .historial-tc-page {
+    padding: 0;
+  }
+
+  .historial-tc-page .page-header,
+  .calendar-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-title {
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .header-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+
+  .header-title h1 {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .calendar-header {
+    display: grid;
+    grid-template-columns: 40px 1fr 40px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .calendar-header h3 {
+    min-width: 0;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  .calendar-grid-header,
+  .calendar-grid {
+    gap: 2px;
+  }
+
+  .calendar-grid-header div {
+    padding: 4px 0;
+    font-size: 9px;
+    overflow: hidden;
+  }
+
+  .calendar-cell {
+    min-height: 54px;
+    padding: 3px 2px;
+    border-radius: 5px;
+  }
+
+  .calendar-day-header {
+    margin-bottom: 2px;
+    font-size: 11px;
+  }
+
+  .calendar-day-data {
+    gap: 2px;
+  }
+
+  .tc-row {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 2px;
+    font-size: 8px;
+    line-height: 1.15;
+  }
+
+  .tc-label,
+  .tc-value {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .calendar-day-empty-data {
+    font-size: 16px;
+  }
+
+  .info-box {
+    padding: 12px;
+  }
+}

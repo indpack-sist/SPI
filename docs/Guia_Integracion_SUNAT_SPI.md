@@ -764,6 +764,11 @@ Reglas de mapeo desde tu BD (respétalas al pie de la letra, son la causa nº 1 
 
 - `cbc:ID` = `serie` + "-" + `numero` de `facturas_venta` (sin ceros a la izquierda en el número).
 - `InvoiceTypeCode listID` = `ordenes_venta.es_exportacion ? "0200" : ordenes_venta.tipo_impuesto` mapeado al catálogo 51; tu campo `tipo_operacion_sunat` (default `0101`) ya lo guarda.
+- En el caso de exportación vigente de INDPACK, la ubicación de entrega corresponde a la selección
+  **"Otro local"** del portal SUNAT. Se precarga desde `empresa_config` y se declara en
+  `AccountingCustomerParty/PartyLegalEntity/RegistrationAddress`: dirección, departamento,
+  provincia, distrito, ubigeo y país `PE`. El panel debe mostrar estos mismos datos en el paso de
+  captura y en el preliminar antes de habilitar **Emitir**.
 - `unitCode` = `productos.codigo_unidad_sunat` (NIU unidades, KGM kilos, MTR metros, ZZ servicios). Complétalo para todos los productos ANTES de emitir.
 - Boletas (03): FUERA DE ALCANCE — el endpoint debe rechazar cualquier `tipo` distinto de `01`, `07` u `08`.
 - Exoneradas/inafectas: `TaxScheme ID` 9997/9998, `TaxExemptionReasonCode` 20/30, y los montos van en `TaxableAmount` con `TaxAmount` 0.00; en `LegalMonetaryTotal` no cambia la mecánica.

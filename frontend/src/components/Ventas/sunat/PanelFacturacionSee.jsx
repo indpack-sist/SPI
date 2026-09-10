@@ -68,10 +68,10 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const vencimientoISO = esCredito ? addDiasISO(fechaEmision, orden?.dias_credito) : null;
   // Observaciones (cbc:Note) que SUNAT muestra como "Observaciones". Texto LIBRE editable.
   const [observaciones, setObservaciones] = useState('');
-  const OBS_MAX = 250;
+  const OBS_MAX = 200;
   // Orden de compra (cac:OrderReference) — campo PROPIO, ya no embebido en las observaciones.
   const [ordenCompra, setOrdenCompra] = useState('');
-  const OC_MAX = 30;
+  const OC_MAX = 20;
   // ── Wizard de Nota de Crédito/Débito (2 pasos: formulario → preliminar estilo SUNAT) ──
   const [notaStep, setNotaStep] = useState(1);          // 1 = datos, 2 = preliminar
   const [notaSustento, setNotaSustento] = useState(''); // Motivo o Sustento (cbc:Description), lo escribe el usuario
@@ -106,6 +106,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const obsPreliminar = obsRepiteOC ? '' : observaciones.trim();
   // Guías declaradas en la factura: las del sistema (auto) + las agregadas a mano en el buscador.
   const guiasPreliminar = [...guiasSistema, ...guiasRef];
+  // Caso de exportación: datos precargados desde empresa_config y usados por el backend para el
+  // RegistrationAddress del XML (equivalente a seleccionar "Otro local" en el portal SUNAT).
+  const ubicacionExport = preview?.ubicacionEntregaExportacion || null;
 
   // Alta de una guía en la lista, con la MISMA validación de formato que el backend (para no llegar
   // a un rechazo de SUNAT): serie = 4 alfanuméricos; número = hasta 8 dígitos; sin duplicados.
@@ -134,7 +137,11 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);          // factura afectada por una nota
   const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
     && x.codigo_tipo_sunat === '07' && x.sunat_estado === 'ACEPTADO');                        // NC 07 que anuló esta factura
-  const puedeEmitir = orden?.estado_verificacion === 'Aprobada' && Number(orden?.facturado_sunat) !== 1;
+  const facturaEnCursoOV = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
+    && ['ENVIADO', 'ACEPTADO'].includes(f.sunat_estado));
+  const puedeEmitir = orden?.estado_verificacion === 'Aprobada'
+    && Number(orden?.facturado_sunat) !== 1
+    && !facturaEnCursoOV;
 
   const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
   const tras = async (fn, okMsg) => {
@@ -152,8 +159,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const handleEmitir = async () => {
     const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta, {
       fecha_emision: fechaEmision,
-      observaciones,
-      orden_compra_cliente: ordenCompra,
+      // Se envía exactamente lo mostrado en el preliminar: sin saltos laterales ni OC duplicada.
+      observaciones: obsPreliminar,
+      orden_compra_cliente: ordenCompra.trim(),
       guias: guiasRef
     }), null);
     const d = r?.data;
@@ -374,6 +382,26 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </div>
           </div>
 
+          {esExportacion && ubicacionExport && (
+            <div className="border border-blue-200 bg-blue-50/50 rounded p-3 text-xs space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] text-blue-700 uppercase font-semibold">Dirección donde se entrega el bien</div>
+                  <div className="font-semibold">Selección SUNAT: {ubicacionExport.seleccion}</div>
+                </div>
+                <span className="badge badge-info">Precargado</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div><span className="text-muted">Departamento</span><div className="font-semibold">{ubicacionExport.departamento || '—'}</div></div>
+                <div><span className="text-muted">Provincia</span><div className="font-semibold">{ubicacionExport.provincia || '—'}</div></div>
+                <div><span className="text-muted">Distrito</span><div className="font-semibold">{ubicacionExport.distrito || '—'}</div></div>
+                <div><span className="text-muted">Ubigeo</span><div className="font-mono font-semibold">{ubicacionExport.ubigeo || '—'}</div></div>
+              </div>
+              <div><span className="text-muted">Dirección: </span><strong>{ubicacionExport.direccion || '—'}</strong></div>
+              <div className="text-[10px] text-blue-700">Estos datos provienen de la configuración de la empresa y se enviarán en el XML; no requieren ingreso manual.</div>
+            </div>
+          )}
+
           {/* Información adicional del comprobante: Orden de compra (campo propio) + Observaciones */}
           <div className="border border-gray-200 rounded p-3 space-y-3">
             {/* Orden de compra → cac:OrderReference (ya no viaja dentro de las observaciones). */}
@@ -406,7 +434,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 rows={2}
                 maxLength={OBS_MAX}
                 value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
+                onChange={(e) => setObservaciones(e.target.value.replace(/[\r\n]+/g, ' '))}
                 placeholder="Notas libres del comprobante"
                 disabled={procesando || previewLoading}
               />
@@ -517,9 +545,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               <div className="text-xs space-y-0.5">
                 <div><span className="text-muted">Fecha de Emisión: </span><strong>{fechaFmt(fechaEmision)}</strong></div>
                 <div><span className="text-muted">Señor(es): </span><strong>{preview.cliente?.razon_social || orden?.cliente || '-'}</strong></div>
-                <div><span className="text-muted">{String(preview.cliente?.tipo_documento || 'RUC').toUpperCase() === 'RUC' ? 'RUC' : 'Documento'}: </span>
-                  <strong className="font-mono">{preview.cliente?.ruc || orden?.ruc_cliente || '-'}</strong></div>
-                {preview.cliente?.direccion && (
+                <div><span className="text-muted">{esExportacion ? 'Tipo de documento' : (String(preview.cliente?.tipo_documento || 'RUC').toUpperCase() === 'RUC' ? 'RUC' : 'Documento')}: </span>
+                  <strong className="font-mono">{esExportacion ? 'SIN DOCUMENTO (-)' : (preview.cliente?.ruc || orden?.ruc_cliente || '-')}</strong></div>
+                {!esExportacion && preview.cliente?.direccion && (
                   <div><span className="text-muted">Dirección: </span>{preview.cliente.direccion}</div>
                 )}
                 <div><span className="text-muted">Tipo de Moneda: </span><strong>{orden?.moneda === 'USD' ? 'DÓLARES' : 'SOLES'}</strong></div>
@@ -537,6 +565,20 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 <div><span className="text-muted">Tipo de operación: </span>
                   <strong>{esExportacion ? 'EXPORTACIÓN' : (preview.igv === 0 ? 'OP. NO GRAVADA' : 'OP. GRAVADA')}</strong></div>
               </div>
+
+              {esExportacion && ubicacionExport && (
+                <div className="border border-blue-200 bg-blue-50/40 rounded p-3 text-xs space-y-1">
+                  <div className="font-semibold text-blue-700">Ubicación declarada a SUNAT — {ubicacionExport.seleccion}</div>
+                  <div><span className="text-muted">Dirección: </span><strong>{ubicacionExport.direccion || '—'}</strong></div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+                    <div><span className="text-muted">Departamento</span><div>{ubicacionExport.departamento || '—'}</div></div>
+                    <div><span className="text-muted">Provincia</span><div>{ubicacionExport.provincia || '—'}</div></div>
+                    <div><span className="text-muted">Distrito</span><div>{ubicacionExport.distrito || '—'}</div></div>
+                    <div><span className="text-muted">Ubigeo / País</span><div className="font-mono">{ubicacionExport.ubigeo || '—'} / {ubicacionExport.pais || 'PE'}</div></div>
+                  </div>
+                  <div className="text-[10px] text-blue-700 pt-1">Esto se enviará como RegistrationAddress del receptor en el XML.</div>
+                </div>
+              )}
 
               {/* Guías de remisión declaradas en la factura */}
               {guiasPreliminar.length > 0 && (

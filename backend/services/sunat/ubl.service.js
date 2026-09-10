@@ -252,13 +252,34 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 
+  // En el caso de exportación usado por INDPACK, el portal SUNAT registra como dirección de
+  // entrega "Otro local" y consigna la ubicación del emisor. La selección del portal no tiene un
+  // tag propio: se materializa en RegistrationAddress. Se replica el bloque del XML E001-1997 con
+  // los datos autoritativos de empresa_config. Para ventas internas se conserva la dirección del
+  // cliente en texto libre.
+  const customerAddress = esExport
+    ? `        <cac:RegistrationAddress>
+          <cbc:AddressTypeCode listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
+          <cbc:BuildingNumber/>
+          <cbc:CitySubdivisionName/>
+          <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
+          <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>
+          <cbc:CountrySubentityCode>${cdata(empresa.ubigeo)}</cbc:CountrySubentityCode>
+          <cbc:District>${cdata(empresa.distrito)}</cbc:District>
+          <cac:AddressLine><cbc:Line>${cdata(empresa.direccion)}</cbc:Line></cac:AddressLine>
+          <cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country>
+        </cac:RegistrationAddress>`
+    : `        <cac:RegistrationAddress>
+          <cac:AddressLine><cbc:Line>${cdata(cliente.direccion_despacho || '-')}</cbc:Line></cac:AddressLine>
+        </cac:RegistrationAddress>`;
+
   // ── OC del cliente + observaciones ──────────────────────────────────────────
   // SUNAT no tiene un campo propio de "orden de compra": el estándar la lleva en
   // cac:OrderReference/cbc:ID (así SÍ queda en el XML/CDR, no solo en el PDF). Las
   // observaciones libres van como cbc:Note adicional, aparte del Note reservado al monto
   // en letras (languageLocaleID="1000").
-  const ocCliente = trunc(ov.orden_compra_cliente, 30);
-  const observaciones = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
+  const ocCliente = trunc(ov.orden_compra_cliente, 20);
+  const observaciones = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
   const notaObservaciones = observaciones ? `\n  <cbc:Note>${cdata(observaciones)}</cbc:Note>` : '';
   const orderReference = ocCliente ? `\n  <cac:OrderReference><cbc:ID>${cdata(ocCliente)}</cbc:ID></cac:OrderReference>` : '';
 
@@ -332,9 +353,7 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
       </cac:PartyIdentification>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>${cdata(cliente.razon_social)}</cbc:RegistrationName>
-        <cac:RegistrationAddress>
-          <cac:AddressLine><cbc:Line>${cdata(cliente.direccion_despacho || '-')}</cbc:Line></cac:AddressLine>
-        </cac:RegistrationAddress>
+${customerAddress}
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>

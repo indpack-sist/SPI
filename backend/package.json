@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test:firma": "node scripts/test-firma.js",
+    "test:factura-exportacion": "node scripts/test-factura-exportacion.js",
     "test:gre": "node scripts/test-gre-xml.js",
     "test:pdf": "node scripts/test-pdf-sunat.js"
   },

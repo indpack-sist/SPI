@@ -52,6 +52,10 @@ const UNIDAD_NOMBRE = {
 };
 
 const n2 = (v) => Number(v || 0).toFixed(2);
+const n2Miles = (v) => Number(v || 0).toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 /**
  * @param {object} p
@@ -82,6 +86,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       const anulado = c.sunat_estado === 'BAJA' || c.estado === 'Anulada';
       const anuladoPorNota = c.estado === 'Anulada' && c.sunat_estado !== 'BAJA';
       const rechazado = c.sunat_estado === 'RECHAZADO';
+      const esExportacion = String(c.afectacion || '') === '40';
+      // El formato impreso del portal para USD usa separador de miles (p. ej. 6,542.33).
+      // Se conserva el formato histórico del PDF nacional para no cambiar comprobantes existentes.
+      const monto2 = esExportacion ? n2Miles : n2;
 
       // ── Cabecera: logo + emisor (izq) + recuadro RUC/tipo/serie-numero (der) ──
       const logo = logoBuffer();
@@ -164,7 +172,13 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         filaSunat('Factura Electrónica', c.docAfectado.comprobante);
       }
       filaSunat('Señor(es)', cliente.razon_social);
-      filaSunat(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc);
+      if (esExportacion) {
+        // En el modelo del portal SUNAT el receptor se emite SIN DOCUMENTO y la representación
+        // impresa muestra la ubicación de entrega elegida como "Otro local", no un RUC ficticio.
+        filaSunat('Dirección del Cliente', cliente.direccion_despacho || c.direccion_entrega);
+      } else {
+        filaSunat(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc);
+      }
       filaSunat('Tipo de Moneda', monedaTxt);
       filaSunat('Forma de Pago', formaPago);
       if (esCredito) filaSunat('Fecha de Vencimiento', c.fecha_vencimiento);
@@ -200,10 +214,20 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // ── Tabla de ítems (formato SUNAT: Cantidad | Unidad de Medida | Descripción | Valor Unitario) ──
       doc.rect(33, y, 529, 18).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
-      doc.text('CANTIDAD', 40, y + 5, { width: 55, align: 'center' });
-      doc.text('UNIDAD DE MEDIDA', 98, y + 5, { width: 78, align: 'center' });
-      doc.text('DESCRIPCIÓN', 182, y + 5);
-      doc.text('VALOR UNITARIO', 450, y + 5, { width: 108, align: 'right' });
+      if (esExportacion) {
+        // Columnas del PDF de exportación emitido en SUNAT (E001-1997).
+        doc.text('CANTIDAD', 37, y + 5, { width: 48, align: 'center' });
+        doc.text('UNIDAD', 88, y + 5, { width: 62, align: 'center' });
+        doc.text('CÓDIGO', 154, y + 5, { width: 66, align: 'center' });
+        doc.text('DESCRIPCIÓN', 224, y + 5, { width: 190 });
+        doc.text('VALOR UNIT.', 418, y + 5, { width: 76, align: 'right' });
+        doc.text('ICBPER', 500, y + 5, { width: 56, align: 'right' });
+      } else {
+        doc.text('CANTIDAD', 40, y + 5, { width: 55, align: 'center' });
+        doc.text('UNIDAD DE MEDIDA', 98, y + 5, { width: 78, align: 'center' });
+        doc.text('DESCRIPCIÓN', 182, y + 5);
+        doc.text('VALOR UNITARIO', 450, y + 5, { width: 108, align: 'right' });
+      }
       y += 18;
 
       doc.font('Helvetica').fontSize(8);
@@ -215,14 +239,23 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         const valorUnit = Number(it.precio_unitario || 0);
         const und = it.unidad || it.codigo_unidad_sunat || 'NIU';
         const undTxt = UNIDAD_NOMBRE[und] || und;
-        const hDesc = doc.heightOfString(desc, { width: 262, lineGap: 1 });
+        const hDesc = doc.heightOfString(desc, { width: esExportacion ? 190 : 262, lineGap: 1 });
         const hFila = Math.max(16, hDesc + 6);
         if (y + hFila > 690) { doc.addPage(); y = 40; }
         doc.fillColor('#000');
-        doc.text(cant.toFixed(2), 40, y + 3, { width: 55, align: 'center' });
-        doc.text(undTxt, 98, y + 3, { width: 78, align: 'center' });
-        doc.text(desc, 182, y + 3, { width: 262, lineGap: 1 });
-        doc.text(`${simbolo} ${n2(valorUnit)}`, 450, y + 3, { width: 108, align: 'right' });
+        if (esExportacion) {
+          doc.text(cant.toFixed(2), 37, y + 3, { width: 48, align: 'center' });
+          doc.text(undTxt, 88, y + 3, { width: 62, align: 'center' });
+          doc.text(String(it.codigo || '-'), 154, y + 3, { width: 66, align: 'center' });
+          doc.text(desc, 224, y + 3, { width: 190, lineGap: 1 });
+          doc.text(monto2(valorUnit), 418, y + 3, { width: 76, align: 'right' });
+          doc.text('0.00', 500, y + 3, { width: 56, align: 'right' });
+        } else {
+          doc.text(cant.toFixed(2), 40, y + 3, { width: 55, align: 'center' });
+          doc.text(undTxt, 98, y + 3, { width: 78, align: 'center' });
+          doc.text(desc, 182, y + 3, { width: 262, lineGap: 1 });
+          doc.text(`${simbolo} ${n2(valorUnit)}`, 450, y + 3, { width: 108, align: 'right' });
+        }
         y += hFila;
       }
       doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
@@ -239,7 +272,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.roundedRect(360, y, 118, 13, 2).fill('#CCCCCC');
         doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#000').text(label, 364, y + 3.5, { width: 112 });
         doc.roundedRect(480, y, 82, 13, 2).stroke('#CCCCCC');
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000').text(`${simbolo} ${n2(valor)}`, 484, y + 3.5, { width: 74, align: 'right' });
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000').text(`${simbolo} ${monto2(valor)}`, 484, y + 3.5, { width: 74, align: 'right' });
         y += 15;
       };
       const yTotalesInicio = y;
@@ -250,6 +283,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('Valor Venta', c.subtotal);
       filaTotal('ISC', 0);
       filaTotal('IGV', c.igv);
+      if (esExportacion) filaTotal('ICBPER', 0);
       filaTotal('Otros Cargos', 0);
       filaTotal('Otros Tributos', 0);
       filaTotal('Monto de Redondeo', 0);
@@ -261,7 +295,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
       doc.text(`Tipo de operación: ${OPERACION_LABEL[afect] || 'OP. GRAVADA'}`, 40, yTotalesInicio, { width: 300 });
       doc.font('Helvetica');
-      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio + 16, { width: 300 });
+      if (esExportacion) {
+        doc.text(`Valor de Venta de Operaciones Gratuitas: ${simbolo} ${monto2(0)}`, 40, yTotalesInicio + 16, { width: 300 });
+      }
+      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio + (esExportacion ? 32 : 16), { width: 300 });
 
       y += 6;
 
@@ -271,7 +308,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.roundedRect(33, y, 529, hCred, 3).stroke('#000');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Información del crédito', 40, y + 6);
         doc.font('Helvetica-Bold').text('Monto neto pendiente de pago:', 40, y + 20);
-        doc.font('Helvetica').text(`${simbolo} ${n2(c.total)}`, 200, y + 20);
+        doc.font('Helvetica').text(`${simbolo} ${monto2(c.total)}`, 200, y + 20);
         doc.font('Helvetica-Bold').text('Total de cuotas:', 320, y + 20);
         doc.font('Helvetica').text('1', 400, y + 20);
         // Encabezado de la tabla de cuotas (MVP: 1 cuota única).
@@ -280,7 +317,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.text('Monto', 220, y + 36, { width: 80, align: 'right' });
         doc.font('Helvetica').text('1', 40, y + 48);
         doc.text(c.fecha_vencimiento || '-', 120, y + 48);
-        doc.text(`${simbolo} ${n2(c.total)}`, 220, y + 48, { width: 80, align: 'right' });
+        doc.text(`${simbolo} ${monto2(c.total)}`, 220, y + 48, { width: 80, align: 'right' });
         y += hCred + 6;
       }
 
@@ -289,8 +326,18 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       // cabecera (campos "Orden de Compra" / "Observación", formato SUNAT), por eso no se repiten.
       // Refleja los cac:DespatchDocumentReference declarados en el XML.
       doc.fontSize(8).fillColor('#000');
+      const guiasDetalle = Array.isArray(c.guias_detalle) ? c.guias_detalle : [];
       const guiasTxt = String(c.guias || '').trim();
-      if (guiasTxt) {
+      if (esExportacion && guiasDetalle.length) {
+        for (const guia of guiasDetalle) {
+          const etiqueta = String(guia.tipo_documento) === '31'
+            ? 'GUÍA DE REMISIÓN TRANSPORTISTA'
+            : 'GUÍA DE REMISIÓN REMITENTE';
+          doc.font('Helvetica-Bold').text(`${etiqueta}: `, 40, y, { continued: true, width: 515 })
+             .font('Helvetica').text(`${guia.serie} ${guia.numero}`);
+          y = doc.y + 2;
+        }
+      } else if (guiasTxt) {
         doc.font('Helvetica-Bold').text('Guía(s) de remisión: ', 40, y, { continued: true, width: 515 })
            .font('Helvetica').text(guiasTxt);
         y = doc.y + 2;

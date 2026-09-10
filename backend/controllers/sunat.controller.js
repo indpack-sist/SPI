@@ -76,6 +76,34 @@ function diffDiasISO(desdeISO, hastaISO) {
   return Math.round((b - a) / 86400000);
 }
 
+// Ubicación que el caso de exportación declara en SUNAT como "Otro local". La elección del portal
+// se representa en el XML mediante el RegistrationAddress del receptor, usando empresa_config.
+function ubicacionEntregaExportacion(empresa = {}) {
+  return {
+    seleccion: 'Otro local',
+    direccion: String(empresa.direccion || '').trim(),
+    departamento: String(empresa.departamento || '').trim(),
+    provincia: String(empresa.provincia || '').trim(),
+    distrito: String(empresa.distrito || '').trim(),
+    ubigeo: String(empresa.ubigeo || '').trim(),
+    pais: 'PE'
+  };
+}
+
+function validarUbicacionEntregaExportacion(empresa) {
+  const u = ubicacionEntregaExportacion(empresa);
+  const faltantes = ['direccion', 'departamento', 'provincia', 'distrito']
+    .filter((campo) => !u[campo]);
+  if (!/^\d{6}$/.test(u.ubigeo)) faltantes.push('ubigeo de 6 dígitos');
+  if (faltantes.length) {
+    throw new AppError(
+      `Exportación: completa en empresa_config la ubicación de "Otro local": ${faltantes.join(', ')}`,
+      422
+    );
+  }
+  return u;
+}
+
 // Valida/normaliza la fecha de emisión opcional (retro-fecha). Sin valor → hoy Lima.
 // Regla: la fecha no puede ser futura y el beneficio de retro-fecha alcanza como máximo
 // 2 días anteriores. La regla cronológica (no anterior a la última factura ya emitida de la
@@ -128,10 +156,10 @@ export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;
   const tipo = req.body.tipo || '01';
   const idEmpleado = req.user?.id_empleado || null;
-  // Guías relacionadas ingresadas en el buscador del panel (null = no vino la clave → usar GRE del
-  // sistema). Se validan ACÁ para fallar temprano, antes de reservar correlativo.
-  const guiasManual = normalizarGuiasFactura(req.body.guias);
   try {
+    // Guías relacionadas ingresadas en el buscador del panel (null = no vino la clave → usar GRE del
+    // sistema). La validación queda dentro del try para que Express devuelva el AppError normalmente.
+    const guiasManual = normalizarGuiasFactura(req.body.guias);
     if (!id_orden_venta) throw new AppError('Falta id_orden_venta', 400);
     if (!TIPOS_PERMITIDOS.includes(tipo)) {
       throw new AppError(`Tipo de comprobante ${tipo} fuera de alcance (solo 01/07/08; boletas no se emiten)`, 400);
@@ -159,6 +187,27 @@ export async function emitirComprobante(req, res, next) {
       if (ov.facturado_sunat) throw new AppError('La OV ya fue facturada', 409);
       if (ov.estado_verificacion !== 'Aprobada') throw new AppError('La OV debe estar Aprobada para facturar', 422);
 
+      // Idempotencia por OV: TX1 se confirma antes de llamar a SUNAT para que una caída deje traza
+      // ENVIADO. Por eso facturado_sunat todavía puede ser 0 mientras existe un envío en curso o de
+      // resultado incierto. El FOR UPDATE de la OV serializa solicitudes concurrentes y esta consulta
+      // impide que la segunda reserve otro correlativo. Los RECHAZADOS sí permiten corregir y reemitir.
+      const [[facturaVigente]] = await conn.query(
+        `SELECT id_factura, numero_factura, sunat_estado
+           FROM facturas_venta
+          WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
+            AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
+          ORDER BY id_factura DESC LIMIT 1`,
+        [id_orden_venta]);
+      if (facturaVigente) {
+        throw new AppError(
+          `La OV ya tiene la factura ${facturaVigente.numero_factura} en estado ${facturaVigente.sunat_estado}. ` +
+          (facturaVigente.sunat_estado === 'ENVIADO'
+            ? 'Consulta su estado en SUNAT; no emitas otro correlativo.'
+            : 'No corresponde emitir otra factura.'),
+          409
+        );
+      }
+
       // Regla cronológica: no se puede retro-fechar por debajo de la última factura ya emitida
       // de la serie. Los días previos solo quedan "libres" mientras no se haya avanzado la
       // facturación (no exista aún un comprobante con fecha posterior). Solo aplica al retro-fechar.
@@ -183,6 +232,8 @@ export async function emitirComprobante(req, res, next) {
         'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
         'WHERE d.id_orden_venta = ?', [id_orden_venta]);
       const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
+      if (!empresa) throw new AppError('Falta la configuración de la empresa emisora', 422);
+      if (esExport) validarUbicacionEntregaExportacion(empresa);
 
       // Guías de remisión electrónicas ya ACEPTADAS de esta OV: se declaran en la factura
       // (cac:DespatchDocumentReference) y, al aceptarse el comprobante, se les estampa id_factura
@@ -201,21 +252,29 @@ export async function emitirComprobante(req, res, next) {
 
       // Orden de compra (cac:OrderReference): campo PROPIO, ya no se mezcla en las observaciones.
       // Si el panel la envía (editable), se usa y se persiste en la OV — que es la fuente que leen
-      // tanto el XML (OrderReference) como el PDF; si no viene, se conserva la de la OV. Máx 30.
+      // tanto el XML (OrderReference) como el PDF; si no viene, se conserva la de la OV. Máx 20
+      // según el Anexo 9-A UBL 2.1. Se rechaza el exceso en vez de truncarlo silenciosamente.
       if (req.body.orden_compra_cliente !== undefined) {
-        ov.orden_compra_cliente = String(req.body.orden_compra_cliente || '').trim().slice(0, 30);
+        const ordenCompraEnviada = String(req.body.orden_compra_cliente || '').trim();
+        if (ordenCompraEnviada.length > 20) {
+          throw new AppError('La orden de compra admite como máximo 20 caracteres para SUNAT', 422);
+        }
+        ov.orden_compra_cliente = ordenCompraEnviada;
         await conn.query('UPDATE ordenes_venta SET orden_compra_cliente = ? WHERE id_orden_venta = ?',
           [ov.orden_compra_cliente || null, id_orden_venta]);
       }
 
       // Observaciones (cbc:Note, lo que SUNAT muestra como "Observaciones"). Texto LIBRE editable
       // desde el panel; ya NO se le inyecta la OC (esa viaja aparte en cac:OrderReference). Si el
-      // cliente no envía la clave, se usa el texto de la OV tal cual. Se normaliza (sin saltos, ≤250)
+      // cliente no envía la clave, se usa el texto de la OV tal cual. Se normaliza (sin saltos, ≤200)
       // para que lo PERSISTIDO coincida byte a byte con el cbc:Note del XML (y así el PDF).
       const observacionEnviada = (req.body.observaciones !== undefined
         ? String(req.body.observaciones)
         : String(ov.observaciones || '')
-      ).replace(/[\r\n]+/g, ' ').trim().slice(0, 250);
+      ).replace(/[\r\n]+/g, ' ').trim();
+      if (observacionEnviada.length > 200) {
+        throw new AppError('Las observaciones admiten como máximo 200 caracteres para SUNAT', 422);
+      }
       ov.observaciones = observacionEnviada;
 
       // Guías declaradas en la factura = UNIÓN de dos fuentes (nunca reemplazo, para no perder
@@ -237,7 +296,7 @@ export async function emitirComprobante(req, res, next) {
       const qr = generarQr({
         ruc: sunatConfig.ruc, tipo, serie, numero,
         igv: totales.igv, total: totales.total, fechaEmision: emision,
-        tipoDocCliente: esExport ? '0' : '6', numDocCliente: cliente.ruc || '0',
+        tipoDocCliente: esExport ? '-' : '6', numDocCliente: esExport ? '-' : (cliente.ruc || '0'),
         hash: digestValue
       });
 
@@ -379,6 +438,7 @@ export async function previewComprobante(req, res, next) {
 
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [ov.id_cliente]);
     const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+    const ubicacionExport = calc.esExport ? ubicacionEntregaExportacion(empresa) : null;
 
     // La OC viaja como campo propio (cac:OrderReference). Si las observaciones de la OV solo repiten
     // la OC (dato heredado de cuando se embebían en cbc:Note, p. ej. "OC: <número>"), no se sugieren
@@ -409,6 +469,14 @@ export async function previewComprobante(req, res, next) {
     if (ov.estado_verificacion !== 'Aprobada') avisos.push('La orden debe estar Aprobada para emitir.');
     const sinUnidad = calc.lineas.filter((l) => !l.unidad).map((l) => l.codigo);
     if (sinUnidad.length) avisos.push(`Productos sin codigo_unidad_sunat: ${sinUnidad.join(', ')}.`);
+    if (calc.esExport) {
+      const faltantesUbicacion = ['direccion', 'departamento', 'provincia', 'distrito']
+        .filter((campo) => !ubicacionExport[campo]);
+      if (!/^\d{6}$/.test(ubicacionExport.ubigeo)) faltantesUbicacion.push('ubigeo de 6 dígitos');
+      if (faltantesUbicacion.length) {
+        avisos.push(`Exportación: ubicación "Otro local" incompleta en empresa_config: ${faltantesUbicacion.join(', ')}.`);
+      }
+    }
 
     res.json({
       ok: true,
@@ -431,14 +499,19 @@ export async function previewComprobante(req, res, next) {
       },
       cliente: {
         razon_social: cliente?.razon_social || '',
-        ruc: cliente?.ruc || '',
-        tipo_documento: cliente?.tipo_documento || 'RUC',
-        direccion: cliente?.direccion_despacho || ov.direccion_entrega || ''
+        ruc: calc.esExport ? '-' : (cliente?.ruc || ''),
+        tipo_documento: calc.esExport ? 'SIN DOCUMENTO' : (cliente?.tipo_documento || 'RUC'),
+        direccion: calc.esExport
+          ? (ubicacionExport?.direccion || '')
+          : (cliente?.direccion_despacho || ov.direccion_entrega || '')
       },
+      // En exportación replica la selección del portal SUNAT: "Otro local" con la ubicación del
+      // emisor. Es exactamente la fuente usada por construirInvoiceXML para RegistrationAddress.
+      ubicacionEntregaExportacion: ubicacionExport,
       // Observación SUGERIDA (cbc:Note): texto LIBRE de la OV, ya SIN la OC (esta viaja aparte).
-      observacion: obsRaw.slice(0, 250),
+      observacion: obsRaw.slice(0, 200),
       // Orden de compra (cac:OrderReference): campo propio, editable en el panel antes de emitir.
-      ordenCompra: String(ov.orden_compra_cliente || '').trim().slice(0, 30),
+      ordenCompra: String(ov.orden_compra_cliente || '').trim().slice(0, 20),
       // GRE del sistema que se auto-declaran (el panel las muestra como ya incluidas, no editables).
       guiasSistema: guiasSistema.map((g) => ({ tipo_documento: '09', serie: String(g.serie), numero: String(g.numero) })),
       // Última fecha ya emitida en la serie: el panel no deja retro-fechar por debajo de ella (regla cronológica).
@@ -1154,16 +1227,17 @@ export async function generarPdfComprobante(req, res, next) {
     // fuentes: GRE del sistema (guias_remision) y las ingresadas a mano en el buscador del panel
     // (facturas_guias_referencia; tabla opcional → si aún no existe, se ignora sin romper el PDF).
     const [guiasRef] = await pool.query(
-      `SELECT serie_sunat AS serie, numero_sunat AS numero FROM guias_remision
+      `SELECT '09' AS tipo_documento, serie_sunat AS serie, numero_sunat AS numero FROM guias_remision
         WHERE id_factura = ? AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL
         ORDER BY id_guia`, [idFactura]);
     let guiasManualRef = [];
     try {
       const [gm] = await pool.query(
-        'SELECT serie, numero FROM facturas_guias_referencia WHERE id_factura = ? ORDER BY id', [idFactura]);
+        'SELECT tipo_documento, serie, numero FROM facturas_guias_referencia WHERE id_factura = ? ORDER BY id', [idFactura]);
       guiasManualRef = gm;
     } catch { /* tabla opcional aún no creada */ }
-    const guiasTexto = [...guiasRef, ...guiasManualRef].map((g) => `${g.serie}-${g.numero}`).join(', ');
+    const guiasDetalle = [...guiasRef, ...guiasManualRef];
+    const guiasTexto = guiasDetalle.map((g) => `${g.serie}-${g.numero}`).join(', ');
 
     // Notas: documento afectado + descripción del motivo (catálogo 09/10).
     let docAfectado = null;
@@ -1206,6 +1280,19 @@ export async function generarPdfComprobante(req, res, next) {
     }
 
     const qrBuffer = f.sunat_qr_data ? await qrPng(f.sunat_qr_data) : null;
+    const clientePdf = afectacion === '40'
+      ? {
+          ...cliente,
+          tipo_documento: 'SIN DOCUMENTO',
+          ruc: '-',
+          // Mismo "Otro local" declarado en el RegistrationAddress del XML, expresado como una
+          // sola línea para la representación impresa al estilo del PDF E001-1997.
+          direccion_despacho: [
+            emisor.direccion,
+            [emisor.distrito, emisor.provincia, emisor.departamento].filter(Boolean).join(' - ')
+          ].filter(Boolean).join(' ')
+        }
+      : cliente;
     const pdf = await generarComprobanteSunatPDF({
       comprobante: {
         codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
@@ -1221,10 +1308,10 @@ export async function generarPdfComprobante(req, res, next) {
         orden_compra: f.orden_compra_cliente || null,
         direccion_entrega: f.direccion_entrega,
         subtotal: f.subtotal, igv: f.igv, total: f.total, afectacion,
-        guias: guiasTexto,
+        guias: guiasTexto, guias_detalle: guiasDetalle,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, estado: f.estado, motivoEstado, docAfectado
       },
-      emisor, cliente, detalle, qrBuffer
+      emisor, cliente: clientePdf, detalle, qrBuffer
     });
 
     // Subida best-effort a Cloudinary (no crítica). SUNAT_PDF_SKIP_UPLOAD=1 la desactiva

@@ -773,8 +773,9 @@ export async function emitirNota(req, res, next) {
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, ?, ?)`,
-        [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente,
-         tipo === '07' ? 'Nota de Credito' : 'Nota de Debito', serie, numero,
+        // `tipo_comprobante` es un ENUM legado que solo admite "Factura". El tipo fiscal real
+        // de la fila se identifica sin ambigüedad con codigo_tipo_sunat (07 NC / 08 ND).
+        [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ref.moneda || 'PEN', 'Emitida',
          tipo, ov.tipo_operacion_sunat || '0101',
          id_factura_ref, String(motivo_codigo), sustento || null, emisionDateTime,

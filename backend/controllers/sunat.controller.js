@@ -5,6 +5,7 @@ import { pool, withTransaction } from '../config/database.js';
 import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
 import { construirInvoiceXML, calcularComprobante, afectacionLinea } from '../services/sunat/ubl.service.js';
 import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.service.js';
+import { prepararCatalogoDisminucion, prepararDetalleDisminucion } from '../services/sunat/nota-disminucion.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
 import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
@@ -524,6 +525,38 @@ export async function previewComprobante(req, res, next) {
 // Serie fija por tipo de nota (asociadas a facturas FE01).
 const SERIES_NOTA = { '07': 'FC01', '08': 'FD01' };
 
+async function consumosDisminucion(db, idFacturaRef) {
+  try {
+    const [porItem] = await db.query(
+      `SELECT nd.id_detalle_ref, ROUND(SUM(nd.valor_venta), 2) AS consumido
+         FROM facturas_notas_detalle nd
+         JOIN facturas_venta nc ON nc.id_factura = nd.id_factura
+        WHERE nc.id_factura_ref = ? AND nc.codigo_tipo_sunat = '07'
+          AND nc.motivo_nota_codigo = '09' AND nc.sunat_estado = 'ACEPTADO'
+          AND nd.id_detalle_ref IS NOT NULL
+        GROUP BY nd.id_detalle_ref`, [idFacturaRef]);
+    const [[total]] = await db.query(
+      `SELECT COALESCE(ROUND(SUM(nc.subtotal), 2), 0) AS consumido
+         FROM facturas_venta nc
+        WHERE nc.id_factura_ref = ? AND nc.codigo_tipo_sunat = '07'
+          AND nc.motivo_nota_codigo = '09' AND nc.sunat_estado = 'ACEPTADO'`, [idFacturaRef]);
+    return {
+      porItem: Object.fromEntries(porItem.map((r) => [Number(r.id_detalle_ref), Number(r.consumido)])),
+      total: Number(total?.consumido || 0)
+    };
+  } catch (error) {
+    if (error.code === 'ER_NO_SUCH_TABLE') {
+      throw new AppError('Falta aplicar la migración 20260910_notas_credito_detalle.sql', 503);
+    }
+    throw error;
+  }
+}
+
+function totalesVacios() {
+  return { subtotal: 0, anticipos: 0, descuentos: 0, valorVenta: 0, isc: 0, igv: 0,
+    otrosCargos: 0, otrosTributos: 0, redondeo: 0, total: 0 };
+}
+
 // Vista previa de una Nota (07/08) — MISMO cálculo (calcularComprobante) que la nota real, para que el
 // panel muestre el "Preliminar de Nota" tal como se firmará y enviará. Solo lectura: no numera, no envía.
 // POST /api/sunat/comprobantes/notas/preview  { id_factura_ref, tipo, motivo_codigo }
@@ -553,7 +586,31 @@ export async function previewNota(req, res, next) {
       'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
       'WHERE d.id_orden_venta = ?', [ref.id_orden_venta]);
 
-    const calc = calcularComprobante({ ov, detalle });
+    let detalleNota = detalle;
+    let catalogoItems = null;
+    let saldoDisponible = null;
+    const esDisminucion = tipo === '07' && String(motivo_codigo) === '09';
+    if (esDisminucion) {
+      const consumos = await consumosDisminucion(pool, id_factura_ref);
+      catalogoItems = prepararCatalogoDisminucion({ ov, detalle, consumos: consumos.porItem });
+      saldoDisponible = Math.max(0, Math.round((Number(ref.subtotal || 0) - consumos.total) * 100) / 100);
+      if (req.body.solo_catalogo) {
+        detalleNota = [];
+      } else {
+        detalleNota = prepararDetalleDisminucion({
+          ov, detalle, consumos: consumos.porItem,
+          modo: req.body.modo, items: req.body.items, montoGlobal: req.body.monto_global
+        });
+        const baseSolicitada = calcularComprobante({ ov, detalle: detalleNota }).subtotal;
+        if (baseSolicitada > saldoDisponible) {
+          throw new AppError(`La disminución supera el saldo global disponible (${saldoDisponible.toFixed(2)})`, 422);
+        }
+      }
+    }
+    const calc = detalleNota.length
+      ? calcularComprobante({ ov, detalle: detalleNota })
+      : { moneda: ov.moneda || 'PEN', esExport: Number(ov.es_exportacion) === 1,
+          lineas: [], subtotal: 0, igv: 0, total: 0, montoEnLetras: '' };
 
     // Información del crédito (solo informativa en el preliminar; la nota total hereda el cronograma
     // de la factura afectada = una cuota a su vencimiento = fecha de emisión de la factura + días de crédito).
@@ -597,8 +654,10 @@ export async function previewNota(req, res, next) {
       monedaLabel: calc.moneda === 'USD' ? 'DOLAR AMERICANO' : 'SOLES',
       esExport: calc.esExport,
       lineas: calc.lineas.map(({ cfg, ...l }) => l),
+      itemsFactura: catalogoItems,
+      saldoDisponible,
       // Desglose al estilo del preliminar SUNAT (los conceptos no usados van en cero).
-      totales: {
+      totales: esDisminucion && req.body.solo_catalogo ? totalesVacios() : {
         subtotal: calc.subtotal, anticipos: 0, descuentos: 0, valorVenta: calc.subtotal,
         isc: 0, igv: calc.igv, otrosCargos: 0, otrosTributos: 0, redondeo: 0, total: calc.total
       },
@@ -654,24 +713,28 @@ export async function emitirNota(req, res, next) {
       if (!cliente) throw new AppError('Cliente del comprobante afectado no existe', 404);
       const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
 
-      // Líneas: parcial (items del request) o total (replica el detalle de la OV facturada).
-      let detalle;
-      if (items) {
-        detalle = items.map((it) => ({
-          codigo: it.codigo || null,
-          nombre: it.descripcion || it.nombre || null,
-          descripcion: it.descripcion || null,
-          cantidad: it.cantidad,
-          precio_unitario: it.precio_unitario,
-          codigo_unidad_sunat: it.codigo_unidad_sunat,
-          codigo_afectacion_igv: it.codigo_afectacion_igv || '10',
-          descuento_porcentaje: it.descuento_porcentaje || 0
-        }));
-      } else {
-        [detalle] = await conn.query(
-          'SELECT d.*, p.codigo, p.nombre, p.codigo_unidad_sunat ' +
-          'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
-          'WHERE d.id_orden_venta = ?', [ref.id_orden_venta]);
+      // Fuente autoritativa: la factura vigente seleccionada. Para motivo 09 nunca se aceptan
+      // descripciones/precios libres del cliente; solo id, cantidad y disminución, validados contra
+      // las líneas originales y contra NC 09 anteriores ya aceptadas.
+      let detalleOriginal;
+      [detalleOriginal] = await conn.query(
+        'SELECT d.*, p.codigo, p.nombre, p.codigo_unidad_sunat ' +
+        'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
+        'WHERE d.id_orden_venta = ?', [ref.id_orden_venta]);
+      let detalle = detalleOriginal;
+      if (tipo === '07' && String(motivo_codigo) === '09') {
+        const consumos = await consumosDisminucion(conn, id_factura_ref);
+        const saldoDisponible = Math.max(0, Math.round((Number(ref.subtotal || 0) - consumos.total) * 100) / 100);
+        detalle = prepararDetalleDisminucion({
+          ov, detalle: detalleOriginal, consumos: consumos.porItem,
+          modo: req.body.modo, items, montoGlobal: req.body.monto_global
+        });
+        const baseSolicitada = calcularComprobante({ ov, detalle }).subtotal;
+        if (baseSolicitada > saldoDisponible) {
+          throw new AppError(`La disminución supera el saldo global disponible (${saldoDisponible.toFixed(2)})`, 422);
+        }
+      } else if (items) {
+        throw new AppError('La selección parcial de líneas solo está habilitada para Disminución en el valor (09)', 422);
       }
 
       // Regla cronológica: no retro-fechar por debajo de la última nota ya emitida de la MISMA serie.
@@ -710,11 +773,29 @@ export async function emitirNota(req, res, next) {
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, ?, ?)`,
-        [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente, 'Factura', serie, numero,
+        [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente,
+         tipo === '07' ? 'Nota de Credito' : 'Nota de Debito', serie, numero,
          totales.subtotal, totales.igv, totales.total, ref.moneda || 'PEN', 'Emitida',
          tipo, ov.tipo_operacion_sunat || '0101',
          id_factura_ref, String(motivo_codigo), sustento || null, emisionDateTime,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
+
+      // Snapshot inmutable de lo que realmente se firmó. Es la fuente del PDF y permite impedir
+      // que varias NC acumuladas disminuyan más que el valor de la factura original.
+      const calcDetalle = calcularComprobante({ ov, detalle });
+      if (calcDetalle.lineas.length) {
+        const values = calcDetalle.lineas.map((linea, i) => {
+          const fuente = detalle[i];
+          return [ins.insertId, fuente.id_detalle_ref || null, fuente.modo_disminucion || null,
+            linea.codigo, linea.descripcion, linea.unidad, linea.cantidad, linea.valorUnitario,
+            linea.afectacion, linea.valorVenta, linea.igv, Math.round((linea.valorVenta + linea.igv) * 100) / 100];
+        });
+        await conn.query(
+          `INSERT INTO facturas_notas_detalle
+            (id_factura, id_detalle_ref, modo_disminucion, codigo, descripcion,
+             codigo_unidad_sunat, cantidad, valor_unitario, codigo_afectacion_igv,
+             valor_venta, igv, importe_total) VALUES ?`, [values]);
+      }
 
       return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales, idOrdenVenta: ref.id_orden_venta };
     });
@@ -1215,12 +1296,24 @@ export async function generarPdfComprobante(req, res, next) {
 
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [f.id_cliente]);
-    // Detalle reconstruido desde la OV. Los TOTALES imprimibles salen de facturas_venta (autoritativos);
-    // en notas parciales las líneas reflejan la OV completa pero los importes del recuadro son los de la nota.
-    const [detalle] = await pool.query(
+    // Facturas antiguas se reconstruyen desde la OV. Para NC/ND se prefiere el snapshot inmutable
+    // guardado al emitir: así una disminución por ítem imprime exactamente cantidad, producto y
+    // valor disminuido que figuran en el XML, aun si posteriormente se modifica la OV.
+    let [detalle] = await pool.query(
       'SELECT d.cantidad, d.precio_unitario, d.descuento_porcentaje, p.codigo, p.nombre, ' +
       'p.codigo_unidad_sunat AS unidad FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
       'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
+    if (['07', '08'].includes(String(f.codigo_tipo_sunat))) {
+      try {
+        const [snapshot] = await pool.query(
+          `SELECT cantidad, valor_unitario AS precio_unitario, 0 AS descuento_porcentaje,
+                  codigo, descripcion AS nombre, codigo_unidad_sunat AS unidad
+             FROM facturas_notas_detalle WHERE id_factura = ? ORDER BY id`, [idFactura]);
+        if (snapshot.length) detalle = snapshot;
+      } catch (error) {
+        if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+      }
+    }
 
     // Guías de remisión que ampara esta factura (las mismas que se declararon en el XML como
     // cac:DespatchDocumentReference). Se rotulan en el PDF para dejar constancia impresa. Dos
@@ -1297,7 +1390,9 @@ export async function generarPdfComprobante(req, res, next) {
       comprobante: {
         codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
         fecha_emision: f.fecha_emision_fmt, moneda: f.moneda,
-        tipo_venta: f.tipo_venta, dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
+        // Las condiciones/cuotas pertenecen a la factura original, no al importe de una NC/ND.
+        tipo_venta: ['07', '08'].includes(String(f.codigo_tipo_sunat)) ? null : f.tipo_venta,
+        dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
         // "Observaciones" del PDF = lo enviado a SUNAT (cbc:Note) persistido en la factura. Para filas
         // viejas (sin persistir) se compone del texto de la OV + OC. La OC ya viaja DENTRO de este
         // texto, así que no se imprime aparte (paridad exacta con lo que muestra SUNAT).

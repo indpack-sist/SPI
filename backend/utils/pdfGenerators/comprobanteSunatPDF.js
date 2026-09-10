@@ -223,10 +223,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.text('VALOR UNIT.', 418, y + 5, { width: 76, align: 'right' });
         doc.text('ICBPER', 500, y + 5, { width: 56, align: 'right' });
       } else {
-        doc.text('CANTIDAD', 40, y + 5, { width: 55, align: 'center' });
-        doc.text('UNIDAD DE MEDIDA', 98, y + 5, { width: 78, align: 'center' });
-        doc.text('DESCRIPCIÓN', 182, y + 5);
-        doc.text('VALOR UNITARIO', 450, y + 5, { width: 108, align: 'right' });
+        doc.text('CANTIDAD', 37, y + 5, { width: 48, align: 'center' });
+        doc.text('UNIDAD', 88, y + 5, { width: 70, align: 'center' });
+        doc.text('CÓDIGO', 162, y + 5, { width: 65, align: 'center' });
+        doc.text('DESCRIPCIÓN', 231, y + 5, { width: 225 });
+        doc.text('VALOR UNITARIO', 460, y + 5, { width: 96, align: 'right' });
       }
       y += 18;
 
@@ -239,7 +240,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         const valorUnit = Number(it.precio_unitario || 0);
         const und = it.unidad || it.codigo_unidad_sunat || 'NIU';
         const undTxt = UNIDAD_NOMBRE[und] || und;
-        const hDesc = doc.heightOfString(desc, { width: esExportacion ? 190 : 262, lineGap: 1 });
+        const hDesc = doc.heightOfString(desc, { width: esExportacion ? 190 : 225, lineGap: 1 });
         const hFila = Math.max(16, hDesc + 6);
         if (y + hFila > 690) { doc.addPage(); y = 40; }
         doc.fillColor('#000');
@@ -251,10 +252,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           doc.text(monto2(valorUnit), 418, y + 3, { width: 76, align: 'right' });
           doc.text('0.00', 500, y + 3, { width: 56, align: 'right' });
         } else {
-          doc.text(cant.toFixed(2), 40, y + 3, { width: 55, align: 'center' });
-          doc.text(undTxt, 98, y + 3, { width: 78, align: 'center' });
-          doc.text(desc, 182, y + 3, { width: 262, lineGap: 1 });
-          doc.text(`${simbolo} ${n2(valorUnit)}`, 450, y + 3, { width: 108, align: 'right' });
+          doc.text(cant.toFixed(2), 37, y + 3, { width: 48, align: 'center' });
+          doc.text(undTxt, 88, y + 3, { width: 70, align: 'center' });
+          doc.text(String(it.codigo || '-'), 162, y + 3, { width: 65, align: 'center' });
+          doc.text(desc, 231, y + 3, { width: 225, lineGap: 1 });
+          doc.text(`${simbolo} ${n2(valorUnit)}`, 460, y + 3, { width: 96, align: 'right' });
         }
         y += hFila;
       }

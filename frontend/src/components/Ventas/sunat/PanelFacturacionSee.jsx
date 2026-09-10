@@ -3,7 +3,7 @@
 // Coexiste con el panel de facturación manual (no lo reemplaza). Gatear su render con
 // tienePermiso('facturacion') desde el contenedor. Toda la lógica SEE de comprobantes vive aquí.
 import { useState, useEffect } from 'react';
-import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck } from 'lucide-react';
+import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck, Pencil, Check, X } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
@@ -79,10 +79,19 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const [notaPreview, setNotaPreview] = useState(null);
   const [notaPreviewLoading, setNotaPreviewLoading] = useState(false);
   const [notaPreviewError, setNotaPreviewError] = useState(null);
+  // Motivo 09: catálogo de líneas de la factura + captura por ítem/global.
+  const [notaCatalogo, setNotaCatalogo] = useState(null);
+  const [notaCatalogoLoading, setNotaCatalogoLoading] = useState(false);
+  const [notaModo, setNotaModo] = useState('item');
+  const [notaItems, setNotaItems] = useState({});
+  const [notaEditando, setNotaEditando] = useState(null);
+  const [notaMontoGlobal, setNotaMontoGlobal] = useState('');
   const SUSTENTO_MAX = 250;
   // Símbolo/formato de la nota (según su propia moneda, que hereda de la factura afectada).
-  const notaSimbolo = notaPreview?.moneda === 'USD' ? '$' : 'S/';
+  const notaMoneda = notaPreview?.moneda || notaCatalogo?.moneda || modalNota?.factura?.moneda;
+  const notaSimbolo = notaMoneda === 'USD' ? '$' : 'S/';
   const notaFmt = (v) => `${notaSimbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
+  const notaFmtCaptura = (v) => `${notaSimbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
   const notaUltima = notaPreview?.ultimaFechaEmitida || null;
   const notaMinISO = notaUltima && notaUltima > minVentana ? notaUltima : minVentana;
   // Guías de remisión relacionadas (buscador manual): las GRE se emiten directo en SUNAT y no hay
@@ -136,7 +145,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   // Relaciones entre comprobantes para rotular cada fila con claridad.
   const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);          // factura afectada por una nota
   const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
-    && x.codigo_tipo_sunat === '07' && x.sunat_estado === 'ACEPTADO');                        // NC 07 que anuló esta factura
+    && x.codigo_tipo_sunat === '07' && x.motivo_nota_codigo === '01'
+    && x.sunat_estado === 'ACEPTADO');                                                        // solo NC 01 anula esta factura
   const facturaEnCursoOV = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
     && ['ENVIADO', 'ACEPTADO'].includes(f.sunat_estado));
   const puedeEmitir = orden?.estado_verificacion === 'Aprobada'
@@ -183,13 +193,39 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     setNotaTipo('07'); setNotaMotivo('01'); setNotaSustento('');
     setNotaFecha(hoyISO); setNotaStep(1);
     setNotaPreview(null); setNotaPreviewError(null);
+    setNotaCatalogo(null); setNotaItems({}); setNotaModo('item');
+    setNotaEditando(null); setNotaMontoGlobal('');
     setModalNota({ factura });
   };
+
+  const esDisminucion = notaTipo === '07' && notaMotivo === '09';
+  const itemsDisminucion = Object.values(notaItems)
+    .filter((it) => it.seleccionado && Number(it.disminucion_valor) > 0)
+    .map((it) => ({
+      id_detalle_ref: it.id_detalle_ref,
+      cantidad: Number(it.cantidad),
+      disminucion_valor: Number(it.disminucion_valor)
+    }));
+  const itemsDisminucionValidos = Object.values(notaItems)
+    .filter((it) => it.seleccionado)
+    .every((it) => Number(it.cantidad) > 0
+      && Number(it.cantidad) <= Number(it.cantidad_original)
+      && Number(it.disminucion_valor) > 0
+      && Number(it.disminucion_valor) <= Number(it.valor_unitario_original)
+      && Number(it.cantidad) * Number(it.disminucion_valor) <= Number(it.valor_disponible) + 0.000001);
+  const payloadDisminucion = esDisminucion ? {
+    modo: notaModo,
+    ...(notaModo === 'item' ? { items: itemsDisminucion } : { monto_global: Number(notaMontoGlobal) })
+  } : {};
+  const disminucionValida = !esDisminucion || (notaModo === 'item'
+    ? itemsDisminucion.length > 0 && itemsDisminucionValidos
+    : Number(notaMontoGlobal) > 0 && Number(notaMontoGlobal) <= Number(notaCatalogo?.saldoDisponible || 0));
 
   const handleEmitirNota = async () => {
     const r = await tras(() => sunatAPI.emitirNota({
       id_factura_ref: modalNota.factura.id_factura, tipo: notaTipo,
-      motivo_codigo: notaMotivo, sustento: notaSustento, fecha_emision: notaFecha
+      motivo_codigo: notaMotivo, sustento: notaSustento, fecha_emision: notaFecha,
+      ...payloadDisminucion
     }), null);
     const d = r?.data;
     if (d) {
@@ -227,13 +263,36 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     return () => { cancel = true; };
   }, [modalEmitir, orden?.id_orden_venta]);
 
+  // Para motivo 09 se carga la factura vigente como catálogo seleccionable. El servidor incluye
+  // el saldo disponible después de NC de disminución anteriores, por ítem y global.
+  useEffect(() => {
+    if (!modalNota?.factura || !esDisminucion) return undefined;
+    let cancel = false;
+    setNotaCatalogoLoading(true); setNotaPreviewError(null);
+    sunatAPI.previewNota({
+      id_factura_ref: modalNota.factura.id_factura,
+      tipo: notaTipo, motivo_codigo: notaMotivo, solo_catalogo: true
+    }).then((r) => {
+      if (cancel) return;
+      setNotaCatalogo(r.data);
+      setNotaItems(Object.fromEntries((r.data?.itemsFactura || []).map((it) => [it.id_detalle_ref, {
+        ...it, seleccionado: false, cantidad_original: it.cantidad, cantidad: it.cantidad, disminucion_valor: ''
+      }])));
+    }).catch((e) => { if (!cancel) setNotaPreviewError(errorMsg(e)); })
+      .finally(() => { if (!cancel) setNotaCatalogoLoading(false); });
+    return () => { cancel = true; };
+  }, [modalNota, esDisminucion, notaTipo, notaMotivo]);
+
   // Al entrar al paso 2 (preliminar), pide al backend el mismo cálculo/desglose que se firmará.
   // Se refresca si cambia el tipo o el motivo (cambian serie, etiqueta y documento).
   useEffect(() => {
     if (!modalNota?.factura || notaStep !== 2) return undefined;
     let cancel = false;
     setNotaPreviewLoading(true); setNotaPreviewError(null);
-    sunatAPI.previewNota({ id_factura_ref: modalNota.factura.id_factura, tipo: notaTipo, motivo_codigo: notaMotivo })
+    sunatAPI.previewNota({
+      id_factura_ref: modalNota.factura.id_factura, tipo: notaTipo, motivo_codigo: notaMotivo,
+      ...payloadDisminucion
+    })
       .then((r) => { if (!cancel) setNotaPreview(r.data); })
       .catch((e) => { if (!cancel) setNotaPreviewError(errorMsg(e)); })
       .finally(() => { if (!cancel) setNotaPreviewLoading(false); });
@@ -276,7 +335,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             // Etiqueta de ROL que deja claro qué es cada fila y a qué documento se relaciona.
             let rol = null;
             if (anulada) rol = { clase: 'badge-danger', txt: `Anulada por NC ${notaQueAnula(f)?.numero_factura || ''}`.trim() };
-            else if (esNC) rol = { clase: 'badge-info', txt: `Nota de Crédito → ${refDe(f)?.numero_factura || 'factura'}` };
+            else if (esNC) rol = { clase: 'badge-info', txt: `Nota de Crédito${f.motivo_nota_codigo === '09' ? ' · Disminución' : ''} → ${refDe(f)?.numero_factura || 'factura'}` };
             else if (esND) rol = { clase: 'badge-info', txt: `Nota de Débito → ${refDe(f)?.numero_factura || 'factura'}` };
             else if (esFactura && aceptado) rol = { clase: 'badge-success', txt: 'Factura vigente' };
             else if (esRechazo) rol = { clase: 'badge-danger', txt: 'Rechazada — sin validez' };
@@ -692,14 +751,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         isOpen={!!modalNota}
         onClose={() => !procesando && setModalNota(null)}
         title={notaStep === 1 ? 'Emitir Nota de Crédito / Débito' : `Preliminar de ${notaTipo === '08' ? 'Nota de Débito' : 'Nota de Crédito'}`}
-        size="lg"
+        size={esDisminucion ? 'xl' : 'lg'}
       >
         {/* ── Paso 1: datos de la nota ── */}
         {notaStep === 1 && (
           <div className="space-y-3 text-sm">
             <p className="text-muted text-xs">
-              Sobre la factura <strong className="font-mono">{modalNota?.factura?.numero_factura}</strong>. Se emite una nota <strong>total</strong> (replica el detalle de la orden).
+              Sobre la factura vigente <strong className="font-mono">{modalNota?.factura?.numero_factura}</strong>. El documento quedará vinculado a ella en el historial.
             </p>
+            {notaPreviewError && <Alert type="error" message={notaPreviewError} />}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-muted mb-1">Fecha de emisión</label>
@@ -752,9 +812,131 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               />
               <div className="text-[10px] text-muted mt-0.5">Texto libre que viaja a SUNAT (cbc:Description) y aparece en el comprobante.</div>
             </div>
+
+            {esDisminucion && (
+              <div className="space-y-3 border-t border-gray-200 pt-3">
+                <div>
+                  <div className="text-xs font-semibold">Alcance de la disminución</div>
+                  <div className="flex gap-4 mt-1">
+                    {[['item', 'Por ítem'], ['global', 'Global']].map(([value, label]) => (
+                      <label key={value} className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="nota-modo" value={value} checked={notaModo === value}
+                          onChange={() => { setNotaModo(value); setNotaEditando(null); }} disabled={procesando} />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {notaCatalogo?.saldoDisponible != null && (
+                    <div className="text-[10px] text-muted mt-1">
+                      Saldo máximo disponible para disminuir: <strong>{notaFmt(notaCatalogo.saldoDisponible)}</strong> (valor de venta sin IGV).
+                    </div>
+                  )}
+                </div>
+
+                {notaCatalogoLoading && <p className="text-xs text-muted">Cargando ítems de la factura…</p>}
+
+                {notaModo === 'item' && !notaCatalogoLoading && (
+                  <div className="border border-gray-200 rounded overflow-x-auto">
+                    <div className="px-3 py-2 text-xs font-semibold bg-gray-50">Seleccione el ítem de la Factura Electrónica</div>
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-y border-gray-200">
+                        <tr>
+                          <th className="p-2 text-center">Selección de ítems</th>
+                          <th className="p-2 text-left">Unidad de medida</th>
+                          <th className="p-2 text-right">Cantidad</th>
+                          <th className="p-2 text-left">Código</th>
+                          <th className="p-2 text-left">Descripción</th>
+                          <th className="p-2 text-right">Valor original</th>
+                          <th className="p-2 text-right">Disminución unit.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.values(notaItems).map((it) => (
+                          <tr key={it.id_detalle_ref} className="border-b border-gray-100">
+                            <td className="p-2 text-center">
+                              <button type="button" className="btn btn-xs btn-outline" title="Editar disminución"
+                                onClick={() => setNotaEditando(it.id_detalle_ref)} disabled={procesando || it.valor_disponible <= 0}>
+                                <Pencil size={12} />
+                              </button>
+                            </td>
+                            <td className="p-2">{it.codigo_unidad_sunat || '-'}</td>
+                            <td className="p-2 text-right">{fmtCant(it.cantidad_original)}</td>
+                            <td className="p-2 font-mono">{it.codigo}</td>
+                            <td className="p-2">{it.descripcion}</td>
+                            <td className="p-2 text-right font-mono">{notaFmt(it.valor_unitario_original)}</td>
+                            <td className="p-2 text-right font-mono font-semibold">
+                              {it.seleccionado ? notaFmt(it.disminucion_valor) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {notaModo === 'item' && notaEditando && notaItems[notaEditando] && (() => {
+                  const it = notaItems[notaEditando];
+                  const base = Number(it.cantidad || 0) * Number(it.disminucion_valor || 0);
+                  const tasa = it.codigo_afectacion_igv === '10' ? 0.18 : 0;
+                  const igv = base * tasa;
+                  const valido = Number(it.cantidad) > 0 && Number(it.cantidad) <= Number(it.cantidad_original)
+                    && Number(it.disminucion_valor) > 0
+                    && Number(it.disminucion_valor) <= Number(it.valor_unitario_original)
+                    && base <= Number(it.valor_disponible) + 0.000001;
+                  const update = (field, value) => setNotaItems((prev) => ({
+                    ...prev, [notaEditando]: { ...prev[notaEditando], [field]: value }
+                  }));
+                  return (
+                    <div className="border border-sky-200 bg-sky-50/40 rounded p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <strong className="text-xs">Captura NC - Disminución en el valor por ítem</strong>
+                        <button type="button" className="btn btn-xs btn-outline" onClick={() => setNotaEditando(null)}><X size={12} /></button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div><label className="block text-[10px] text-muted mb-1">Cantidad afectada</label>
+                          <input type="number" min="0.000001" max={it.cantidad_original} step="0.000001" className="form-input w-full"
+                            value={it.cantidad} onChange={(e) => update('cantidad', e.target.value)} /></div>
+                        <div><label className="block text-[10px] text-muted mb-1">Unidad de medida</label>
+                          <input className="form-input w-full bg-gray-50" value={it.codigo_unidad_sunat || ''} readOnly /></div>
+                        <div><label className="block text-[10px] text-muted mb-1">Descripción</label>
+                          <input className="form-input w-full bg-gray-50" value={it.descripcion || ''} readOnly /></div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                        <div><label className="block text-[10px] text-muted mb-1">Disminución en el valor (unitaria, sin IGV)</label>
+                          <input type="number" min="0.01" max={it.valor_unitario_original} step="0.01" className="form-input w-full"
+                            value={it.disminucion_valor} onChange={(e) => update('disminucion_valor', e.target.value)} placeholder="0.00" /></div>
+                        <div><div className="text-[10px] text-muted">ISC</div><strong>{notaFmt(0)}</strong></div>
+                        <div><div className="text-[10px] text-muted">IGV ({tasa * 100}%)</div><strong>{notaFmtCaptura(igv)}</strong></div>
+                        <div><div className="text-[10px] text-muted">Importe de venta</div><strong>{notaFmtCaptura(base + igv)}</strong></div>
+                      </div>
+                      {!valido && it.disminucion_valor !== '' && <div className="text-[10px] text-red-600">Verifique cantidad e importe: la base no puede superar {notaFmt(it.valor_disponible)}.</div>}
+                      <div className="flex justify-end gap-2">
+                        {it.seleccionado && <button type="button" className="btn btn-xs btn-outline" onClick={() => {
+                          update('seleccionado', false); setNotaEditando(null);
+                        }}>Quitar</button>}
+                        <button type="button" className="btn btn-xs btn-primary" disabled={!valido} onClick={() => {
+                          update('seleccionado', true); setNotaEditando(null);
+                        }}><Check size={12} className="mr-1" /> Aplicar</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {notaModo === 'global' && (
+                  <div className="border border-gray-200 rounded p-3 max-w-md">
+                    <label className="block text-xs text-muted mb-1">Disminución global (valor de venta sin IGV)</label>
+                    <input type="number" min="0.01" max={notaCatalogo?.saldoDisponible || undefined} step="0.01"
+                      className="form-input w-full" value={notaMontoGlobal}
+                      onChange={(e) => setNotaMontoGlobal(e.target.value)} placeholder="0.00" />
+                    <div className="text-[10px] text-muted mt-1">El servidor distribuye el monto por afectación tributaria y calcula el IGV correspondiente.</div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
               <button className="btn btn-sm btn-outline" onClick={() => setModalNota(null)} disabled={procesando}>Cerrar</button>
-              <button className="btn btn-sm btn-primary" onClick={() => setNotaStep(2)} disabled={procesando || !notaSustento.trim()}>Continuar</button>
+              <button className="btn btn-sm btn-primary" onClick={() => setNotaStep(2)}
+                disabled={procesando || !notaSustento.trim() || notaCatalogoLoading || !disminucionValida}>Continuar</button>
             </div>
           </div>
         )}
@@ -790,6 +972,33 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   {notaPreview.motivo?.label && (
                     <div className="uppercase font-semibold text-[11px]">{notaPreview.motivo.label}</div>
                   )}
+                </div>
+
+                {/* Líneas exactas que se firmarán. En motivo 09 el valor unitario es la
+                    disminución capturada (p. ej. 2.80), no el precio original de la factura. */}
+                <div className="border border-gray-200 rounded overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="p-2 text-right">Cantidad</th>
+                        <th className="p-2 text-left">Unidad de medida</th>
+                        <th className="p-2 text-left">Código</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-right">Valor unitario</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(notaPreview.lineas || []).map((l) => (
+                        <tr key={`${l.numero}-${l.codigo}`} className="border-t border-gray-100">
+                          <td className="p-2 text-right">{fmtCant(l.cantidad)}</td>
+                          <td className="p-2">{l.unidad || '-'}</td>
+                          <td className="p-2 font-mono">{l.codigo}</td>
+                          <td className="p-2">{l.descripcion}</td>
+                          <td className="p-2 text-right font-mono">{notaFmt(l.valorUnitario)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Desglose de totales (estilo SUNAT) */}

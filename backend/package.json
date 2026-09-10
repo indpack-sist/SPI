@@ -10,6 +10,7 @@
     "test:firma": "node scripts/test-firma.js",
     "test:factura-exportacion": "node scripts/test-factura-exportacion.js",
     "test:gre": "node scripts/test-gre-xml.js",
+    "test:nota-disminucion": "node scripts/test-nota-disminucion.js",
     "test:pdf": "node scripts/test-pdf-sunat.js"
   },
   "keywords": [

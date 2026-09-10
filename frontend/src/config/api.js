@@ -1324,12 +1324,21 @@ export const sunatAPI = {
     }),
   // Vista previa de una nota (07/08): preliminar estilo SUNAT (empresa, doc afectado, cliente,
   // desglose de totales, información del crédito) calculado por el backend con la MISMA lógica.
-  previewNota: ({ id_factura_ref, tipo, motivo_codigo }) =>
-    api.post('/sunat/comprobantes/notas/preview', { id_factura_ref, tipo, motivo_codigo }),
+  previewNota: ({ id_factura_ref, tipo, motivo_codigo, modo, items, monto_global, solo_catalogo }) =>
+    api.post('/sunat/comprobantes/notas/preview', {
+      id_factura_ref, tipo, motivo_codigo,
+      ...(modo ? { modo } : {}),
+      ...(Array.isArray(items) ? { items } : {}),
+      ...(monto_global !== undefined ? { monto_global } : {}),
+      ...(solo_catalogo ? { solo_catalogo: true } : {})
+    }),
   // sustento: texto libre del usuario → cbc:Description (Motivo o Sustento). fecha_emision: retro-fecha ≤2 días.
-  emitirNota: ({ id_factura_ref, tipo, motivo_codigo, items, sustento, fecha_emision }) =>
+  emitirNota: ({ id_factura_ref, tipo, motivo_codigo, modo, items, monto_global, sustento, fecha_emision }) =>
     api.post('/sunat/comprobantes/notas/emitir', {
-      id_factura_ref, tipo, motivo_codigo, items,
+      id_factura_ref, tipo, motivo_codigo,
+      ...(modo ? { modo } : {}),
+      ...(Array.isArray(items) ? { items } : {}),
+      ...(monto_global !== undefined ? { monto_global } : {}),
       ...(sustento !== undefined ? { sustento } : {}),
       ...(fecha_emision ? { fecha_emision } : {})
     }),

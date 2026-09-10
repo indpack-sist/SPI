@@ -1871,6 +1871,11 @@ input.bg-blue-50 {
     display: none !important;
   }
 
+  /* Las columnas que antes se ocultaban ahora caben dentro de cada tarjeta. */
+  table.responsive-table-cards td.pros-hide-sm {
+    display: grid !important;
+  }
+
   /* Fallback para tablas deliberadamente excluidas o sin encabezados. */
   :where(.table-container, .overflow-x-auto):has(> table.responsive-table-scroll),
   *:has(> table.responsive-table-scroll) {

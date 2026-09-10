@@ -190,3 +190,79 @@
     cursor: not-allowed;
     box-shadow: none;
 }
+
+@media (max-width: 1023px) {
+    .modal-sunat-content {
+        width: calc(100vw - 2rem);
+        max-width: 100%;
+        height: min(92dvh, 900px);
+    }
+
+    .sunat-panel-izquierdo {
+        width: min(38vw, 360px);
+        min-width: 280px;
+        padding: 1rem;
+    }
+
+    .sunat-panel-derecho {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 700px) {
+    .modal-sunat-overlay {
+        align-items: flex-end;
+    }
+
+    .modal-sunat-content {
+        width: 100%;
+        height: calc(100dvh - env(safe-area-inset-top));
+        border-radius: 12px 12px 0 0;
+    }
+
+    .modal-sunat-header {
+        flex-shrink: 0;
+        padding: 0.875rem 1rem;
+    }
+
+    .modal-sunat-header h2 {
+        min-width: 0;
+        font-size: 1rem;
+        overflow-wrap: anywhere;
+    }
+
+    .modal-sunat-body {
+        flex-direction: column;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .sunat-panel-izquierdo {
+        width: 100%;
+        min-width: 0;
+        overflow: visible;
+        border-right: 0;
+        border-bottom: 1px solid var(--steel);
+    }
+
+    .sunat-panel-derecho {
+        flex: 0 0 min(52dvh, 520px);
+        min-height: 360px;
+    }
+
+    .sunat-form-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        margin-inline: -1rem;
+        margin-bottom: -1rem;
+        padding: 0.875rem 1rem calc(0.875rem + env(safe-area-inset-bottom));
+        background: var(--carbon-mid);
+    }
+
+    .sunat-form-actions .btn {
+        flex: 1;
+        min-width: 0;
+        min-height: 44px;
+    }
+}

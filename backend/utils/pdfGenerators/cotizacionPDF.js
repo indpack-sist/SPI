@@ -38,14 +38,19 @@ function obtenerNombreCorto(nombreCompleto) {
   if (partes.length === 2) return `${partes[0]} ${partes[1]}`;
 
   const particulas = ['de', 'del', 'la', 'las', 'los', 'y', 'von', 'van', 'san', 'santa'];
-  let indexInicioApellido = partes.length - 2;
+  
+  let i = partes.length - 2;
+  while (i > 0 && particulas.includes(partes[i].toLowerCase())) {
+    i--;
+  }
+  let indexInicioApellido = i;
 
-  while (indexInicioApellido > 0 && particulas.includes(partes[indexInicioApellido].toLowerCase())) {
+  while (indexInicioApellido > 0 && particulas.includes(partes[indexInicioApellido - 1].toLowerCase())) {
     indexInicioApellido--;
   }
 
   const primerNombre = partes[0];
-  const apellidoCompuesto = partes.slice(indexInicioApellido).join(' ');
+  const apellidoCompuesto = partes.slice(indexInicioApellido, partes.length - 1).join(' ');
 
   return `${primerNombre} ${apellidoCompuesto}`;
 }

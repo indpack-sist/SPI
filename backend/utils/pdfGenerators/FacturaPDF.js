@@ -140,87 +140,111 @@ export async function generarFacturaPDF(orden) {
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
-      // ... El resto del código es idéntico al original, solo pegando la lógica de cuerpo ...
+      // --- INICIO DEL REEMPLAZO (Recuadro Cliente/Emisor Dinámico) ---
+      const esExportacion = Number(orden.es_exportacion) === 1;
+
+      // 1. Datos Dinámicos (Exportación vs Nacional)
       const clienteTexto = orden.cliente || '';
-      const rucTexto = orden.ruc_cliente || '';
-      const direccionCliente = (orden.direccion_entrega || orden.direccion_cliente || '').replace(/[\r\n]+/g, " ");
-      const ubicacionTexto = [orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ') || 'Lima - Perú';
+      const rucTexto = esExportacion ? 'SIN DOCUMENTO (-)' : (orden.ruc_cliente || '');
+      
+      const tituloDireccion = esExportacion ? 'Establecimiento del Emisor:' : 'Dirección:';
+      const tituloMoneda = 'Tipo de Moneda:';
+
+      const direccionCliente = esExportacion
+        ? [orden.direccion_empresa, orden.urbanizacion_empresa, 'LIMA-LIMA-VILLA EL SALVADOR'].filter(Boolean).join(' - ')
+        : (orden.direccion_entrega || orden.direccion_cliente || '').replace(/[\r\n]+/g, " ");
+
+      const ubicacionTexto = esExportacion ? '' : ([orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ') || 'Lima - Perú');
       const contactoTexto = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ') || '-';
 
-      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 230, 8);
-      const alturaRUC = calcularAlturaTexto(doc, rucTexto, 230, 8);
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaUbicacion = calcularAlturaTexto(doc, ubicacionTexto, 230, 8);
-      const alturaContacto = calcularAlturaTexto(doc, contactoTexto, 230, 8);
+      // 2. Coordenadas y anchos ampliados (Evita el choque de textos)
+      const labelXLeft = 40;
+      const valXLeft = 165; // Movido de 100 a 165 para dar más espacio a las etiquetas largas
+      const widthValLeft = 175; 
 
+      const labelXRight = 350;
+      const valXRight = 440;
+
+      // 3. Cálculos de altura dinámica
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, widthValLeft, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, widthValLeft, 8);
+      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, widthValLeft, 8);
+      const alturaUbicacion = ubicacionTexto ? calcularAlturaTexto(doc, ubicacionTexto, widthValLeft, 8) : 0;
+      const alturaContacto = calcularAlturaTexto(doc, contactoTexto, widthValLeft, 8);
+      const altTitDir = calcularAlturaTexto(doc, tituloDireccion, valXLeft - labelXLeft - 5, 8);
+
+      // Sumatoria de alturas columna izquierda
       let leftH = Math.max(15, alturaCliente + 5);
       leftH += Math.max(15, alturaRUC + 5);
-      leftH += Math.max(15, alturaDireccion + 5);
-      leftH += Math.max(15, alturaUbicacion + 5);
+      leftH += Math.max(15, Math.max(alturaDireccion, altTitDir) + 5); 
+      if (ubicacionTexto) leftH += Math.max(15, alturaUbicacion + 5);
       leftH += Math.max(15, alturaContacto + 5);
 
-      let rightH = 15; // Moneda
-      rightH += 15; // Plazo
-      rightH += 15; // Forma
-      rightH += 15; // O/C
+      // Sumatoria de alturas columna derecha
+      let rightH = 15 + 15 + 15 + 15; // Moneda, Plazo, Forma, O/C
 
+      // 4. Dibujo del recuadro
       const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
-      
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
+      // 5. Renderizado Columna Izquierda
       let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, cursorY);
+      doc.text('Cliente:', labelXLeft, cursorY);
       doc.font('Helvetica');
-      doc.text(clienteTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      doc.text(clienteTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
       cursorY += Math.max(15, alturaCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, cursorY);
+      doc.text(esExportacion ? 'Tipo de Documento:' : 'RUC:', labelXLeft, cursorY);
       doc.font('Helvetica');
-      doc.text(rucTexto, 100, cursorY);
+      doc.text(rucTexto, valXLeft, cursorY);
       cursorY += Math.max(15, alturaRUC + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, cursorY);
+      doc.text(tituloDireccion, labelXLeft, cursorY, { width: valXLeft - labelXLeft - 5 });
       doc.font('Helvetica');
-      doc.text(direccionCliente, 100, cursorY, { width: 230, lineGap: 2 });
-      cursorY += Math.max(15, alturaDireccion + 5);
+      doc.text(direccionCliente, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+      cursorY += Math.max(15, Math.max(alturaDireccion, altTitDir) + 5);
       
-      doc.font('Helvetica-Bold');
-      doc.text('Ciudad/Lugar:', 40, cursorY);
-      doc.font('Helvetica');
-      doc.text(ubicacionTexto, 100, cursorY, { width: 230, lineGap: 2 });
-      cursorY += Math.max(15, alturaUbicacion + 5);
+      if (ubicacionTexto) {
+          doc.font('Helvetica-Bold');
+          doc.text('Ciudad/Lugar:', labelXLeft, cursorY);
+          doc.font('Helvetica');
+          doc.text(ubicacionTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+          cursorY += Math.max(15, alturaUbicacion + 5);
+      }
 
       doc.font('Helvetica-Bold');
-      doc.text('Contacto:', 40, cursorY);
+      doc.text('Contacto:', labelXLeft, cursorY);
       doc.font('Helvetica');
-      doc.text(contactoTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      doc.text(contactoTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
 
+      // 6. Renderizado Columna Derecha
       let rightY = 203;
       doc.font('Helvetica-Bold');
-      doc.text('Moneda:', 360, rightY);
+      doc.text(tituloMoneda, labelXRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, rightY);
+      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', valXRight, rightY);
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Plazo de pago:', 360, rightY);
+      doc.text('Plazo de pago:', labelXRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.plazo_pago || '', 450, rightY);
+      doc.text(orden.plazo_pago || '-', valXRight, rightY);
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Forma de pago:', 360, rightY);
+      doc.text('Forma de pago:', labelXRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.forma_pago || '', 450, rightY);
+      doc.text(orden.forma_pago || '-', valXRight, rightY);
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('O/C Cliente:', 360, rightY);
+      doc.text('O/C Cliente:', labelXRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || '-', 450, rightY);
+      doc.text(orden.orden_compra_cliente || '-', valXRight, rightY);
+      // --- FIN DEL REEMPLAZO ---
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
       

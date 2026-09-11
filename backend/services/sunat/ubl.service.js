@@ -350,7 +350,7 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
         <cbc:RegistrationName>${cdata(empresa.razon_social)}</cbc:RegistrationName>
         <cac:RegistrationAddress>
           <cbc:ID>${empresa.ubigeo}</cbc:ID>
-          <cbc:AddressTypeCode>${esExport ? '0' : (empresa.codigo_establecimiento || '0000')}</cbc:AddressTypeCode>
+          <cbc:AddressTypeCode>${empresa.codigo_establecimiento || '0000'}</cbc:AddressTypeCode>
           <cbc:CitySubdivisionName>${cdata(trunc(empresa.urbanizacion, 25))}</cbc:CitySubdivisionName>
           <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
           <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>

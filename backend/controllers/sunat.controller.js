@@ -1698,9 +1698,6 @@ export async function monitorSunat(req, res, next) {
       OR (l.origen = 'GRE_REMITENTE' AND EXISTS (
         SELECT 1 FROM guias_remision gr WHERE gr.id_guia = l.referencia_id
       ))
-      OR (l.origen = 'GRE_TRANSPORTISTA' AND EXISTS (
-        SELECT 1 FROM guias_transportista gt WHERE gt.id_guia = l.referencia_id
-      ))
       OR (l.origen = 'BAJA' AND EXISTS (
         SELECT 1 FROM sunat_bajas sb WHERE sb.id_baja = l.referencia_id
       ))

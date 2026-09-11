@@ -27,7 +27,23 @@ const fmtPrecio = (num) => {
     maximumFractionDigits: 6
   });
 };
+// Reduce un nombre completo (Nombres + Apellidos) a "Primer Nombre + Primer Apellido"
+function obtenerNombreCorto(nombreCompleto) {
+  if (!nombreCompleto || typeof nombreCompleto !== 'string') return '';
 
+  const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
+
+  if (partes.length === 0) return '';
+  if (partes.length === 1) return partes[0]; // solo hay una palabra
+  if (partes.length === 2) return `${partes[0]} ${partes[1]}`; // Nombre + Apellido
+
+  // Asume el formato peruano: [Nombre1, Nombre2?, ApellidoPaterno, ApellidoMaterno]
+  // Toma la primera palabra (primer nombre) y la penúltima (apellido paterno)
+  const primerNombre = partes[0];
+  const apellidoPaterno = partes[partes.length - 2];
+
+  return `${primerNombre} ${apellidoPaterno}`;
+}
 async function descargarImagen(url) {
   try {
     const fs = await import('fs');
@@ -267,7 +283,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica-Bold');
       doc.text('Comercial:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
       doc.font('Helvetica');
-      doc.text(cotizacion.comercial || '', 310, yPosRecuadroFechas + 20, { align: 'center', width: 252 });
+      doc.text(obtenerNombreCorto(cotizacion.comercial) || '', 310, yPosRecuadroFechas + 20, { align: 'center', width: 252 });
       doc.text(cotizacion.email_comercial || '', 310, yPosRecuadroFechas + 30, { align: 'center', width: 252 });
 
       let yPos = yPosRecuadroFechas + 52;

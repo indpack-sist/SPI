@@ -635,7 +635,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     <div><span className="text-muted">Distrito</span><div>{ubicacionExport.distrito || '—'}</div></div>
                     <div><span className="text-muted">Ubigeo / País</span><div className="font-mono">{ubicacionExport.ubigeo || '—'} / {ubicacionExport.pais || 'PE'}</div></div>
                   </div>
-                  <div className="text-[10px] text-blue-700 pt-1">Esto se enviará como RegistrationAddress del receptor en el XML.</div>
+                  <div className="text-[10px] text-blue-700 pt-1">Esto se enviará como la dirección del establecimiento del emisor (SellerSupplierParty) en el XML. El cliente receptor figurará sin dirección según norma SUNAT.</div>
                 </div>
               )}
 

@@ -1176,7 +1176,8 @@ const ReporteVentas = () => {
               precio_unitario: parseFloat(det.precio_unitario),
               subtotal: parseFloat(det.subtotal),
               tc: parseFloat(orden.tipo_cambio || 1),
-              vendedor: orden.vendedor
+              vendedor: orden.vendedor,
+              total_orden: parseFloat(orden.total)
             });
           });
         }
@@ -1196,7 +1197,7 @@ const ReporteVentas = () => {
         datosFechasAOA.push([
           'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha SUNAT', 'Fecha Despacho', 'Cliente',
           'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
-          'TC', 'Subtotal (PEN)', 'Vendedor'
+          'TC', 'Subtotal (PEN)', 'Vendedor', 'Total OV'
         ]);
 
         fechasArray.forEach(fechaData => {
@@ -1217,7 +1218,7 @@ const ReporteVentas = () => {
             // Si cambia la orden y ya teníamos una, aplicamos el merge de la orden anterior
             if (isNewOrden && ordenStartRow !== -1 && ordenItemCount > 1) {
               const ordenEndRow = datosFechasAOA.length - 1;
-              [1, 2, 3, 4, 5, 6].forEach(c => { // Orden, Comprobante, Fecha Emisión, Fecha SUNAT, Fecha Despacho, Cliente
+              [1, 2, 3, 4, 5, 6, 17].forEach(c => { // Orden, Comprobante, Fecha Emisión, Fecha SUNAT, Fecha Despacho, Cliente
                 mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
               });
             }
@@ -1250,7 +1251,7 @@ const ReporteVentas = () => {
             } else {
                rowData.push('-', '-', item.vendedor || '-');
             }
-
+            rowData.push(isNewOrden ? item.total_orden : '');
             datosFechasAOA.push(rowData);
           });
 
@@ -1275,7 +1276,8 @@ const ReporteVentas = () => {
           wsFechas['!cols'] = [
             { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, 
             { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, 
-            { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 25 }
+            { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 25 },
+            { wch: 15 }
           ];
 
           const borderStyle = {
@@ -1300,7 +1302,7 @@ const ReporteVentas = () => {
                 wsFechas[cellRef].s.fill = { fgColor: { rgb: "333333" } };
               }
             } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] === 'Fecha Agrupación') {
-              for (let C = 0; C < 17; C++) {
+              for (let C = 0; C < 18; C++) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (wsFechas[cellRef]) {
                   if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
@@ -1312,7 +1314,7 @@ const ReporteVentas = () => {
               }
             } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] !== 'Fecha Agrupación') {
               const isUSD = datosFechasAOA[R][10] === 'USD'; 
-              for (let C = 0; C < 17; C++) {
+              for (let C = 0; C < 18; C++) {
                   const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                   if (wsFechas[cellRef]) {
                     if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};

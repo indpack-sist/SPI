@@ -1258,7 +1258,7 @@ const ReporteVentas = () => {
           // Asegurarse de aplicar el merge para la última orden de la fecha si tuvo más de 1 ítem
           if (ordenStartRow !== -1 && ordenItemCount > 1) {
             const ordenEndRow = datosFechasAOA.length - 1;
-            [1, 2, 3, 4, 5, 6].forEach(c => {
+            [1, 2, 3, 4, 5, 6, 17].forEach(c => {
               mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
             });
           }

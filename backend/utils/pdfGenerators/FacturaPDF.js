@@ -31,6 +31,17 @@ function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   return Math.ceil(heightOfString);
 }
 
+// NUEVO: mide el ancho real de un texto con una fuente/tamaño dados,
+// sin alterar el estado de fuente actual del documento.
+function medirAnchoTexto(doc, texto, font, fontSize) {
+  const prevFont = doc._font ? doc._font.name : 'Helvetica';
+  const prevSize = doc._fontSize || 12;
+  doc.font(font).fontSize(fontSize);
+  const ancho = doc.widthOfString(texto || '');
+  doc.font(prevFont).fontSize(prevSize);
+  return ancho;
+}
+
 function numeroALetras(numero, moneda) {
   const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
   const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
@@ -39,10 +50,10 @@ function numeroALetras(numero, moneda) {
     11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
     16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
   };
-  
+
   const entero = Math.floor(numero);
   const decimales = Math.round((numero - entero) * 100);
-  
+
   function convertirNumero(num) {
     if (num === 0) return 'CERO';
     if (num < 10) return unidades[num];
@@ -71,21 +82,21 @@ function numeroALetras(numero, moneda) {
     const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
     return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
   }
-  
+
   const resultado = convertirNumero(entero);
   const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
-  
+
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }
 
 export async function generarFacturaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ 
+      const doc = new PDFDocument({
         size: 'A4',
         margins: { top: 30, bottom: 30, left: 30, right: 30 }
       });
-      
+
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -118,7 +129,7 @@ export async function generarFacturaPDF(orden) {
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 110);
-      
+
       doc.fontSize(8).font('Helvetica');
       const direccionEmpresa = 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA, Villa el Salvador, Lima - Lima (PE) - Perú';
       doc.text(direccionEmpresa, 50, 123, { width: 250 });
@@ -127,13 +138,13 @@ export async function generarFacturaPDF(orden) {
       doc.text('Web: https://www.indpackperu.com/', 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
-      
+
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
-      
+
       doc.fontSize(12).font('Helvetica-Bold');
       doc.text('FACTURA ELECTRÓNICA', 385, 65, { align: 'center', width: 155 });
-      
+
       doc.fontSize(11).font('Helvetica-Bold');
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
@@ -144,7 +155,7 @@ export async function generarFacturaPDF(orden) {
       // 1. Datos Dinámicos (Exportación vs Nacional)
       const clienteTexto = orden.cliente || '';
       const rucTexto = esExportacion ? 'SIN DOCUMENTO (-)' : (orden.ruc_cliente || '');
-      
+
       const tituloDireccion = esExportacion ? 'Establecimiento del Emisor:' : 'Dirección:';
       const tituloMoneda = 'Tipo de Moneda:';
 
@@ -157,60 +168,84 @@ export async function generarFacturaPDF(orden) {
 
       // 2. Coordenadas y anchos ampliados (Evita el choque de textos)
       const labelXLeft = 40;
-      const valXLeft = 175; // Espacio amplio para que el título no haga salto de línea
-      const widthValLeft = 165; 
+      const valXLeft = 175; // Espacio para etiquetas cortas (Cliente, RUC, Ciudad, Contacto)
+      const widthValLeft = 165;
+      const anchoDireccionApilado = 480; // ancho cuando el valor va DEBAJO de la etiqueta
 
       const labelXRight = 350;
       const valXRight = 440;
 
-      // 3. Cálculos de altura dinámica
+      // 3. Detectar si la etiqueta de dirección es demasiado ancha para ir en línea
+      //    (esto es lo que causaba el choque con "Tipo de Moneda": la etiqueta
+      //    "Establecimiento del Emisor:" no cabía entre labelXLeft y valXLeft).
+      const anchoLabelDireccion = medirAnchoTexto(doc, tituloDireccion, 'Helvetica-Bold', 8);
+      const direccionApilada = anchoLabelDireccion > (valXLeft - labelXLeft - 4);
+      const ALTURA_LINEA_LABEL = 11; // alto aproximado de una línea de etiqueta en bold 8pt
+
+      // 4. Cálculos de altura dinámica
       const alturaCliente = calcularAlturaTexto(doc, clienteTexto, widthValLeft, 8);
       const alturaRUC = calcularAlturaTexto(doc, rucTexto, widthValLeft, 8);
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, widthValLeft, 8);
+      const alturaDireccion = calcularAlturaTexto(
+        doc,
+        direccionCliente,
+        direccionApilada ? anchoDireccionApilado : widthValLeft,
+        8
+      );
       const alturaUbicacion = ubicacionTexto ? calcularAlturaTexto(doc, ubicacionTexto, widthValLeft, 8) : 0;
       const alturaContacto = calcularAlturaTexto(doc, contactoTexto, widthValLeft, 8);
 
       // Sumatoria de alturas columna izquierda
       let leftH = Math.max(15, alturaCliente + 5);
       leftH += Math.max(15, alturaRUC + 5);
-      leftH += Math.max(15, alturaDireccion + 5); 
+      // Si la etiqueta va apilada, sumamos su propia línea + el alto del valor
+      leftH += direccionApilada
+        ? (ALTURA_LINEA_LABEL + alturaDireccion + 5)
+        : Math.max(15, alturaDireccion + 5);
       if (ubicacionTexto) leftH += Math.max(15, alturaUbicacion + 5);
       leftH += Math.max(15, alturaContacto + 5);
 
       // Sumatoria de alturas columna derecha
       let rightH = 15 + 15 + 15 + 15; // Moneda, Plazo, Forma, O/C
 
-      // 4. Dibujo del recuadro
+      // 5. Dibujo del recuadro
       const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
-      
-      // 5. Renderizado Columna Izquierda
+
+      // 6. Renderizado Columna Izquierda
       let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Cliente:', labelXLeft, cursorY);
       doc.font('Helvetica');
       doc.text(clienteTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
       cursorY += Math.max(15, alturaCliente + 5);
-      
+
       doc.font('Helvetica-Bold');
       doc.text(esExportacion ? 'Tipo de Documento:' : 'RUC:', labelXLeft, cursorY);
       doc.font('Helvetica');
       doc.text(rucTexto, valXLeft, cursorY);
       cursorY += Math.max(15, alturaRUC + 5);
-      
+
       doc.font('Helvetica-Bold');
-      // NOTA: Se quitó el atributo 'width' aquí para que "Establecimiento del Emisor:" NO salte a la siguiente línea.
-      doc.text(tituloDireccion, labelXLeft, cursorY); 
+      doc.text(tituloDireccion, labelXLeft, cursorY);
       doc.font('Helvetica');
-      doc.text(direccionCliente, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
-      cursorY += Math.max(15, alturaDireccion + 5);
-      
+      if (direccionApilada) {
+        // Etiqueta larga ("Establecimiento del Emisor:"): el valor va en su
+        // PROPIA línea debajo de la etiqueta, con ancho amplio, evitando
+        // cualquier choque horizontal con la columna derecha.
+        const yValorDireccion = cursorY + ALTURA_LINEA_LABEL;
+        doc.text(direccionCliente, labelXLeft, yValorDireccion, { width: anchoDireccionApilado, lineGap: 2 });
+        cursorY += ALTURA_LINEA_LABEL + alturaDireccion + 5;
+      } else {
+        doc.text(direccionCliente, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+        cursorY += Math.max(15, alturaDireccion + 5);
+      }
+
       if (ubicacionTexto) {
-          doc.font('Helvetica-Bold');
-          doc.text('Ciudad/Lugar:', labelXLeft, cursorY);
-          doc.font('Helvetica');
-          doc.text(ubicacionTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
-          cursorY += Math.max(15, alturaUbicacion + 5);
+        doc.font('Helvetica-Bold');
+        doc.text('Ciudad/Lugar:', labelXLeft, cursorY);
+        doc.font('Helvetica');
+        doc.text(ubicacionTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+        cursorY += Math.max(15, alturaUbicacion + 5);
       }
 
       doc.font('Helvetica-Bold');
@@ -218,26 +253,26 @@ export async function generarFacturaPDF(orden) {
       doc.font('Helvetica');
       doc.text(contactoTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
 
-      // 6. Renderizado Columna Derecha
+      // 7. Renderizado Columna Derecha
       let rightY = 203;
       doc.font('Helvetica-Bold');
       doc.text(tituloMoneda, labelXRight, rightY);
       doc.font('Helvetica');
       doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', valXRight, rightY);
       rightY += 15;
-      
+
       doc.font('Helvetica-Bold');
       doc.text('Plazo de pago:', labelXRight, rightY);
       doc.font('Helvetica');
       doc.text(orden.plazo_pago || '-', valXRight, rightY);
       rightY += 15;
-      
+
       doc.font('Helvetica-Bold');
       doc.text('Forma de pago:', labelXRight, rightY);
       doc.font('Helvetica');
       doc.text(orden.forma_pago || '-', valXRight, rightY);
       rightY += 15;
-      
+
       doc.font('Helvetica-Bold');
       doc.text('O/C Cliente:', labelXRight, rightY);
       doc.font('Helvetica');
@@ -245,9 +280,9 @@ export async function generarFacturaPDF(orden) {
       // --- FIN DEL REEMPLAZO ---
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
-      
+
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
-      
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
@@ -263,7 +298,7 @@ export async function generarFacturaPDF(orden) {
       let yPos = yPosRecuadroFechas + 52;
 
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-      
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CÓDIGO', 40, yPos + 6);
       doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
@@ -275,7 +310,7 @@ export async function generarFacturaPDF(orden) {
       yPos += 20;
 
       const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
-      
+
       orden.detalle.forEach((item, idx) => {
         const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
@@ -383,7 +418,7 @@ export async function generarFacturaPDF(orden) {
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });
       doc.end();
-      
+
     } catch (error) {
       console.error(error);
       reject(error);

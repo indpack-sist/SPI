@@ -132,11 +132,9 @@ export async function generarFacturaPDF(orden) {
       doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
       
       doc.fontSize(12).font('Helvetica-Bold');
-      // CAMBIO AQUÍ: Título Factura
       doc.text('FACTURA ELECTRÓNICA', 385, 65, { align: 'center', width: 155 });
       
       doc.fontSize(11).font('Helvetica-Bold');
-      // CAMBIO AQUÍ: Uso de serie_correlativo o numero_comprobante
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
@@ -159,8 +157,8 @@ export async function generarFacturaPDF(orden) {
 
       // 2. Coordenadas y anchos ampliados (Evita el choque de textos)
       const labelXLeft = 40;
-      const valXLeft = 165; // Movido de 100 a 165 para dar más espacio a las etiquetas largas
-      const widthValLeft = 175; 
+      const valXLeft = 175; // Espacio amplio para que el título no haga salto de línea
+      const widthValLeft = 165; 
 
       const labelXRight = 350;
       const valXRight = 440;
@@ -171,12 +169,11 @@ export async function generarFacturaPDF(orden) {
       const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, widthValLeft, 8);
       const alturaUbicacion = ubicacionTexto ? calcularAlturaTexto(doc, ubicacionTexto, widthValLeft, 8) : 0;
       const alturaContacto = calcularAlturaTexto(doc, contactoTexto, widthValLeft, 8);
-      const altTitDir = calcularAlturaTexto(doc, tituloDireccion, valXLeft - labelXLeft - 5, 8);
 
       // Sumatoria de alturas columna izquierda
       let leftH = Math.max(15, alturaCliente + 5);
       leftH += Math.max(15, alturaRUC + 5);
-      leftH += Math.max(15, Math.max(alturaDireccion, altTitDir) + 5); 
+      leftH += Math.max(15, alturaDireccion + 5); 
       if (ubicacionTexto) leftH += Math.max(15, alturaUbicacion + 5);
       leftH += Math.max(15, alturaContacto + 5);
 
@@ -202,10 +199,11 @@ export async function generarFacturaPDF(orden) {
       cursorY += Math.max(15, alturaRUC + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text(tituloDireccion, labelXLeft, cursorY, { width: valXLeft - labelXLeft - 5 });
+      // NOTA: Se quitó el atributo 'width' aquí para que "Establecimiento del Emisor:" NO salte a la siguiente línea.
+      doc.text(tituloDireccion, labelXLeft, cursorY); 
       doc.font('Helvetica');
       doc.text(direccionCliente, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
-      cursorY += Math.max(15, Math.max(alturaDireccion, altTitDir) + 5);
+      cursorY += Math.max(15, alturaDireccion + 5);
       
       if (ubicacionTexto) {
           doc.font('Helvetica-Bold');

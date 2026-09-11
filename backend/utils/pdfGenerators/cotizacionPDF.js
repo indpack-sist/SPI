@@ -34,15 +34,20 @@ function obtenerNombreCorto(nombreCompleto) {
   const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
 
   if (partes.length === 0) return '';
-  if (partes.length === 1) return partes[0]; // solo hay una palabra
-  if (partes.length === 2) return `${partes[0]} ${partes[1]}`; // Nombre + Apellido
+  if (partes.length === 1) return partes[0];
+  if (partes.length === 2) return `${partes[0]} ${partes[1]}`;
 
-  // Asume el formato peruano: [Nombre1, Nombre2?, ApellidoPaterno, ApellidoMaterno]
-  // Toma la primera palabra (primer nombre) y la penúltima (apellido paterno)
+  const particulas = ['de', 'del', 'la', 'las', 'los', 'y', 'von', 'van', 'san', 'santa'];
+  let indexInicioApellido = partes.length - 2;
+
+  while (indexInicioApellido > 0 && particulas.includes(partes[indexInicioApellido].toLowerCase())) {
+    indexInicioApellido--;
+  }
+
   const primerNombre = partes[0];
-  const apellidoPaterno = partes[partes.length - 2];
+  const apellidoCompuesto = partes.slice(indexInicioApellido).join(' ');
 
-  return `${primerNombre} ${apellidoPaterno}`;
+  return `${primerNombre} ${apellidoCompuesto}`;
 }
 async function descargarImagen(url) {
   try {

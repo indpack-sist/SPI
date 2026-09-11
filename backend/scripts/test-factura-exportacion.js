@@ -116,5 +116,7 @@ for (const textoEsperado of [
 ]) {
   assert.ok(textoPdf.includes(textoEsperado), `El PDF no contiene: ${textoEsperado}`);
 }
+assert.ok(!textoPdf.includes('Valor de Venta de Operaciones Gratuitas'), 'El PDF de exportación no debe mostrar operaciones gratuitas');
+assert.ok(!textoPdf.includes('IGV'), 'El PDF de exportación no debe mostrar la fila IGV');
 
 console.log('OK factura exportación: XML y PDF con 0200, afectación 40, crédito, guía, OC, observación y Otro local 150142.');

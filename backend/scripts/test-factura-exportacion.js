@@ -62,6 +62,9 @@ assert.match(xml, /<cbc:CountrySubentityCode><!\[CDATA\[150142\]\]><\/cbc:Countr
 assert.match(xml, /<cbc:District><!\[CDATA\[VILLA EL SALVADOR\]\]><\/cbc:District>/);
 assert.match(xml, /<cbc:Line><!\[CDATA\[AV\. EL SOL MZA\. LL-1 LOTE 4\]\]><\/cbc:Line>/);
 assert.doesNotMatch(xml, /<!\[CDATA\[PANAMA\]\]>/);
+const customerXml = xml.match(/<cac:AccountingCustomerParty>[\s\S]*?<\/cac:AccountingCustomerParty>/)?.[0] || '';
+assert.doesNotMatch(customerXml, /RegistrationAddress/);
+assert.match(xml, /<cac:SellerSupplierParty>[\s\S]*?<cbc:ID>150142<\/cbc:ID>[\s\S]*?<cbc:Line><!\[CDATA\[AV\. EL SOL MZA\. LL-1 LOTE 4 LIMA-LIMA-VILLA EL SALVADOR\]\]><\/cbc:Line>[\s\S]*?<\/cac:SellerSupplierParty>/);
 
 const pdf = await generarComprobanteSunatPDF({
   comprobante: {
@@ -101,7 +104,6 @@ assert.ok(pdf.length > 1000);
 const textoPdf = (await new PDFParse({ data: pdf }).getText()).text;
 for (const textoEsperado of [
   'INTERNATIONAL SUPPLY 507 S.A.',
-  'Dirección del Cliente',
   'DÓLAR AMERICANO',
   'CRÉDITO A 30 DÍAS',
   '10/10/2026',
@@ -116,7 +118,8 @@ for (const textoEsperado of [
 ]) {
   assert.ok(textoPdf.includes(textoEsperado), `El PDF no contiene: ${textoEsperado}`);
 }
+assert.match(textoPdf, /Establecimiento\s+del\s+Emisor/, 'El PDF debe rotular el establecimiento del emisor');
 assert.ok(!textoPdf.includes('Valor de Venta de Operaciones Gratuitas'), 'El PDF de exportación no debe mostrar operaciones gratuitas');
 assert.ok(!textoPdf.includes('IGV'), 'El PDF de exportación no debe mostrar la fila IGV');
 
-console.log('OK factura exportación: XML y PDF con 0200, afectación 40, crédito, guía, OC, observación y Otro local 150142.');
+console.log('OK factura exportación: XML y PDF con 0200, afectación 40, crédito, guía, OC, observación y establecimiento emisor 150142.');

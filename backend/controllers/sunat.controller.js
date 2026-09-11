@@ -77,11 +77,11 @@ function diffDiasISO(desdeISO, hastaISO) {
   return Math.round((b - a) / 86400000);
 }
 
-// Ubicación que el caso de exportación declara en SUNAT como "Otro local". La elección del portal
-// se representa en el XML mediante el RegistrationAddress del receptor, usando empresa_config.
+// Ubicación del establecimiento del emisor seleccionada en el portal para la entrega/prestación
+// de una exportación. El XML la declara en SellerSupplierParty/PostalAddress.
 function ubicacionEntregaExportacion(empresa = {}) {
   return {
-    seleccion: 'Otro local',
+    seleccion: 'Establecimiento del emisor',
     direccion: String(empresa.direccion || '').trim(),
     departamento: String(empresa.departamento || '').trim(),
     provincia: String(empresa.provincia || '').trim(),
@@ -91,6 +91,13 @@ function ubicacionEntregaExportacion(empresa = {}) {
   };
 }
 
+function direccionEstablecimientoEmisor(empresa = {}) {
+  const valorReal = (valor) => String(valor || '').trim() && String(valor).trim() !== '-';
+  const direccion = [empresa.direccion, empresa.urbanizacion].filter(valorReal).join(' - ');
+  const ubicacion = [empresa.departamento, empresa.provincia, empresa.distrito].filter(valorReal).join('-');
+  return [direccion, ubicacion].filter(valorReal).join(' ');
+}
+
 function validarUbicacionEntregaExportacion(empresa) {
   const u = ubicacionEntregaExportacion(empresa);
   const faltantes = ['direccion', 'departamento', 'provincia', 'distrito']
@@ -98,7 +105,7 @@ function validarUbicacionEntregaExportacion(empresa) {
   if (!/^\d{6}$/.test(u.ubigeo)) faltantes.push('ubigeo de 6 dígitos');
   if (faltantes.length) {
     throw new AppError(
-      `Exportación: completa en empresa_config la ubicación de "Otro local": ${faltantes.join(', ')}`,
+      `Exportación: completa en empresa_config la ubicación del establecimiento emisor: ${faltantes.join(', ')}`,
       422
     );
   }
@@ -1379,12 +1386,9 @@ export async function generarPdfComprobante(req, res, next) {
           ...cliente,
           tipo_documento: 'SIN DOCUMENTO',
           ruc: '-',
-          // Mismo "Otro local" declarado en el RegistrationAddress del XML, expresado como una
-          // sola línea para la representación impresa al estilo del PDF E001-1997.
-          direccion_despacho: [
-            emisor.direccion,
-            [emisor.distrito, emisor.provincia, emisor.departamento].filter(Boolean).join(' - ')
-          ].filter(Boolean).join(' ')
+          // Mismo establecimiento emisor declarado en SellerSupplierParty del XML, expresado
+          // como una sola línea para la representación impresa del comprobante de exportación.
+          direccion_despacho: direccionEstablecimientoEmisor(emisor)
         }
       : cliente;
     const pdf = await generarComprobanteSunatPDF({

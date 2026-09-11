@@ -173,9 +173,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       }
       filaSunat('Señor(es)', cliente.razon_social);
       if (esExportacion) {
-        // En el modelo del portal SUNAT el receptor se emite SIN DOCUMENTO y la representación
-        // impresa muestra la ubicación de entrega elegida como "Otro local", no un RUC ficticio.
-        filaSunat('Dirección del Cliente', cliente.direccion_despacho || c.direccion_entrega);
+        // En el portal SUNAT se eligió "Sí" a "Indique el Establecimiento del Emisor donde
+        // entregue el bien o preste el servicio". El XML lo declara en SellerSupplierParty;
+        // el rótulo impreso refleja esa selección y no atribuye la dirección al cliente.
+        filaSunat('Establecimiento del Emisor', cliente.direccion_despacho || c.direccion_entrega);
       } else {
         filaSunat(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc);
       }

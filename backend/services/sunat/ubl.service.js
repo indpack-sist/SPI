@@ -11,6 +11,19 @@ export const u6 = (n) => roundN(n, 6).toFixed(6);    // valores unitarios: 6 dec
 export const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
 // Trunca a la longitud máxima que exige el anexo SUNAT (evita observaciones de formato).
 export const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
+const valorReal = (v) => String(v ?? '').trim() && String(v).trim() !== '-';
+
+// Texto que muestra SUNAT cuando se marca que la entrega/prestación ocurre en el establecimiento
+// del emisor. Los componentes UBL permanecen también como campos estructurados en PostalAddress.
+const direccionEstablecimientoEmisor = (empresa = {}) => {
+  const direccion = [empresa.direccion, empresa.urbanizacion]
+    .filter(valorReal)
+    .join(' - ');
+  const ubicacion = [empresa.departamento, empresa.provincia, empresa.distrito]
+    .filter(valorReal)
+    .join('-');
+  return [direccion, ubicacion].filter(valorReal).join(' ');
+};
 
 // Catálogo 07 (afectación IGV) -> TaxScheme + porcentaje.
 export const AFECTACION = {
@@ -252,26 +265,28 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 
-  // En el caso de exportación usado por INDPACK, el portal SUNAT registra como dirección de
-  // entrega "Otro local" y consigna la ubicación del emisor. La selección del portal no tiene un
-  // tag propio: se materializa en RegistrationAddress. Se replica el bloque del XML E001-1997 con
-  // los datos autoritativos de empresa_config. Para ventas internas se conserva la dirección del
-  // cliente en texto libre.
+  // Si SUNAT recibe "Sí" para el establecimiento del emisor, el receptor no lleva dirección:
+  // la ubicación se expresa aparte en SellerSupplierParty/PostalAddress (molde aceptado E001-1800).
   const customerAddress = esExport
-    ? `        <cac:RegistrationAddress>
-          <cbc:AddressTypeCode listAgencyName="PE:SUNAT" listName="Establecimientos anexos">0</cbc:AddressTypeCode>
-          <cbc:BuildingNumber/>
-          <cbc:CitySubdivisionName/>
-          <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
-          <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>
-          <cbc:CountrySubentityCode>${cdata(empresa.ubigeo)}</cbc:CountrySubentityCode>
-          <cbc:District>${cdata(empresa.distrito)}</cbc:District>
-          <cac:AddressLine><cbc:Line>${cdata(empresa.direccion)}</cbc:Line></cac:AddressLine>
-          <cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country>
-        </cac:RegistrationAddress>`
+    ? ''
     : `        <cac:RegistrationAddress>
           <cac:AddressLine><cbc:Line>${cdata(cliente.direccion_despacho || '-')}</cbc:Line></cac:AddressLine>
         </cac:RegistrationAddress>`;
+  const sellerSupplierParty = esExport
+    ? `  <cac:SellerSupplierParty>
+    <cac:Party>
+      <cac:PostalAddress>
+        <cbc:ID>${empresa.ubigeo}</cbc:ID>
+        <cbc:CitySubdivisionName/>
+        <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
+        <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>
+        <cbc:District>${cdata(empresa.distrito)}</cbc:District>
+        <cac:AddressLine><cbc:Line>${cdata(direccionEstablecimientoEmisor(empresa))}</cbc:Line></cac:AddressLine>
+        <cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+    </cac:Party>
+  </cac:SellerSupplierParty>\n`
+    : '';
 
   // ── OC del cliente + observaciones ──────────────────────────────────────────
   // SUNAT no tiene un campo propio de "orden de compra": el estándar la lleva en
@@ -335,10 +350,11 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
         <cbc:RegistrationName>${cdata(empresa.razon_social)}</cbc:RegistrationName>
         <cac:RegistrationAddress>
           <cbc:ID>${empresa.ubigeo}</cbc:ID>
-          <cbc:AddressTypeCode>${empresa.codigo_establecimiento || '0000'}</cbc:AddressTypeCode>
+          <cbc:AddressTypeCode>${esExport ? '0' : (empresa.codigo_establecimiento || '0000')}</cbc:AddressTypeCode>
           <cbc:CitySubdivisionName>${cdata(trunc(empresa.urbanizacion, 25))}</cbc:CitySubdivisionName>
           <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
           <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>
+          <cbc:CountrySubentityCode>${cdata(empresa.ubigeo)}</cbc:CountrySubentityCode>
           <cbc:District>${cdata(empresa.distrito)}</cbc:District>
           <cac:AddressLine><cbc:Line>${cdata(empresa.direccion)}</cbc:Line></cac:AddressLine>
           <cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country>
@@ -357,7 +373,7 @@ ${customerAddress}
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
-${paymentTerms}
+${sellerSupplierParty}${paymentTerms}
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="${moneda}">${m2(totalIgv)}</cbc:TaxAmount>
 ${taxSubtotalsHeader}

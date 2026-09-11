@@ -57,6 +57,18 @@ const n2Miles = (v) => Number(v || 0).toLocaleString('en-US', {
   maximumFractionDigits: 2
 });
 
+// Mide el ancho real de un texto con una fuente/tamaño dados, sin alterar
+// el estado de fuente actual del documento (para calcular dónde debe
+// empezar el valor de cada campo, según el ancho real de su etiqueta).
+function medirAnchoTexto(doc, texto, font, fontSize) {
+  const prevFont = doc._font ? doc._font.name : 'Helvetica';
+  const prevSize = doc._fontSize || 12;
+  doc.font(font).fontSize(fontSize);
+  const ancho = doc.widthOfString(texto || '');
+  doc.font(prevFont).fontSize(prevSize);
+  return ancho;
+}
+
 /**
  * @param {object} p
  * @param {object} p.comprobante  { codigo_tipo_sunat, serie, numero, fecha_emision, moneda,
@@ -115,24 +127,50 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       }
       doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, yTipo + 3, { align: 'center', width: 172 });
 
-      // ── Datos del comprobante (formato SUNAT: lista de campos etiquetados en una columna) ──
-      // Orden como el PDF oficial: Fecha de Emisión, [Documento que modifica + doc afectado],
-      // Señor(es), RUC, Tipo de Moneda, Forma de Pago, [Vencimiento], Observación (motivo/nota).
+      // ── Datos del comprobante: DOS COLUMNAS DE ANCHO IGUAL ──
+      // Cada campo se dibuja "Etiqueta: valor" en línea; si el valor es extenso hace wrap,
+      // pero el ancho de wrap queda limitado al ancho de SU columna (nunca invade la vecina).
+      // Esto reemplaza el layout anterior de una sola columna con labelW fijo (96pt), que es
+      // lo que causaba que "Establecimiento del Emisor" (más ancho que 96pt) se montara sobre
+      // el valor de "Tipo de Moneda".
       let y = 140;
       const boxTop = y;
       const boxPad = 8;
-      const labelW = 96;          // ancho de la etiqueta
-      const valX = 40 + labelW;   // x del valor ("­: valor")
-      const valW = 400;           // ancho del valor (envuelve valores largos)
-      let yc = boxTop + boxPad;
 
-      // Fila "Etiqueta : valor" (una sola columna, con wrap del valor). Avanza yc.
-      const filaSunat = (label, valor) => {
+      const gapColumnas = 20;
+      const anchoUtil = 529 - boxPad * 2;              // 513
+      const colWidth = (anchoUtil - gapColumnas) / 2;  // ~246.5
+      const colXIzq = 33 + boxPad;                     // 41
+      const colXDer = colXIzq + colWidth + gapColumnas; // ~307.5
+
+      /**
+       * Dibuja (o mide) un campo "Etiqueta: Valor" en línea, dentro de los límites de una
+       * columna. El valor arranca justo después de la etiqueta (según su ancho real) y su
+       * wrap está acotado a (colX + colWidth), por lo que jamás se extiende hacia la otra
+       * columna. Si `valor` es null, dibuja solo la etiqueta en negrita (línea de encabezado,
+       * usada para "Documento que modifica:").
+       * @returns {number} altura ocupada por la fila.
+       */
+      const campoSunat = (colX, yPos, label, valor, dibujar = true) => {
+        if (valor === null) {
+          if (dibujar) {
+            doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text(label, colX, yPos, { width: colWidth });
+          }
+          return 12;
+        }
         const v = valor == null || valor === '' ? '-' : String(valor).replace(/[\r\n]+/g, ' ').trim();
-        doc.fontSize(8).fillColor('#000');
-        doc.font('Helvetica-Bold').text(label, 40, yc, { width: labelW - 3, lineBreak: false });
-        doc.font('Helvetica').text(`: ${v}`, valX, yc, { width: valW });
-        yc += Math.max(doc.heightOfString(`: ${v}`, { width: valW }), 11) + 3;
+        const anchoLabel = medirAnchoTexto(doc, `${label}: `, 'Helvetica-Bold', 8);
+        const valX = colX + anchoLabel;
+        const valWidth = Math.max(30, colX + colWidth - valX);
+        const alturaValor = doc.fontSize(8).heightOfString(v, { width: valWidth });
+        const alturaFila = Math.max(11, alturaValor) + 3;
+
+        if (dibujar) {
+          doc.fontSize(8).fillColor('#000');
+          doc.font('Helvetica-Bold').text(`${label}: `, colX, yPos, { width: anchoLabel, lineBreak: false });
+          doc.font('Helvetica').text(v, valX, yPos, { width: valWidth });
+        }
+        return alturaFila;
       };
 
       const esCredito = String(c.tipo_venta || '').toLowerCase().startsWith('cr');
@@ -164,33 +202,54 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       const ocNorm = normOC(c.orden_compra);
       const obsRepiteOC = !!ocNorm && !motivoTxt && stripOC(obsHeader) === stripOC(c.orden_compra);
 
-      filaSunat('Fecha de Emisión', c.fecha_emision);
+      // Columna izquierda: identidad del comprobante / cliente / emisor.
+      const camposIzquierda = [['Fecha de Emisión', c.fecha_emision]];
       if (c.docAfectado) {
-        // El documento afectado por una nota siempre es una Factura Electrónica (01) en este sistema.
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Documento que modifica:', 40, yc, { lineBreak: false });
-        yc += 12;
-        filaSunat('Factura Electrónica', c.docAfectado.comprobante);
+        camposIzquierda.push(['Documento que modifica:', null]);
+        camposIzquierda.push(['Factura Electrónica', c.docAfectado.comprobante]);
       }
-      filaSunat('Señor(es)', cliente.razon_social);
+      camposIzquierda.push(['Señor(es)', cliente.razon_social]);
       if (esExportacion) {
         // En el portal SUNAT se eligió "Sí" a "Indique el Establecimiento del Emisor donde
         // entregue el bien o preste el servicio". El XML lo declara en SellerSupplierParty;
         // el rótulo impreso refleja esa selección y no atribuye la dirección al cliente.
-        filaSunat('Establecimiento del Emisor', cliente.direccion_despacho || c.direccion_entrega);
+        camposIzquierda.push(['Establecimiento del Emisor', cliente.direccion_despacho || c.direccion_entrega]);
       } else {
-        filaSunat(String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc);
+        camposIzquierda.push([String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc]);
       }
-      filaSunat('Tipo de Moneda', monedaTxt);
-      filaSunat('Forma de Pago', formaPago);
-      if (esCredito) filaSunat('Fecha de Vencimiento', c.fecha_vencimiento);
-      // Orden de compra (cac:OrderReference) como campo propio de la cabecera, igual que SUNAT.
-      if (c.orden_compra) filaSunat('Orden de Compra', String(c.orden_compra).trim());
-      // En notas: primero el sustento del usuario, luego la etiqueta del catálogo (motivo).
-      if (sustentoTxt) filaSunat('Motivo o Sustento', sustentoTxt);
-      if (obsHeader && !obsRepiteOC) filaSunat('Observación', obsHeader);
+      if (c.orden_compra) camposIzquierda.push(['Orden de Compra', String(c.orden_compra).trim()]);
 
-      const boxH = (yc + boxPad) - boxTop;
+      // Columna derecha: condiciones de pago / motivo / observación.
+      const camposDerecha = [
+        ['Tipo de Moneda', monedaTxt],
+        ['Forma de Pago', formaPago],
+      ];
+      if (esCredito) camposDerecha.push(['Fecha de Vencimiento', c.fecha_vencimiento]);
+      if (sustentoTxt) camposDerecha.push(['Motivo o Sustento', sustentoTxt]);
+      if (obsHeader && !obsRepiteOC) camposDerecha.push(['Observación', obsHeader]);
+
+      // Medir alturas (sin dibujar) para calcular el alto total del recuadro antes de trazarlo.
+      const alturaColumna = (campos, colX) =>
+        campos.reduce((acc, [label, valor]) => acc + campoSunat(colX, 0, label, valor, false), 0);
+
+      const leftH = alturaColumna(camposIzquierda, colXIzq);
+      const rightH = alturaColumna(camposDerecha, colXDer);
+      const boxH = Math.max(leftH, rightH) + boxPad * 2;
+
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
+
+      // Renderizado columna izquierda
+      let yIzq = boxTop + boxPad;
+      for (const [label, valor] of camposIzquierda) {
+        yIzq += campoSunat(colXIzq, yIzq, label, valor, true);
+      }
+
+      // Renderizado columna derecha
+      let yDer = boxTop + boxPad;
+      for (const [label, valor] of camposDerecha) {
+        yDer += campoSunat(colXDer, yDer, label, valor, true);
+      }
+
       y = boxTop + boxH + 8;
 
       // ── Banda de estado (rojo): RECHAZADO o ANULADO + su motivo, para dejar constancia impresa ──

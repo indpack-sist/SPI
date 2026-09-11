@@ -138,14 +138,14 @@ export async function generarFacturaPDF(orden) {
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
-      // --- INICIO DEL REEMPLAZO (Recuadro Cliente/Emisor Dinámico) ---
+      // --- INICIO DEL REEMPLAZO (Recuadro Cliente/Emisor Dividido en 2 Columnas) ---
       const esExportacion = Number(orden.es_exportacion) === 1;
 
       // 1. Datos Dinámicos (Exportación vs Nacional)
       const clienteTexto = orden.cliente || '';
       const rucTexto = esExportacion ? 'SIN DOCUMENTO (-)' : (orden.ruc_cliente || '');
       
-      const tituloDireccion = esExportacion ? 'Local del Emisor:' : 'Dirección:';
+      const tituloDireccion = esExportacion ? 'Establecimiento del Emisor:' : 'Dirección:';
       const tituloMoneda = 'Tipo de Moneda:';
 
       const direccionCliente = esExportacion
@@ -155,92 +155,97 @@ export async function generarFacturaPDF(orden) {
       const ubicacionTexto = esExportacion ? '' : ([orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ') || 'Lima - Perú');
       const contactoTexto = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ') || '-';
 
-      // 2. Coordenadas fijas robustas
-      const labelXLeft = 40;
-      const valXLeft = 140; 
-      const widthValLeft = 190; 
+      // 2. Coordenadas: División estricta en 2 columnas (50% - 50%)
+      // COLUMNA 1 (Izquierda) - Ancho total disponible 255
+      const col1LabelX = 40;
+      const col1ValX = 140; 
+      const col1ValWidth = 155; 
 
-      const labelXRight = 350;
-      const valXRight = 440;
+      // COLUMNA 2 (Derecha) - Ancho total disponible 250
+      const col2LabelX = 310;
+      const col2ValX = 390; 
+      const col2ValWidth = 160; 
 
-      // 3. Cálculos de altura dinámica
-      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, widthValLeft, 8);
-      const alturaRUC = calcularAlturaTexto(doc, rucTexto, widthValLeft, 8);
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, widthValLeft, 8);
-      const alturaUbicacion = ubicacionTexto ? calcularAlturaTexto(doc, ubicacionTexto, widthValLeft, 8) : 0;
-      const alturaContacto = calcularAlturaTexto(doc, contactoTexto, widthValLeft, 8);
+      // 3. Cálculos de altura dinámica (Respetando el ancho estricto de su columna)
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, col1ValWidth, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, col1ValWidth, 8);
+      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, col1ValWidth, 8);
+      const alturaLabelDir = calcularAlturaTexto(doc, tituloDireccion, col1ValX - col1LabelX - 5, 8); // En caso el label se rompa en 2 líneas
+      const alturaUbicacion = ubicacionTexto ? calcularAlturaTexto(doc, ubicacionTexto, col1ValWidth, 8) : 0;
+      const alturaContacto = calcularAlturaTexto(doc, contactoTexto, col1ValWidth, 8);
 
-      // Sumatoria de alturas columna izquierda
-      let leftH = Math.max(15, alturaCliente + 5);
+      // Sumatoria de alturas columna izquierda (se adapta al texto más largo)
+      let leftH = 5;
+      leftH += Math.max(15, alturaCliente + 5);
       leftH += Math.max(15, alturaRUC + 5);
-      leftH += Math.max(15, alturaDireccion + 5); 
+      leftH += Math.max(15, Math.max(alturaDireccion, alturaLabelDir) + 5); 
       if (ubicacionTexto) leftH += Math.max(15, alturaUbicacion + 5);
       leftH += Math.max(15, alturaContacto + 5);
 
       // Sumatoria de alturas columna derecha
-      let rightH = 15 * 4; // 4 campos fijos a 15 de alto
+      let rightH = 5 + 15 + 15 + 15 + 15; // 4 campos x 15
 
       // 4. Dibujo del recuadro
       const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
-      // 5. Renderizado Columna Izquierda (con lineBreak: false para blindar saltos)
+      // 5. Renderizado Columna Izquierda
       let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', labelXLeft, cursorY, { lineBreak: false });
+      doc.text('Cliente:', col1LabelX, cursorY, { width: col1ValX - col1LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(clienteTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+      doc.text(clienteTexto, col1ValX, cursorY, { width: col1ValWidth, lineGap: 2 });
       cursorY += Math.max(15, alturaCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text(esExportacion ? 'Tipo de Documento:' : 'RUC:', labelXLeft, cursorY, { lineBreak: false });
+      doc.text(esExportacion ? 'Tipo de Documento:' : 'RUC:', col1LabelX, cursorY, { width: col1ValX - col1LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(rucTexto, valXLeft, cursorY, { lineBreak: false });
+      doc.text(rucTexto, col1ValX, cursorY, { width: col1ValWidth });
       cursorY += Math.max(15, alturaRUC + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text(tituloDireccion, labelXLeft, cursorY, { lineBreak: false }); 
+      doc.text(tituloDireccion, col1LabelX, cursorY, { width: col1ValX - col1LabelX - 5 }); 
       doc.font('Helvetica');
-      doc.text(direccionCliente, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
-      cursorY += Math.max(15, alturaDireccion + 5);
+      doc.text(direccionCliente, col1ValX, cursorY, { width: col1ValWidth, lineGap: 2 });
+      cursorY += Math.max(15, Math.max(alturaDireccion, alturaLabelDir) + 5);
       
       if (ubicacionTexto) {
           doc.font('Helvetica-Bold');
-          doc.text('Ciudad/Lugar:', labelXLeft, cursorY, { lineBreak: false });
+          doc.text('Ciudad/Lugar:', col1LabelX, cursorY, { width: col1ValX - col1LabelX - 5 });
           doc.font('Helvetica');
-          doc.text(ubicacionTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+          doc.text(ubicacionTexto, col1ValX, cursorY, { width: col1ValWidth, lineGap: 2 });
           cursorY += Math.max(15, alturaUbicacion + 5);
       }
 
       doc.font('Helvetica-Bold');
-      doc.text('Contacto:', labelXLeft, cursorY, { lineBreak: false });
+      doc.text('Contacto:', col1LabelX, cursorY, { width: col1ValX - col1LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(contactoTexto, valXLeft, cursorY, { width: widthValLeft, lineGap: 2 });
+      doc.text(contactoTexto, col1ValX, cursorY, { width: col1ValWidth, lineGap: 2 });
 
-      // 6. Renderizado Columna Derecha
+      // 6. Renderizado Columna Derecha (Comienza desde el mismo eje Y superior)
       let rightY = 203;
       doc.font('Helvetica-Bold');
-      doc.text(tituloMoneda, labelXRight, rightY, { lineBreak: false });
+      doc.text(tituloMoneda, col2LabelX, rightY, { width: col2ValX - col2LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', valXRight, rightY, { lineBreak: false });
+      doc.text(orden.moneda === 'USD' ? 'DÓLARES' : 'SOLES', col2ValX, rightY, { width: col2ValWidth });
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Plazo de pago:', labelXRight, rightY, { lineBreak: false });
+      doc.text('Plazo de pago:', col2LabelX, rightY, { width: col2ValX - col2LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(orden.plazo_pago || '-', valXRight, rightY, { lineBreak: false });
+      doc.text(orden.plazo_pago || '-', col2ValX, rightY, { width: col2ValWidth });
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Forma de pago:', labelXRight, rightY, { lineBreak: false });
+      doc.text('Forma de pago:', col2LabelX, rightY, { width: col2ValX - col2LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(orden.forma_pago || '-', valXRight, rightY, { lineBreak: false });
+      doc.text(orden.forma_pago || '-', col2ValX, rightY, { width: col2ValWidth });
       rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('O/C Cliente:', labelXRight, rightY, { lineBreak: false });
+      doc.text('O/C Cliente:', col2LabelX, rightY, { width: col2ValX - col2LabelX - 5 });
       doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || '-', valXRight, rightY, { lineBreak: false });
+      doc.text(orden.orden_compra_cliente || '-', col2ValX, rightY, { width: col2ValWidth });
       // --- FIN DEL REEMPLAZO ---
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;

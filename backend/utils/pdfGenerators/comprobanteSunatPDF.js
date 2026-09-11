@@ -167,7 +167,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
         if (dibujar) {
           doc.fontSize(8).fillColor('#000');
-          doc.font('Helvetica-Bold').text(`${label}: `, colX, yPos, { width: anchoLabel, lineBreak: false });
+          // Sin `width` acá: la etiqueta fluye libre en una sola línea (lineBreak:false es
+          // solo un respaldo). Restringirla a su propio ancho medido es lo que provocaba que
+          // etiquetas compuestas ("Tipo de Moneda:", "Fecha de Vencimiento:") se partieran en
+          // dos líneas por mínimas diferencias de redondeo entre medición y render.
+          doc.font('Helvetica-Bold').text(`${label}: `, colX, yPos, { lineBreak: false });
           doc.font('Helvetica').text(v, valX, yPos, { width: valWidth });
         }
         return alturaFila;

@@ -653,7 +653,17 @@ const ReporteVentas = () => {
   useEffect(() => {
     aplicarFiltrosLocales();
   }, [filtros.estadosOrden, filtros.estadosPago, dataReporte.detalle]);
-
+  // Reduce un nombre completo (Nombres + Apellidos) a "Primer Nombre + Primer Apellido"
+const obtenerNombreCorto = (nombreCompleto) => {
+  if (!nombreCompleto || typeof nombreCompleto !== 'string') return '';
+  const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '';
+  if (partes.length === 1) return partes[0];
+  if (partes.length === 2) return `${partes[0]} ${partes[1]}`;
+  const primerNombre = partes[0];
+  const apellidoPaterno = partes[partes.length - 2];
+  return `${primerNombre} ${apellidoPaterno}`;
+};
   const seleccionarCliente = (cliente) => {
     setFiltros({ ...filtros, idCliente: cliente.id_cliente });
     setBusquedaCliente(cliente.razon_social);
@@ -783,7 +793,7 @@ const ReporteVentas = () => {
           'Facturado SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : (item.facturado_sunat ? 'Si' : 'No'),
           'Cliente': item.cliente,
           'RUC': item.ruc,
-          'Vendedor': item.vendedor,
+          'Vendedor': obtenerNombreCorto(item.vendedor),
           'Fecha Emision': formatearFecha(item.fecha_emision),
           'Fecha Fact. SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : ((item.facturado_sunat && item.fecha_facturacion_sunat) ? formatearFecha(item.fecha_facturacion_sunat) : ''),
           'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
@@ -1176,7 +1186,7 @@ const ReporteVentas = () => {
               precio_unitario: parseFloat(det.precio_unitario),
               subtotal: parseFloat(det.subtotal),
               tc: parseFloat(orden.tipo_cambio || 1),
-              vendedor: orden.vendedor,
+              vendedor: obtenerNombreCorto(orden.vendedor),
               total_orden: parseFloat(orden.total)
             });
           });
@@ -1195,7 +1205,7 @@ const ReporteVentas = () => {
       if (fechasArray.length > 0) {
         datosFechasAOA.push([`=== RESUMEN POR ${tituloResumen} ===`]);
         datosFechasAOA.push([
-          'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha SUNAT', 'Fecha Despacho', 'Cliente',
+          'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha Despacho', 'Fecha SUNAT', 'Cliente',
           'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
           'TC', 'Subtotal (PEN)', 'Vendedor', 'Total OV'
         ]);
@@ -1239,8 +1249,8 @@ const ReporteVentas = () => {
               isNewOrden ? item.orden : '',
               isNewOrden ? item.comprobante : '',
               isNewOrden ? item.fecha_emision : '',
-              isNewOrden ? item.fecha_sunat : '',
               isNewOrden ? item.fecha_despacho : '',
+              isNewOrden ? item.fecha_sunat : '',
               isNewOrden ? item.cliente : '',
               item.codigo, item.producto, item.unidad, item.moneda,
               parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
@@ -1289,9 +1299,9 @@ const ReporteVentas = () => {
 
           // Determinar qué columna de fecha se debe pintar de amarillo según el filtro
           let colFiltroIndex = -1;
-          if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 3;
-          else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 4;
-          else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 5;
+if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 3;
+else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 4; // <-- Ahora Despacho es la columna 4
+else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y SUNAT es la columna 5
 
           for (let R = 0; R < datosFechasAOA.length; R++) {
             if (datosFechasAOA[R].length === 1 && datosFechasAOA[R][0] && datosFechasAOA[R][0].toString().startsWith('===')) {

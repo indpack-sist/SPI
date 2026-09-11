@@ -284,7 +284,9 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('Descuentos', 0);
       filaTotal('Valor Venta', c.subtotal);
       filaTotal('ISC', 0);
-      filaTotal('IGV', c.igv);
+      // El formato de referencia de exportación no muestra la fila IGV en cero.
+      // La afectación 40 y el TaxTotal=0 siguen viajando intactos en el XML.
+      if (!esExportacion) filaTotal('IGV', c.igv);
       if (esExportacion) filaTotal('ICBPER', 0);
       filaTotal('Otros Cargos', 0);
       filaTotal('Otros Tributos', 0);
@@ -297,10 +299,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
       doc.text(`Tipo de operación: ${OPERACION_LABEL[afect] || 'OP. GRAVADA'}`, 40, yTotalesInicio, { width: 300 });
       doc.font('Helvetica');
-      if (esExportacion) {
-        doc.text(`Valor de Venta de Operaciones Gratuitas: ${simbolo} ${monto2(0)}`, 40, yTotalesInicio + 16, { width: 300 });
-      }
-      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio + (esExportacion ? 32 : 16), { width: 300 });
+      doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio + 16, { width: 300 });
 
       y += 6;
 

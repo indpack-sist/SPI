@@ -386,7 +386,7 @@ export async function generarGuiaRemisionSunatPDF({
           const values = {
             n: String(index + 1),
             normalizado: item.bien_normalizado === true || item.bien_normalizado === 1 ? 'SÍ' : 'NO',
-            codigo: limpio(item.codigo),
+            codigo: limpio(item.codigo_bien || item.codigo),
             codigoSunat: limpio(item.codigo_producto_sunat),
             partida: limpio(item.subpartida_nacional || item.partida_arancelaria),
             gtin: limpio(item.gtin),

@@ -331,8 +331,8 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     // se usa TAL CUAL y se persiste en la guía (el PDF luego muestra lo persistido = lo enviado).
     // Si no viene (API antigua), se compone del texto libre de la guía + OC de la OV.
     const observacion = observacionOverride !== undefined
-      ? String(observacionOverride).replace(/[\r\n]+/g, ' ').trim().slice(0, 250)
-      : componerObservacionGuia(g.observaciones, ov?.orden_compra_cliente);
+  ? String(observacionOverride).replace(/\r\n/g, '\n').trim().slice(0, 250)
+  : componerObservacionGuia(g.observaciones, ov?.orden_compra_cliente);
     if (observacionOverride !== undefined) {
       await conn.query('UPDATE guias_remision SET observaciones = ? WHERE id_guia = ?', [observacion, idGuia]);
     }

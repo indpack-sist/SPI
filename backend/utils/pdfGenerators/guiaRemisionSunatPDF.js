@@ -62,7 +62,15 @@ const fechaConPeriodo = (value) => {
   const hour12 = hour % 12 || 12;
   return `${match[1]} ${String(hour12).padStart(2, '0')}:${match[3]} ${hour >= 12 ? 'PM' : 'AM'}`;
 };
-
+const limpioMultilinea = (value, fallback = '—') => {
+  if (value == null || value === '') return fallback;
+  return String(value)
+    .replace(/\r\n/g, '\n')           // normaliza CRLF a LF
+    .split('\n')
+    .map((linea) => linea.replace(/\s+/g, ' ').trim())
+    .join('\n')
+    .trim() || fallback;
+};
 /**
  * Genera el PDF de una Guía de Remisión Electrónica aceptada por SUNAT.
  * Las columnas SUNAT que no forman parte del maestro actual de productos se imprimen como “—”.
@@ -517,7 +525,7 @@ export async function generarGuiaRemisionSunatPDF({
         sectionEnd(top, 4, { borderless: true });
       }
 
-      const observacion = limpio(g.observaciones, '');
+    const observacion = limpioMultilinea(g.observaciones, '');
       if (observacion) {
         doc.font('Helvetica').fontSize(7.1);
         const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });

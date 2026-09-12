@@ -1,6 +1,6 @@
 import { executeQuery, executeTransaction, withTransaction } from '../config/database.js';
 import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
-import { componerObservacion, extraerUrl } from '../services/sunat/util.service.js';
+import { componerObservacion, extraerUrl, codigoBienValido } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 
 // Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
@@ -551,13 +551,23 @@ export async function createGuiaRemision(req, res) {
       }
       
       // Validar que el id_producto coincida
+            // Validar que el id_producto coincida
       if (item.id_producto !== detalleOrden.id_producto) {
         return res.status(400).json({
           success: false,
           error: `El producto del detalle no coincide con el de la orden`
         });
       }
+
+      // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
+      if (item.codigo_bien && !codigoBienValido(item.codigo_bien)) {
+        return res.status(400).json({
+          success: false,
+          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Código de bien inválido (debe tener 13 dígitos)`
+        });
+      }
     }
+    
     
     // Generar número de guía con correlativo atómico dedicado (fila 'GR'/'T001' en
     // series_correlativos). Reemplaza el antiguo MAX(id_guia)+regex, que era frágil:
@@ -651,7 +661,7 @@ export async function createGuiaRemision(req, res) {
     for (const item of detalle) {
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
       
-      await executeQuery(`
+            await executeQuery(`
         INSERT INTO detalle_guia_remision (
           id_guia,
           id_detalle_orden,
@@ -662,8 +672,9 @@ export async function createGuiaRemision(req, res) {
           peso_unitario_kg,
           peso_total_kg,
           subpartida_nacional,
-          dam_serie
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          dam_serie,
+          codigo_bien
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idGuia,
         item.id_detalle_orden,
@@ -673,9 +684,9 @@ export async function createGuiaRemision(req, res) {
         item.descripcion || item.producto || '',
         parseFloat(item.peso_unitario_kg) || 0,
         pesoTotal,
-        // Comex: subpartida nacional (7020) + nº de serie en la DAM (7023) por ítem.
         esComex ? (item.subpartida_nacional || null) : null,
-        esComex ? (item.dam_serie || null) : null
+        esComex ? (item.dam_serie || null) : null,
+        item.codigo_bien ? String(item.codigo_bien).trim() : null
       ]);
     }
 
@@ -799,10 +810,13 @@ export async function createGuiaCompra(req, res) {
         if (!base || Number(base.id_producto) !== idProd) {
           throw fail(400, `La línea de compra del producto (id ${idProd}) no es válida`);
         }
-        const cantidad = parseFloat(it.cantidad);
+                const cantidad = parseFloat(it.cantidad);
         if (!(cantidad > 0)) throw fail(400, `Cantidad recibida inválida para "${base.nombre}"`);
-        // Las compras anteriores a la trazabilidad documental pueden completar el dato una sola
-        // vez desde el wizard. Para compras nuevas, la copia guardada desde el XML es autoritativa.
+
+        // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
+        if (it.codigo_bien && !codigoBienValido(it.codigo_bien)) {
+          throw fail(400, `Código de bien inválido para "${base.nombre}" (debe tener 13 dígitos)`);
+        }
         const codigoDocumento = base.codigo_documento
           || String(it.codigo_documento || '').trim().slice(0, 100);
         const descripcionDocumento = base.descripcion_documento
@@ -820,7 +834,7 @@ export async function createGuiaCompra(req, res) {
             [codigoDocumento, descripcionDocumento, unidadDocumento, base.id_detalle, id_orden_compra]
           );
         }
-        items.push({
+                items.push({
           id_detalle_compra: base.id_detalle,
           id_producto: idProd,
           id_tipo_inventario: base.id_tipo_inventario,
@@ -831,6 +845,7 @@ export async function createGuiaCompra(req, res) {
           unidad_medida: unidadDocumento,
           descripcion: descripcionDocumento,
           peso_unitario_kg: parseFloat(it.peso_unitario_kg || 0),
+          codigo_bien: it.codigo_bien ? String(it.codigo_bien).trim() : null,
         });
       }
 
@@ -858,15 +873,15 @@ export async function createGuiaCompra(req, res) {
       );
       const idGuia = resGuia.insertId;
 
-      for (const it of items) {
+            for (const it of items) {
         const pesoTotal = it.cantidad * (it.peso_unitario_kg || 0);
         await conn.query(
           `INSERT INTO detalle_guia_remision (
              id_guia, id_detalle_orden, id_detalle_compra, id_producto, cantidad, unidad_medida,
-             descripcion, codigo_documento, peso_unitario_kg, peso_total_kg
-           ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             descripcion, codigo_documento, peso_unitario_kg, peso_total_kg, codigo_bien
+           ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [idGuia, it.id_detalle_compra, it.id_producto, it.cantidad, it.unidad_medida || 'NIU',
-            it.descripcion || '', it.codigo_documento || null, it.peso_unitario_kg || 0, pesoTotal]);
+            it.descripcion || '', it.codigo_documento || null, it.peso_unitario_kg || 0, pesoTotal, it.codigo_bien]);
       }
 
       // ¿La compra YA ingresó su mercadería en la recepción (Total/Parcial)? Entonces la guía es

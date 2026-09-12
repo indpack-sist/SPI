@@ -17,6 +17,7 @@ const normPlaca = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 const placaOk = (p) => /^[A-Z0-9]{6,8}$/.test(normPlaca(p));
 const dniOk = (d) => /^\d{8}$/.test(String(d || '').trim());
 const ubigeoOk = (u) => /^\d{6}$/.test(String(u || '').trim());
+const codigoBienOk = (v) => !v || /^\d{13}$/.test(String(v).trim());
 
 // Motivo de traslado (catálogo 20) según sea comercio exterior o no.
 const MOTIVOS_DOMESTICO = [
@@ -149,31 +150,32 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     const ubicacion = comex ? null : resolverUbigeoDesdeDireccion(direccionLlegada);
     const ubigeoGuardado = llegadaUbigeo;
     setUbigeoDetectado(!ubigeoGuardado ? ubicacion : null);
-    setEmitForm({
+        setEmitForm({
       es_comercio_exterior: comex,
       motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : (esCompra ? '02' : '01')),
       peso_bruto_kg: guia?.peso_bruto_kg ?? '',
       direccion_llegada: direccionLlegada,
-      // Fallback para guías legacy sin ubigeo: derivarlo de la cola de la dirección de llegada.
       ubigeo_llegada: ubigeoGuardado || ubicacion?.codigo || '',
       ciudad_llegada: guia?.ciudad_llegada || ubicacion?.distrito || '',
       observaciones: guia?.observacion_sugerida ?? guia?.observaciones ?? '',
       transporteModo: modoInicial,
-      // Modo particular (texto libre): prellena de la guía; si viene vacío, cae a los datos de la OV.
       placa: guia?.transporte_placa || guia?.ov_transporte_placa || '',
       dni: guia?.transporte_dni || guia?.ov_transporte_dni || '',
       conductor: guia?.transporte_conductor || guia?.ov_transporte_conductor || '',
       licencia: guia?.transporte_licencia || guia?.ov_transporte_licencia || '',
-      // Modo flota: ids seleccionados (principal + secundario opcional).
       id_conductor: guia?.id_conductor ? String(guia.id_conductor) : '',
       id_vehiculo: guia?.id_vehiculo ? String(guia.id_vehiculo) : '',
       id_conductor2: guia?.id_conductor2 ? String(guia.id_conductor2) : '',
       id_vehiculo2: guia?.id_vehiculo2 ? String(guia.id_vehiculo2) : '',
-      // Modo tercero: interruptor "registrar veh/cond" + indicadores (editables al emitir).
       registrar: guia?.ov_transporte_registrar === 0 ? false : true,
       indTransbordo: !!guia?.ov_ind_transbordo,
       indM1l: !!guia?.ov_ind_m1l,
       indRetornoVacio: !!guia?.ov_ind_retorno_vacio,
+            // Código de Bien opcional por línea (lo indica el cliente): si se completa, reemplaza al
+      // código interno del producto en esa línea al declararla a SUNAT. Editable antes de emitir.
+      codigosBien: Object.fromEntries(
+        (guia?.detalle || []).map((it) => [it.id_detalle, it.codigo_bien || ''])
+      ),
     });
     setWizStep(0);
     setAlerta(null);
@@ -181,7 +183,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   };
 
   const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
-
+  const setCodigoBien = (idDetalle, valor) => {
+    const limpio = valor.replace(/\D/g, '').slice(0, 13);
+    setEmitForm((f) => ({ ...f, codigosBien: { ...f.codigosBien, [idDetalle]: limpio } }));
+  };
   const handleDireccionLlegada = (direccion) => {
     if (emitForm?.es_comercio_exterior) {
       setF('direccion_llegada', direccion);
@@ -224,7 +229,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
         : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null,
             id_conductor2: f.id_conductor2 || null, id_vehiculo2: f.id_vehiculo2 || null };
-    const payload = {
+        const payload = {
       observaciones: f.observaciones,
       direccion_llegada: f.direccion_llegada,
       ubigeo_llegada: f.ubigeo_llegada,
@@ -233,6 +238,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       motivo_traslado_cod: f.motivo_traslado_cod,
       es_comercio_exterior: f.es_comercio_exterior,
       transporte,
+            // Código de Bien del cliente (13 dígitos), opcional por línea: si se envía, reemplaza el
+      // código interno en esa línea del XML. Se filtran las vacías para no pisar con ''.
+      codigos_bien: Object.entries(f.codigosBien || {})
+        .filter(([, v]) => v)
+        .map(([id_detalle, codigo_bien]) => ({ id_detalle: Number(id_detalle), codigo_bien })),
     };
     const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia, payload), null);
     const d = r?.data;
@@ -313,8 +323,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa,
             conductor2: condFlota2?.nombre_completo, dni2: condFlota2?.dni, licencia2: condFlota2?.licencia_conducir, placa2: vehFlota2?.placa }
   );
+  
   // Validez por paso (bloquea "Siguiente"/"Emitir" hasta que el formato sea correcto → sin rechazos SUNAT).
-  const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod;
+    const codigosBienOk = !f ? true : Object.values(f.codigosBien || {}).every(codigoBienOk);
+  const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod && codigosBienOk;
   const vLlegada = !!f && !!String(f.direccion_llegada).trim() && ubigeoOk(f.ubigeo_llegada);
   const vTransporte = !f ? false : (
     f.transporteModo === 'tercero'
@@ -450,24 +462,46 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               </div>
 
               {/* Detalle de bienes (de la OV, solo lectura) */}
-              <div className="border border-gray-200 rounded overflow-x-auto">
+                            <div className="border border-gray-200 rounded overflow-x-auto">
                 <div className="text-[10px] text-muted uppercase px-2 pt-2 flex items-center gap-1"><Package size={12} /> Bienes por transportar (de la orden)</div>
                 <table className="w-full text-xs">
                   <thead className="bg-gray-100 text-muted">
-                    <tr><th className="text-left p-2">Código</th><th className="text-left p-2">Descripción</th><th className="text-center p-2">Und</th><th className="text-right p-2">Cant.</th><th className="text-right p-2">Peso total</th></tr>
+                    <tr>
+                      <th className="text-left p-2">Código</th>
+                      <th className="text-left p-2">Descripción</th>
+                      <th className="text-center p-2">Und</th>
+                      <th className="text-right p-2">Cant.</th>
+                      <th className="text-right p-2">Peso total</th>
+                      <th className="text-left p-2">Código de Bien del cliente (opcional)</th>                    
+                      </tr>
                   </thead>
                   <tbody>
                     {lineas.length === 0 ? (
-                      <tr><td colSpan={5} className="p-3 text-center text-muted">La guía no tiene detalle.</td></tr>
-                    ) : lineas.map((it, i) => (
-                      <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
-                        <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
-                        <td className="p-2">{it.producto || it.descripcion}</td>
-                        <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
-                        <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
-                        <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
-                      </tr>
-                    ))}
+                      <tr><td colSpan={6} className="p-3 text-center text-muted">La guía no tiene detalle.</td></tr>
+                    ) : lineas.map((it, i) => {
+                      const idL = it.id_detalle || it.id_producto || i;
+                      const valor = f.codigosBien?.[it.id_detalle] ?? '';
+                      const ok = codigoBienOk(valor);
+                      return (
+                        <tr key={idL} className="border-t border-gray-100">
+                          <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
+                          <td className="p-2">{it.producto || it.descripcion}</td>
+                          <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                          <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
+                          <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
+                          <td className="p-2">
+                            <input
+                              className={`form-input w-full text-xs font-mono ${valor && !ok ? 'border-danger' : ''}`}
+                              value={valor}
+                              onChange={(e) => setCodigoBien(it.id_detalle, e.target.value)}
+                              placeholder="13 dígitos (código de bien del cliente)"
+                              maxLength={13}
+                            />
+                            {valor && !ok && <p className="text-[10px] text-danger mt-0.5">Debe tener 13 dígitos.</p>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

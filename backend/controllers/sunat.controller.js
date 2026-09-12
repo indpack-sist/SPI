@@ -12,8 +12,7 @@ import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gr
 import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
-import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from '../services/sunat/util.service.js';
-import { firmarXml } from '../services/sunat/firma.service.js';
+import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from '../services/sunat/util.service.js';import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
@@ -1171,6 +1170,26 @@ export async function emitirGuiaRemision(req, res, next) {
       vals.push(idGuia);
       await pool.query(`UPDATE guias_remision SET ${sets.join(', ')} WHERE id_guia = ?`, vals);
     }
+    // ── Código de Bien (GTIN-13) por línea, opcional ──────────────────────────────
+    // El wizard envía solo las líneas donde el usuario escribió algo; se valida formato y se
+    // persiste ANTES de emitir, verificando que cada id_detalle pertenezca a ESTA guía (evita que
+    // un payload manipulado escriba sobre el detalle de otra guía).
+        if (Array.isArray(b.codigos_bien) && b.codigos_bien.length) {
+      for (const item of b.codigos_bien) {
+        const idDetalle = Number(item?.id_detalle);
+        const codigo = String(item?.codigo_bien || '').trim();
+        if (!idDetalle) throw new AppError('codigos_bien: id_detalle inválido', 400);
+        if (!codigoBienValido(codigo)) {
+          throw new AppError(`Código de bien inválido en el detalle ${idDetalle}: debe tener 13 dígitos (GTIN-13)`, 400);
+        }
+        const [result] = await pool.query(
+          'UPDATE detalle_guia_remision SET codigo_bien = ? WHERE id_detalle = ? AND id_guia = ?',
+          [codigo || null, idDetalle, idGuia]);
+        if (result.affectedRows === 0) {
+          throw new AppError(`El detalle ${idDetalle} no pertenece a esta guía`, 400);
+        }
+      }
+    }
 
     // Si el panel envía `observaciones` (editable, prellenado con la OC) se usa tal cual como
     // cbc:Note; si no viene (undefined), el core compone del texto de la guía + OC de la OV.
@@ -1580,9 +1599,9 @@ export async function generarPdfGuia(req, res, next) {
         if (v2?.placa) vehiculosPdf.push({ placa: normalizarPlaca(v2.placa) });
       }
     }
-    const [detalle] = await pool.query(
+        const [detalle] = await pool.query(
       'SELECT d.cantidad, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento, ' +
-      'd.unidad_medida AS unidad_documento_sunat, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
+      'd.unidad_medida AS unidad_documento_sunat, d.codigo_bien, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
       'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
     const detallePdf = esCompra
       ? detalle.map((d) => ({

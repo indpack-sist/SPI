@@ -845,19 +845,22 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded overflow-x-auto">
+                            <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-100 text-muted"><tr><th className="text-left p-2">Código</th><th className="text-left p-2">Descripción</th><th className="text-center p-2">Und</th><th className="text-right p-2">Cant.</th><th className="text-right p-2">Peso total</th></tr></thead>
                   <tbody>
-                    {lineas.map((it, i) => (
-                      <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
-                        <td className="p-2 font-mono">{it.codigo_producto || '-'}</td>
-                        <td className="p-2">{it.producto || it.descripcion}</td>
-                        <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
-                        <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
-                        <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
-                      </tr>
-                    ))}
+                    {lineas.map((it, i) => {
+                      const codigoBien = f.codigosBien?.[it.id_detalle];
+                      return (
+                        <tr key={it.id_detalle || it.id_producto || i} className="border-t border-gray-100">
+                          <td className="p-2 font-mono">{codigoBien || it.codigo_producto || '-'}</td>
+                          <td className="p-2">{it.producto || it.descripcion}</td>
+                          <td className="p-2 text-center">{it.unidad_medida || 'NIU'}</td>
+                          <td className="p-2 text-right">{fmtCant(it.cantidad)}</td>
+                          <td className="p-2 text-right">{fmtPeso(it.peso_total_kg)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -11,7 +11,7 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima } from './fecha.service.js';
-import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido } from './util.service.js';
+import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from './util.service.js';
 import AppError from '../../utils/AppError.js';
 
 // Compatibilidad con reemplazos iniciados por versiones anteriores. Aceptar una GRE nueva no
@@ -266,7 +266,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const [detalle] = await conn.query(
       `SELECT d.id_detalle_orden, d.id_producto, d.cantidad, d.subpartida_nacional, d.dam_serie,
               d.codigo_documento, d.descripcion AS descripcion_documento,
-              d.unidad_medida AS unidad_documento_sunat,
+              d.unidad_medida AS unidad_documento_sunat, d.codigo_bien,
               p.codigo, p.nombre, p.codigo_unidad_sunat
          FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
         WHERE d.id_guia = ?`, [idGuia]);
@@ -281,10 +281,12 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
           codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat,
         }))
       : detalle;
-    for (const d of detalleEmision) {
+        for (const d of detalleEmision) {
       if (!d.codigo_unidad_sunat) throw new AppError(`Producto ${d.codigo} sin codigo_unidad_sunat`, 422);
+      if (!codigoBienValido(d.codigo_bien)) {
+        throw new AppError(`Código de bien inválido en "${d.codigo || d.nombre}": debe tener exactamente 13 dígitos (GTIN-13)`, 422);
+      }
     }
-
     // Modalidad de traslado (catálogo 18): 01 público para tercero, 02 privado para vehículo propio.
     const modalidad = esTercero ? '01' : '02';
 

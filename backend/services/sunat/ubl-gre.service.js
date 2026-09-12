@@ -294,7 +294,10 @@ export function construirDespatchAdviceXML(d) {
         <cbc:NameCode ${CAT55}>${code}</cbc:NameCode>
         <cbc:Value>${cdata(String(value))}</cbc:Value>
       </cac:AdditionalItemProperty>`;
-  const lineasXml = d.detalle.map((it, i) => {
+      const standardItemIdentificationXml = (it) => it.codigo_bien
+    ? `\n      <cac:StandardItemIdentification><cbc:ID>${cdata(it.codigo_bien)}</cbc:ID></cac:StandardItemIdentification>`
+    : '';
+    const lineasXml = d.detalle.map((it, i) => {
     const prop7020 = it.subpartida_nacional ? itemProp('Subpartida nacional', '7020', it.subpartida_nacional) : '';
     const prop7022 = itemProp('Indicador de bien regulado por SUNAT', '7022', '0');
     const prop7021 = comex?.damNumero ? itemProp('Numeracion de la DAM o DS', '7021', comex.damNumero) : '';
@@ -305,8 +308,7 @@ export function construirDespatchAdviceXML(d) {
     <cac:OrderLineReference><cbc:LineID>${i + 1}</cbc:LineID></cac:OrderLineReference>
     <cac:Item>
       <cbc:Description>${cdata(trunc(it.nombre || it.codigo, 250))}</cbc:Description>
-      <cac:SellersItemIdentification><cbc:ID>${cdata(it.codigo || it.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>${prop7020}${prop7022}${prop7021}${prop7023}
-    </cac:Item>
+      <cac:SellersItemIdentification><cbc:ID>${cdata(it.codigo_bien || it.codigo || it.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>${prop7020}${prop7022}${prop7021}${prop7023}    </cac:Item>
   </cac:DespatchLine>`;
   }).join('\n');
 

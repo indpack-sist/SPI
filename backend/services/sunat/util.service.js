@@ -62,6 +62,16 @@ export function ubigeoValido(ubigeo) {
 }
 
 /**
+ * Código de Bien (GTIN) para el detalle de la GRE: opcional, y cuando se usa es de exactamente
+ * 13 dígitos numéricos (GTIN-13), distinto del código interno de producto. Devuelve true si el
+ * campo viene vacío (es opcional) o si cumple el formato.
+ */
+export function codigoBienValido(codigoBien) {
+  const v = String(codigoBien ?? '').trim();
+  if (!v) return true; // opcional: nada que validar
+  return /^\d{13}$/.test(v);
+}
+/**
  * Observación por defecto de un comprobante (factura/GRE): concatena el texto libre con la orden
  * de compra del cliente (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones"
  * y viaja en cbc:Note. Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de

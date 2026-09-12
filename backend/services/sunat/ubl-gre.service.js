@@ -294,9 +294,6 @@ export function construirDespatchAdviceXML(d) {
         <cbc:NameCode ${CAT55}>${code}</cbc:NameCode>
         <cbc:Value>${cdata(String(value))}</cbc:Value>
       </cac:AdditionalItemProperty>`;
-      const standardItemIdentificationXml = (it) => it.codigo_bien
-    ? `\n      <cac:StandardItemIdentification><cbc:ID>${cdata(it.codigo_bien)}</cbc:ID></cac:StandardItemIdentification>`
-    : '';
     const lineasXml = d.detalle.map((it, i) => {
     const prop7020 = it.subpartida_nacional ? itemProp('Subpartida nacional', '7020', it.subpartida_nacional) : '';
     const prop7022 = itemProp('Indicador de bien regulado por SUNAT', '7022', '0');

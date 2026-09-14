@@ -374,16 +374,18 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         <h3 className="flex items-center gap-2 font-semibold text-sm">
           <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
         </h3>
-        {!soloLectura && puedeEmitir && (
-          <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando || faltantes.length > 0}>
-            <Zap size={14} className="mr-1" /> Emitir GRE
-          </button>
-        )}
-        {puedeDespachar && (
-          <button className="btn btn-sm btn-info" onClick={abrirDespachar} disabled={procesando} title="Despachar la guía (pasa a En Tránsito y descuenta stock)">
-            <Truck size={14} className="mr-1" /> Poner En Tránsito
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!soloLectura && puedeEmitir && (
+            <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando || faltantes.length > 0}>
+              <Zap size={14} className="mr-1" /> Emitir GRE
+            </button>
+          )}
+          {puedeDespachar && (
+            <button className="btn btn-sm btn-info" onClick={abrirDespachar} disabled={procesando} title="Despachar la guía (pasa a En Tránsito y descuenta stock)">
+              <Truck size={14} className="mr-1" /> Poner En Tránsito
+            </button>
+          )}
+        </div>
       </div>
 
       {alerta && <Alert type={alerta.type} message={alerta.message} onClose={() => setAlerta(null)} />}

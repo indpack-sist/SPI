@@ -199,12 +199,13 @@ export async function emitirComprobante(req, res, next) {
       // resultado incierto. El FOR UPDATE de la OV serializa solicitudes concurrentes y esta consulta
       // impide que la segunda reserve otro correlativo. Los RECHAZADOS sí permiten corregir y reemitir.
       const [[facturaVigente]] = await conn.query(
-        `SELECT id_factura, numero_factura, sunat_estado
-           FROM facturas_venta
-          WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
-            AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
-          ORDER BY id_factura DESC LIMIT 1`,
-        [id_orden_venta]);
+  `SELECT id_factura, numero_factura, sunat_estado
+     FROM facturas_venta
+    WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
+      AND estado != 'Anulada'
+      AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
+    ORDER BY id_factura DESC LIMIT 1`,
+  [id_orden_venta]);
       if (facturaVigente) {
         throw new AppError(
           `La OV ya tiene la factura ${facturaVigente.numero_factura} en estado ${facturaVigente.sunat_estado}. ` +

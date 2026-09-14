@@ -49,6 +49,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // en compras.
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
+  // Despacho (Poner En Tránsito) desde el propio panel, sin salir del detalle de la OV.
+  const [modalDespachar, setModalDespachar] = useState(false);
+  const [fechaDespacho, setFechaDespacho] = useState('');
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
   const hoyIsoLima = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -60,6 +63,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
   const estado = guia?.sunat_estado || null;               // null = sin emitir (estado SUNAT)
   const estadoNegocio = guia?.estado || null;              // Emitida/En Tránsito/Entregada/Anulada
+  // La guía puede despacharse (pasar a En Tránsito) solo si está Emitida y no fue anulada.
+  const puedeDespachar = !soloLectura && estadoNegocio === 'Emitida';
   const tieneComprobante = !!(guia?.serie_sunat && guia?.numero_sunat);
   const comprobante = tieneComprobante ? `${guia.serie_sunat}-${guia.numero_sunat}` : null;
 
@@ -254,6 +259,24 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     setModalEmitir(false);
   };
 
+  const abrirDespachar = () => {
+    setFechaDespacho(hoyIsoLima);
+    setAlerta(null);
+    setModalDespachar(true);
+  };
+
+  const handleDespachar = async () => {
+    if (!fechaDespacho) {
+      setAlerta({ type: 'error', message: 'Seleccione la fecha de despacho.' });
+      return;
+    }
+    const r = await tras(
+      () => guiasRemisionAPI.despachar(guia.id_guia, { fecha_despacho: fechaDespacho }),
+      'Guía puesta En Tránsito. Stock descontado y orden marcada como Despachada.'
+    );
+    if (r) setModalDespachar(false);
+  };
+
   const handleVerificar = () => tras(() => sunatAPI.estadoGuia(guia.id_guia), 'Estado consultado en SUNAT.');
   const handlePdf = async () => { try { await sunatAPI.verPdfGuia(guia.id_guia); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
   const archivoUrl = (v) => {
@@ -354,6 +377,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         {!soloLectura && puedeEmitir && (
           <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando || faltantes.length > 0}>
             <Zap size={14} className="mr-1" /> Emitir GRE
+          </button>
+        )}
+        {puedeDespachar && (
+          <button className="btn btn-sm btn-info" onClick={abrirDespachar} disabled={procesando} title="Despachar la guía (pasa a En Tránsito y descuenta stock)">
+            <Truck size={14} className="mr-1" /> Poner En Tránsito
           </button>
         )}
       </div>
@@ -899,6 +927,71 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           </div>
         </div>
         )}
+      </Modal>
+
+      {/* Modal: despachar la guía (Poner En Tránsito) desde el propio panel */}
+      <Modal isOpen={modalDespachar} onClose={() => !procesando && setModalDespachar(false)} title="Despachar Guía de Remisión" size="md">
+        <div className="space-y-4 text-sm">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Truck size={24} className="text-info flex-shrink-0 mt-1" />
+              <div>
+                <p className="font-medium text-blue-900">¿Qué sucederá al despachar?</p>
+                <ul className="text-sm text-blue-800 mt-2 space-y-1">
+                  <li>✓ Se generará salida de inventario automática</li>
+                  <li>✓ Se descontará el stock de cada producto</li>
+                  <li>✓ La guía cambiará a estado "En Tránsito"</li>
+                  <li>✓ La orden de venta se marcará como "Despachada"</li>
+                  <li>⚠️ Esta acción no se puede deshacer</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha de Despacho *</label>
+            <input
+              type="date"
+              className="form-input w-full"
+              value={fechaDespacho}
+              onChange={(e) => setFechaDespacho(e.target.value)}
+              required
+            />
+            <p className="text-[11px] text-muted mt-1">Puede ser anterior o posterior a hoy (según la fecha real del traslado).</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="font-medium mb-3">Resumen del Despacho:</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Guía:</span>
+                <span className="font-mono font-bold">{guia?.numero_guia}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">{esCompra ? 'Proveedor:' : 'Cliente:'}</span>
+                <span className="font-medium">{(esCompra ? guia?.proveedor : guia?.cliente) || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Productos:</span>
+                <span>{lineas.length} items</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="text-muted">Peso Total:</span>
+                <span className="font-bold text-primary">{fmtPeso(guia?.peso_bruto_kg)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <button className="btn btn-sm btn-outline" onClick={() => setModalDespachar(false)} disabled={procesando}>
+              Cancelar
+            </button>
+            <button className="btn btn-sm btn-info" onClick={handleDespachar} disabled={procesando || !fechaDespacho}>
+              <Truck size={16} className="mr-1" />
+              {procesando ? 'Procesando...' : 'Confirmar Despacho'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Modal: baja oficial en SOL + sincronización local */}

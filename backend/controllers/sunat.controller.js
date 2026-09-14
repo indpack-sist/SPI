@@ -199,13 +199,13 @@ export async function emitirComprobante(req, res, next) {
       // resultado incierto. El FOR UPDATE de la OV serializa solicitudes concurrentes y esta consulta
       // impide que la segunda reserve otro correlativo. Los RECHAZADOS sí permiten corregir y reemitir.
       const [[facturaVigente]] = await conn.query(
-  `SELECT id_factura, numero_factura, sunat_estado
-     FROM facturas_venta
-    WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
-      AND estado != 'Anulada'
-      AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
-    ORDER BY id_factura DESC LIMIT 1`,
-  [id_orden_venta]);
+        `SELECT id_factura, numero_factura, sunat_estado
+           FROM facturas_venta
+          WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
+            AND estado != 'Anulada'
+            AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
+          ORDER BY id_factura DESC LIMIT 1`,
+        [id_orden_venta]);
       if (facturaVigente) {
         throw new AppError(
           `La OV ya tiene la factura ${facturaVigente.numero_factura} en estado ${facturaVigente.sunat_estado}. ` +
@@ -321,6 +321,29 @@ export async function emitirComprobante(req, res, next) {
          tipo, esExport ? '0200' : (ov.tipo_operacion_sunat || '0101'),
          emisionDateTime, observacionEnviada,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
+
+      // Snapshot inmutable de lo que realmente se firmó y se envió a SUNAT. Sin esto, el PDF de la
+      // factura se reconstruía leyendo detalle_orden_venta EN VIVO: si la OV se editaba después
+      // (p. ej. para corregir un precio tras anular por Nota de Crédito), el PDF de la factura ya
+      // ACEPTADA/ANULADA mostraba precios distintos a los que realmente viajaron en el XML firmado.
+      // Reutiliza facturas_notas_detalle (mismo mecanismo que las NC/ND) para no duplicar esquema;
+      // id_detalle_ref aquí es simplemente el id_detalle original de la OV (no hay "línea de referencia"
+      // como en una NC, es la propia línea de la factura).
+      const calcDetalle = calcularComprobante({ ov, detalle });
+      if (calcDetalle.lineas.length) {
+        const valuesSnapshot = calcDetalle.lineas.map((linea, i) => {
+          const fuente = detalle[i];
+          return [ins.insertId, fuente.id_detalle || null, null,
+            linea.codigo, linea.descripcion, linea.unidad, linea.cantidad, linea.valorUnitario,
+            linea.afectacion, linea.valorVenta, linea.igv,
+            Math.round((linea.valorVenta + linea.igv) * 100) / 100];
+        });
+        await conn.query(
+          `INSERT INTO facturas_notas_detalle
+            (id_factura, id_detalle_ref, modo_disminucion, codigo, descripcion,
+             codigo_unidad_sunat, cantidad, valor_unitario, codigo_afectacion_igv,
+             valor_venta, igv, importe_total) VALUES ?`, [valuesSnapshot]);
+      }
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales,
         guiaIds: guias.map((g) => g.id_guia), guiasManualNuevas };
@@ -1324,23 +1347,24 @@ export async function generarPdfComprobante(req, res, next) {
 
     const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [f.id_cliente]);
-    // Facturas antiguas se reconstruyen desde la OV. Para NC/ND se prefiere el snapshot inmutable
-    // guardado al emitir: así una disminución por ítem imprime exactamente cantidad, producto y
-    // valor disminuido que figuran en el XML, aun si posteriormente se modifica la OV.
+    // Fallback: detalle EN VIVO de la OV (solo se usa si no existe snapshot, p. ej. facturas
+    // emitidas antes de que se empezara a persistir facturas_notas_detalle para tipo 01).
     let [detalle] = await pool.query(
       'SELECT d.cantidad, d.precio_unitario, d.descuento_porcentaje, p.codigo, p.nombre, ' +
       'p.codigo_unidad_sunat AS unidad FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
       'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
-    if (['07', '08'].includes(String(f.codigo_tipo_sunat))) {
-      try {
-        const [snapshot] = await pool.query(
-          `SELECT cantidad, valor_unitario AS precio_unitario, 0 AS descuento_porcentaje,
-                  codigo, descripcion AS nombre, codigo_unidad_sunat AS unidad
-             FROM facturas_notas_detalle WHERE id_factura = ? ORDER BY id`, [idFactura]);
-        if (snapshot.length) detalle = snapshot;
-      } catch (error) {
-        if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
-      }
+    // Snapshot inmutable de lo que realmente se firmó y envió a SUNAT (facturas 01, notas 07/08).
+    // Se intenta SIEMPRE, sin discriminar por tipo: así una edición posterior de la OV (p. ej.
+    // corregir un precio tras anular la factura por Nota de Crédito) nunca desalinea el PDF con
+    // el XML ya firmado. Si la factura es anterior a este fix y no tiene snapshot, cae al fallback.
+    try {
+      const [snapshot] = await pool.query(
+        `SELECT cantidad, valor_unitario AS precio_unitario, 0 AS descuento_porcentaje,
+                codigo, descripcion AS nombre, codigo_unidad_sunat AS unidad
+           FROM facturas_notas_detalle WHERE id_factura = ? ORDER BY id`, [idFactura]);
+      if (snapshot.length) detalle = snapshot;
+    } catch (error) {
+      if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
     }
 
     // Guías de remisión que ampara esta factura (las mismas que se declararon en el XML como

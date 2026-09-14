@@ -148,6 +148,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     && x.codigo_tipo_sunat === '07' && x.motivo_nota_codigo === '01'
     && x.sunat_estado === 'ACEPTADO');                                                        // solo NC 01 anula esta factura
   const facturaEnCursoOV = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
+    && f.estado !== 'Anulada'
     && ['ENVIADO', 'ACEPTADO'].includes(f.sunat_estado));
   const puedeEmitir = orden?.estado_verificacion === 'Aprobada'
     && Number(orden?.facturado_sunat) !== 1

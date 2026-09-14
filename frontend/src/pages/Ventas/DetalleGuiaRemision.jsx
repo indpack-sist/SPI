@@ -719,7 +719,6 @@ function DetalleGuiaRemision() {
               className="form-input"
               value={fechaDespacho}
               onChange={(e) => setFechaDespacho(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
               required
             />
           </div>

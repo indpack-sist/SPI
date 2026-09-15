@@ -1586,23 +1586,34 @@ export async function generarPdfGuia(req, res, next) {
     //   · flota → empleados/flota. Se arman conductores[] y vehiculos[] (1-2) + indicadores + registrar.
     let transportistaPdf = null, conductores = [], vehiculosPdf = [], indicadoresPdf = {};
     let registrarPdf = true, modalidadPdf = null, fechaEntregaPdf = null;
-    if (g.transporte_modo === 'particular' || g.transporte_placa) {
+    // Modo particular: transporte_placa es texto libre; nunca coincide con modo tercero porque
+    // transporte_modo='tercero' aunque el snapshot ahora también llena transporte_placa.
+    if (g.transporte_modo === 'particular' || (!g.transporte_modo && g.transporte_placa)) {
       modalidadPdf = '02';
       conductores = g.transporte_dni ? [{ dni: g.transporte_dni, nombre_completo: g.transporte_conductor, licencia_conducir: g.transporte_licencia }] : [];
       vehiculosPdf = g.transporte_placa ? [{ placa: normalizarPlaca(g.transporte_placa) }] : [];
     } else if (g.id_transportista) {
       modalidadPdf = '01';
       transportistaPdf = { razon: g.transportista_razon, ruc: g.transportista_ruc, mtc: g.transportista_mtc };
-      registrarPdf = g.ov_transporte_registrar !== 0;
-      indicadoresPdf = { transbordo: !!g.ov_ind_transbordo, m1l: !!g.ov_ind_m1l, retornoVacio: !!g.ov_ind_retorno_vacio };
-      fechaEntregaPdf = g.ov_transporte_fecha_entrega || null;
+      // Snapshot propio (columnas de guias_remision, pobladas desde esta versión); fallback a JOIN
+      // en vivo de ordenes_venta para guías emitidas antes de la migración 20260915.
+      const isoToFmt = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
+      registrarPdf = (g.transporte_registrar ?? g.ov_transporte_registrar) !== 0;
+      indicadoresPdf = {
+        transbordo: !!(g.transporte_ind_transbordo ?? g.ov_ind_transbordo),
+        m1l: !!(g.transporte_ind_m1l ?? g.ov_ind_m1l),
+        retornoVacio: !!(g.transporte_ind_retorno_vacio ?? g.ov_ind_retorno_vacio),
+      };
+      fechaEntregaPdf = g.transporte_fecha_entrega ? isoToFmt(g.transporte_fecha_entrega) : (g.ov_transporte_fecha_entrega || null);
       if (registrarPdf) {
-        if (g.ov_transporte_dni) conductores.push({ dni: g.ov_transporte_dni, nombre_completo: g.ov_transporte_conductor, licencia_conducir: g.ov_transporte_licencia });
-        if (g.ov_transporte_dni2) conductores.push({ dni: g.ov_transporte_dni2, nombre_completo: g.ov_transporte_conductor2, licencia_conducir: g.ov_transporte_licencia2 });
-        const p1 = normalizarPlaca(g.ov_transporte_placa);
-        if (p1) vehiculosPdf.push({ placa: p1, tuce: g.ov_transporte_tuc || null, autorizacion: g.ov_transporte_autorizacion || null });
-        const p2 = normalizarPlaca(g.ov_transporte_placa2);
-        if (p2) vehiculosPdf.push({ placa: p2, tuce: g.ov_transporte_tuc2 || null, autorizacion: g.ov_transporte_autorizacion2 || null });
+        const dni1 = g.transporte_dni || g.ov_transporte_dni;
+        if (dni1) conductores.push({ dni: dni1, nombre_completo: g.transporte_conductor || g.ov_transporte_conductor, licencia_conducir: g.transporte_licencia || g.ov_transporte_licencia });
+        const dni2 = g.transporte_dni2 || g.ov_transporte_dni2;
+        if (dni2) conductores.push({ dni: dni2, nombre_completo: g.transporte_conductor2 || g.ov_transporte_conductor2, licencia_conducir: g.transporte_licencia2 || g.ov_transporte_licencia2 });
+        const p1 = normalizarPlaca(g.transporte_placa || g.ov_transporte_placa);
+        if (p1) vehiculosPdf.push({ placa: p1, tuce: g.transporte_tuc || g.ov_transporte_tuc || null, autorizacion: g.transporte_autorizacion || g.ov_transporte_autorizacion || null });
+        const p2 = normalizarPlaca(g.transporte_placa2 || g.ov_transporte_placa2);
+        if (p2) vehiculosPdf.push({ placa: p2, tuce: g.transporte_tuc2 || g.ov_transporte_tuc2 || null, autorizacion: g.transporte_autorizacion2 || g.ov_transporte_autorizacion2 || null });
       }
     } else {
       modalidadPdf = '02';

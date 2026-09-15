@@ -274,16 +274,22 @@ export async function emitirComprobante(req, res, next) {
 
       // Observaciones (cbc:Note, lo que SUNAT muestra como "Observaciones"). Texto LIBRE editable
       // desde el panel; ya NO se le inyecta la OC (esa viaja aparte en cac:OrderReference). Si el
-      // cliente no envía la clave, se usa el texto de la OV tal cual. Se normaliza (sin saltos, ≤200)
-      // para que lo PERSISTIDO coincida byte a byte con el cbc:Note del XML (y así el PDF).
-      const observacionEnviada = (req.body.observaciones !== undefined
+      // cliente no envía la clave, se usa el texto de la OV tal cual.
+      //  · observacionRaw: conserva los saltos de línea que escribió el usuario (solo colapsa líneas
+      //    en blanco y recorta). Es lo que se PERSISTE, para que el PDF imprima cada línea aparte
+      //    (p. ej. "OC:...", "ACOMPAÑANTE:...").
+      //  · observacionEnviada: versión APLANADA (sin saltos) que viaja en el cbc:Note del XML, para
+      //    no arriesgar que un validador de SUNAT observe caracteres de control. El límite de 200 se
+      //    mide sobre esta versión (la que realmente llega a SUNAT).
+      const observacionRaw = (req.body.observaciones !== undefined
         ? String(req.body.observaciones)
         : String(ov.observaciones || '')
-      ).replace(/[\r\n]+/g, ' ').trim();
+      ).replace(/\r\n?/g, '\n').replace(/\n{2,}/g, '\n').trim();
+      const observacionEnviada = observacionRaw.replace(/[\r\n]+/g, ' ').trim();
       if (observacionEnviada.length > 200) {
         throw new AppError('Las observaciones admiten como máximo 200 caracteres para SUNAT', 422);
       }
-      ov.observaciones = observacionEnviada;
+      ov.observaciones = observacionEnviada; // el XML (cbc:Note) usa la versión aplanada
 
       // Guías declaradas en la factura = UNIÓN de dos fuentes (nunca reemplazo, para no perder
       // las del sistema si el panel manda lista vacía):
@@ -319,7 +325,7 @@ export async function emitirComprobante(req, res, next) {
         [`${serie}-${numero}`, id_orden_venta, ov.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ov.moneda || 'PEN', 'Emitida',
          tipo, esExport ? '0200' : (ov.tipo_operacion_sunat || '0101'),
-         emisionDateTime, observacionEnviada,
+         emisionDateTime, observacionRaw,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       // Snapshot inmutable de lo que realmente se firmó y se envió a SUNAT. Sin esto, el PDF de la

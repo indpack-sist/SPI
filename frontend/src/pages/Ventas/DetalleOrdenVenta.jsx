@@ -3487,37 +3487,101 @@ function DetalleOrdenVenta() {
                 <p className="whitespace-pre-wrap mb-4">{orden.observaciones || 'Sin observaciones.'}</p>
 
                 {verFinanzas && orden.comprobante_url && (
-                    <div className="bg-green-50 p-3 rounded border border-green-200 flex justify-between items-center flex-wrap gap-2">
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 space-y-2">
                         <div className="flex items-center gap-2 text-green-800">
                             <FileText size={20}/>
                             <span className="font-medium">Comprobante/Voucher Adjunto</span>
                         </div>
-                        <div className="flex gap-1 flex-wrap">
-                            {(() => {
-                                let urls = [];
+                        {(() => {
+                            let urls = [];
+                            try {
                                 if (Array.isArray(orden.comprobante_url)) {
                                     urls = orden.comprobante_url;
                                 } else if (typeof orden.comprobante_url === 'string') {
-                                    try {
+                                    if (orden.comprobante_url.startsWith('[')) {
                                         urls = JSON.parse(orden.comprobante_url);
                                         if (!Array.isArray(urls)) urls = [orden.comprobante_url];
-                                    } catch {
+                                    } else {
                                         urls = [orden.comprobante_url];
                                     }
-                                } else {
-                                    urls = [orden.comprobante_url];
                                 }
-                                return urls.map((url, index) => (
-                                    <button 
-                                        key={index}
-                                        className="btn btn-sm btn-outline bg-white flex items-center gap-1"
-                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Comprobante de Pago ${index + 1}` : 'Comprobante de Pago')}
-                                    >
-                                        <Eye size={16}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
-                                    </button>
-                                ));
-                            })()}
-                        </div>
+                            } catch {
+                                urls = [orden.comprobante_url];
+                            }
+                            return (
+                                <div className="space-y-3">
+                                    {urls.map((url, index) => {
+                                        const titulo = urls.length > 1
+                                            ? `Comprobante de Pago ${index + 1}`
+                                            : 'Comprobante de Pago';
+                                        const extension = String(url).split('.').pop().toLowerCase();
+                                        const esPdf = extension === 'pdf';
+                                        const proxyUrl = archivosAPI.getProxyUrl(url);
+                                        return (
+                                            <div key={index} className="space-y-1">
+                                                {urls.length > 1 && (
+                                                    <p className="text-xs font-semibold text-muted">Archivo {index + 1}</p>
+                                                )}
+                                                <div
+                                                    style={{
+                                                        position: 'relative',
+                                                        width: '100%',
+                                                        height: 520,
+                                                        borderRadius: 6,
+                                                        overflow: 'hidden',
+                                                        border: '2px solid var(--border)',
+                                                        background: '#f3f4f6',
+                                                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
+                                                    }}
+                                                >
+                                                    {esPdf ? (
+                                                        <iframe
+                                                            src={proxyUrl}
+                                                            title={titulo}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                border: 'none',
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={proxyUrl}
+                                                            alt={titulo}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
+                                                        />
+                                                    )}
+                                                    {/* Botón flotante para abrir en pantalla completa */}
+                                                    <button
+                                                        onClick={() => abrirVisor(url, titulo)}
+                                                        title="Abrir en pantalla completa"
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: 8,
+                                                            right: 8,
+                                                            background: 'rgba(0,0,0,0.6)',
+                                                            color: '#fff',
+                                                            border: 'none',
+                                                            borderRadius: 4,
+                                                            padding: '4px 8px',
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 4,
+                                                            zIndex: 10,
+                                                        }}
+                                                    >
+                                                        <Eye size={12} /> Ampliar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
             </div>

@@ -2688,8 +2688,8 @@ function DetalleOrdenVenta() {
                             )}
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
-                            {/* Botones ver archivos */}
+                        <div className="space-y-2">
+                            {/* Previews en miniatura de los archivos OC */}
                             {orden.orden_compra_url && (() => {
                                 let urls = [];
                                 try {
@@ -2706,27 +2706,96 @@ function DetalleOrdenVenta() {
                                 } catch {
                                     urls = [orden.orden_compra_url];
                                 }
-                                return urls.map((url, index) => (
-                                    <button
-                                        key={index}
-                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra Cliente ${index + 1}` : 'Orden de Compra Cliente')}
-                                    >
-                                        <Eye size={14}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
-                                    </button>
-                                ));
+                                return (
+                                    <div className="flex flex-wrap gap-2">
+                                        {urls.map((url, index) => {
+                                            const titulo = urls.length > 1
+                                                ? `Orden de Compra Cliente ${index + 1}`
+                                                : 'Orden de Compra Cliente';
+                                            const extension = String(url).split('.').pop().toLowerCase();
+                                            const esPdf = extension === 'pdf';
+                                            const proxyUrl = archivosAPI.getProxyUrl(url);
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    onClick={() => abrirVisor(url, titulo)}
+                                                    title={`Clic para ampliar: ${titulo}`}
+                                                    style={{
+                                                        position: 'relative',
+                                                        width: 130,
+                                                        height: 90,
+                                                        cursor: 'pointer',
+                                                        borderRadius: 6,
+                                                        overflow: 'hidden',
+                                                        border: '1px solid var(--border)',
+                                                        background: '#f3f4f6',
+                                                        flexShrink: 0,
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                                                    }}
+                                                >
+                                                    {esPdf ? (
+                                                        <iframe
+                                                            src={proxyUrl}
+                                                            title={titulo}
+                                                            style={{
+                                                                width: '200%',
+                                                                height: '200%',
+                                                                border: 'none',
+                                                                pointerEvents: 'none',
+                                                                transform: 'scale(0.5)',
+                                                                transformOrigin: '0 0',
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={proxyUrl}
+                                                            alt={titulo}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        />
+                                                    )}
+                                                    {/* Overlay para capturar click y mostrar etiqueta */}
+                                                    <div style={{
+                                                        position: 'absolute', inset: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'flex-end',
+                                                        justifyContent: 'center',
+                                                        paddingBottom: 5
+                                                    }}>
+                                                        <span style={{
+                                                            background: 'rgba(0,0,0,0.55)',
+                                                            color: '#fff',
+                                                            fontSize: 10,
+                                                            padding: '2px 7px',
+                                                            borderRadius: 3,
+                                                            fontWeight: 700,
+                                                            letterSpacing: '0.03em',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 3
+                                                        }}>
+                                                            <Eye size={10} />
+                                                            {urls.length > 1 ? `OC ${index + 1}` : 'Ver OC'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
                             })()}
 
                             {/* Botón verificar OC */}
                             {orden.orden_compra_url && orden.estado !== 'Cancelada' && (
-                                <button
-                                    className="btn btn-xs bg-amber-500 hover:bg-amber-600 text-white border-amber-500 flex items-center gap-1 ml-auto"
-                                    onClick={() => setModalVerificacionOCOpen(true)}
-                                    disabled={guardandoVerifOC}
-                                >
-                                    <ShieldCheck size={12} />
-                                    {orden.estado_verificacion_oc === 'Verificado' ? 'Re-verificar OC' : 'Verificar OC'}
-                                </button>
+                                <div className="flex">
+                                    <button
+                                        className="btn btn-xs bg-amber-500 hover:bg-amber-600 text-white border-amber-500 flex items-center gap-1"
+                                        onClick={() => setModalVerificacionOCOpen(true)}
+                                        disabled={guardandoVerifOC}
+                                    >
+                                        <ShieldCheck size={12} />
+                                        {orden.estado_verificacion_oc === 'Verificado' ? 'Re-verificar OC' : 'Verificar OC'}
+                                    </button>
+                                </div>
                             )}
                         </div>
 

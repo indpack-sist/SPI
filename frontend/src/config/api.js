@@ -1160,6 +1160,7 @@ export const listasPreciosAPI = {
   getByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}`),
   getCompletasByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}/completas`),
   getDetalle: (idLista) => api.get(`/listas-precios/${idLista}/detalle`),
+  getHistorial: (idLista) => api.get(`/listas-precios/${idLista}/historial`),
   create: (data) => api.post('/listas-precios', data),
   update: (id, data) => api.put(`/listas-precios/${id}`, data),
   delete: (id) => api.delete(`/listas-precios/${id}`)

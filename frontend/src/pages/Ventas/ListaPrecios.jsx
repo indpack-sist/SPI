@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check, Eye, EyeOff } from 'lucide-react';
+import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check, Eye, EyeOff, History, Lock, User } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
+import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 
 function ListaPrecios() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Solo el creador puede editar. Las listas antiguas sin dueño (creado_por NULL)
+  // quedan abiertas hasta que alguien las edite y las reclame.
+  const puedeEditar = (lista) => !lista?.creado_por || Number(lista.creado_por) === Number(user?.id);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -28,6 +34,10 @@ function ListaPrecios() {
   
   const [modoEdicion, setModoEdicion] = useState(false);
   const [idListaEditar, setIdListaEditar] = useState(null);
+
+  const [historialModalOpen, setHistorialModalOpen] = useState(false);
+  const [historialData, setHistorialData] = useState([]);
+  const [historialLista, setHistorialLista] = useState(null);
   
   const [nuevaLista, setNuevaLista] = useState({
     nombre_lista: '',
@@ -134,9 +144,13 @@ function ListaPrecios() {
   };
 
   const abrirModalEditarLista = async (e, lista) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     if (!clienteSel) return;
-    
+    if (!puedeEditar(lista)) {
+      setError(`Solo ${lista.creador_nombre || 'el usuario que la creó'} puede editar esta lista de precios.`);
+      return;
+    }
+
     setModoEdicion(true);
     setIdListaEditar(lista.id_lista);
     setMostrarSoloIncluidos(true);
@@ -168,8 +182,13 @@ function ListaPrecios() {
     }
   };
 
-  const eliminarLista = async (e, idLista) => {
+  const eliminarLista = async (e, lista) => {
       e.stopPropagation();
+      if (!puedeEditar(lista)) {
+        setError(`Solo ${lista.creador_nombre || 'el usuario que la creó'} puede eliminar esta lista de precios.`);
+        return;
+      }
+      const idLista = lista.id_lista;
       if(!confirm('¿Estás seguro de eliminar esta lista de precios? Esto no se puede deshacer.')) return;
 
       try {
@@ -188,6 +207,35 @@ function ListaPrecios() {
       } finally {
           setLoading(false);
       }
+  };
+
+  const verHistorial = async (e, lista) => {
+    e.stopPropagation();
+    setHistorialLista(lista);
+    setHistorialData([]);
+    try {
+      setLoading(true);
+      const res = await listasPreciosAPI.getHistorial(lista.id_lista);
+      if (res.data.success) setHistorialData(res.data.data);
+      setHistorialModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar el historial de precios');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // La fecha llega como DATE ('YYYY-MM-DD'); se muestra sin hora y sin desfase de zona.
+  const fmtFecha = (f) => {
+    if (!f) return '—';
+    const [y, m, d] = String(f).slice(0, 10).split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const fmtPrecio = (valor, moneda) => {
+    if (valor === null || valor === undefined) return null;
+    return `${moneda === 'USD' ? '$' : 'S/'} ${parseFloat(valor).toFixed(2)}`;
   };
 
   const handlePrecioChange = (idProducto, valor) => {
@@ -259,7 +307,7 @@ function ListaPrecios() {
         }
       }
     } catch (err) {
-      setError('Error al guardar la lista');
+      setError(err?.response?.data?.error || 'Error al guardar la lista');
     } finally {
       setLoading(false);
     }
@@ -368,23 +416,45 @@ function ListaPrecios() {
                             <span className="badge badge-sm badge-info shrink-0 text-[10px] uppercase font-black tracking-wider">{l.moneda}</span>
                         </div>
                         <p className="text-xs text-wire font-medium uppercase tracking-wider">{l.total_productos} productos incluidos</p>
+                        <p className="text-[0.65rem] text-wire font-medium mt-1 flex items-center gap-1 truncate" title={l.creador_nombre || ''}>
+                            <User size={11} className="shrink-0" />
+                            {l.creador_nombre ? `Creada por ${l.creador_nombre}` : 'Sin dueño asignado'}
+                        </p>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 shrink-0">
-                        <button 
-                            className="btn btn-xs btn-outline border-steel p-2 hover:border-primary hover:text-primary transition-colors text-mist"
-                            onClick={(e) => abrirModalEditarLista(e, l)}
-                            title="Editar Lista (Añadir/Eliminar Productos)"
+                        <button
+                            className="btn btn-xs btn-outline border-steel p-2 hover:border-info hover:text-info transition-colors text-mist"
+                            onClick={(e) => verHistorial(e, l)}
+                            title="Ver historial de cambios de precios"
                         >
-                            <Edit size={14} />
+                            <History size={14} />
                         </button>
-                        <button 
-                            className="btn btn-xs btn-outline border-steel p-2 hover:border-danger hover:text-danger hover:bg-danger/10 transition-colors text-mist"
-                            onClick={(e) => eliminarLista(e, l.id_lista)}
-                            title="Eliminar Lista Completa"
-                        >
-                            <Trash2 size={14} />
-                        </button>
+                        {puedeEditar(l) ? (
+                          <>
+                            <button
+                                className="btn btn-xs btn-outline border-steel p-2 hover:border-primary hover:text-primary transition-colors text-mist"
+                                onClick={(e) => abrirModalEditarLista(e, l)}
+                                title="Editar Lista (Añadir/Eliminar Productos)"
+                            >
+                                <Edit size={14} />
+                            </button>
+                            <button
+                                className="btn btn-xs btn-outline border-steel p-2 hover:border-danger hover:text-danger hover:bg-danger/10 transition-colors text-mist"
+                                onClick={(e) => eliminarLista(e, l)}
+                                title="Eliminar Lista Completa"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <span
+                            className="btn btn-xs btn-outline border-steel p-2 text-wire opacity-60 cursor-not-allowed"
+                            title={`Solo ${l.creador_nombre || 'el creador'} puede editar o eliminar esta lista`}
+                          >
+                            <Lock size={14} />
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -607,6 +677,67 @@ function ListaPrecios() {
                     {modoEdicion ? 'ACTUALIZAR LISTA' : 'GUARDAR LISTA'}
                 </button>
             </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={historialModalOpen} onClose={() => setHistorialModalOpen(false)} title="Historial de Cambios de Precios" size="xl">
+        <div className="page-listas-precios p-1">
+          <div className="bg-carbon-mid p-4 rounded-xl border border-steel shadow-inner mb-4 flex flex-wrap gap-x-8 gap-y-2">
+            <div>
+              <p className="text-[0.6rem] font-black text-wire uppercase tracking-widest">Cliente</p>
+              <p className="font-bold text-mist text-sm">{clienteSel?.razon_social || historialData[0]?.cliente || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[0.6rem] font-black text-wire uppercase tracking-widest">Lista</p>
+              <p className="font-bold text-mist text-sm">{historialLista?.nombre_lista || '—'}</p>
+            </div>
+          </div>
+
+          <div className="border border-steel rounded-xl overflow-hidden bg-carbon max-h-[60vh] overflow-y-auto scrollbar-thin">
+            <table className="table w-full">
+              <thead className="sticky top-0 bg-carbon-light shadow-sm z-10">
+                <tr>
+                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Fecha</th>
+                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3">Producto</th>
+                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Anterior</th>
+                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Nuevo</th>
+                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Editó</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historialData.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-10">
+                      <p className="text-wire font-bold uppercase tracking-widest text-xs">Esta lista no tiene cambios de precio registrados</p>
+                    </td>
+                  </tr>
+                ) : historialData.map(h => {
+                  const anterior = fmtPrecio(h.precio_anterior, h.moneda);
+                  const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
+                  return (
+                    <tr key={h.id_historial} className="border-b border-steel/50 hover:bg-carbon-light">
+                      <td className="px-3 text-xs text-mist font-mono align-middle whitespace-nowrap">{fmtFecha(h.fecha)}</td>
+                      <td className="align-middle">
+                        <p className="font-bold text-sm text-mist">{h.producto}</p>
+                        <p className="text-xs text-wire font-mono mt-0.5">{h.codigo}</p>
+                      </td>
+                      <td className="text-right align-middle">
+                        {anterior
+                          ? <span className="text-wire line-through text-xs">{anterior}</span>
+                          : <span className="badge badge-sm badge-success text-[9px] uppercase font-black tracking-wider">Alta</span>}
+                      </td>
+                      <td className="text-right align-middle">
+                        {nuevo
+                          ? <span className="font-black text-primary text-sm">{nuevo}</span>
+                          : <span className="badge badge-sm badge-danger text-[9px] uppercase font-black tracking-wider">Retirado</span>}
+                      </td>
+                      <td className="px-3 text-xs text-wire align-middle">{h.empleado || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Modal>
     </div>

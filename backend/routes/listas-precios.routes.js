@@ -5,7 +5,8 @@ import {
   getDetalleLista, 
   createListaPrecio,
   updateListaPrecio,
-  deleteListaPrecio
+  deleteListaPrecio,
+  getHistorialLista
 } from '../controllers/listasPrecios.controller.js';
 
 const router = express.Router();
@@ -13,6 +14,7 @@ const router = express.Router();
 router.get('/cliente/:id_cliente', getListasByCliente);
 router.get('/cliente/:id_cliente/completas', getListasCompletasByCliente);
 router.get('/:id/detalle', getDetalleLista);
+router.get('/:id/historial', getHistorialLista);
 router.post('/', createListaPrecio);
 router.put('/:id', updateListaPrecio);
 router.delete('/:id', deleteListaPrecio);

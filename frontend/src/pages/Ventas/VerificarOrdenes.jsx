@@ -664,44 +664,114 @@ function VerificarOrdenes() {
                           </div>
                         )}
 
-                        <div className="flex gap-2 flex-wrap">
-                            {/* Botón único para abrir ModalVerificacionOC */}
-                            {datosVerificacion.orden.orden_compra_url && (
-                              <button
-                                className="btn btn-xs btn-outline bg-amber-50 border-amber-400 text-amber-700 hover:bg-amber-100 flex items-center gap-1"
-                                onClick={() => setModalVerifOCOpen(true)}
-                              >
-                                <ShieldCheck size={12} />
-                                {datosVerificacion.orden.estado_verificacion_oc === 'Verificado'
-                                  ? 'Ver/Re-verificar OC'
-                                  : 'Verificar OC'}
-                              </button>
-                            )}
-                            {datosVerificacion.orden.comprobante_url && (() => {
-                                let urls = [];
+                        {/* Preview inline de la Orden de Compra */}
+                        {datosVerificacion.orden.orden_compra_url && (() => {
+                            let urls = [];
+                            try {
+                                if (Array.isArray(datosVerificacion.orden.orden_compra_url)) {
+                                    urls = datosVerificacion.orden.orden_compra_url;
+                                } else if (typeof datosVerificacion.orden.orden_compra_url === 'string') {
+                                    if (datosVerificacion.orden.orden_compra_url.startsWith('[')) {
+                                        urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
+                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
+                                    } else {
+                                        urls = [datosVerificacion.orden.orden_compra_url];
+                                    }
+                                }
+                            } catch {
+                                urls = [datosVerificacion.orden.orden_compra_url];
+                            }
+                            return (
+                                <div className="space-y-3 mb-3">
+                                    {urls.map((url, i) => {
+                                        const titulo = urls.length > 1 ? `Orden de Compra Cliente ${i + 1}` : 'Orden de Compra Cliente';
+                                        const esPdf = String(url).split('.').pop().toLowerCase() === 'pdf';
+                                        const proxyUrl = archivosAPI.getProxyUrl(url);
+                                        return (
+                                            <div key={`oc-${i}`} className="space-y-1">
+                                                <p className="text-xs font-semibold text-muted">{titulo}</p>
+                                                <div style={{ position: 'relative', width: '100%', height: 520, borderRadius: 6, overflow: 'hidden', border: '2px solid var(--border)', background: '#f3f4f6', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                                                    {esPdf ? (
+                                                        <iframe src={proxyUrl} title={titulo} style={{ width: '100%', height: '100%', border: 'none' }} />
+                                                    ) : (
+                                                        <img src={proxyUrl} alt={titulo} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }} />
+                                                    )}
+                                                    <button
+                                                        onClick={() => abrirVisor(url, titulo)}
+                                                        title="Abrir en pantalla completa"
+                                                        style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, zIndex: 10 }}
+                                                    >
+                                                        <Eye size={12} /> Ampliar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Botón para abrir ModalVerificacionOC */}
+                        {datosVerificacion.orden.orden_compra_url && (
+                          <div className="flex mb-3">
+                            <button
+                              className="btn btn-xs btn-outline bg-amber-50 border-amber-400 text-amber-700 hover:bg-amber-100 flex items-center gap-1"
+                              onClick={() => setModalVerifOCOpen(true)}
+                            >
+                              <ShieldCheck size={12} />
+                              {datosVerificacion.orden.estado_verificacion_oc === 'Verificado'
+                                ? 'Ver/Re-verificar OC'
+                                : 'Verificar OC'}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Preview inline del Comprobante/Voucher */}
+                        {datosVerificacion.orden.comprobante_url && (() => {
+                            let urls = [];
+                            try {
                                 if (Array.isArray(datosVerificacion.orden.comprobante_url)) {
                                     urls = datosVerificacion.orden.comprobante_url;
                                 } else if (typeof datosVerificacion.orden.comprobante_url === 'string') {
-                                    try {
+                                    if (datosVerificacion.orden.comprobante_url.startsWith('[')) {
                                         urls = JSON.parse(datosVerificacion.orden.comprobante_url);
                                         if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
-                                    } catch {
+                                    } else {
                                         urls = [datosVerificacion.orden.comprobante_url];
                                     }
-                                } else {
-                                    urls = [datosVerificacion.orden.comprobante_url];
                                 }
-                                return urls.map((url, i) => (
-                                    <button
-                                        key={`comp-${i}`}
-                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago')}
-                                    >
-                                        <Eye size={12}/> {urls.length > 1 ? `Ver Comprobante ${i + 1}` : 'Ver Comprobante'}
-                                    </button>
-                                ));
-                            })()}
-                        </div>
+                            } catch {
+                                urls = [datosVerificacion.orden.comprobante_url];
+                            }
+                            return (
+                                <div className="space-y-3">
+                                    {urls.map((url, i) => {
+                                        const titulo = urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago';
+                                        const esPdf = String(url).split('.').pop().toLowerCase() === 'pdf';
+                                        const proxyUrl = archivosAPI.getProxyUrl(url);
+                                        return (
+                                            <div key={`comp-${i}`} className="space-y-1">
+                                                <p className="text-xs font-semibold text-muted">{titulo}</p>
+                                                <div style={{ position: 'relative', width: '100%', height: 520, borderRadius: 6, overflow: 'hidden', border: '2px solid var(--border)', background: '#f3f4f6', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                                                    {esPdf ? (
+                                                        <iframe src={proxyUrl} title={titulo} style={{ width: '100%', height: '100%', border: 'none' }} />
+                                                    ) : (
+                                                        <img src={proxyUrl} alt={titulo} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }} />
+                                                    )}
+                                                    <button
+                                                        onClick={() => abrirVisor(url, titulo)}
+                                                        title="Abrir en pantalla completa"
+                                                        style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, zIndex: 10 }}
+                                                    >
+                                                        <Eye size={12} /> Ampliar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                   )}
                 </div>

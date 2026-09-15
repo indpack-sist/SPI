@@ -2707,7 +2707,7 @@ function DetalleOrdenVenta() {
                                     urls = [orden.orden_compra_url];
                                 }
                                 return (
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="space-y-3">
                                         {urls.map((url, index) => {
                                             const titulo = urls.length > 1
                                                 ? `Orden de Compra Cliente ${index + 1}`
@@ -2716,66 +2716,60 @@ function DetalleOrdenVenta() {
                                             const esPdf = extension === 'pdf';
                                             const proxyUrl = archivosAPI.getProxyUrl(url);
                                             return (
-                                                <div
-                                                    key={index}
-                                                    onClick={() => abrirVisor(url, titulo)}
-                                                    title={`Clic para ampliar: ${titulo}`}
-                                                    style={{
-                                                        position: 'relative',
-                                                        width: 130,
-                                                        height: 90,
-                                                        cursor: 'pointer',
-                                                        borderRadius: 6,
-                                                        overflow: 'hidden',
-                                                        border: '1px solid var(--border)',
-                                                        background: '#f3f4f6',
-                                                        flexShrink: 0,
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                                                    }}
-                                                >
-                                                    {esPdf ? (
-                                                        <iframe
-                                                            src={proxyUrl}
-                                                            title={titulo}
-                                                            style={{
-                                                                width: '200%',
-                                                                height: '200%',
-                                                                border: 'none',
-                                                                pointerEvents: 'none',
-                                                                transform: 'scale(0.5)',
-                                                                transformOrigin: '0 0',
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <img
-                                                            src={proxyUrl}
-                                                            alt={titulo}
-                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                        />
+                                                <div key={index} className="space-y-1">
+                                                    {urls.length > 1 && (
+                                                        <p className="text-xs font-semibold text-muted">Archivo {index + 1}</p>
                                                     )}
-                                                    {/* Overlay para capturar click y mostrar etiqueta */}
-                                                    <div style={{
-                                                        position: 'absolute', inset: 0,
-                                                        display: 'flex',
-                                                        alignItems: 'flex-end',
-                                                        justifyContent: 'center',
-                                                        paddingBottom: 5
-                                                    }}>
-                                                        <span style={{
-                                                            background: 'rgba(0,0,0,0.55)',
-                                                            color: '#fff',
-                                                            fontSize: 10,
-                                                            padding: '2px 7px',
-                                                            borderRadius: 3,
-                                                            fontWeight: 700,
-                                                            letterSpacing: '0.03em',
+                                                    <div
+                                                        onClick={() => abrirVisor(url, titulo)}
+                                                        title="Clic para abrir en pantalla completa"
+                                                        style={{
+                                                            position: 'relative',
+                                                            width: '100%',
+                                                            height: 520,
+                                                            cursor: 'pointer',
+                                                            borderRadius: 6,
+                                                            overflow: 'hidden',
+                                                            border: '2px solid var(--border)',
+                                                            background: '#f3f4f6',
+                                                            boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
+                                                        }}
+                                                    >
+                                                        {esPdf ? (
+                                                            <iframe
+                                                                src={proxyUrl}
+                                                                title={titulo}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    border: 'none',
+                                                                    pointerEvents: 'none',
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <img
+                                                                src={proxyUrl}
+                                                                alt={titulo}
+                                                                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
+                                                            />
+                                                        )}
+                                                        {/* Overlay transparente para capturar el click */}
+                                                        <div style={{ position: 'absolute', inset: 0 }} />
+                                                        {/* Etiqueta inferior */}
+                                                        <div style={{
+                                                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                                                            background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
+                                                            padding: '16px 10px 8px',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: 3
+                                                            justifyContent: 'center',
+                                                            gap: 4,
+                                                            color: '#fff',
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
                                                         }}>
-                                                            <Eye size={10} />
-                                                            {urls.length > 1 ? `OC ${index + 1}` : 'Ver OC'}
-                                                        </span>
+                                                            <Eye size={12} /> Clic para pantalla completa
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );

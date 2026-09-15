@@ -731,7 +731,11 @@ function ListaPrecios() {
                           ? <span className="font-black text-primary text-sm">{nuevo}</span>
                           : <span className="badge badge-sm badge-danger text-[9px] uppercase font-black tracking-wider">Retirado</span>}
                       </td>
-                      <td className="px-3 text-xs text-wire align-middle">{h.empleado || '—'}</td>
+                      <td className="px-3 text-xs align-middle">
+                        {h.empleado
+                          ? <span className="text-wire">{h.empleado}</span>
+                          : <span className="badge badge-sm badge-warning text-[9px] uppercase font-black tracking-wider" title="Cambio hecho directamente en la base de datos, fuera del sistema">Cambio directo en BD</span>}
+                      </td>
                     </tr>
                   );
                 })}

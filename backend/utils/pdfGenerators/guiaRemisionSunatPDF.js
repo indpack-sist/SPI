@@ -289,8 +289,8 @@ export async function generarGuiaRemisionSunatPDF({
           null
         ]
       ];
-      const partida = `[${limpio(g.ubigeo_partida)}] ${limpio(g.direccion_partida)}`;
-      const llegada = `[${limpio(g.ubigeo_llegada)}] ${limpio(g.direccion_llegada)}`;
+      const partida = limpio(g.direccion_partida);
+      const llegada = limpio(g.direccion_llegada);
       const routeAddressOptions = { labelWidth: 105, fontSize: 7.2 };
       const routeBodyHeight = twoColumnHeight(routeRows)
         + fullWidthHeight('Punto de partida:', partida, routeAddressOptions)

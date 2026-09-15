@@ -379,6 +379,42 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const { xmlFirmado, digestValue } = firmarXml(xml);
     const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
 
+    // Snapshot inmutable del transporte tercero. Sin esto el PDF regenerado leía en vivo de
+    // ordenes_venta y mostraba datos distintos si la OV se editaba tras una baja + nueva emisión.
+    // Los campos transporte_placa/dni/conductor/licencia son compartidos con modo particular (cond 1).
+    if (esTercero) {
+      await conn.query(
+        `UPDATE guias_remision SET
+           transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
+           transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
+           transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
+           transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
+           transporte_registrar = ?, transporte_ind_transbordo = ?, transporte_ind_m1l = ?,
+           transporte_ind_retorno_vacio = ?, transporte_fecha_entrega = ?
+         WHERE id_guia = ?`,
+        [
+          vehiculos[0]?.placa || null,
+          ov.transporte_tuc || null,
+          ov.transporte_autorizacion || null,
+          vehiculos[1]?.placa || null,
+          ov.transporte_tuc2 || null,
+          ov.transporte_autorizacion2 || null,
+          conductores[0]?.dni || null,
+          conductores[0]?.nombre || null,
+          conductores[0]?.licencia || null,
+          conductores[1]?.dni || null,
+          conductores[1]?.nombre || null,
+          conductores[1]?.licencia || null,
+          registrar ? 1 : 0,
+          indicadores.transbordo ? 1 : 0,
+          indicadores.m1l ? 1 : 0,
+          indicadores.retornoVacio ? 1 : 0,
+          fechaEntregaTransportista || null,
+          idGuia,
+        ]
+      );
+    }
+
     await conn.query(
       `UPDATE guias_remision SET serie_sunat = ?, numero_sunat = ?, sunat_estado = 'ENVIADO',
          sunat_digest_value = ?, sunat_fecha_envio = ? WHERE id_guia = ?`,

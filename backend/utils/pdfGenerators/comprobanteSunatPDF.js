@@ -151,14 +151,21 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
        * usada para "Documento que modifica:").
        * @returns {number} altura ocupada por la fila.
        */
-      const campoSunat = (colX, yPos, label, valor, dibujar = true) => {
+      const campoSunat = (colX, yPos, label, valor, dibujar = true, multilinea = false) => {
         if (valor === null) {
           if (dibujar) {
             doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text(label, colX, yPos, { width: colWidth });
           }
           return 12;
         }
-        const v = valor == null || valor === '' ? '-' : String(valor).replace(/[\r\n]+/g, ' ').trim();
+        // Por defecto se aplanan los saltos de línea (los campos de una sola línea no deben partirse).
+        // Para campos multilínea (p. ej. la observación libre: OC + acompañantes) se preservan los
+        // saltos que escribió el usuario y solo se colapsan las líneas en blanco consecutivas.
+        const v = valor == null || valor === ''
+          ? '-'
+          : (multilinea
+            ? String(valor).replace(/\r\n?/g, '\n').replace(/\n{2,}/g, '\n').trim()
+            : String(valor).replace(/[\r\n]+/g, ' ').trim());
         const anchoLabel = medirAnchoTexto(doc, `${label}: `, 'Helvetica-Bold', 8);
         const valX = colX + anchoLabel;
         const valWidth = Math.max(30, colX + colWidth - valX);
@@ -194,7 +201,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       const sustentoTxt = c.docAfectado?.sustento
         ? String(c.docAfectado.sustento).replace(/[\r\n]+/g, ' ').trim()
         : null;
-      const obsHeader = motivoTxt || String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      // La observación libre (cbc:Note) conserva sus saltos de línea para imprimirse tal cual la
+      // escribió el usuario (p. ej. "OC:...", "ACOMPAÑANTE:..."). El motivo del catálogo (notas) es
+      // de una sola línea y por eso no se marca como multilínea más abajo.
+      const obsHeader = motivoTxt || String(c.observaciones || '').trim();
       // La OC ya se imprime como campo propio ("Orden de Compra"). Si la observación libre solo la
       // repite (dato heredado de cuando la OC viajaba embebida en cbc:Note, p. ej. "OC: <número>"),
       // no se vuelve a mostrar como "Observación" para no duplicarla.
@@ -230,11 +240,12 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       ];
       if (esCredito) camposDerecha.push(['Fecha de Vencimiento', c.fecha_vencimiento]);
       if (sustentoTxt) camposDerecha.push(['Motivo o Sustento', sustentoTxt]);
-      if (obsHeader && !obsRepiteOC) camposDerecha.push(['Observación', obsHeader]);
+      // Solo la observación libre (no el motivo del catálogo) se imprime multilínea.
+      if (obsHeader && !obsRepiteOC) camposDerecha.push(['Observación', obsHeader, !motivoTxt]);
 
       // Medir alturas (sin dibujar) para calcular el alto total del recuadro antes de trazarlo.
       const alturaColumna = (campos, colX) =>
-        campos.reduce((acc, [label, valor]) => acc + campoSunat(colX, 0, label, valor, false), 0);
+        campos.reduce((acc, [label, valor, multilinea]) => acc + campoSunat(colX, 0, label, valor, false, multilinea), 0);
 
       const leftH = alturaColumna(camposIzquierda, colXIzq);
       const rightH = alturaColumna(camposDerecha, colXDer);
@@ -244,14 +255,14 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       // Renderizado columna izquierda
       let yIzq = boxTop + boxPad;
-      for (const [label, valor] of camposIzquierda) {
-        yIzq += campoSunat(colXIzq, yIzq, label, valor, true);
+      for (const [label, valor, multilinea] of camposIzquierda) {
+        yIzq += campoSunat(colXIzq, yIzq, label, valor, true, multilinea);
       }
 
       // Renderizado columna derecha
       let yDer = boxTop + boxPad;
-      for (const [label, valor] of camposDerecha) {
-        yDer += campoSunat(colXDer, yDer, label, valor, true);
+      for (const [label, valor, multilinea] of camposDerecha) {
+        yDer += campoSunat(colXDer, yDer, label, valor, true, multilinea);
       }
 
       y = boxTop + boxH + 8;

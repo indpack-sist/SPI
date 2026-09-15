@@ -491,11 +491,11 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               </div>
               <textarea
                 className="form-input w-full text-sm"
-                rows={2}
+                rows={3}
                 maxLength={OBS_MAX}
                 value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value.replace(/[\r\n]+/g, ' '))}
-                placeholder="Notas libres del comprobante"
+                onChange={(e) => setObservaciones(e.target.value)}
+                placeholder={"Notas libres del comprobante.\nUsa Enter para separar por líneas (p. ej. OC, ACOMPAÑANTES)."}
                 disabled={procesando || previewLoading}
               />
               <div className="text-[10px] text-muted mt-0.5">
@@ -620,7 +620,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <div><span className="text-muted">Orden de Compra: </span><strong>{ordenCompra.trim()}</strong></div>
                 )}
                 {obsPreliminar && (
-                  <div><span className="text-muted">Observación: </span>{obsPreliminar}</div>
+                  <div className="whitespace-pre-line"><span className="text-muted">Observación: </span>{obsPreliminar}</div>
                 )}
                 <div><span className="text-muted">Tipo de operación: </span>
                   <strong>{esExportacion ? 'EXPORTACIÓN' : (preview.igv === 0 ? 'OP. NO GRAVADA' : 'OP. GRAVADA')}</strong></div>

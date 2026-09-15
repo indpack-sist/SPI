@@ -10,6 +10,15 @@ function getFechaPeru() {
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
 }
 
+// Arma la dirección completa de la empresa a partir de los campos de empresa_config:
+// "AV. ... URBANIZACION DEPARTAMENTO - PROVINCIA - DISTRITO"
+function armarDireccionCompleta(cfg) {
+  const valorReal = (v) => v && String(v).trim() && String(v).trim() !== '-';
+  const partes = [cfg.direccion, cfg.urbanizacion].filter(valorReal).join(' ');
+  const ubicacion = [cfg.departamento, cfg.provincia, cfg.distrito].filter(valorReal).join(' - ');
+  return [partes, ubicacion].filter(Boolean).join(' ');
+}
+
 // Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
 // (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring
 // OV→GRE (cuando la orden se entrega por tercero, su RUC se materializa en el maestro).
@@ -486,9 +495,9 @@ export async function createGuiaRemision(req, res) {
     // En guías de venta el punto de partida es autoritativamente el domicilio fiscal configurado.
     // No se aceptan valores del navegador: así una manipulación o estado viejo del formulario no
     // puede enviar a SUNAT un origen distinto de empresa_config.
-    const empresaResult = await executeQuery('SELECT direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const empresaResult = await executeQuery('SELECT direccion, ubigeo, urbanizacion, departamento, provincia, distrito FROM empresa_config WHERE id = 1');
     const empresaCfg = (empresaResult.success && empresaResult.data[0]) || {};
-    const direccionPartidaFinal = String(empresaCfg.direccion || '').trim();
+    const direccionPartidaFinal = armarDireccionCompleta(empresaCfg) || String(empresaCfg.direccion || '').trim();
     const ubigeoPartidaFinal = String(empresaCfg.ubigeo || '').trim();
     if (!direccionPartidaFinal) {
       return res.status(400).json({
@@ -921,7 +930,7 @@ export async function createGuiaCompra(req, res) {
 // En la guía de compra, la LLEGADA es tu almacén → el wizard la prellena con esto (editable).
 export async function getEmpresaRemitente(req, res) {
   try {
-    const r = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo FROM empresa_config WHERE id = 1');
+    const r = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo, urbanizacion, departamento, provincia, distrito FROM empresa_config WHERE id = 1');
     const emp = (r.success && r.data[0]) || {};
     res.json({
       success: true,
@@ -930,6 +939,7 @@ export async function getEmpresaRemitente(req, res) {
         ruc: emp.ruc || null,
         direccion: emp.direccion || null,
         ubigeo: emp.ubigeo || null,
+        direccion_completa: armarDireccionCompleta(emp) || emp.direccion || null,
       }
     });
   } catch (error) {

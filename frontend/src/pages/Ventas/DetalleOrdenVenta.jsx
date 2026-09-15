@@ -114,6 +114,8 @@ function DetalleOrdenVenta() {
   const [facturaAAnular, setFacturaAAnular] = useState(null);
   const [modalConfirmarGuiaInterna, setModalConfirmarGuiaInterna] = useState(false);
   const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
+  const [modalTransitoOpen, setModalTransitoOpen] = useState(false);
+  const [fechaDespachoTransito, setFechaDespachoTransito] = useState('');
   // Vincular factura / documento a un despacho concreto (id_salida)
   const [salidaParaFactura, setSalidaParaFactura] = useState(null);
   const [salidaFacturaInfo, setSalidaFacturaInfo] = useState({ valor: 0, facturado: 0 });
@@ -631,6 +633,27 @@ function DetalleOrdenVenta() {
     if (!observaciones) return null;
     const match = observaciones.match(/GI-\d{4}-\d+/);
     return match ? match[0] : null;
+  };
+
+  const handlePonerEnTransito = async () => {
+    if (!guiaActiva) return;
+    try {
+      setProcesando(true);
+      setError(null);
+      const response = await guiasRemisionAPI.despachar(guiaActiva.id_guia, {
+        fecha_despacho: fechaDespachoTransito || new Date().toISOString().split('T')[0]
+      });
+      if (response.data.success) {
+        setSuccess('Guía puesta en tránsito exitosamente');
+        setModalTransitoOpen(false);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al poner en tránsito');
+    } finally {
+      setProcesando(false);
+    }
   };
 
   const handleAsignarGuiaInterna = async () => {
@@ -2257,6 +2280,17 @@ function DetalleOrdenVenta() {
              >
                <FileText size={20} /> Crear Guía de Remisión
              </button>
+          )}
+
+          {guiaActiva && guiaActiva.estado === 'Emitida' && (
+            <button
+              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              onClick={() => { setFechaDespachoTransito(new Date().toISOString().split('T')[0]); setModalTransitoOpen(true); }}
+              disabled={procesando}
+              title="Poner la guía de remisión en tránsito"
+            >
+              <Truck size={20} /> Poner en Tránsito
+            </button>
           )}
 
           <button
@@ -4109,6 +4143,39 @@ function DetalleOrdenVenta() {
             </div>
           </form>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={modalTransitoOpen}
+        onClose={() => !procesando && setModalTransitoOpen(false)}
+        title="Poner Guía en Tránsito"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Se registrará el despacho de la guía <strong>{guiaActiva?.numero_guia}</strong> y su estado cambiará a <strong>En Tránsito</strong>.
+          </p>
+          <div className="form-group">
+            <label className="form-label">Fecha de Despacho</label>
+            <input
+              type="date"
+              className="form-input"
+              value={fechaDespachoTransito}
+              onChange={(e) => setFechaDespachoTransito(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted mt-1">Puede ser una fecha pasada o futura. No afecta la fecha de emisión SUNAT.</p>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn btn-outline" onClick={() => setModalTransitoOpen(false)} disabled={procesando}>
+              Cancelar
+            </button>
+            <button className="btn btn-primary" onClick={handlePonerEnTransito} disabled={procesando || !fechaDespachoTransito}>
+              <Truck size={16} />
+              {procesando ? 'Procesando...' : 'Confirmar Tránsito'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal

@@ -117,7 +117,7 @@ function NuevaGuiaRemision() {
           if (emp) {
             setFormData((prev) => ({
               ...prev,
-              direccion_partida: prev.direccion_partida || emp.direccion || '',
+              direccion_partida: prev.direccion_partida || emp.direccion_completa || emp.direccion || '',
               ubigeo_partida: prev.ubigeo_partida || emp.ubigeo || '',
             }));
           }

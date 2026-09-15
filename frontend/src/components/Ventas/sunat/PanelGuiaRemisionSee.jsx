@@ -91,7 +91,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   // conservan como partida el domicilio del proveedor porque SPI recoge allí la mercadería.
   const partidaDireccion = esCompra
     ? (guia?.direccion_partida || guia?.punto_partida || '')
-    : (empresaRemitente?.direccion || guia?.direccion_partida || guia?.punto_partida || '');
+    : (empresaRemitente?.direccion_completa || empresaRemitente?.direccion || guia?.direccion_partida || guia?.punto_partida || '');
   const partidaUbigeo = esCompra
     ? (guia?.ubigeo_partida || '')
     : (empresaRemitente?.ubigeo || guia?.ubigeo_partida || '');

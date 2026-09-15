@@ -2721,13 +2721,10 @@ function DetalleOrdenVenta() {
                                                         <p className="text-xs font-semibold text-muted">Archivo {index + 1}</p>
                                                     )}
                                                     <div
-                                                        onClick={() => abrirVisor(url, titulo)}
-                                                        title="Clic para abrir en pantalla completa"
                                                         style={{
                                                             position: 'relative',
                                                             width: '100%',
                                                             height: 520,
-                                                            cursor: 'pointer',
                                                             borderRadius: 6,
                                                             overflow: 'hidden',
                                                             border: '2px solid var(--border)',
@@ -2743,7 +2740,6 @@ function DetalleOrdenVenta() {
                                                                     width: '100%',
                                                                     height: '100%',
                                                                     border: 'none',
-                                                                    pointerEvents: 'none',
                                                                 }}
                                                             />
                                                         ) : (
@@ -2753,23 +2749,30 @@ function DetalleOrdenVenta() {
                                                                 style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
                                                             />
                                                         )}
-                                                        {/* Overlay transparente para capturar el click */}
-                                                        <div style={{ position: 'absolute', inset: 0 }} />
-                                                        {/* Etiqueta inferior */}
-                                                        <div style={{
-                                                            position: 'absolute', bottom: 0, left: 0, right: 0,
-                                                            background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
-                                                            padding: '16px 10px 8px',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: 4,
-                                                            color: '#fff',
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                        }}>
-                                                            <Eye size={12} /> Clic para pantalla completa
-                                                        </div>
+                                                        {/* Botón flotante para abrir en pantalla completa */}
+                                                        <button
+                                                            onClick={() => abrirVisor(url, titulo)}
+                                                            title="Abrir en pantalla completa"
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: 8,
+                                                                right: 8,
+                                                                background: 'rgba(0,0,0,0.6)',
+                                                                color: '#fff',
+                                                                border: 'none',
+                                                                borderRadius: 4,
+                                                                padding: '4px 8px',
+                                                                fontSize: 11,
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 4,
+                                                                zIndex: 10,
+                                                            }}
+                                                        >
+                                                            <Eye size={12} /> Ampliar
+                                                        </button>
                                                     </div>
                                                 </div>
                                             );

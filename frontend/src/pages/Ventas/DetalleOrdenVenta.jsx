@@ -531,9 +531,8 @@ function DetalleOrdenVenta() {
     
     const index = nuevosDetalles.findIndex(item => item.id_producto === idProducto);
     if (index !== -1) {
-        if (val > nuevosDetalles[index].cantidad_pendiente) {
-            val = nuevosDetalles[index].cantidad_pendiente;
-        }
+        // Se permite despachar por encima de lo pendiente (venta con excedente),
+        // pero se advierte al usuario en el propio panel (ver render del modal).
         nuevosDetalles[index].cantidad_a_despachar = val;
         setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
     }
@@ -4266,7 +4265,11 @@ function DetalleOrdenVenta() {
                 </tr>
               </thead>
               <tbody>
-                {despachoForm.detalles.map((item, idx) => (
+                {despachoForm.detalles.map((item, idx) => {
+                  const cantDesp = parseFloat(item.cantidad_a_despachar) || 0;
+                  const excedePendiente = cantDesp > parseFloat(item.cantidad_pendiente);
+                  const excedeStock = cantDesp > parseFloat(item.stock_disponible);
+                  return (
                   <tr key={item.id_producto}>
                     <td>
                       <div className="font-medium text-sm">{item.producto}</div>
@@ -4275,23 +4278,35 @@ function DetalleOrdenVenta() {
                     <td className="text-right font-medium">
                       {parseFloat(parseFloat(item.cantidad_pendiente).toFixed(4))}
                     </td>
-                    <td className="text-right text-muted">
+                    <td className={`text-right ${excedeStock ? 'text-red-600 font-semibold' : 'text-muted'}`}>
                       {parseFloat(parseFloat(item.stock_disponible).toFixed(4))}
                     </td>
                     <td>
                       <input
                         type="number"
-                        className="form-input form-input-sm text-right"
+                        className={`form-input form-input-sm text-right ${excedePendiente || excedeStock ? 'border-amber-400' : ''}`}
                         min="0"
-                        max={item.cantidad_pendiente}
                         step="0.001"
                         value={item.cantidad_a_despachar}
                         onChange={(e) => handleCambioCantidadDespacho(item.id_producto, e.target.value)}
                         onWheel={handleWheelDisable}
                       />
+                      {excedePendiente && (
+                        <div className="flex items-center gap-1 text-xs text-amber-600 mt-1 justify-end">
+                          <AlertTriangle size={12} />
+                          <span>Más de lo pedido ({parseFloat(parseFloat(item.cantidad_pendiente).toFixed(4))} pend.)</span>
+                        </div>
+                      )}
+                      {excedeStock && (
+                        <div className="flex items-center gap-1 text-xs text-red-600 mt-1 justify-end">
+                          <AlertTriangle size={12} />
+                          <span>Supera el stock ({parseFloat(parseFloat(item.stock_disponible).toFixed(4))} disp.)</span>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -4305,6 +4320,16 @@ function DetalleOrdenVenta() {
                   onChange={(e) => setDespachoForm({...despachoForm, fecha_despacho: e.target.value})}
               />
           </div>
+
+          {despachoForm.detalles.some(it => (parseFloat(it.cantidad_a_despachar) || 0) > parseFloat(it.cantidad_pendiente)) && (
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 flex items-start gap-2">
+              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700">
+                Estás despachando <strong>más de lo pedido</strong> en uno o más productos.
+                Verifica las cantidades antes de confirmar.
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn btn-outline" onClick={() => setModalDespacho(false)} disabled={procesando}>

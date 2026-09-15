@@ -40,6 +40,8 @@ export async function createListaPrecio(req, res) {
         let id_lista;
         try {
             await connection.beginTransaction();
+            // Atribuye al creador los registros de historial que dispararán los triggers.
+            await connection.query(`SET @app_user_id = ${creadoPor != null ? Number(creadoPor) : 'NULL'}`);
             const [result] = await connection.execute(
                 'INSERT INTO listas_precios (id_cliente, nombre_lista, moneda, creado_por) VALUES (?, ?, ?, ?)',
                 [id_cliente, nombre_lista, moneda, creadoPor]
@@ -51,6 +53,7 @@ export async function createListaPrecio(req, res) {
                     [productos.map(prod => [id_lista, prod.id_producto, prod.precio_especial])]
                 );
             }
+            await connection.query('SET @app_user_id = NULL');
             await connection.commit();
         } catch (error) {
             await connection.rollback();
@@ -110,50 +113,58 @@ export async function updateListaPrecio(req, res) {
             productosNuevos.map(p => [Number(p.id_producto), fmt(p.precio_especial)])
         );
 
-        // 3. Armar el historial: cambios de precio, altas y bajas de producto
-        const fechaLima = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // YYYY-MM-DD
-        const historial = [];
+        // 3. Diferenciar cambios a nivel de fila. NO se borra y reinserta todo:
+        //    así los triggers de la BD registran solo el cambio real (y también
+        //    capturarían cualquier edición hecha por SQL directo, fuera del sistema).
+        const aInsertar = [];   // producto nuevo en la lista
+        const aActualizar = []; // producto que cambió de precio
         for (const [idProd, precioNuevo] of preciosNuevos) {
-            const precioPrevio = preciosPrevios.has(idProd) ? preciosPrevios.get(idProd) : null;
-            if (precioPrevio === null || precioPrevio !== precioNuevo) {
-                historial.push([id, lista.id_cliente, idProd, precioPrevio, precioNuevo, idEmpleado, fechaLima]);
+            if (!preciosPrevios.has(idProd)) {
+                aInsertar.push([idProd, precioNuevo]);
+            } else if (preciosPrevios.get(idProd) !== precioNuevo) {
+                aActualizar.push([idProd, precioNuevo]);
             }
         }
-        for (const [idProd, precioPrevio] of preciosPrevios) {
-            if (!preciosNuevos.has(idProd)) {
-                historial.push([id, lista.id_cliente, idProd, precioPrevio, null, idEmpleado, fechaLima]);
-            }
+        const aEliminar = []; // producto quitado de la lista
+        for (const idProd of preciosPrevios.keys()) {
+            if (!preciosNuevos.has(idProd)) aEliminar.push(idProd);
         }
 
-        // 4. Transacción: cabecera + reemplazo de detalle + historial
+        // 4. Transacción. La variable de sesión @app_user_id le dice a los triggers
+        //    QUIÉN hizo el cambio; se limpia al final para no filtrarla a la conexión.
         const queries = [];
+        queries.push({ sql: `SET @app_user_id = ${idEmpleado != null ? Number(idEmpleado) : 'NULL'}`, params: [] });
         queries.push({
             sql: `UPDATE listas_precios SET nombre_lista = ?, moneda = ?, creado_por = ? WHERE id_lista = ?`,
             params: [nombre_lista, moneda, nuevoDueno, id]
         });
-        queries.push({
-            sql: `DELETE FROM listas_precios_detalle WHERE id_lista = ?`,
-            params: [id]
-        });
-        if (productosNuevos.length > 0) {
+        if (aEliminar.length > 0) {
             queries.push({
-                sql: `INSERT INTO listas_precios_detalle (id_lista, id_producto, precio_especial) VALUES ${productosNuevos.map(() => '(?, ?, ?)').join(', ')}`,
-                params: productosNuevos.flatMap(prod => [id, prod.id_producto, prod.precio_especial])
+                sql: `DELETE FROM listas_precios_detalle WHERE id_lista = ? AND id_producto IN (${aEliminar.map(() => '?').join(', ')})`,
+                params: [id, ...aEliminar]
             });
         }
-        if (historial.length > 0) {
+        for (const [idProd, precio] of aActualizar) {
             queries.push({
-                sql: `INSERT INTO listas_precios_historial (id_lista, id_cliente, id_producto, precio_anterior, precio_nuevo, id_empleado, fecha) VALUES ${historial.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
-                params: historial.flat()
+                sql: `UPDATE listas_precios_detalle SET precio_especial = ? WHERE id_lista = ? AND id_producto = ?`,
+                params: [precio, id, idProd]
             });
         }
+        if (aInsertar.length > 0) {
+            queries.push({
+                sql: `INSERT INTO listas_precios_detalle (id_lista, id_producto, precio_especial) VALUES ${aInsertar.map(() => '(?, ?, ?)').join(', ')}`,
+                params: aInsertar.flatMap(([idProd, precio]) => [id, idProd, precio])
+            });
+        }
+        queries.push({ sql: `SET @app_user_id = NULL`, params: [] });
 
         const result = await executeTransaction(queries);
         if (!result.success) {
             return res.status(500).json({ success: false, error: result.error });
         }
 
-        res.json({ success: true, message: 'Lista de precios actualizada correctamente', cambios: historial.length });
+        const cambios = aInsertar.length + aActualizar.length + aEliminar.length;
+        res.json({ success: true, message: 'Lista de precios actualizada correctamente', cambios });
 
     } catch (error) {
         console.error(error);

@@ -1182,9 +1182,9 @@ export async function emitirGuiaRemision(req, res, next) {
         // El wizard sí puede ajustar por-emisión el interruptor "registrar vehículos y conductores
         // del transportista" (Caso 1 ↔ 2/3) y los indicadores; se persisten en la OV (fuente única).
         const ovSets = [], ovVals = [];
-        if (t.registrar !== undefined) { ovSets.push('transporte_registrar = ?'); ovVals.push(t.registrar ? 1 : 0); }
+        if (t.registrar !== undefined) { ovSets.push('ov.transporte_registrar = ?'); ovVals.push(t.registrar ? 1 : 0); }
         if (t.indicadores && typeof t.indicadores === 'object') {
-          ovSets.push('transporte_ind_transbordo = ?', 'transporte_ind_m1l = ?', 'transporte_ind_retorno_vacio = ?');
+          ovSets.push('ov.transporte_ind_transbordo = ?', 'ov.transporte_ind_m1l = ?', 'ov.transporte_ind_retorno_vacio = ?');
           ovVals.push(t.indicadores.transbordo ? 1 : 0, t.indicadores.m1l ? 1 : 0, t.indicadores.retornoVacio ? 1 : 0);
         }
         if (ovSets.length) {

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { esTelefonoPlaceholder } from './scraper-web.service.js';
 
 // ============================================================
 // Lectura de datos públicos en una RED social de la empresa (best-effort).
@@ -25,6 +26,8 @@ const EMAIL_BASURA = /(sentry|wixpress|example\.com|ejemplo\.|@2x|\.png|\.jpg|\.
 function limpiarTelefono(t) {
   let d = String(t).replace(/\D/g, '');
   if (d.length === 11 && d.startsWith('51')) d = d.slice(2);
+  // Descarta placeholders/rellenos de ejemplo (mismo criterio que el scraper web).
+  if (esTelefonoPlaceholder(d)) return null;
   if (d.length === 9 && d.startsWith('9')) return d;
   if ((d.length === 8 || d.length === 9) && d[0] === '0' && d[1] !== '0') return d;
   return null;

@@ -78,11 +78,32 @@ function normalizarUrl(url) {
   }
 }
 
+/**
+ * ¿El número (solo dígitos, ya normalizado) es un placeholder/relleno de ejemplo
+ * y NO un teléfono real? Cubre los formatos que las webs ponen como muestra:
+ *   - todos los dígitos iguales:            999999999, 000000000, 111111111
+ *   - secuencia ascendente/descendente:     123456789, 987654321
+ *   - un bloque de 3 repetido:              900900900, 123123123
+ *   - rellenos notorios conocidos.
+ * Se usa tanto en el scraper de web como en el de redes sociales.
+ */
+export function esTelefonoPlaceholder(d) {
+  const s = String(d || '');
+  if (!s) return true;
+  if (/^(.)\1+$/.test(s)) return true;              // todos iguales
+  if (/^(\d{3})\1\1$/.test(s)) return true;         // bloque de 3 repetido (9 díg.)
+  if ('0123456789'.includes(s)) return true;        // ascendente (012345678, 123456789…)
+  if ('9876543210'.includes(s)) return true;        // descendente (987654321, 876543210…)
+  const RELLENOS = new Set(['987654321', '912345678', '900000000', '999000000', '999888777', '900123456']);
+  if (RELLENOS.has(s)) return true;
+  return false;
+}
+
 function limpiarTelefono(t) {
   let d = String(t).replace(/\D/g, '');
   if (d.length === 11 && d.startsWith('51')) d = d.slice(2); // quita prefijo país +51
-  // Rechaza placeholders: todos los dígitos iguales (999999999, 111111111…).
-  if (/^(.)\1+$/.test(d)) return null;
+  // Rechaza placeholders/rellenos de ejemplo (999999999, 123456789, 900900900…).
+  if (esTelefonoPlaceholder(d)) return null;
   // Móvil peruano: 9 dígitos empezando en 9 (el preferido como principal).
   if (d.length === 9 && d.startsWith('9')) return d;
   // Fijo con código de área: 0 + código válido (no "00") → 8-9 dígitos.

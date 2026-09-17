@@ -144,6 +144,7 @@ export async function scrapeWebsite(website) {
   const telefonos = new Map();
   const redes = {};
   let logo = null;
+  let titulo = null;
   let ruc = null;
   let paginasLeidas = 0;
 
@@ -203,6 +204,19 @@ export async function scrapeWebsite(website) {
         try { logo = new URL(og[1], base).href; } catch { logo = og[1]; }
       }
     }
+
+    // Título / nombre del sitio: sirve para verificar que la web CORRESPONDE a
+    // la empresa (el nombre publicado en la web debe relacionarse con la razón
+    // social). og:site_name o og:title primero; si no, el <title>.
+    if (!titulo) {
+      const ogt = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+      if (ogt && ogt[1]) titulo = ogt[1].trim();
+      else {
+        const t = html.match(/<title[^>]*>([^<]{2,160})<\/title>/i);
+        if (t && t[1]) titulo = t[1].trim();
+      }
+    }
   }
 
   // Contactos con su área y su URL de origen (correos primero: canal prioritario).
@@ -219,6 +233,7 @@ export async function scrapeWebsite(website) {
     contactos,
     redes,
     logo,
+    titulo,
     ruc,
     paginas_leidas: paginasLeidas,
   };

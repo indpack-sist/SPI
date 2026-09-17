@@ -28,6 +28,20 @@ const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
 // vistazo. Si no es una URL válida, devuelve el texto tal cual.
 const hostFromUrl = (u) => { try { return new URL(u).host.replace(/^www\./i, ''); } catch { return u || ''; } };
 
+// Fecha de descubrimiento (YYYY-MM-DD HH:mm:ss) → DD/MM/YYYY, y días transcurridos
+// para resaltar lo recién descubierto en el listado.
+const fechaCorta = (f) => {
+  if (!f) return '—';
+  const s = String(f).slice(0, 10);
+  const [y, m, d] = s.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : s;
+};
+const diasDesde = (f) => {
+  if (!f) return Infinity;
+  const t = new Date(String(f).replace(' ', 'T')).getTime();
+  return Number.isNaN(t) ? Infinity : (Date.now() - t) / 86400000;
+};
+
 // Etiqueta legible del origen técnico de un contacto (columna `fuente`).
 const FUENTE_LABEL = {
   web: 'sitio web', social: 'red social', google_places: 'Google Maps',
@@ -833,7 +847,11 @@ export default function Prospectos() {
                       <div><small>
                         {j.tipo === 'google_places'
                           ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes${rez.irrelevantes ? ` · ${rez.irrelevantes} descartados` : ''}`
-                          : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
+                          : rez.rechazada
+                            ? `Web descartada: no corresponde al nombre/RUC · score ${rez.score ?? '—'}`
+                            : rez.purgado
+                              ? `Datos no verificables removidos · sin web propia · score ${rez.score ?? '—'}`
+                              : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
                       </small></div>
                     )}
                     {j.estado === 'error' && <div><small style={{ color: '#e74c3c' }}>{j.error}</small></div>}
@@ -928,6 +946,7 @@ export default function Prospectos() {
                 <th>Empresa</th>
                 <th className="pros-hide-sm">Sector</th>
                 <th className="pros-hide-sm">Ubicación</th>
+                <th>Descubierto</th>
                 <th>Estado</th>
                 <th style={{ textAlign: 'right' }}>Acciones</th>
               </tr>
@@ -967,6 +986,14 @@ export default function Prospectos() {
                     <td className="pros-hide-sm">{p.sector || <span style={{ color: 'var(--text-secondary)' }}>—</span>}</td>
                     <td className="pros-hide-sm" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                       {[p.distrito, p.provincia].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {fechaCorta(p.fecha_captura)}
+                      {diasDesde(p.fecha_captura) < 1 ? (
+                        <span className="pros-nuevo-badge">Hoy</span>
+                      ) : diasDesde(p.fecha_captura) < 3 ? (
+                        <span className="pros-nuevo-badge">Nuevo</span>
+                      ) : null}
                     </td>
                     <td>
                       <span className={`pros-chip ${ec.cls}`}>{ec.label}</span>

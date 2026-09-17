@@ -194,6 +194,7 @@ export const prospectosAPI = {
   enriquecerMasivo: (data) => api.post('/prospectos/enriquecer-masivo', data),
   buscarRuc: (id) => api.post(`/prospectos/${id}/buscar-ruc`),
   getJobs: () => api.get('/prospectos/jobs'),
+  getLotesActivos: () => api.get('/prospectos/lotes-activos'),
 
   // Exporta a Excel en el servidor y dispara la descarga (diálogo de guardado
   // nativo). `params` lleva los filtros del listado y, opcionalmente,

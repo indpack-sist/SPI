@@ -106,6 +106,13 @@ const DEPARTAMENTOS_PERU = [
   'Madre de Dios', 'Moquegua', 'Pasco', 'Piura', 'Puno', 'San Martín', 'Tacna', 'Tumbes', 'Ucayali',
 ];
 
+// Etiqueta e ícono de la barra de progreso según la operación masiva en curso.
+const ACCION_LOTE = {
+  descubrir:   { label: 'Descubriendo empresas' },
+  enriquecer:  { label: 'Enriqueciendo empresas' },
+  redescubrir: { label: 'Re-verificando datos' },
+};
+
 const ESTADO_CHIP = {
   Nuevo:      { cls: 'chip-nuevo', label: 'Nuevo' },
   En_gestion: { cls: 'chip-gestion', label: 'En gestión' },
@@ -193,6 +200,9 @@ export default function Prospectos() {
   const [jobs, setJobs] = useState([]);
   const [jobsOpen, setJobsOpen] = useState(false);
   const completadosRef = useRef(new Set());
+
+  // Progreso en vivo de operaciones masivas (barra de carga agregada por lote).
+  const [lotesActivos, setLotesActivos] = useState([]);
 
   // Actualización en vivo (WebSocket): refleja lo que otros hacen sin recargar.
   const [enVivo, setEnVivo] = useState(false);
@@ -289,14 +299,32 @@ export default function Prospectos() {
 
   const jobsActivos = jobs.filter((j) => j.estado === 'pendiente' || j.estado === 'procesando').length;
 
+  // Progreso de lotes masivos: se refresca por socket (en vivo) y con un poll de
+  // respaldo mientras haya alguno activo. Barato: una sola consulta agregada.
+  const cargarLotes = useCallback(async () => {
+    try {
+      const res = await prospectosAPI.getLotesActivos();
+      setLotesActivos(res.data.data || []);
+    } catch { /* silencioso: si falla, la barra simplemente no se muestra */ }
+  }, []);
+
+  useEffect(() => {
+    cargarLotes();
+    const hay = lotesActivos.length > 0;
+    const t = setInterval(cargarLotes, hay ? 2500 : 9000);
+    return () => clearInterval(t);
+  }, [cargarLotes, lotesActivos.length]);
+
   // --- Actualización en vivo por WebSocket ---
   // Refs a lo último (callbacks/estado) para que el socket se suscriba UNA vez y
   // no se reconecte en cada cambio de filtro/página.
   const cargarRef = useRef(cargar);
   const cargarFacetasRef = useRef(cargarFacetas);
+  const cargarLotesRef = useRef(cargarLotes);
   const detalleIdRef = useRef(null);
   useEffect(() => { cargarRef.current = cargar; }, [cargar]);
   useEffect(() => { cargarFacetasRef.current = cargarFacetas; }, [cargarFacetas]);
+  useEffect(() => { cargarLotesRef.current = cargarLotes; }, [cargarLotes]);
   useEffect(() => { detalleIdRef.current = detalle?.id_prospecto || null; }, [detalle]);
 
   // Recarga el detalle abierto sin el parpadeo de "cargando" (solo si sigue
@@ -335,13 +363,25 @@ export default function Prospectos() {
       }
     };
 
+    // Cada transición de job (inicio/fin) mueve la barra de progreso EN VIVO.
+    let loteDebounce = null;
+    const onScraping = () => {
+      clearTimeout(loteDebounce);
+      loteDebounce = setTimeout(() => cargarLotesRef.current?.(), 350);
+    };
+
     socket.on('connect', () => setEnVivo(true));
     socket.on('disconnect', () => setEnVivo(false));
     socket.on('prospectos:cambio', onCambio);
+    socket.on('prospectos:cambio', onScraping);
+    socket.on('scraping:update', onScraping);
 
     return () => {
       clearTimeout(debounce);
+      clearTimeout(loteDebounce);
       socket.off('prospectos:cambio', onCambio);
+      socket.off('prospectos:cambio', onScraping);
+      socket.off('scraping:update', onScraping);
       socket.disconnect();
     };
   }, [user?.id, recargarDetalleSilencioso]);
@@ -380,6 +420,7 @@ export default function Prospectos() {
       setDescubrirOpen(false);
       setJobsOpen(true);
       refreshJobs();
+      cargarLotes();
     } catch (err) {
       setError(err.error || 'No se pudo iniciar el descubrimiento');
     } finally {
@@ -442,6 +483,7 @@ export default function Prospectos() {
         : 'Búsqueda encolada: se buscará la web y sus contactos automáticamente.');
       setJobsOpen(true);
       refreshJobs();
+      cargarLotes();
     } catch (err) {
       setError(err.error || 'No se pudo enriquecer el prospecto');
     }
@@ -462,6 +504,7 @@ export default function Prospectos() {
       notify('Re-descubrimiento encolado: verificando datos desde cero en segundo plano.');
       setJobsOpen(true);
       refreshJobs();
+      cargarLotes();
     } catch (err) {
       setError(err.error || 'No se pudo iniciar el re-descubrimiento');
     }
@@ -483,6 +526,7 @@ export default function Prospectos() {
       notify(res.data.message || `Se encolaron ${res.data.encolados} enriquecimientos.`);
       setJobsOpen(true);
       refreshJobs();
+      cargarLotes();
     } catch (err) {
       setError(err.error || 'No se pudo iniciar el enriquecimiento masivo');
     } finally {
@@ -507,6 +551,7 @@ export default function Prospectos() {
       notify(res.data.message || `Se encolaron ${res.data.encolados} re-descubrimientos.`);
       setJobsOpen(true);
       refreshJobs();
+      cargarLotes();
     } catch (err) {
       setError(err.error || 'No se pudo iniciar el re-descubrimiento masivo');
     } finally {
@@ -736,6 +781,33 @@ export default function Prospectos() {
           <div><div className="pros-stat-val">{stats.score_promedio || 0}</div><div className="pros-stat-lbl">Score prom.</div></div>
         </div>
       </div>
+
+      {/* Barra(s) de progreso en vivo de operaciones masivas */}
+      {lotesActivos.length > 0 && (
+        <div className="pros-lotes">
+          {lotesActivos.map((l) => (
+            <div className="pros-lote" key={l.lote}>
+              <div className="pros-lote-head">
+                <span className="pros-lote-title">
+                  <Loader size={15} className="pros-spin" />
+                  {ACCION_LOTE[l.accion]?.label || 'Procesando'}
+                  <span className="pros-lote-user">· {l.usuario}</span>
+                </span>
+                <span className="pros-lote-pct">{l.porcentaje}%</span>
+              </div>
+              <div className="pros-lote-track">
+                <div className="pros-lote-fill" style={{ width: `${l.porcentaje}%` }} />
+              </div>
+              <div className="pros-lote-sub">
+                {l.hechos}/{l.total} listos
+                {l.en_proceso ? ` · ${l.en_proceso} en curso` : ''}
+                {l.pendientes ? ` · ${l.pendientes} en cola` : ''}
+                {l.errores ? ` · ${l.errores} con error` : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Panel de actividad (jobs) */}
       {jobsOpen && (
@@ -1206,14 +1278,16 @@ export default function Prospectos() {
               >
                 <Zap size={15} /> {detalle.web ? "Enriquecer" : "Buscar datos"}
               </button>
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={bloqueado}
-                title={bloqueado ? 'Bloqueado por otro usuario' : 'Búsqueda nueva (sin caché): borra lo auto-recolectado y re-verifica web y contactos desde cero'}
-                onClick={() => redescubrir(detalle.id_prospecto)}
-              >
-                <RefreshCw size={15} /> Descubrir de nuevo
-              </button>
+              {detalle.estado_workflow !== 'Convertido' && detalle.flag_duplicado !== 'Ya_cliente' && (
+                <button
+                  className="btn btn-outline btn-sm"
+                  disabled={bloqueado}
+                  title={bloqueado ? 'Bloqueado por otro usuario' : 'Búsqueda nueva (sin caché): borra lo auto-recolectado y re-verifica web y contactos desde cero'}
+                  onClick={() => redescubrir(detalle.id_prospecto)}
+                >
+                  <RefreshCw size={15} /> Descubrir de nuevo
+                </button>
+              )}
               {vista === 'excluidos' ? (
                 <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>
               ) : (

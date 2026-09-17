@@ -733,6 +733,12 @@ async function encolarJob(tipo, parametros, idEmpleado, prioridad = 5) {
   return idJob;
 }
 
+// Id de lote para agrupar los jobs de una misma operación masiva y poder
+// mostrar una barra de progreso agregada (cuántos van de cuántos, y quién la lanzó).
+function genLote() {
+  return 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
 function parseZonas(zonas) {
   let lista = Array.isArray(zonas) ? zonas : String(zonas || '').split(/[\n;]+/);
   lista = lista.map((z) => z.trim()).filter(Boolean);
@@ -761,6 +767,52 @@ export async function listarJobs(req, res) {
       FROM scraping_jobs ORDER BY id_job DESC LIMIT 25`);
     if (!r.success) return res.status(500).json({ error: r.error });
     res.json({ success: true, data: r.data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// Progreso agregado de las operaciones MASIVAS en curso (barra de carga en vivo).
+// Agrupa los jobs por lote/acción/usuario y devuelve cuántos van de cuántos.
+// Solo lotes con jobs aún activos (pendiente/procesando) para la barra visible.
+export async function getLotesActivos(req, res) {
+  try {
+    const r = await executeQuery(`
+      SELECT
+        JSON_UNQUOTE(JSON_EXTRACT(j.parametros, '$.lote'))   AS lote,
+        JSON_UNQUOTE(JSON_EXTRACT(j.parametros, '$.accion')) AS accion,
+        COALESCE(e.nombre_completo, 'Sistema')               AS usuario,
+        COUNT(*)                                             AS total,
+        SUM(j.estado IN ('completado','error'))              AS hechos,
+        SUM(j.estado = 'procesando')                         AS en_proceso,
+        SUM(j.estado = 'pendiente')                          AS pendientes,
+        SUM(j.estado = 'error')                              AS errores,
+        MIN(j.fecha_creacion)                                AS creado
+      FROM scraping_jobs j
+      LEFT JOIN empleados e ON j.id_empleado_solicita = e.id_empleado
+      WHERE JSON_UNQUOTE(JSON_EXTRACT(j.parametros, '$.lote')) IS NOT NULL
+      GROUP BY lote, accion, usuario
+      HAVING SUM(j.estado IN ('pendiente','procesando')) > 0
+      ORDER BY creado DESC
+      LIMIT 20`);
+    if (!r.success) return res.status(500).json({ error: r.error });
+
+    const data = r.data.map((x) => {
+      const total = Number(x.total) || 0;
+      const hechos = Number(x.hechos) || 0;
+      return {
+        lote: x.lote,
+        accion: x.accion,
+        usuario: x.usuario,
+        total,
+        hechos,
+        en_proceso: Number(x.en_proceso) || 0,
+        pendientes: Number(x.pendientes) || 0,
+        errores: Number(x.errores) || 0,
+        porcentaje: total > 0 ? Math.round((hechos / total) * 100) : 0,
+      };
+    });
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -805,11 +857,12 @@ export async function descubrirTodo(req, res) {
     const listaZonas = parseZonas(zonas);
     const lim = Math.min(parseInt(limite || 15), 20);
 
+    const lote = genLote();
     let encolados = 0;
     for (const rubro of RUBROS_OBJETIVO) {
       for (const zona of listaZonas) {
         await encolarJob('google_places', {
-          query: rubro.q, zona, segmento: segmento || 'Formal', limite: lim,
+          query: rubro.q, zona, segmento: segmento || 'Formal', limite: lim, lote, accion: 'descubrir',
         }, req.user?.id_empleado, rubro.prioridad);
         encolados++;
       }
@@ -899,8 +952,14 @@ export async function enriquecerProspecto(req, res) {
 export async function redescubrirProspecto(req, res) {
   try {
     const { id } = req.params;
-    const r = await executeQuery('SELECT id_prospecto FROM prospectos WHERE id_prospecto = ?', [id]);
+    const r = await executeQuery('SELECT id_prospecto, estado_workflow, flag_duplicado FROM prospectos WHERE id_prospecto = ?', [id]);
     if (!r.success || r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
+
+    // No re-descubrir prospectos convertidos o ya ligados a un cliente: su ficha
+    // comercial vive en la tabla de clientes y no se debe alterar su contacto.
+    if (r.data[0].estado_workflow === 'Convertido' || r.data[0].flag_duplicado === 'Ya_cliente') {
+      return res.status(400).json({ error: 'Este prospecto ya es (o coincide con) un cliente; no se re-descubre para no alterar su información registrada.' });
+    }
 
     // Prioridad 3 (alta): es una corrección puntual pedida por el usuario.
     const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), redescubrir: true }, req.user?.id_empleado, 3);
@@ -959,13 +1018,14 @@ export async function enriquecerMasivo(req, res) {
     // Un solo INSERT...SELECT: encola un job por prospecto aunque sean miles.
     // Prioridad 8 (baja): los descubrimientos activos siguen yendo primero.
     // Mayor score primero, para que los mejores leads se enriquezcan antes.
+    const lote = genLote();
     const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
     const ins = await executeQuery(
       `INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita, prioridad)
-       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto), ?, 8
+       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto, 'lote', ?, 'accion', 'enriquecer'), ?, 8
        FROM prospectos p${where}
        ORDER BY p.score DESC, p.id_prospecto ASC${limClause}`,
-      [req.user?.id_empleado || null, ...params]
+      [lote, req.user?.id_empleado || null, ...params]
     );
     if (!ins.success) return res.status(500).json({ error: ins.error });
 
@@ -975,6 +1035,7 @@ export async function enriquecerMasivo(req, res) {
       success: true,
       encolados,
       candidatos,
+      lote,
       message: `Se encolaron ${encolados} enriquecimientos. Se irán procesando en segundo plano; míralos en Actividad.`,
     });
   } catch (error) {
@@ -999,7 +1060,10 @@ export async function redescubrirMasivo(req, res) {
   try {
     const { min_score, limite, solo_sin_fuente = true } = req.body || {};
     const params = [];
-    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')";
+    // Excluye descartados, convertidos y los ya ligados a un cliente: no se
+    // re-verifica nada que pertenezca a un cliente registrado.
+    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
+      + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
 
     // Por defecto, solo los que tienen datos auto (web/redes/Places) SIN URL de
     // origen: son los que necesitan re-trazado para ganar su link verificable.
@@ -1028,13 +1092,14 @@ export async function redescubrirMasivo(req, res) {
 
     // Un solo INSERT...SELECT: encola un re-descubrir por prospecto. Prioridad 6
     // (por debajo de un re-descubrir puntual, que es 3, y de los descubrimientos).
+    const lote = genLote();
     const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
     const ins = await executeQuery(
       `INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita, prioridad)
-       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto, 'redescubrir', true), ?, 6
+       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto, 'redescubrir', true, 'lote', ?, 'accion', 'redescubrir'), ?, 6
        FROM prospectos p${where}
        ORDER BY p.score DESC, p.id_prospecto ASC${limClause}`,
-      [req.user?.id_empleado || null, ...params]
+      [lote, req.user?.id_empleado || null, ...params]
     );
     if (!ins.success) return res.status(500).json({ error: ins.error });
 
@@ -1044,6 +1109,7 @@ export async function redescubrirMasivo(req, res) {
       success: true,
       encolados,
       candidatos,
+      lote,
       message: `Se encolaron ${encolados} re-descubrimientos. Se re-verificarán en segundo plano; míralos en Actividad.`,
     });
   } catch (error) {

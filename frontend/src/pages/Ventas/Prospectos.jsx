@@ -170,7 +170,7 @@ export default function Prospectos() {
   const [fSector, setFSector] = useState('');
   const [fBusqueda, setFBusqueda] = useState('');
   const [fMinScore, setFMinScore] = useState(''); // umbral de potencial mínimo
-  const [orden, setOrden] = useState('score');
+  const [orden, setOrden] = useState('recientes'); // por defecto: lo recién descubierto primero
   const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
   const [facetas, setFacetas] = useState({ sectores: [], busquedas: [] });
 
@@ -915,8 +915,8 @@ export default function Prospectos() {
           <option value="45">🟡 Tibio · ≥ 45%</option>
         </select>
         <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
-          <option value="score">Mayor score</option>
           <option value="recientes">Más recientes</option>
+          <option value="score">Mayor score</option>
           <option value="nombre">Nombre A-Z</option>
         </select>
         <button

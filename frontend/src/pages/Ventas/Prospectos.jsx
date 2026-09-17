@@ -1281,8 +1281,12 @@ export default function Prospectos() {
               {detalle.estado_workflow !== 'Convertido' && detalle.flag_duplicado !== 'Ya_cliente' && (
                 <button
                   className="btn btn-outline btn-sm"
-                  disabled={bloqueado}
-                  title={bloqueado ? 'Bloqueado por otro usuario' : 'Búsqueda nueva (sin caché): borra lo auto-recolectado y re-verifica web y contactos desde cero'}
+                  disabled={bloqueado && !esAdmin}
+                  title={bloqueado
+                    ? (esAdmin
+                        ? 'Gestionado por otro usuario — permitido como administrador'
+                        : 'Bloqueado: lo gestiona otro usuario')
+                    : 'Búsqueda nueva (sin caché): borra lo auto-recolectado y re-verifica web y contactos desde cero'}
                   onClick={() => redescubrir(detalle.id_prospecto)}
                 >
                   <RefreshCw size={15} /> Descubrir de nuevo

@@ -934,8 +934,12 @@ export async function enriquecerProspecto(req, res) {
     if (r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
 
     const web = url || r.data[0].web;
-    // Quitamos el check de if (!web) porque ahora el worker sabe descubrirla
-    const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), url: web || null }, req.user?.id_empleado);
+    // Quitamos el check de if (!web) porque ahora el worker sabe descubrirla.
+    // Si el usuario escribió la web a mano, se confía (no se verifica); si es
+    // descubierta/guardada, el worker la verifica contra el nombre/RUC.
+    const jobParams = { id_prospecto: parseInt(id), url: web || null };
+    if (url) jobParams.verificar = false;
+    const idJob = await encolarJob('web_scrape', jobParams, req.user?.id_empleado);
     res.status(201).json({ success: true, message: 'Enriquecimiento encolado', id_job: idJob });
   } catch (error) {
     res.status(500).json({ error: error.message });

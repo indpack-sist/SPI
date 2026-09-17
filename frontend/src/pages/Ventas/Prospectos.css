@@ -471,6 +471,19 @@
   .pros-hide-sm { display: none; }
 }
 
+/* ---- Badge "Hoy/Nuevo" en la columna Descubierto ---- */
+.pros-nuevo-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #06121c;
+  background: #2ecc71;
+  vertical-align: middle;
+}
+
 /* ---- Barra(s) de progreso en vivo de operaciones masivas ---- */
 .pros-lotes {
   display: flex;

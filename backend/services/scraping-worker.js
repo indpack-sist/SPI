@@ -4,6 +4,7 @@ import {
   recalcularScore,
   normalizarTelefono,
   normalizarEmail,
+  normalizarDocumento,
   getFechaPeru,
 } from './prospectos.service.js';
 import { esEmpresaServicios } from './prospectos.service.js';
@@ -253,10 +254,64 @@ async function procesarWebScrape(job, params) {
     return fallar(job.id_job, 'No se pudo encontrar la web del prospecto (ni por Google ni por búsqueda web).');
   }
 
-  const resultado = await enriquecerDesdeWeb(idProspecto, url, { permitirBajar: redescubrir });
+  // Verificación de correspondencia de la web: activa por defecto; solo se
+  // omite si el job la desactiva (web escrita a mano por el usuario).
+  const verificar = params.verificar !== false;
+  const resultado = await enriquecerDesdeWeb(idProspecto, url, { permitirBajar: redescubrir, verificar });
   if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
   emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
   await completar(job.id_job, { id_prospecto: idProspecto, redescubierto: redescubrir, ...resultado });
+}
+
+// ============================================================
+// Verificación de que una web descubierta CORRESPONDE al prospecto.
+// Evita pegar la web (y sus contactos) de OTRA empresa co-ubicada que Google
+// Places o DuckDuckGo devolvieron por un dato cruzado (mismo edificio, el
+// "website" del place apunta a otra firma, etc.).
+// ============================================================
+function normalizarTextoNombre(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+// Palabras genéricas/geográficas que NO distinguen una empresa de otra.
+const GENERICOS_NOMBRE = new Set([
+  'peru', 'peruana', 'peruano', 'lima', 'callao', 'sac', 'sa', 'srl', 'eirl', 'ltda',
+  'sociedad', 'anonima', 'cerrada', 'group', 'grupo', 'international', 'internacional',
+  'corporation', 'corp', 'company', 'cia', 'holding', 'import', 'export', 'importaciones',
+  'exportaciones', 'comercial', 'industrial', 'industria', 'industrias', 'servicios',
+  'inversiones', 'negocios', 'distribuidora', 'distribuciones', 'empresa', 'del', 'de',
+  'la', 'el', 'los', 'las', 'and',
+]);
+function tokensSignificativos(nombre) {
+  return normalizarTextoNombre(nombre).split(' ').filter((t) => t.length >= 3 && !GENERICOS_NOMBRE.has(t));
+}
+function hostCompacto(url) {
+  try { return new URL(url).host.toLowerCase().replace(/[^a-z0-9]/g, ''); } catch { return ''; }
+}
+/**
+ * ¿La web scrapeada corresponde al prospecto?
+ *  - Si la web publica un RUC → debe coincidir con el del prospecto (prueba fuerte
+ *    en ambos sentidos: coincide = sí; distinto = NO es su web).
+ *  - Si la web no publica RUC → el dominio o el título deben contener un token
+ *    distintivo del nombre (no genérico). Si no, no se confía y se rechaza.
+ * @returns {{ok:boolean, motivo:string}}
+ */
+function webCorrespondeAlProspecto({ razonSocial, documentoProspecto, urlBase, tituloWeb, rucWeb }) {
+  const docP = normalizarDocumento(documentoProspecto);
+  const rucW = normalizarDocumento(rucWeb);
+  if (docP && rucW) {
+    return rucW === docP ? { ok: true, motivo: 'ruc_coincide' } : { ok: false, motivo: 'ruc_distinto' };
+  }
+  const toks = tokensSignificativos(razonSocial);
+  if (!toks.length) return { ok: true, motivo: 'nombre_sin_tokens_evaluables' };
+  const host = hostCompacto(urlBase);
+  const titulo = normalizarTextoNombre(tituloWeb).replace(/ /g, '');
+  const relacionado = toks.some((t) => host.includes(t) || titulo.includes(t));
+  return relacionado ? { ok: true, motivo: 'token_en_dominio_o_titulo' } : { ok: false, motivo: 'sin_relacion_con_nombre' };
 }
 
 /**
@@ -268,6 +323,26 @@ async function procesarWebScrape(job, params) {
 async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
   const data = await scrapeWebsite(url);
   if (!data.ok) return null;
+
+  // Verifica que la web sea realmente del prospecto (salvo que se pida omitir,
+  // p.ej. web escrita a mano por el usuario). Si NO corresponde, no se pega
+  // nada: ni contactos, ni web, ni logo. Así no se repite la contaminación de
+  // una web ajena (mismo edificio / place con website cruzado).
+  if (opciones.verificar !== false) {
+    const prow = await executeQuery('SELECT documento, razon_social FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const p = prow.data?.[0] || {};
+    const v = webCorrespondeAlProspecto({
+      razonSocial: p.razon_social,
+      documentoProspecto: p.documento,
+      urlBase: data.base,
+      tituloWeb: data.titulo,
+      rucWeb: data.ruc,
+    });
+    if (!v.ok) {
+      const score = await recalcularScore(idProspecto, {}, { permitirBajar: !!opciones.permitirBajar });
+      return { rechazada: true, motivo: v.motivo, web_rechazada: data.base, contactos_nuevos: 0, emails: 0, telefonos: 0, redes: 0, ruc: null, score };
+    }
+  }
 
   let nuevos = 0;
   // fuenteUrl = URL EXACTA de donde salió el dato (página o perfil), para que la

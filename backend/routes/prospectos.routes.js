@@ -19,6 +19,7 @@ import {
   deleteProspecto,
   crearJob,
   listarJobs,
+  getLotesActivos,
   descubrirEmpresas,
   descubrirTodo,
   enriquecerProspecto,
@@ -37,6 +38,7 @@ router.get('/estadisticas', getEstadisticas);
 router.get('/facetas', getFacetas);
 router.get('/barridos', getBarridos);
 router.get('/jobs', listarJobs);
+router.get('/lotes-activos', getLotesActivos);
 router.get('/:id', getProspectoById);
 
 router.post('/', createProspecto);

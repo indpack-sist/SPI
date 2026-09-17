@@ -470,3 +470,62 @@
 @media (max-width: 720px) {
   .pros-hide-sm { display: none; }
 }
+
+/* ---- Barra(s) de progreso en vivo de operaciones masivas ---- */
+.pros-lotes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+.pros-lote {
+  background: var(--carbon-mid);
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  padding: 0.75rem 0.95rem;
+  box-shadow: var(--shadow-md);
+}
+.pros-lote-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.pros-lote-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  min-width: 0;
+}
+.pros-lote-title svg { color: var(--accent); flex-shrink: 0; }
+.pros-lote-user { color: var(--text-secondary); font-weight: 500; }
+.pros-lote-pct {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.pros-lote-track {
+  height: 11px;
+  background: var(--carbon);
+  border: 1px solid var(--steel);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pros-lote-fill {
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #2ecc71);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pros-lote-sub {
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}

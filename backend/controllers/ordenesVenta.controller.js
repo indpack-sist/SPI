@@ -88,6 +88,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.subtotal,
         ov.igv,
         ov.total,
+        ov.es_exportacion,
         ov.moneda,
         ov.tipo_cambio,
         ov.monto_pagado,
@@ -263,8 +264,8 @@ export async function getAllOrdenesVenta(req, res) {
       'SELECT COUNT(*) AS total',
       `SELECT
         COUNT(*) AS total,
-        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN ov.total ELSE 0 END), 0) AS facturas_pen,
-        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN ov.total ELSE 0 END), 0) AS facturas_usd,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN CASE WHEN ov.es_exportacion = 1 THEN COALESCE(ov.subtotal, ov.total) ELSE ov.total END ELSE 0 END), 0) AS facturas_pen,
+        COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND ov.tipo_comprobante = 'Factura' AND (ov.tipo_impuesto NOT IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') OR ov.numero_orden IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093')) THEN CASE WHEN ov.es_exportacion = 1 THEN COALESCE(ov.subtotal, ov.total) ELSE ov.total END ELSE 0 END), 0) AS facturas_usd,
         COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND (ov.tipo_comprobante = 'Nota de Venta' OR (ov.tipo_comprobante = 'Factura' AND ov.tipo_impuesto IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') AND ov.numero_orden NOT IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093'))) THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS notas_venta_pen,
         COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'USD' AND (ov.tipo_comprobante = 'Nota de Venta' OR (ov.tipo_comprobante = 'Factura' AND ov.tipo_impuesto IN ('INA','EXO','INAFECTO','EXONERADO','0','LIBRE') AND ov.numero_orden NOT IN ('OV-2026-0380','OV-2026-0277','OV-2026-0162','OV-2026-0093'))) THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS notas_venta_usd,
         COALESCE(SUM(CASE WHEN ov.estado != 'Cancelada' AND ov.estado_verificacion = 'Aprobada' AND ov.moneda = 'PEN' AND (ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '' OR ov.tipo_comprobante = 'Sin Comprobante') THEN COALESCE(ov.subtotal, ov.total) ELSE 0 END), 0) AS sin_comprobante_pen,
@@ -2203,16 +2204,18 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
     const numeroGuiaInterna = matchGI ? matchGI[0] : 'GI-PROV';
 
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         ds.cantidad,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida
       FROM detalle_salidas ds
       INNER JOIN productos p ON ds.id_producto = p.id_producto
+      LEFT JOIN detalle_orden_venta dov
+        ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
       WHERE ds.id_salida = ?
-      ORDER BY p.codigo
-    `, [idSalida]);
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, p.codigo ASC
+    `, [id, idSalida]);
 
     if (!detalleResult.success) {
       return res.status(500).json({ success: false, error: 'Error al obtener detalle del despacho' });
@@ -2423,7 +2426,7 @@ export async function descargarPDFDespacho(req, res) {
       LEFT JOIN detalle_orden_venta dov
         ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
       WHERE ds.id_salida = ?
-      ORDER BY p.codigo
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, p.codigo ASC
     `, [id, idSalida]);
 
     if (!detalleResult.success) {
@@ -3498,9 +3501,10 @@ export async function rectificarCantidadProducto(req, res) {
       nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario));
     });
 
-    const esSinImpuesto = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
-    const porcentajeImpuesto = esSinImpuesto ? 0 : ((orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined) 
-      ? parseFloat(orden.porcentaje_impuesto) 
+    const esSinImpuesto = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(orden.tipo_impuesto || '').toUpperCase())
+      || Number(orden.es_exportacion) === 1;
+    const porcentajeImpuesto = esSinImpuesto ? 0 : ((orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined)
+      ? parseFloat(orden.porcentaje_impuesto)
       : 18);
     const nuevoImpuesto = nuevoSubtotalOrden * (porcentajeImpuesto / 100);
     const nuevoTotal = nuevoSubtotalOrden + nuevoImpuesto;

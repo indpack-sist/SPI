@@ -180,8 +180,23 @@ async function procesarWebScrape(job, params) {
   const idProspecto = params.id_prospecto;
   if (!idProspecto) return fallar(job.id_job, 'Falta id_prospecto');
 
-  let url = params.url;
+  // Re-descubrir: purga TODO lo recolectado automáticamente (web, teléfonos,
+  // correos y redes), CONSERVA lo ingresado a mano, y olvida la web guardada
+  // para forzar una búsqueda NUEVA (no desde caché). Sirve para corregir un
+  // prospecto al que se le pegaron datos de OTRA empresa por una web mal
+  // atribuida: se vuelve a verificar todo desde cero con matching estricto.
+  const redescubrir = !!params.redescubrir;
+  if (redescubrir) {
+    await executeQuery(
+      "DELETE FROM prospecto_contactos WHERE id_prospecto = ? AND (fuente IS NULL OR fuente <> 'manual')",
+      [idProspecto]
+    );
+    await executeQuery('UPDATE prospectos SET web = NULL, logo_url = NULL WHERE id_prospecto = ?', [idProspecto]);
+  }
+
+  let url = redescubrir ? null : params.url;
   let telefonoDescubierto = null; // teléfono que Places pueda dar aunque no haya web
+  let placeIdDescubierto = null;  // para enlazar la ficha de Maps como fuente
 
   // Si no vino URL en el job, resolvemos en este orden (barato → caro):
   //   1) la web que el prospecto YA tiene guardada  → se raspa directo, GRATIS.
@@ -189,27 +204,34 @@ async function procesarWebScrape(job, params) {
   //      cuesta cuota, así que solo se usa cuando de verdad no hay web.
   // Clave para el enriquecimiento MASIVO: sin este orden, cada prospecto que
   // ya tenía web dispararía una llamada paga a Places sin necesidad.
+  // En re-descubrir la web quedó en NULL arriba, así que siempre cae en la
+  // búsqueda nueva (nunca reutiliza la web guardada).
   if (!url) {
     const pr = await executeQuery('SELECT razon_social, distrito, provincia, web FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const p = pr.data?.[0];
-    if (p?.web) {
+    if (!redescubrir && p?.web) {
       url = p.web;
     } else if (p) {
       const zona = p.distrito ? `${p.distrito}, ${p.provincia || 'Perú'}` : 'Perú';
       const disc = await descubrirWeb(p.razon_social, { zona });
       url = disc?.web || null;
       telefonoDescubierto = disc?.telefono || null;
+      placeIdDescubierto = disc?.place_id || null;
     }
   }
 
   // Si Places dio un teléfono (con o sin web), lo guardamos como contacto: es
-  // un dato accionable aunque el prospecto se ingresara solo con su RUC.
+  // un dato accionable aunque el prospecto se ingresara solo con su RUC. Como
+  // fuente se enlaza la ficha del lugar en Google Maps (verificable).
   if (telefonoDescubierto) {
     const norm = normalizarTelefono(telefonoDescubierto);
+    const fuenteUrl = placeIdDescubierto
+      ? `https://www.google.com/maps/place/?q=place_id:${placeIdDescubierto}`
+      : null;
     await executeQuery(
-      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente)
-       VALUES (?, 'Telefono', ?, ?, NULL, 'google_places')`,
-      [idProspecto, telefonoDescubierto, norm]
+      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente, fuente_url)
+       VALUES (?, 'Telefono', ?, ?, NULL, 'google_places', ?)`,
+      [idProspecto, telefonoDescubierto, norm, fuenteUrl]
     );
   }
 
@@ -217,17 +239,24 @@ async function procesarWebScrape(job, params) {
   // Places, el job fue útil: recalculamos score y cerramos como completado.
   if (!url) {
     if (telefonoDescubierto) {
-      const score = await recalcularScore(idProspecto);
+      const score = await recalcularScore(idProspecto, {}, { permitirBajar: redescubrir });
       emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
-      return completar(job.id_job, { id_prospecto: idProspecto, web_no_encontrada: true, telefono_places: telefonoDescubierto, score });
+      return completar(job.id_job, { id_prospecto: idProspecto, web_no_encontrada: true, telefono_places: telefonoDescubierto, score, redescubierto: redescubrir });
+    }
+    // En re-descubrir es un desenlace VÁLIDO: se purgó lo dudoso y no hay web
+    // que corresponda al nombre → el prospecto queda limpio (solo datos SUNAT).
+    if (redescubrir) {
+      const score = await recalcularScore(idProspecto, {}, { permitirBajar: true });
+      emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
+      return completar(job.id_job, { id_prospecto: idProspecto, redescubierto: true, web_no_encontrada: true, purgado: true, score });
     }
     return fallar(job.id_job, 'No se pudo encontrar la web del prospecto (ni por Google ni por búsqueda web).');
   }
 
-  const resultado = await enriquecerDesdeWeb(idProspecto, url);
+  const resultado = await enriquecerDesdeWeb(idProspecto, url, { permitirBajar: redescubrir });
   if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
   emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
-  await completar(job.id_job, { id_prospecto: idProspecto, ...resultado });
+  await completar(job.id_job, { id_prospecto: idProspecto, redescubierto: redescubrir, ...resultado });
 }
 
 /**
@@ -236,39 +265,42 @@ async function procesarWebScrape(job, params) {
  * "Enriquecer" y por el descubrimiento (para traer el RUC sin pasos extra).
  * @returns {Promise<Object|null>} resumen o null si no se pudo leer la web.
  */
-async function enriquecerDesdeWeb(idProspecto, url) {
+async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
   const data = await scrapeWebsite(url);
   if (!data.ok) return null;
 
   let nuevos = 0;
-  const agregar = async (tipo, valor, norm, area, fuente = 'web') => {
+  // fuenteUrl = URL EXACTA de donde salió el dato (página o perfil), para que la
+  // ficha permita verificar la veracidad de cada contacto.
+  const agregar = async (tipo, valor, norm, area, fuente = 'web', fuenteUrl = null) => {
     const r = await executeQuery(
-      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente)
-       VALUES (?,?,?,?,?,?)`,
-      [idProspecto, tipo, valor, norm, area || null, fuente]
+      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente, fuente_url)
+       VALUES (?,?,?,?,?,?,?)`,
+      [idProspecto, tipo, valor, norm, area || null, fuente, fuenteUrl]
     );
     if (r.success && r.data.affectedRows > 0) nuevos++;
   };
 
-  // Contactos con área (correos primero, ya vienen priorizados del scraper).
+  // Contactos con área y URL de origen (correos primero, ya vienen priorizados).
   for (const c of data.contactos || []) {
     const norm = c.tipo === 'Email' ? normalizarEmail(c.valor) : normalizarTelefono(c.valor);
-    await agregar(c.tipo, c.valor, norm, c.area);
+    await agregar(c.tipo, c.valor, norm, c.area, 'web', c.fuente_url || data.base);
   }
 
-  // Redes sociales: las guardamos como contacto y TAMBIÉN intentamos rasparlas
+  // Redes sociales: el perfil ES su propia fuente; las guardamos como contacto
+  // y TAMBIÉN intentamos rasparlas (su URL es la fuente de lo que devuelvan).
   for (const [red, redUrl] of Object.entries(data.redes)) {
-    await agregar('RedSocial', redUrl, String(redUrl).toLowerCase(), null);
+    await agregar('RedSocial', redUrl, String(redUrl).toLowerCase(), null, 'web', redUrl);
 
     // Raspar la red social (best-effort, aislado)
     try {
       const socialData = await scrapeSocial(redUrl);
       if (socialData) {
         for (const email of socialData.emails) {
-          await agregar('Email', email, normalizarEmail(email), `Social (${red})`, 'social');
+          await agregar('Email', email, normalizarEmail(email), `Social (${red})`, 'social', redUrl);
         }
         for (const tel of socialData.telefonos) {
-          await agregar('Telefono', tel, normalizarTelefono(tel), `Social (${red})`, 'social');
+          await agregar('Telefono', tel, normalizarTelefono(tel), `Social (${red})`, 'social', redUrl);
         }
       }
     } catch (e) {
@@ -319,7 +351,7 @@ async function enriquecerDesdeWeb(idProspecto, url) {
     'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw, fecha_scraping) VALUES (?, "web", ?, ?, ?)',
     [idProspecto, data.base, JSON.stringify({ emails: data.emails, telefonos: data.telefonos, redes: data.redes }), getFechaPeru()]
   );
-  const score = await recalcularScore(idProspecto);
+  const score = await recalcularScore(idProspecto, {}, { permitirBajar: !!opciones.permitirBajar });
 
   return {
     contactos_nuevos: nuevos,

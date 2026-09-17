@@ -1644,7 +1644,7 @@ export async function generarPdfGuia(req, res, next) {
       const [detalle] = await pool.query(
   'SELECT d.cantidad, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento, ' +
   'd.unidad_medida AS unidad_documento_sunat, d.codigo_bien, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
-  'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
+  'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ? ORDER BY d.id_detalle', [idGuia]);
     const detallePdf = esCompra
       ? detalle.map((d) => ({
           ...d,

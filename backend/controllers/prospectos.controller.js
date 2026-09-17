@@ -597,9 +597,9 @@ export async function addContacto(req, res) {
       : normalizarTelefono(valor);
 
     const r = await executeQuery(
-      `INSERT INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, nombre_persona, cargo, area, fuente, verificado)
-       VALUES (?,?,?,?,?,?,?,?,1)`,
-      [id, tipo, valor, norm, nombre_persona || null, cargo || null, area || null, 'manual']
+      `INSERT INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, nombre_persona, cargo, area, fuente, fuente_url, verificado)
+       VALUES (?,?,?,?,?,?,?,?,?,1)`,
+      [id, tipo, valor, norm, nombre_persona || null, cargo || null, area || null, 'manual', null]
     );
     if (!r.success) return res.status(500).json({ error: r.error });
     emitirCambioProspecto(req, { accion: 'contacto', id_prospecto: Number(id) });
@@ -890,6 +890,27 @@ export async function enriquecerProspecto(req, res) {
 }
 
 // ------------------------------------------------------------
+// Re-descubrir: fuerza una búsqueda NUEVA (sin caché). Purga lo recolectado
+// automáticamente (web/teléfonos/correos/redes), conserva lo ingresado a mano,
+// y vuelve a verificar la web desde cero con matching estricto de nombre. Sirve
+// para corregir un prospecto que quedó con datos de OTRA empresa (web mal
+// atribuida). Disponible para cualquier prospecto.
+// ------------------------------------------------------------
+export async function redescubrirProspecto(req, res) {
+  try {
+    const { id } = req.params;
+    const r = await executeQuery('SELECT id_prospecto FROM prospectos WHERE id_prospecto = ?', [id]);
+    if (!r.success || r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
+
+    // Prioridad 3 (alta): es una corrección puntual pedida por el usuario.
+    const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), redescubrir: true }, req.user?.id_empleado, 3);
+    res.status(201).json({ success: true, message: 'Re-descubrimiento encolado (búsqueda nueva, sin caché)', id_job: idJob });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
 // Enriquecimiento MASIVO: encola un job de enriquecimiento por cada prospecto
 // que cumpla el filtro. NO borra ni pisa nada (el worker solo AGREGA contactos
 // e info faltante). Pensado para poblar de contactos una base ya descubierta.
@@ -955,6 +976,75 @@ export async function enriquecerMasivo(req, res) {
       encolados,
       candidatos,
       message: `Se encolaron ${encolados} enriquecimientos. Se irán procesando en segundo plano; míralos en Actividad.`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Re-descubrimiento MASIVO: encola un re-descubrir (búsqueda nueva, sin caché)
+// por cada prospecto que cumpla el filtro. Purga lo auto-recolectado y lo
+// vuelve a verificar desde cero, para que CADA dato quede con su URL de origen
+// (link verificable). CONSERVA estado comercial, gestor, notas y lo manual.
+//
+// Filtros (body):
+//   - solo_sin_fuente (default true): solo re-traza prospectos que tienen algún
+//       dato auto SIN url de origen (los capturados antes de esta mejora). Así
+//       no se re-verifica de gratis lo que ya quedó trazado.
+//   - min_score, limite.
+// Excluye Descartados, Convertidos y excluidos (no aporta re-verificarlos).
+// ------------------------------------------------------------
+export async function redescubrirMasivo(req, res) {
+  try {
+    const { min_score, limite, solo_sin_fuente = true } = req.body || {};
+    const params = [];
+    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')";
+
+    // Por defecto, solo los que tienen datos auto (web/redes/Places) SIN URL de
+    // origen: son los que necesitan re-trazado para ganar su link verificable.
+    if (solo_sin_fuente) {
+      where += ` AND EXISTS (SELECT 1 FROM prospecto_contactos pc
+        WHERE pc.id_prospecto = p.id_prospecto
+          AND (pc.fuente IS NULL OR pc.fuente <> 'manual')
+          AND pc.fuente_url IS NULL)`;
+    }
+
+    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+      where += ' AND p.score >= ?'; params.push(Number(min_score));
+    }
+
+    // Idempotencia: no re-encolar si ya hay un web_scrape pendiente/en curso.
+    where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
+      WHERE j.tipo = 'web_scrape' AND j.estado IN ('pendiente','procesando')
+        AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto)`;
+
+    const cnt = await executeQuery(`SELECT COUNT(*) AS n FROM prospectos p${where}`, params);
+    if (!cnt.success) return res.status(500).json({ error: cnt.error });
+    const candidatos = cnt.data[0].n;
+    if (candidatos === 0) {
+      return res.json({ success: true, encolados: 0, candidatos: 0, message: 'No hay prospectos por re-descubrir con esos filtros.' });
+    }
+
+    // Un solo INSERT...SELECT: encola un re-descubrir por prospecto. Prioridad 6
+    // (por debajo de un re-descubrir puntual, que es 3, y de los descubrimientos).
+    const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
+    const ins = await executeQuery(
+      `INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita, prioridad)
+       SELECT 'web_scrape', JSON_OBJECT('id_prospecto', p.id_prospecto, 'redescubrir', true), ?, 6
+       FROM prospectos p${where}
+       ORDER BY p.score DESC, p.id_prospecto ASC${limClause}`,
+      [req.user?.id_empleado || null, ...params]
+    );
+    if (!ins.success) return res.status(500).json({ error: ins.error });
+
+    notificarJob();
+    const encolados = ins.data.affectedRows ?? candidatos;
+    res.status(201).json({
+      success: true,
+      encolados,
+      candidatos,
+      message: `Se encolaron ${encolados} re-descubrimientos. Se re-verificarán en segundo plano; míralos en Actividad.`,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

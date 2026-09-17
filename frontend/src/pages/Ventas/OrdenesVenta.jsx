@@ -451,7 +451,8 @@ function OrdenesVenta() {
       return acc;
     }
 
-    const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
+    const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim())
+      || Number(orden.es_exportacion) === 1;
     const monto = esSinImpuesto ? parseFloat(orden.subtotal || 0) : parseFloat(orden.total || 0);
     const tipo = String(orden.tipo_comprobante || '').trim();
     
@@ -697,7 +698,8 @@ function OrdenesVenta() {
       align: 'right',
       width: '170px',
       render: (value, row) => {
-        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase());
+        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
+          || Number(row.es_exportacion) === 1;
         const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
@@ -741,7 +743,10 @@ function OrdenesVenta() {
         if (value === 1) {
           const numFacturas = Number(row.total_facturas || 0);
           const totalFacturado = Number(row.total_facturado || 0);
-          const esParcial = totalFacturado > 0 && (Number(row.total || 0) - totalFacturado) > 1;
+          const esSinImpuestoSunat = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
+            || Number(row.es_exportacion) === 1;
+          const totalParaCmp = esSinImpuestoSunat ? parseFloat(row.subtotal || 0) : parseFloat(row.total || 0);
+          const esParcial = totalFacturado > 0 && (totalParaCmp - totalFacturado) > 1;
           return (
             <div className="flex flex-col items-center gap-1.5">
               <span className={`flex items-center gap-1 font-black text-[9px] uppercase tracking-widest ${esParcial ? 'text-warning' : 'text-success'}`}>

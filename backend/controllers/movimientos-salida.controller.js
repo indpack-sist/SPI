@@ -179,16 +179,22 @@ export async function getSalidaById(req, res) {
             return res.status(404).json({ error: 'Salida no encontrado' });
         }
 
+        // Respeta el orden manual de la OV (si la salida proviene de una) para que la vista y
+        // el PDF de la salida muestren los ítems en el mismo orden; fallback al de inserción.
+        const idOrdenSalida = cabeceraResult.data[0].id_orden_venta || null;
         const detallesSql = `
-            SELECT 
+            SELECT
                 ds.*,
                 p.nombre AS producto,
                 p.unidad_medida
             FROM detalle_salidas ds
             INNER JOIN productos p ON ds.id_producto = p.id_producto
+            LEFT JOIN detalle_orden_venta dov
+                ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
             WHERE ds.id_salida = ?
+            ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, ds.id_detalle ASC
         `;
-        const detallesResult = await executeQuery(detallesSql, [id]);
+        const detallesResult = await executeQuery(detallesSql, [idOrdenSalida, id]);
 
         const cabecera = cabeceraResult.data[0];
         const imp = calcularImpuestosSalida(cabecera);
@@ -559,6 +565,7 @@ export const generarPDFSalidaController = async (req, res, next) => {
         v.placa AS vehiculo,
         -- Nuevos campos para el PDF
         ov.numero_orden AS codigo_orden_venta,
+        ov.id_orden_venta AS ov_id_orden_venta,
         cot.numero_cotizacion AS codigo_cotizacion
       FROM salidas s
       INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
@@ -576,16 +583,24 @@ export const generarPDFSalidaController = async (req, res, next) => {
       return res.status(404).json({ error: 'Salida no encontrada' });
     }
     
+    // Orden del detalle: si la salida proviene de una orden de venta, se respeta el orden
+    // manual de la OV (misma clave que el detalle/nota de venta/guía interna); si no está
+    // ligada a una OV, se cae al orden de inserción (ds.id_detalle). Sin ORDER BY MySQL no
+    // garantiza el orden y el PDF podía salir por código.
+    const idOrdenSalida = salidasResult.data[0].id_orden_venta || salidasResult.data[0].ov_id_orden_venta || null;
     const detallesResult = await executeQuery(`
-      SELECT 
+      SELECT
         ds.*,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida
       FROM detalle_salidas ds
       INNER JOIN productos p ON ds.id_producto = p.id_producto
+      LEFT JOIN detalle_orden_venta dov
+        ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
       WHERE ds.id_salida = ?
-    `, [id]);
+      ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, ds.id_detalle ASC
+    `, [idOrdenSalida, id]);
     
     const salida = {
       ...salidasResult.data[0],

@@ -269,7 +269,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
               d.unidad_medida AS unidad_documento_sunat, d.codigo_bien,
               p.codigo, p.nombre, p.codigo_unidad_sunat
          FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
-        WHERE d.id_guia = ?`, [idGuia]);
+        WHERE d.id_guia = ? ORDER BY d.id_detalle`, [idGuia]);
     if (!detalle.length) throw new AppError('La guía no tiene detalle', 422);
     // Ventas conserva su comportamiento integrado (catálogo de productos). En compras se emiten
     // los datos documentales copiados desde la factura/XML del proveedor.

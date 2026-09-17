@@ -3,7 +3,8 @@ import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
   UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
-  EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight
+  EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight,
+  ExternalLink, RefreshCw, ShieldCheck
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { prospectosAPI } from '../../config/api';
@@ -22,6 +23,16 @@ const colorScore = (s) => (s >= SCORE_CALIENTE ? '#2ecc71' : s >= SCORE_TIBIO ? 
 const bandaScore = (s) => (s >= SCORE_CALIENTE ? 'Caliente' : s >= SCORE_TIBIO ? 'Tibio' : 'Frío');
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
+
+// Host legible (sin www) de una URL, para mostrar la fuente de un dato de un
+// vistazo. Si no es una URL válida, devuelve el texto tal cual.
+const hostFromUrl = (u) => { try { return new URL(u).host.replace(/^www\./i, ''); } catch { return u || ''; } };
+
+// Etiqueta legible del origen técnico de un contacto (columna `fuente`).
+const FUENTE_LABEL = {
+  web: 'sitio web', social: 'red social', google_places: 'Google Maps',
+  sunat: 'SUNAT', manual: 'ingresado a mano',
+};
 
 // Prospectos por página en la tabla (tope acordado con el backend).
 const POR_PAGINA = 50;
@@ -176,6 +187,7 @@ export default function Prospectos() {
   const [descubrirData, setDescubrirData] = useState({ query: '', zonasSel: ['Lima'], otras: '', segmento: 'Formal', limite: 20, todos: true });
   const [descubrirLoading, setDescubrirLoading] = useState(false);
   const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
+  const [redescMasivoLoading, setRedescMasivoLoading] = useState(false);
 
   // Panel de actividad (jobs)
   const [jobs, setJobs] = useState([]);
@@ -435,6 +447,26 @@ export default function Prospectos() {
     }
   };
 
+  // Re-descubrir: búsqueda NUEVA (sin caché). Purga lo recolectado
+  // automáticamente y re-verifica la web desde cero; conserva lo manual. Sirve
+  // para corregir un prospecto con datos de otra empresa (web mal atribuida).
+  const redescubrir = async (id) => {
+    if (!window.confirm(
+      'Se hará una búsqueda NUEVA (no en caché) de la web y los contactos de esta empresa.\n\n' +
+      '• Se BORRA lo recolectado automáticamente (web, teléfonos, correos y redes) para volver a verificarlo desde cero.\n' +
+      '• Se CONSERVA lo que agregaste a mano.\n' +
+      '• Si no se halla una web que corresponda al nombre, quedará solo con sus datos oficiales (SUNAT).\n\n¿Continuar?'
+    )) return;
+    try {
+      await prospectosAPI.redescubrir(id);
+      notify('Re-descubrimiento encolado: verificando datos desde cero en segundo plano.');
+      setJobsOpen(true);
+      refreshJobs();
+    } catch (err) {
+      setError(err.error || 'No se pudo iniciar el re-descubrimiento');
+    }
+  };
+
   // Enriquecimiento MASIVO: busca web + contactos para todas las empresas que
   // aún no tienen contacto. No borra nada (solo agrega). Las que no tengan web
   // usarán Google Places (consume cuota), por eso se confirma antes.
@@ -455,6 +487,30 @@ export default function Prospectos() {
       setError(err.error || 'No se pudo iniciar el enriquecimiento masivo');
     } finally {
       setEnriqMasivoLoading(false);
+    }
+  };
+
+  // Re-descubrimiento MASIVO: re-verifica desde cero (sin caché) todos los
+  // prospectos cuyos datos auto aún no tienen URL de origen, para que cada dato
+  // quede con su link verificable. No borra lo manual ni cambia el estado.
+  const redescubrirTodo = async () => {
+    if (!window.confirm(
+      'Se RE-VERIFICARÁN desde cero (sin caché) todas las empresas cuyos datos automáticos aún no tienen URL de origen.\n\n' +
+      '• Cada teléfono/correo/red quedará con el link exacto de dónde se obtuvo (verificable).\n' +
+      '• Se BORRA lo auto-recolectado para volver a confirmarlo; se CONSERVA lo que agregaste a mano.\n' +
+      '• NO cambia el estado comercial (Contactado, En gestión…), ni el gestor, ni las notas.\n' +
+      '• Las que no tengan web usarán Google Places (consume cuota). Corre en segundo plano.\n\n¿Continuar?'
+    )) return;
+    try {
+      setRedescMasivoLoading(true);
+      const res = await prospectosAPI.redescubrirMasivo({ solo_sin_fuente: true });
+      notify(res.data.message || `Se encolaron ${res.data.encolados} re-descubrimientos.`);
+      setJobsOpen(true);
+      refreshJobs();
+    } catch (err) {
+      setError(err.error || 'No se pudo iniciar el re-descubrimiento masivo');
+    } finally {
+      setRedescMasivoLoading(false);
     }
   };
 
@@ -639,6 +695,14 @@ export default function Prospectos() {
             title="Buscar web y contactos para todas las empresas sin contacto (usa Google Places; no borra nada)"
           >
             {enriqMasivoLoading ? <Loader size={16} className="pros-spin" /> : <Zap size={16} />} Enriquecer todo
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={redescubrirTodo}
+            disabled={redescMasivoLoading}
+            title="Re-verificar desde cero (sin caché) los datos sin URL de origen, para que cada dato tenga su link. Conserva estado y lo agregado a mano."
+          >
+            {redescMasivoLoading ? <Loader size={16} className="pros-spin" /> : <ShieldCheck size={16} />} Re-verificar todo
           </button>
           <button className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
             <FileSpreadsheet size={16} /> Excel
@@ -988,6 +1052,42 @@ export default function Prospectos() {
                     <div className="pros-field"><div className="pros-field-lbl">Ubicación</div>
                       <div className="pros-field-val">{[detalle.distrito, detalle.provincia, detalle.departamento].filter(Boolean).join(', ')}</div></div>
                   )}
+                  {detalle.web && (
+                    <div className="pros-field"><div className="pros-field-lbl">Sitio web</div>
+                      <div className="pros-field-val">
+                        <a href={detalle.web} target="_blank" rel="noopener noreferrer"
+                           title={`Abrir ${detalle.web}`}
+                           style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, wordBreak: 'break-all' }}>
+                          {hostFromUrl(detalle.web)} <ExternalLink size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trazabilidad: todas las fuentes de las que se tomaron datos
+                      de este prospecto (SUNAT, su web, Maps…), verificables. */}
+                  {(detalle.fuentes || []).length > 0 && (
+                    <div className="pros-field">
+                      <div className="pros-field-lbl"><ShieldCheck size={12} style={{ verticalAlign: -2 }} /> Fuentes de datos</div>
+                      <div className="pros-field-val" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {detalle.fuentes.map((f) => (
+                          f.url ? (
+                            <a key={f.id_fuente} href={f.url} target="_blank" rel="noopener noreferrer"
+                               title={`Verificar la fuente:\n${f.url}`}
+                               style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', wordBreak: 'break-all' }}>
+                              <ExternalLink size={11} style={{ flexShrink: 0, opacity: 0.75 }} />
+                              <span>{FUENTE_LABEL[f.fuente] || f.fuente} · {hostFromUrl(f.url)}</span>
+                              <small style={{ color: 'var(--text-secondary)' }}>{String(f.fecha_scraping || '').slice(0, 10)}</small>
+                            </a>
+                          ) : (
+                            <span key={f.id_fuente} style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                              {FUENTE_LABEL[f.fuente] || f.fuente} <small>{String(f.fecha_scraping || '').slice(0, 10)}</small>
+                            </span>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="pros-section-title">Contactos</div>
                   {(() => {
@@ -1010,9 +1110,36 @@ export default function Prospectos() {
                             {c.tipo === 'Email' ? <Mail size={15} /> : c.tipo === 'Web' ? <Globe size={15} /> : c.tipo === 'RedSocial' ? <Globe size={15} /> : <Phone size={15} />}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: 'var(--white)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ wordBreak: 'break-all' }}>{c.valor}</span>
+                                {c.fuente_url ? (
+                                  <a
+                                    href={c.fuente_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Verificar en la fuente:\n${c.fuente_url}\n(clic para abrir en otra pestaña)`}
+                                    style={{ wordBreak: 'break-all', color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                  >
+                                    {c.valor} <ExternalLink size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
+                                  </a>
+                                ) : (
+                                  <span
+                                    style={{ wordBreak: 'break-all' }}
+                                    title={c.fuente === 'manual' ? 'Ingresado a mano (sin fuente web)' : 'Sin URL de origen registrada'}
+                                  >
+                                    {c.valor}
+                                  </span>
+                                )}
                                 {c.area && <span className="pros-area-badge">{c.area}</span>}
                               </div>
+                              {/* Trazabilidad: de dónde salió exactamente este dato. */}
+                              {c.fuente_url ? (
+                                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }} title={c.fuente_url}>
+                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente} · {hostFromUrl(c.fuente_url)}
+                                </div>
+                              ) : c.fuente && c.fuente !== 'manual' ? (
+                                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente}
+                                </div>
+                              ) : null}
                               {(c.nombre_persona || c.cargo) && (
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
                                   {c.nombre_persona}{c.nombre_persona && c.cargo ? ' · ' : ''}{c.cargo}
@@ -1078,6 +1205,14 @@ export default function Prospectos() {
                 onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}
               >
                 <Zap size={15} /> {detalle.web ? "Enriquecer" : "Buscar datos"}
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                disabled={bloqueado}
+                title={bloqueado ? 'Bloqueado por otro usuario' : 'Búsqueda nueva (sin caché): borra lo auto-recolectado y re-verifica web y contactos desde cero'}
+                onClick={() => redescubrir(detalle.id_prospecto)}
+              >
+                <RefreshCw size={15} /> Descubrir de nuevo
               </button>
               {vista === 'excluidos' ? (
                 <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>

@@ -128,8 +128,8 @@ async function porBusquedaGratis(nombre) {
   const conSim = candidatos
     .map((base) => ({ base, sim: similitudNombre(nombre, hostDe(base).replace(/\.[a-z.]+$/i, '').replace(/[-_]/g, ' ')) }))
     .sort((a, b) => b.sim - a.sim);
-  const elegido = conSim[0].sim >= UMBRAL_SIM ? conSim[0].base : candidatos[0];
-  return { web: elegido, telefono: null, fuente: 'busqueda_web' };
+  if (conSim[0].sim < UMBRAL_SIM) return null; // ningún dominio es suficientemente similar
+  return { web: conSim[0].base, telefono: null, fuente: 'busqueda_web' };
 }
 
 /**

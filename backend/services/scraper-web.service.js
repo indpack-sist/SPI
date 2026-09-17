@@ -81,6 +81,8 @@ function normalizarUrl(url) {
 function limpiarTelefono(t) {
   let d = String(t).replace(/\D/g, '');
   if (d.length === 11 && d.startsWith('51')) d = d.slice(2); // quita prefijo país +51
+  // Rechaza placeholders: todos los dígitos iguales (999999999, 111111111…).
+  if (/^(.)\1+$/.test(d)) return null;
   // Móvil peruano: 9 dígitos empezando en 9 (el preferido como principal).
   if (d.length === 9 && d.startsWith('9')) return d;
   // Fijo con código de área: 0 + código válido (no "00") → 8-9 dígitos.
@@ -126,26 +128,33 @@ export async function scrapeWebsite(website) {
 
   for (const ruta of RUTAS_CONTACTO) {
     if (paginasLeidas >= 3) break; // como mucho 3 páginas por sitio
-    const html = await fetchHtml(base + ruta);
+    const paginaUrl = base + ruta;          // URL EXACTA de esta página (para trazabilidad)
+    const html = await fetchHtml(paginaUrl);
     if (!html) continue;
     paginasLeidas++;
 
     // Emails (incluye los de enlaces mailto:). El área se infiere del texto
-    // alrededor y, si no, del usuario del correo (ventas@, informes@…).
+    // alrededor y, si no, del usuario del correo (ventas@, informes@…). Se
+    // guarda la URL exacta donde apareció para poder verificar la fuente.
     for (const m of html.matchAll(RE_EMAIL)) {
       const e = m[0].toLowerCase();
       if (EMAIL_BASURA.test(e) || e.length >= 80) continue;
       const ctx = html.slice(Math.max(0, m.index - 80), m.index);
       const area = detectarArea(ctx) || areaDeEmail(e);
-      if (!emails.has(e) || (area && !emails.get(e))) emails.set(e, area || null);
+      const prev = emails.get(e);
+      if (!prev) emails.set(e, { area: area || null, url: paginaUrl });
+      else if (area && !prev.area) prev.area = area; // conserva la primera URL, mejora el área
     }
-    // Teléfonos: el área se infiere del texto que rodea al número.
+    // Teléfonos: el área se infiere del texto que rodea al número; se guarda
+    // también la URL exacta de origen.
     for (const m of html.matchAll(RE_TEL)) {
       const t = limpiarTelefono(m[0]);
       if (!t) continue;
       const ctx = html.slice(Math.max(0, m.index - 80), m.index + m[0].length + 20);
       const area = detectarArea(ctx);
-      if (!telefonos.has(t) || (area && !telefonos.get(t))) telefonos.set(t, area || null);
+      const prev = telefonos.get(t);
+      if (!prev) telefonos.set(t, { area: area || null, url: paginaUrl });
+      else if (area && !prev.area) prev.area = area;
     }
     // Redes (solo la primera aparición de cada una).
     for (const [red, re] of Object.entries(REDES)) {
@@ -175,10 +184,10 @@ export async function scrapeWebsite(website) {
     }
   }
 
-  // Contactos con su área (correos primero: canal prioritario).
+  // Contactos con su área y su URL de origen (correos primero: canal prioritario).
   const contactos = [
-    ...[...emails].slice(0, 8).map(([valor, area]) => ({ tipo: 'Email', valor, area })),
-    ...[...telefonos].slice(0, 6).map(([valor, area]) => ({ tipo: 'Telefono', valor, area })),
+    ...[...emails].slice(0, 8).map(([valor, m]) => ({ tipo: 'Email', valor, area: m.area, fuente_url: m.url })),
+    ...[...telefonos].slice(0, 6).map(([valor, m]) => ({ tipo: 'Telefono', valor, area: m.area, fuente_url: m.url })),
   ];
 
   return {

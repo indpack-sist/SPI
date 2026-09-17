@@ -22,6 +22,8 @@ import {
   descubrirEmpresas,
   descubrirTodo,
   enriquecerProspecto,
+  redescubrirProspecto,
+  redescubrirMasivo,
   enriquecerMasivo,
   buscarRucProspecto,
   excluirProspecto,
@@ -43,7 +45,9 @@ router.post('/descubrir', descubrirEmpresas);
 router.post('/descubrir-todo', descubrirTodo);
 router.post('/jobs', crearJob);
 router.post('/enriquecer-masivo', enriquecerMasivo);
+router.post('/redescubrir-masivo', redescubrirMasivo);
 router.post('/:id/enriquecer', enriquecerProspecto);
+router.post('/:id/redescubrir', redescubrirProspecto);
 router.post('/:id/buscar-ruc', buscarRucProspecto);
 
 router.put('/:id', updateProspecto);

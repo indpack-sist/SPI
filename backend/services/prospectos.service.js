@@ -364,9 +364,9 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
   if (datos.web)      contactos.push({ tipo: 'Web', valor: datos.web, norm: String(datos.web).trim().toLowerCase() });
   for (const ct of contactos) {
     await executeQuery(
-      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, fuente)
-       VALUES (?,?,?,?,?)`,
-      [idProspecto, ct.tipo, ct.valor, ct.norm, datos.origen || 'manual']
+      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, fuente, fuente_url)
+       VALUES (?,?,?,?,?,?)`,
+      [idProspecto, ct.tipo, ct.valor, ct.norm, datos.origen || 'manual', datos.url || null]
     );
   }
 
@@ -385,7 +385,7 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
  * web, etc.). Lee el estado actual + sus contactos y actualiza score y
  * score_detalle.
  */
-export async function recalcularScore(idProspecto, sunat = {}) {
+export async function recalcularScore(idProspecto, sunat = {}, opciones = {}) {
   const pr = await executeQuery('SELECT * FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
   if (!pr.success || pr.data.length === 0) return null;
   const p = pr.data[0];
@@ -412,7 +412,11 @@ export async function recalcularScore(idProspecto, sunat = {}) {
   // Guardia no-decreciente: enriquecer solo AGREGA señales, así que el score
   // nunca debe bajar por recalcular. Cubre el caso borde de un prospecto SUNAT
   // que tenía bono de "HABIDO" en el alta y aquí no se re-pasa la vigencia.
-  const nuevoScore = Math.max(Number(p.score) || 0, scoring.score);
+  // Excepción: al RE-DESCUBRIR se purgan contactos dudosos, así que el score
+  // debe poder BAJAR para reflejar el estado real (opciones.permitirBajar).
+  const nuevoScore = opciones.permitirBajar
+    ? scoring.score
+    : Math.max(Number(p.score) || 0, scoring.score);
   await executeQuery(
     'UPDATE prospectos SET score = ?, sector = COALESCE(sector, ?), score_detalle = ? WHERE id_prospecto = ?',
     [nuevoScore, scoring.sector, JSON.stringify({ señales: scoring.señales, por_que_contactar: scoring.por_que_contactar }), idProspecto]

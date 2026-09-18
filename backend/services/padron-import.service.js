@@ -29,7 +29,10 @@ import { resolverUbigeo } from './ubigeo.service.js';
  */
 export function parsearLineaPadron(linea) {
   if (!linea) return null;
-  const f = linea.split('|').map((x) => (x || '').trim());
+  // Delimitador según la versión del padrón: puede venir con TAB o con '|'.
+  // Se detecta por línea (SUNAT usa uno consistente en todo el archivo).
+  const delim = linea.indexOf('\t') !== -1 ? '\t' : '|';
+  const f = linea.split(delim).map((x) => (x || '').trim());
   const ruc = f[0];
   if (!/^\d{11}$/.test(ruc)) return null; // cabecera o basura
   const direccion = [f[5], f[6], f[9] && `NRO ${f[9]}`, f[10] && `INT ${f[10]}`]

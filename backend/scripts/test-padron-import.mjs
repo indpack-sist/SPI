@@ -15,14 +15,27 @@ const SERVICIOS = '20600000001|AGENCIA DE MARKETING DIGITAL SAC|ACTIVO|HABIDO|15
 const PERSONA   = '10456789012|JUAN PEREZ DISTRIBUIDORA|ACTIVO|HABIDO|150101|-|-|-|-|-|-|-|-|-|-';
 const BAJA      = '20999999999|DISTRIBUIDORA MAYORISTA BAJA SAC|BAJA DE OFICIO|NO HABIDO|150101|-|-|-|-|-|-|-|-|-|-';
 
+// Muestra REAL separada por TAB (formato del padrón que trajo el usuario), con
+// cabecera en español y acentos (archivo latin1).
+const HEADER_TAB = 'RUC\tNOMBRE O RAZÓN SOCIAL\tESTADO DEL CONTRIBUYENTE\tCONDICIÓN DE DOMICILIO\tUBIGEO\tTIPO DE VÍA\tNOMBRE DE VÍA\tCÓDIGO DE ZONA\tTIPO DE ZONA\tNÚMERO\tINTERIOR\tLOTE\tDEPARTAMENTO\tMANZANA\tKILÓMETRO';
+const LOGISTICA_TAB = '20512345678\tALFA PACK LOGISTICA SAC\tACTIVO\tHABIDO\t150122\tAV\tLOS PROCERES\t-\t-\t605\t102\t-\t-\t-\t-';
+
 console.log('parsearLineaPadron:');
-check('header → null', parsearLineaPadron(HEADER) === null);
+check('header (|) → null', parsearLineaPadron(HEADER) === null);
+check('header (TAB) → null', parsearLineaPadron(HEADER_TAB) === null);
 const p = parsearLineaPadron(LOGISTICA);
 check('ruc', p?.ruc === '20512345678', `→ ${p?.ruc}`);
 check('razon_social', p?.razon_social === 'ALFA PACK LOGISTICA SAC');
 check('estado', p?.estado === 'ACTIVO');
 check('ubigeo', p?.ubigeo === '150122', `→ ${p?.ubigeo}`);
 check('direccion', /AV LOS PROCERES NRO 605 INT 102/.test(p?.direccion || ''), `→ ${p?.direccion}`);
+
+// Mismo registro pero separado por TAB → debe parsear idéntico.
+const pt = parsearLineaPadron(LOGISTICA_TAB);
+check('TAB ruc', pt?.ruc === '20512345678', `→ ${pt?.ruc}`);
+check('TAB razon_social', pt?.razon_social === 'ALFA PACK LOGISTICA SAC', `→ ${pt?.razon_social}`);
+check('TAB ubigeo', pt?.ubigeo === '150122', `→ ${pt?.ubigeo}`);
+check('TAB objetivo', clasificarObjetivo(pt)?.sector === 'Logística / Almacenes');
 
 console.log('clasificarObjetivo:');
 check('logística → objetivo', clasificarObjetivo(parsearLineaPadron(LOGISTICA))?.sector === 'Logística / Almacenes');

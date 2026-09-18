@@ -11,7 +11,9 @@
     "test:factura-exportacion": "node scripts/test-factura-exportacion.js",
     "test:gre": "node scripts/test-gre-xml.js",
     "test:nota-disminucion": "node scripts/test-nota-disminucion.js",
-    "test:pdf": "node scripts/test-pdf-sunat.js"
+    "test:pdf": "node scripts/test-pdf-sunat.js",
+    "test:padron": "node scripts/test-padron-parser.mjs && node scripts/test-padron-import.mjs",
+    "import:padron": "node scripts/import-padron.mjs"
   },
   "keywords": [
     "inventario",

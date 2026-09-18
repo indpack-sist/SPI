@@ -8,6 +8,7 @@ import {
   getFechaPeru,
 } from './prospectos.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
+import { buscarRucPorNombre } from './ruc-lookup.service.js';
 import { descubrirWeb } from './descubrir-web.service.js';
 import { scrapeSocial } from './scraper-social.service.js';
 
@@ -143,11 +144,38 @@ async function procesarWebScrape(job, params) {
   if (!url) {
     const pr = await executeQuery('SELECT razon_social, documento, distrito, provincia, web FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const p = pr.data?.[0];
+    let documento = p?.documento || null;
+
+    // Recuperación de RUC faltante (clave para los leads viejos "sin RUC"): al
+    // re-descubrir, si el prospecto no tiene documento, se busca por nombre en
+    // ruc.pe (gratis, con triple candado de similitud/checksum). Opt-out con
+    // buscar_ruc:false. Si aparece, se aplica y el descubrimiento de web queda
+    // anclado a ese RUC. NO altera estado/gestor/historial.
+    if (redescubrir && !documento && p?.razon_social && params.buscar_ruc !== false) {
+      try {
+        const hit = await buscarRucPorNombre(p.razon_social);
+        if (hit?.ruc) {
+          documento = hit.ruc;
+          await executeQuery(
+            "UPDATE prospectos SET documento = ?, tipo_documento = 'RUC', segmento = 'Formal', razon_social = COALESCE(NULLIF(?, ''), razon_social) WHERE id_prospecto = ?",
+            [hit.ruc, hit.datos?.razon_social || null, idProspecto]
+          );
+          const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [hit.ruc]);
+          if (cli.success && cli.data.length > 0) {
+            await executeQuery(
+              "UPDATE prospectos SET flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
+              [cli.data[0].id_cliente, idProspecto]
+            );
+          }
+        }
+      } catch { /* best-effort: si ruc.pe falla, se sigue sin RUC */ }
+    }
+
     if (!redescubrir && p?.web) {
       url = p.web;
     } else if (p) {
       const zona = p.distrito ? `${p.distrito}, ${p.provincia || 'Perú'}` : 'Perú';
-      const disc = await descubrirWeb(p.razon_social, { ruc: p.documento, zona });
+      const disc = await descubrirWeb(p.razon_social, { ruc: documento, zona });
       url = disc?.web || null;
       // Descubrimiento anclado en RUC ya viene verificado (RUC en la página o
       // dominio == nombre): no hace falta re-verificar al raspar.

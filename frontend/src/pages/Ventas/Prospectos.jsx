@@ -4,7 +4,7 @@ import {
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
   UserPlus, Trash2, Eye, AlertTriangle, Activity, Zap, FileSpreadsheet,
   EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight,
-  ExternalLink, RefreshCw, ShieldCheck
+  ExternalLink, RefreshCw, ShieldCheck, Compass, MapPin
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { prospectosAPI } from '../../config/api';
@@ -199,6 +199,12 @@ export default function Prospectos() {
   const [convertData, setConvertData] = useState(null);
   const [convertLoading, setConvertLoading] = useState(false);
 
+  // Descubrimiento por Padrón SUNAT (por departamento + sector)
+  const [descubrirOpen, setDescubrirOpen] = useState(false);
+  const [descubrirLoading, setDescubrirLoading] = useState(false);
+  const [padron, setPadron] = useState(null); // stats del padrón (total, departamentos, sectores)
+  const [padronSel, setPadronSel] = useState({ departamentos: [], sectores: [], limite: 100 });
+
   // Operaciones masivas de enriquecimiento / re-verificación
   const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
   const [redescMasivoLoading, setRedescMasivoLoading] = useState(false);
@@ -385,6 +391,46 @@ export default function Prospectos() {
     };
   }, [user?.id, recargarDetalleSilencioso]);
 
+  // Abre el modal de descubrimiento y carga qué hay disponible en el padrón.
+  const abrirDescubrir = async () => {
+    setDescubrirOpen(true);
+    try {
+      const res = await prospectosAPI.padronStats();
+      setPadron(res.data.data || { total: 0, departamentos: [], sectores: [] });
+    } catch {
+      setPadron({ total: 0, departamentos: [], sectores: [] });
+    }
+  };
+
+  const togglePadron = (campo, valor) => setPadronSel((s) => ({
+    ...s,
+    [campo]: s[campo].includes(valor) ? s[campo].filter((x) => x !== valor) : [...s[campo], valor],
+  }));
+
+  // Crea prospectos desde el padrón SUNAT para los departamentos/sectores elegidos.
+  const hacerDescubrir = async () => {
+    if (!padronSel.departamentos.length) { setError('Elige al menos un departamento'); return; }
+    try {
+      setDescubrirLoading(true);
+      const res = await prospectosAPI.descubrirPadron({
+        departamentos: padronSel.departamentos,
+        sectores: padronSel.sectores,
+        limite: padronSel.limite,
+      });
+      const r = res.data.resumen || {};
+      notify(res.data.message || `Creados ${r.creados || 0} prospecto(s).`);
+      setDescubrirOpen(false);
+      setJobsOpen(true);
+      refreshJobs();
+      cargarLotes();
+      cargar();
+    } catch (err) {
+      setError(err.error || 'No se pudo descubrir desde el padrón');
+    } finally {
+      setDescubrirLoading(false);
+    }
+  };
+
   // Filtros actuales (sin paginación) para reusarlos en la exportación.
   const filtrosActuales = () => {
     const params = { orden };
@@ -492,26 +538,29 @@ export default function Prospectos() {
     }
   };
 
-  // Re-descubrimiento MASIVO: re-verifica desde cero (sin caché) todos los
-  // prospectos cuyos datos auto aún no tienen URL de origen, para que cada dato
-  // quede con su link verificable. No borra lo manual ni cambia el estado.
+  // REBUSCAR TODO: re-busca desde cero (sin caché) los datos de TODOS los
+  // prospectos que no son clientes — incluye los En gestión / Contactado. Purga
+  // los datos AUTO (conserva lo manual), recupera el RUC faltante por nombre y
+  // re-trae web/contactos anclados al RUC. NO toca estado, gestor ni historial.
   const redescubrirTodo = async () => {
     if (!window.confirm(
-      'Se RE-VERIFICARÁN desde cero (sin caché) los prospectos SIN TRABAJAR cuyos datos automáticos aún no tienen URL de origen.\n\n' +
-      '• Solo se tocan prospectos en estado "Nuevo" y sin gestor. Los gestionados, contactados, convertidos y los que ya son clientes NO se tocan.\n' +
-      '• Se BORRA lo auto-recolectado para volver a confirmarlo; se CONSERVA lo que agregaste a mano.\n' +
-      '• Cada teléfono/correo/red quedará con el link exacto de dónde se obtuvo (verificable).\n' +
-      '• La web se re-busca por el RUC y solo se aceptan datos de páginas que lo publican. Corre en segundo plano.\n\n¿Continuar?'
+      'Se RE-BUSCARÁN los datos de TODOS los prospectos (menos los que ya son clientes) desde cero.\n\n' +
+      '• A los que ya son CLIENTES o están Convertidos NO se les toca nada.\n' +
+      '• A los que están En gestión / Contactado SÍ se les refrescan los datos, pero se CONSERVA su historial, su estado y su gestor.\n' +
+      '• Se BORRAN los datos automáticos (web/teléfonos/correos fantasma) y se CONSERVA lo que agregaste a mano.\n' +
+      '• A los que están SIN RUC se les intenta recuperar el RUC por nombre (ruc.pe).\n' +
+      '• La web y los contactos se re-buscan anclados al RUC. Corre en segundo plano; con ~4 mil puede tardar horas.\n\n¿Continuar?'
     )) return;
     try {
       setRedescMasivoLoading(true);
-      const res = await prospectosAPI.redescubrirMasivo({ solo_sin_fuente: true });
-      notify(res.data.message || `Se encolaron ${res.data.encolados} re-descubrimientos.`);
+      // solo_sin_fuente:false = re-busca TODOS (no solo los que no tenían fuente).
+      const res = await prospectosAPI.redescubrirMasivo({ solo_sin_fuente: false });
+      notify(res.data.message || `Se encolaron ${res.data.encolados} re-búsquedas.`);
       setJobsOpen(true);
       refreshJobs();
       cargarLotes();
     } catch (err) {
-      setError(err.error || 'No se pudo iniciar el re-descubrimiento masivo');
+      setError(err.error || 'No se pudo iniciar la re-búsqueda masiva');
     } finally {
       setRedescMasivoLoading(false);
     }
@@ -681,6 +730,9 @@ export default function Prospectos() {
             <Activity size={16} /> Actividad
             {jobsActivos > 0 && <span className="pros-activity-dot">{jobsActivos}</span>}
           </button>
+          <button className="btn btn-outline" onClick={abrirDescubrir} title="Descubrir empresas reales del Padrón SUNAT por departamento y sector">
+            <Compass size={16} /> Descubrir
+          </button>
           <button
             className="btn btn-outline"
             onClick={enriquecerTodo}
@@ -693,9 +745,9 @@ export default function Prospectos() {
             className="btn btn-outline"
             onClick={redescubrirTodo}
             disabled={redescMasivoLoading}
-            title="Re-verificar desde cero (sin caché) los datos sin URL de origen, para que cada dato tenga su link. Conserva estado y lo agregado a mano."
+            title="Re-buscar desde cero los datos de todos los prospectos (menos clientes): recupera RUC faltante y re-trae web/contactos anclados al RUC. Conserva historial, estado y lo agregado a mano."
           >
-            {redescMasivoLoading ? <Loader size={16} className="pros-spin" /> : <ShieldCheck size={16} />} Re-verificar todo
+            {redescMasivoLoading ? <Loader size={16} className="pros-spin" /> : <ShieldCheck size={16} />} Rebuscar todo
           </button>
           <button className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
             <FileSpreadsheet size={16} /> Excel
@@ -1349,6 +1401,79 @@ export default function Prospectos() {
           <button className="btn btn-outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>Cancelar</button>
           <button className="btn btn-primary" onClick={exportarExcel} disabled={exportLoading}>
             {exportLoading ? <><Loader size={16} className="pros-spin" /> Generando…</> : <><FileSpreadsheet size={16} /> Descargar</>}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ---------- Modal descubrir (Padrón SUNAT) ---------- */}
+      <Modal isOpen={descubrirOpen} onClose={() => setDescubrirOpen(false)} title="Descubrir empresas por departamento y sector" size="md">
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+          Trae empresas <b>reales del Padrón de SUNAT</b> (personas jurídicas activas) de los sectores que compran empaque, filtradas por departamento. Se crean como prospectos con razón social, estado y ubicación oficiales, y se les busca web/contactos anclados al RUC. <b>No duplica</b> lo que ya tienes ni toca a tus clientes.
+        </p>
+
+        {padron === null ? (
+          <div className="pros-loading-inline"><Loader size={16} className="pros-spin" /> Cargando disponibilidad del padrón…</div>
+        ) : padron.total === 0 ? (
+          <div style={{ fontSize: '0.82rem', background: 'rgba(232,184,75,0.12)', border: '1px solid rgba(232,184,75,0.5)', borderRadius: 8, padding: '0.7rem 0.8rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e8b84b', fontWeight: 700, marginBottom: 4 }}>
+              <AlertTriangle size={15} /> El padrón aún no está cargado
+            </div>
+            <div style={{ color: 'var(--text-secondary)' }}>
+              Un administrador debe importarlo una vez con:<br />
+              <code style={{ color: 'var(--white)' }}>npm run import:padron -- --file=padron_reducido_ruc.zip</code><br />
+              (descarga el Padrón Reducido RUC del portal de SUNAT). Luego vuelve aquí.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+              <b style={{ color: 'var(--white)' }}>{Number(padron.total).toLocaleString('es-PE')}</b> empresas objetivo en el padrón
+              {padron.ultima_import ? ` · actualizado ${String(padron.ultima_import).slice(0, 10)}` : ''}.
+            </div>
+
+            <label className="form-label"><MapPin size={13} style={{ verticalAlign: -2 }} /> Departamentos</label>
+            <div className="pros-zonas-grid">
+              {(padron.departamentos || []).map((d) => {
+                const on = padronSel.departamentos.includes(d.valor);
+                return (
+                  <label key={d.valor} className={`pros-zona-chk ${on ? 'on' : ''}`}>
+                    <input type="checkbox" checked={on} onChange={() => togglePadron('departamentos', d.valor)} />
+                    <span>{d.valor} <small style={{ opacity: 0.7 }}>({Number(d.total).toLocaleString('es-PE')})</small></span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <label className="form-label" style={{ marginTop: '0.7rem' }}>Sectores <small style={{ color: 'var(--text-secondary)' }}>(vacío = todos)</small></label>
+            <div className="pros-zonas-grid">
+              {(padron.sectores || []).map((s) => {
+                const on = padronSel.sectores.includes(s.valor);
+                return (
+                  <label key={s.valor} className={`pros-zona-chk ${on ? 'on' : ''}`}>
+                    <input type="checkbox" checked={on} onChange={() => togglePadron('sectores', s.valor)} />
+                    <span>{s.valor} <small style={{ opacity: 0.7 }}>({Number(s.total).toLocaleString('es-PE')})</small></span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '0.7rem', maxWidth: 220 }}>
+              <label className="form-label">Cuántas crear (máx. 500)</label>
+              <input type="number" className="form-input" min={1} max={500} value={padronSel.limite}
+                onChange={(e) => setPadronSel({ ...padronSel, limite: Math.max(1, Math.min(parseInt(e.target.value) || 1, 500)) })} />
+            </div>
+
+            <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
+              Se crean solo empresas que aún no tienes (ni prospecto ni cliente). El enriquecimiento (web/correos/teléfonos) corre en segundo plano y solo acepta datos de páginas que publican el RUC.
+            </div>
+          </>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
+          <button className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
+          <button className="btn btn-primary" onClick={hacerDescubrir}
+            disabled={descubrirLoading || !padron || padron.total === 0 || padronSel.departamentos.length === 0}>
+            {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Creando…</> : <><Compass size={16} /> Descubrir</>}
           </button>
         </div>
       </Modal>

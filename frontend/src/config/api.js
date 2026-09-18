@@ -185,9 +185,9 @@ export const prospectosAPI = {
   liberar: (id) => api.patch(`/prospectos/${id}/liberar`),
   excluir: (id, excluido) => api.patch(`/prospectos/${id}/excluir`, { excluido }),
   delete: (id) => api.delete(`/prospectos/${id}`),
-  // Cola de scraping / descubrimiento
-  descubrir: (data) => api.post('/prospectos/descubrir', data),
-  descubrirTodo: (data) => api.post('/prospectos/descubrir-todo', data),
+  // Descubrimiento por Padrón SUNAT (reemplaza Google Places)
+  padronStats: () => api.get('/prospectos/padron/stats'),
+  descubrirPadron: (data) => api.post('/prospectos/descubrir-padron', data),
   enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
   redescubrir: (id) => api.post(`/prospectos/${id}/redescubrir`),
   redescubrirMasivo: (data) => api.post('/prospectos/redescubrir-masivo', data),

@@ -22,6 +22,8 @@ import {
   getLotesActivos,
   descubrirEmpresas,
   descubrirTodo,
+  padronStats,
+  descubrirPadron,
   enriquecerProspecto,
   redescubrirProspecto,
   redescubrirMasivo,
@@ -39,12 +41,14 @@ router.get('/facetas', getFacetas);
 router.get('/barridos', getBarridos);
 router.get('/jobs', listarJobs);
 router.get('/lotes-activos', getLotesActivos);
+router.get('/padron/stats', padronStats);
 router.get('/:id', getProspectoById);
 
 router.post('/', createProspecto);
 router.post('/ingesta-lista', ingestaLista);
 router.post('/descubrir', descubrirEmpresas);
 router.post('/descubrir-todo', descubrirTodo);
+router.post('/descubrir-padron', descubrirPadron);
 router.post('/jobs', crearJob);
 router.post('/enriquecer-masivo', enriquecerMasivo);
 router.post('/redescubrir-masivo', redescubrirMasivo);

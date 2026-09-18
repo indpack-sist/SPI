@@ -23,6 +23,15 @@ let socketIo = null;
 let procesando = false;
 let intervalo = null;
 
+// Cuántos jobs se procesan EN PARALELO. Cada job es casi todo I/O de red
+// (fetch de dominios candidatos, web y redes) que NO está limitado por el
+// throttle de búsqueda —ese sigue siendo un candado global anti-baneo—, así
+// que solapar varios multiplica el throughput sin golpear más por segundo a
+// los buscadores ni perder precisión. La toma de jobs ya es atómica
+// (tomarSiguienteJob reclama con UPDATE optimista), así que varios obreros
+// compiten por la cola sin pisarse. Ajustable por entorno.
+const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 4);
+
 /** Arranca el worker. Se llama desde server.js con la instancia de socket.io. */
 export function startWorker(io) {
   socketIo = io;
@@ -45,17 +54,28 @@ async function tick() {
   if (procesando) return;
   procesando = true;
   try {
-    // Procesa todos los pendientes en cascada mientras haya.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const job = await tomarSiguienteJob();
-      if (!job) break;
-      await procesarJob(job);
-    }
+    // Lanza CONCURRENCIA obreros que compiten por la cola en paralelo. Cada uno
+    // drena jobs mientras haya; el claim atómico evita que dos tomen el mismo.
+    await Promise.all(Array.from({ length: CONCURRENCIA }, () => obrero()));
   } catch (e) {
     console.error('Error en worker de prospección:', e.message);
   } finally {
     procesando = false;
+  }
+}
+
+// Un obrero: toma y procesa jobs pendientes en cascada hasta que la cola se
+// vacía. Un fallo de un job no debe tumbar al obrero (ni al resto): se aísla.
+async function obrero() {
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const job = await tomarSiguienteJob();
+    if (!job) break;
+    try {
+      await procesarJob(job);
+    } catch (e) {
+      console.error('Error procesando job de prospección:', e.message);
+    }
   }
 }
 

@@ -39,13 +39,23 @@ const GENERICOS = new Set([
   'la', 'el', 'los', 'las', 'and', 'representaciones', 'soluciones',
 ]);
 
-// Throttle global: los buscadores HTML limitan ráfagas.
+// Throttle global anti-baneo: los buscadores HTML limitan ráfagas, así que las
+// consultas salen como máximo 1 cada MIN_GAP_MS. Implementado como una CADENA de
+// promesas (no como una lectura de timestamp) para que sea correcto aunque haya
+// varios obreros del worker pidiendo turno en paralelo: cada llamada se encola
+// detrás de la anterior y respeta el gap, garantizando el ritmo global exacto.
 const MIN_GAP_MS = Number(process.env.WEB_LOOKUP_GAP_MS) || 1200;
+let cadenaTurno = Promise.resolve();
 let ultimaPeticion = 0;
-async function esperarTurno() {
-  const espera = ultimaPeticion + MIN_GAP_MS - Date.now();
-  if (espera > 0) await new Promise((r) => setTimeout(r, espera));
-  ultimaPeticion = Date.now();
+function esperarTurno() {
+  const turno = cadenaTurno.then(async () => {
+    const espera = ultimaPeticion + MIN_GAP_MS - Date.now();
+    if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+    ultimaPeticion = Date.now();
+  });
+  // La cadena avanza aunque un turno falle (no debe romper el throttle).
+  cadenaTurno = turno.catch(() => {});
+  return turno;
 }
 
 function normalizarTextoNombre(s) {

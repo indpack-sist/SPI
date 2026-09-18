@@ -843,6 +843,32 @@ export async function descubrirTodo(req, res) {
 
 // Conteo disponible en el padrón, por departamento y por sector, para poblar el
 // modal de descubrimiento (y saber si hace falta correr el import).
+// Tope de prospectos a crear por clic desde el padrón. No es un límite técnico:
+// cada creación encola un enriquecimiento (throttle anti-baneo) y llena la
+// bandeja, así que se acota por lote (repetible). Ajustable por entorno.
+const PADRON_DESCUBRIR_MAX = Number(process.env.PADRON_DESCUBRIR_MAX) || 2000;
+
+// Prioridad por afinidad de sector (mismos bonos que el scoring): cuando se
+// eligen muchas zonas/sectores y el lote se topa, se crean PRIMERO las de mayor
+// potencial (agroexport, logística, e-commerce…). Empate → alfabético.
+const SECTOR_PRIORIDAD_SQL = `CASE pe.sector
+  WHEN 'Agroexportación' THEN 16
+  WHEN 'Logística / Almacenes' THEN 15
+  WHEN 'E-commerce / Courier' THEN 14
+  WHEN 'Mudanzas / Embalaje' THEN 13
+  WHEN 'Alimentos' THEN 13
+  WHEN 'Bebidas' THEN 12
+  WHEN 'Pesca / Congelados' THEN 12
+  WHEN 'Electrodomésticos / Electrónica' THEN 12
+  WHEN 'Vidrio / Cerámica' THEN 12
+  WHEN 'Farmacéutica / Química' THEN 11
+  WHEN 'Muebles / Madera' THEN 10
+  WHEN 'Importación / Distribución' THEN 10
+  WHEN 'Industria / Manufactura' THEN 9
+  WHEN 'Textil / Calzado' THEN 8
+  WHEN 'Ferretería / Suministros' THEN 8
+  ELSE 0 END`;
+
 export async function padronStats(req, res) {
   try {
     const [tot, deptos, sectores] = await Promise.all([
@@ -860,6 +886,7 @@ export async function padronStats(req, res) {
         ultima_import: tot.data[0].ultima,
         departamentos: deptos.success ? deptos.data : [],
         sectores: sectores.success ? sectores.data : [],
+        max_por_lote: PADRON_DESCUBRIR_MAX,
       },
     });
   } catch (error) {
@@ -876,7 +903,9 @@ export async function descubrirPadron(req, res) {
     const deps = Array.isArray(departamentos) ? departamentos.filter(Boolean) : [];
     const secs = Array.isArray(sectores) ? sectores.filter(Boolean) : [];
     if (!deps.length) return res.status(400).json({ error: 'Elige al menos un departamento' });
-    const lim = Math.min(Math.max(parseInt(limite || 100, 10) || 100, 1), 500);
+    // Si no se indica límite, se crean hasta el tope configurado.
+    const pedido = parseInt(limite, 10);
+    const lim = Math.min(Math.max(Number.isFinite(pedido) ? pedido : PADRON_DESCUBRIR_MAX, 1), PADRON_DESCUBRIR_MAX);
 
     const params = [];
     let where = "WHERE pe.estado LIKE 'ACTIVO%'"
@@ -890,8 +919,12 @@ export async function descubrirPadron(req, res) {
     where += ' AND NOT EXISTS (SELECT 1 FROM prospectos p WHERE p.documento = pe.ruc)';
     where += ' AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.ruc = pe.ruc)';
 
+    // Orden por POTENCIAL: mayor afinidad de sector primero; empate, alfabético.
+    // Así, con el lote topado, se crean primero los mejores clientes potenciales.
     const sel = await executeQuery(
-      `SELECT pe.* FROM padron_empresas pe ${where} ORDER BY pe.razon_social ASC LIMIT ${lim}`,
+      `SELECT pe.* FROM padron_empresas pe ${where}
+       ORDER BY (${SECTOR_PRIORIDAD_SQL}) DESC, pe.razon_social ASC
+       LIMIT ${lim}`,
       params
     );
     if (!sel.success) return res.status(500).json({ error: sel.error });

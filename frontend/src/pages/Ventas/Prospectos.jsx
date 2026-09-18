@@ -203,7 +203,7 @@ export default function Prospectos() {
   const [descubrirOpen, setDescubrirOpen] = useState(false);
   const [descubrirLoading, setDescubrirLoading] = useState(false);
   const [padron, setPadron] = useState(null); // stats del padrón (total, departamentos, sectores)
-  const [padronSel, setPadronSel] = useState({ departamentos: [], sectores: [], limite: 100 });
+  const [padronSel, setPadronSel] = useState({ departamentos: [], sectores: [], limite: 500 });
 
   // Operaciones masivas de enriquecimiento / re-verificación
   const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
@@ -1457,14 +1457,14 @@ export default function Prospectos() {
               })}
             </div>
 
-            <div style={{ marginTop: '0.7rem', maxWidth: 220 }}>
-              <label className="form-label">Cuántas crear (máx. 500)</label>
-              <input type="number" className="form-input" min={1} max={500} value={padronSel.limite}
-                onChange={(e) => setPadronSel({ ...padronSel, limite: Math.max(1, Math.min(parseInt(e.target.value) || 1, 500)) })} />
+            <div style={{ marginTop: '0.7rem', maxWidth: 260 }}>
+              <label className="form-label">Cuántas crear por vez (máx. {Number(padron.max_por_lote || 2000).toLocaleString('es-PE')})</label>
+              <input type="number" className="form-input" min={1} max={padron.max_por_lote || 2000} value={padronSel.limite}
+                onChange={(e) => setPadronSel({ ...padronSel, limite: Math.max(1, Math.min(parseInt(e.target.value) || 1, padron.max_por_lote || 2000)) })} />
             </div>
 
             <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-              Se crean solo empresas que aún no tienes (ni prospecto ni cliente). El enriquecimiento (web/correos/teléfonos) corre en segundo plano y solo acepta datos de páginas que publican el RUC.
+              Se crean solo empresas que aún no tienes (ni prospecto ni cliente). Es un tope <b>por vez</b> (puedes repetir). Cada una encola un enriquecimiento (web/correos/teléfonos por RUC) que corre en segundo plano; por eso no conviene crear decenas de miles de golpe. Lotes grandes tardan un poco en crearse.
             </div>
           </>
         )}

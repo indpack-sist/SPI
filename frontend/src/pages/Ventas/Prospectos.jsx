@@ -28,18 +28,44 @@ const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
 // vistazo. Si no es una URL válida, devuelve el texto tal cual.
 const hostFromUrl = (u) => { try { return new URL(u).host.replace(/^www\./i, ''); } catch { return u || ''; } };
 
-// Fecha de descubrimiento (YYYY-MM-DD HH:mm:ss) → DD/MM/YYYY, y días transcurridos
-// para resaltar lo recién descubierto en el listado.
-const fechaCorta = (f) => {
-  if (!f) return '—';
-  const s = String(f).slice(0, 10);
-  const [y, m, d] = s.split('-');
-  return d && m && y ? `${d}/${m}/${y}` : s;
+// Día del calendario (YYYY-MM-DD) de un timestamp EXPRESADO EN HORA DE PERÚ
+// (America/Lima). Acepta tanto ISO en UTC ("...T..Z", como lo serializa el
+// driver de MySQL) como "YYYY-MM-DD HH:mm:ss". Sin esto, recortar el ISO en UTC
+// desfasaba el día para capturas de la tarde/noche de Perú.
+const fechaPeruISO = (f) => {
+  if (!f) return '';
+  const d = new Date(String(f).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(f).slice(0, 10);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // en-CA → YYYY-MM-DD
 };
+const hoyPeruISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+
+// Fecha de descubrimiento → DD/MM/YYYY en hora de Perú.
+const fechaCorta = (f) => {
+  const iso = fechaPeruISO(f);
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+};
+// Días DE CALENDARIO (Perú) transcurridos desde la captura, para resaltar lo
+// recién descubierto de forma congruente con la fecha mostrada: 0 = hoy, 1 = ayer.
+// (Antes se usaba una ventana móvil de 24 h, así que lo capturado ayer por la
+// tarde seguía marcado "Hoy" esta mañana.)
 const diasDesde = (f) => {
-  if (!f) return Infinity;
-  const t = new Date(String(f).replace(' ', 'T')).getTime();
-  return Number.isNaN(t) ? Infinity : (Date.now() - t) / 86400000;
+  const iso = fechaPeruISO(f);
+  if (!iso) return Infinity;
+  const cap = new Date(`${iso}T00:00:00Z`).getTime();
+  const hoy = new Date(`${hoyPeruISO()}T00:00:00Z`).getTime();
+  return Number.isNaN(cap) ? Infinity : Math.round((hoy - cap) / 86400000);
+};
+// Texto de recencia para el badge de la columna "Descubierto". Explícito para no
+// confundirse con el estado del workflow "Nuevo". Solo resalta la primera semana.
+const etiquetaRecencia = (f) => {
+  const d = diasDesde(f);
+  if (d <= 0) return 'Hoy';
+  if (d === 1) return 'Ayer';
+  if (d < 7) return `Hace ${d} días`;
+  return null;
 };
 
 // Etiqueta legible del origen técnico de un contacto (columna `fuente`).
@@ -989,11 +1015,9 @@ export default function Prospectos() {
                     </td>
                     <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       {fechaCorta(p.fecha_captura)}
-                      {diasDesde(p.fecha_captura) < 1 ? (
-                        <span className="pros-nuevo-badge">Hoy</span>
-                      ) : diasDesde(p.fecha_captura) < 3 ? (
-                        <span className="pros-nuevo-badge">Nuevo</span>
-                      ) : null}
+                      {etiquetaRecencia(p.fecha_captura) && (
+                        <span className="pros-nuevo-badge">{etiquetaRecencia(p.fecha_captura)}</span>
+                      )}
                     </td>
                     <td>
                       <span className={`pros-chip ${ec.cls}`}>{ec.label}</span>

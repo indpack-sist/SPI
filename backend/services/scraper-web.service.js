@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { rucChecksumValido } from './ruc-lookup.service.js';
 
 // ============================================================
 // Scraper de sitio web corporativo (dependency-free).
@@ -146,6 +147,7 @@ export async function scrapeWebsite(website) {
   let logo = null;
   let titulo = null;
   let ruc = null;
+  const rucsSet = new Set(); // TODOS los RUCs válidos hallados en el sitio (para verificar pertenencia)
   let paginasLeidas = 0;
 
   for (const ruta of RUTAS_CONTACTO) {
@@ -196,6 +198,14 @@ export async function scrapeWebsite(website) {
       }
     }
 
+    // Todos los RUCs válidos del sitio (con o sin etiqueta), quitando separadores.
+    // Se usa para VERIFICAR que la web pertenece al prospecto: basta con que su
+    // RUC exacto aparezca aquí. El checksum filtra números que no son RUC.
+    const sinSep = html.replace(/[.\-\s]/g, '');
+    for (const mm of sinSep.matchAll(/\b((?:10|15|16|17|20)\d{9})\b/g)) {
+      if (rucChecksumValido(mm[1])) rucsSet.add(mm[1]);
+    }
+
     // Logo / imagen representativa: og:image de la home.
     if (!logo) {
       const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
@@ -235,6 +245,7 @@ export async function scrapeWebsite(website) {
     logo,
     titulo,
     ruc,
+    rucs: [...rucsSet],
     paginas_leidas: paginasLeidas,
   };
 }

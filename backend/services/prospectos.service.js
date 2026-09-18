@@ -46,6 +46,42 @@ const SECTORES_OBJETIVO = [
   { patron: /\b(FERRETER|FERRETERIA INDUSTRIAL|SUMINISTRO)/i, sector: 'Ferretería / Suministros', bono: 8 },
 ];
 
+// Mapeo CIIU (Rev.4) → sector objetivo. La actividad económica de SUNAT es MUCHO
+// más fiable que adivinar por el nombre: se prioriza siempre que exista. La clave
+// es la "división" (2 primeros dígitos del CIIU). El orden fija la prioridad.
+const CIIU_SECTOR = [
+  { div: ['01', '02'], sector: 'Agroexportación', bono: 16 },
+  { div: ['03'], sector: 'Pesca / Congelados', bono: 12 },
+  { div: ['49', '50', '51', '52', '53'], sector: 'Logística / Almacenes', bono: 15 },
+  { div: ['10'], sector: 'Alimentos', bono: 13 },
+  { div: ['11'], sector: 'Bebidas', bono: 12 },
+  { div: ['23'], sector: 'Vidrio / Cerámica', bono: 12 },
+  { div: ['26', '27'], sector: 'Electrodomésticos / Electrónica', bono: 12 },
+  { div: ['20', '21'], sector: 'Farmacéutica / Química', bono: 11 },
+  { div: ['16', '31'], sector: 'Muebles / Madera', bono: 10 },
+  { div: ['46', '47'], sector: 'Importación / Distribución', bono: 10 },
+  { div: ['13', '14', '15'], sector: 'Textil / Calzado', bono: 8 },
+  { div: ['17', '18', '19', '22', '24', '25', '28', '29', '30', '32', '33'], sector: 'Industria / Manufactura', bono: 9 },
+];
+
+/**
+ * Detecta el sector objetivo a partir del/los CIIU (array de {codigo,...} o de
+ * strings). Devuelve { sector, bono, codigo } del primer CIIU que encaje, o null.
+ */
+export function sectorPorCiiu(ciiu) {
+  if (!ciiu) return null;
+  const lista = Array.isArray(ciiu) ? ciiu : [ciiu];
+  for (const item of lista) {
+    const cod = String(item?.codigo ?? item ?? '').replace(/\D/g, '');
+    if (cod.length < 2) continue;
+    const div = cod.padStart(4, '0').slice(0, 2);
+    for (const m of CIIU_SECTOR) {
+      if (m.div.includes(div)) return { sector: m.sector, bono: m.bono, codigo: cod };
+    }
+  }
+  return null;
+}
+
 // Anti-sectores: empresas de SERVICIOS que NO compran empaque industrial, pero
 // cuyo nombre puede contener una palabra de sector objetivo (ej. "ecommerce" en
 // una agencia de diseño web). Si el nombre calza con esto, no se asigna sector
@@ -142,9 +178,16 @@ export function calcularScore(p = {}) {
     señales.push('Condición NO HABIDO');
   }
 
-  // --- Encaje de sector (los anti-sectores de servicios no puntúan) ---
+  // --- Encaje de sector ---
+  // 1º el CIIU real de SUNAT (fiable); si no hay, se cae al nombre (heurístico),
+  // descartando empresas de servicios que no compran empaque.
   let sectorDetectado = p.sector || null;
-  if (ANTISECTORES.test(p.razon_social || '')) {
+  const porCiiu = sectorPorCiiu(p.ciiu);
+  if (porCiiu) {
+    sectorDetectado = porCiiu.sector;
+    score += porCiiu.bono;
+    señales.push(`Sector afín (CIIU ${porCiiu.codigo}): ${sectorDetectado}`);
+  } else if (ANTISECTORES.test(p.razon_social || '')) {
     // Empresa de servicios: no compra empaque físico. Se descarta el sector
     // afín aunque su nombre contenga una palabra de sector objetivo
     // (ej. "ecommerce" en una agencia web) o venga uno guardado de antes.
@@ -316,6 +359,7 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
     es_habido: datos.es_habido,
     razon_social: datos.razon_social,
     sector: datos.sector,
+    ciiu: datos.ciiu_detalle || datos.ciiu,
     tiene_telefono: !!datos.telefono,
     tiene_email: !!datos.email,
     tiene_web: !!datos.web,
@@ -398,6 +442,7 @@ export async function recalcularScore(idProspecto, sunat = {}, opciones = {}) {
     segmento: p.segmento,
     razon_social: p.razon_social,
     sector: p.sector,
+    ciiu: p.ciiu,
     tiene_telefono: tipos.some((t) => ['Telefono', 'Celular', 'Whatsapp'].includes(t)),
     tiene_email: tipos.includes('Email'),
     tiene_web: !!p.web || tipos.includes('Web'),

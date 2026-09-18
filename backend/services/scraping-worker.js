@@ -7,8 +7,6 @@ import {
   normalizarDocumento,
   getFechaPeru,
 } from './prospectos.service.js';
-import { esEmpresaServicios } from './prospectos.service.js';
-import { buscarBasico, detallar } from './scraper-places.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
 import { descubrirWeb } from './descubrir-web.service.js';
 import { scrapeSocial } from './scraper-social.service.js';
@@ -103,77 +101,15 @@ function parseParams(job) {
 async function procesarJob(job) {
   const params = parseParams(job);
   try {
-    if (job.tipo === 'google_places') {
-      await procesarPlaces(job, params);
-    } else if (job.tipo === 'web_scrape' || job.tipo === 'enriquecer') {
+    if (job.tipo === 'web_scrape' || job.tipo === 'enriquecer') {
       await procesarWebScrape(job, params);
     } else {
+      // 'google_places' quedó fuera de servicio (se eliminó la dependencia).
       await fallar(job.id_job, `Tipo de job no soportado por el worker: ${job.tipo}`);
     }
   } catch (e) {
     await fallar(job.id_job, e.message);
   }
-}
-
-// ---- Descubrimiento por Google Places ----
-async function procesarPlaces(job, params) {
-  const { query, zona, segmento, limite } = params;
-  const res = await buscarBasico(query, { zona, limite });
-  if (!res.ok) return fallar(job.id_job, res.error || 'Búsqueda fallida');
-
-  const resumen = { encontrados: res.resultados.length, creados: 0, duplicados: 0, ya_cliente: 0, irrelevantes: 0 };
-
-  for (const base of res.resultados) {
-    // Descartar empresas de servicios (agencias digitales, consultoras, estudios…)
-    // que NO compran empaque: no se crean como prospecto y, al filtrar por el
-    // nombre del Text Search, ni siquiera se pide el Place Details (ahorra cuota).
-    if (esEmpresaServicios(base.razon_social)) { resumen.irrelevantes++; continue; }
-
-    // Dedup barato por place_id: si ya existe, se salta SIN pedir el detalle
-    // (ahorra cuota) y respeta exclusiones previas (no lo recrea).
-    if (base.place_id) {
-      const existe = await executeQuery('SELECT id_prospecto FROM prospectos WHERE place_id = ? LIMIT 1', [base.place_id]);
-      if (existe.success && existe.data.length > 0) { resumen.duplicados++; continue; }
-    }
-
-    const det = await detallar(base.place_id);
-
-    const r = await crearProspectoDesdeDatos({
-      segmento: segmento || 'Formal',
-      razon_social: det?.razon_social || base.razon_social,
-      direccion: det?.direccion || base.direccion,
-      distrito: det?.distrito || base.distrito,
-      provincia: det?.provincia || base.provincia,
-      telefono: det?.telefono || null,
-      web: det?.web || null,
-      foto_referencia: base.foto_referencia,
-      place_id: base.place_id,
-      origen: 'google_maps',
-      origen_query: query,
-      url: det?.maps_url || null,
-      datos_raw: { ...base.datos_raw, detalle: det?.detalle_raw },
-    }, job.id_empleado_solicita);
-
-    if (!r.success) continue;
-    if (r.duplicado_prospecto) { resumen.duplicados++; continue; }
-    if (r.flag === 'Ya_cliente') resumen.ya_cliente++;
-    resumen.creados++;
-
-    // Auto-enriquecimiento en el mismo descubrimiento: si Google nos dio la
-    // web, la leemos (gratis, no consume cuota de Places) para completar el
-    // RUC y priorizar correos SIN depender del botón "Enriquecer".
-    if (r.id_prospecto && det?.web) {
-      try {
-        const enr = await enriquecerDesdeWeb(r.id_prospecto, det.web);
-        if (enr?.ruc) resumen.con_ruc = (resumen.con_ruc || 0) + 1;
-        if (enr?.emails) resumen.con_email = (resumen.con_email || 0) + (enr.emails > 0 ? 1 : 0);
-      } catch { /* el prospecto ya quedó creado; el scraping es best-effort */ }
-    }
-  }
-
-  // Si el barrido creó prospectos nuevos, avisa en vivo a quien esté en el módulo.
-  if (resumen.creados > 0) emit('prospectos:cambio', { accion: 'descubrir', creados: resumen.creados, ts: Date.now() });
-  await completar(job.id_job, resumen);
 }
 
 // ---- Enriquecimiento por scraping de web corporativa (job manual) ----
@@ -196,54 +132,31 @@ async function procesarWebScrape(job, params) {
   }
 
   let url = redescubrir ? null : params.url;
-  let telefonoDescubierto = null; // teléfono que Places pueda dar aunque no haya web
-  let placeIdDescubierto = null;  // para enlazar la ficha de Maps como fuente
+  let webVerificada = false; // el descubridor ya confirmó que la web es del prospecto
 
-  // Si no vino URL en el job, resolvemos en este orden (barato → caro):
-  //   1) la web que el prospecto YA tiene guardada  → se raspa directo, GRATIS.
-  //   2) descubrimiento en cascada (Places + búsqueda web gratis) → Places
-  //      cuesta cuota, así que solo se usa cuando de verdad no hay web.
-  // Clave para el enriquecimiento MASIVO: sin este orden, cada prospecto que
-  // ya tenía web dispararía una llamada paga a Places sin necesidad.
+  // Si no vino URL en el job, resolvemos en este orden:
+  //   1) la web que el prospecto YA tiene guardada  → se raspa directo.
+  //   2) descubrimiento anclado en el RUC (buscadores gratis + candado de RUC
+  //      en la página). Ya NO se usa Google Places.
   // En re-descubrir la web quedó en NULL arriba, así que siempre cae en la
   // búsqueda nueva (nunca reutiliza la web guardada).
   if (!url) {
-    const pr = await executeQuery('SELECT razon_social, distrito, provincia, web FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const pr = await executeQuery('SELECT razon_social, documento, distrito, provincia, web FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const p = pr.data?.[0];
     if (!redescubrir && p?.web) {
       url = p.web;
     } else if (p) {
       const zona = p.distrito ? `${p.distrito}, ${p.provincia || 'Perú'}` : 'Perú';
-      const disc = await descubrirWeb(p.razon_social, { zona });
+      const disc = await descubrirWeb(p.razon_social, { ruc: p.documento, zona });
       url = disc?.web || null;
-      telefonoDescubierto = disc?.telefono || null;
-      placeIdDescubierto = disc?.place_id || null;
+      // Descubrimiento anclado en RUC ya viene verificado (RUC en la página o
+      // dominio == nombre): no hace falta re-verificar al raspar.
+      webVerificada = !!disc;
     }
   }
 
-  // Si Places dio un teléfono (con o sin web), lo guardamos como contacto: es
-  // un dato accionable aunque el prospecto se ingresara solo con su RUC. Como
-  // fuente se enlaza la ficha del lugar en Google Maps (verificable).
-  if (telefonoDescubierto) {
-    const norm = normalizarTelefono(telefonoDescubierto);
-    const fuenteUrl = placeIdDescubierto
-      ? `https://www.google.com/maps/place/?q=place_id:${placeIdDescubierto}`
-      : null;
-    await executeQuery(
-      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente, fuente_url)
-       VALUES (?, 'Telefono', ?, ?, NULL, 'google_places', ?)`,
-      [idProspecto, telefonoDescubierto, norm, fuenteUrl]
-    );
-  }
-
-  // Sin web no se puede raspar contacto; pero si al menos hubo teléfono de
-  // Places, el job fue útil: recalculamos score y cerramos como completado.
+  // Sin web no se puede raspar contacto.
   if (!url) {
-    if (telefonoDescubierto) {
-      const score = await recalcularScore(idProspecto, {}, { permitirBajar: redescubrir });
-      emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
-      return completar(job.id_job, { id_prospecto: idProspecto, web_no_encontrada: true, telefono_places: telefonoDescubierto, score, redescubierto: redescubrir });
-    }
     // En re-descubrir es un desenlace VÁLIDO: se purgó lo dudoso y no hay web
     // que corresponda al nombre → el prospecto queda limpio (solo datos SUNAT).
     if (redescubrir) {
@@ -251,12 +164,13 @@ async function procesarWebScrape(job, params) {
       emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
       return completar(job.id_job, { id_prospecto: idProspecto, redescubierto: true, web_no_encontrada: true, purgado: true, score });
     }
-    return fallar(job.id_job, 'No se pudo encontrar la web del prospecto (ni por Google ni por búsqueda web).');
+    return fallar(job.id_job, 'No se encontró una web que publique el RUC del prospecto (búsqueda por RUC en buscadores gratis).');
   }
 
-  // Verificación de correspondencia de la web: activa por defecto; solo se
-  // omite si el job la desactiva (web escrita a mano por el usuario).
-  const verificar = params.verificar !== false;
+  // Verificación de correspondencia de la web: activa por defecto. Se omite si
+  // el job la desactiva (web escrita a mano por el usuario) o si el descubridor
+  // ya la verificó por RUC (evita una segunda lectura innecesaria).
+  const verificar = params.verificar !== false && !webVerificada;
   const resultado = await enriquecerDesdeWeb(idProspecto, url, { permitirBajar: redescubrir, verificar });
   if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
   emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
@@ -293,25 +207,34 @@ function hostCompacto(url) {
   try { return new URL(url).host.toLowerCase().replace(/[^a-z0-9]/g, ''); } catch { return ''; }
 }
 /**
- * ¿La web scrapeada corresponde al prospecto?
- *  - Si la web publica un RUC → debe coincidir con el del prospecto (prueba fuerte
- *    en ambos sentidos: coincide = sí; distinto = NO es su web).
- *  - Si la web no publica RUC → el dominio o el título deben contener un token
- *    distintivo del nombre (no genérico). Si no, no se confía y se rechaza.
+ * ¿La web scrapeada corresponde al prospecto? Criterio ESTRICTO (cero falsos
+ * positivos):
+ *  - Si el prospecto tiene RUC → la web debe publicar ESE RUC exacto en alguna
+ *    de sus páginas (rucsWeb). Es la única prueba que se acepta cuando hay RUC:
+ *    que el sitio muestre otros RUCs, o ninguno, NO basta → se rechaza. Así una
+ *    web ajena (co-ubicada, directorio, dato cruzado) nunca contamina el lead.
+ *  - Si el prospecto NO tiene RUC → se acepta solo si el token DISTINTIVO del
+ *    nombre ES el dominio (ej. "anguard" ↔ anguardperu.com). El match por título
+ *    se eliminó a propósito: era el que dejaba pasar directorios.
  * @returns {{ok:boolean, motivo:string}}
  */
-function webCorrespondeAlProspecto({ razonSocial, documentoProspecto, urlBase, tituloWeb, rucWeb }) {
+function webCorrespondeAlProspecto({ razonSocial, documentoProspecto, urlBase, rucsWeb = [] }) {
   const docP = normalizarDocumento(documentoProspecto);
-  const rucW = normalizarDocumento(rucWeb);
-  if (docP && rucW) {
-    return rucW === docP ? { ok: true, motivo: 'ruc_coincide' } : { ok: false, motivo: 'ruc_distinto' };
+  const rucs = (rucsWeb || []).map(normalizarDocumento);
+
+  if (docP) {
+    return rucs.includes(docP)
+      ? { ok: true, motivo: 'ruc_en_pagina' }
+      : { ok: false, motivo: rucs.length ? 'ruc_distinto' : 'sin_ruc_en_pagina' };
   }
+
   const toks = tokensSignificativos(razonSocial);
-  if (!toks.length) return { ok: true, motivo: 'nombre_sin_tokens_evaluables' };
+  if (!toks.length) return { ok: false, motivo: 'nombre_sin_tokens_evaluables' };
   const host = hostCompacto(urlBase);
-  const titulo = normalizarTextoNombre(tituloWeb).replace(/ /g, '');
-  const relacionado = toks.some((t) => host.includes(t) || titulo.includes(t));
-  return relacionado ? { ok: true, motivo: 'token_en_dominio_o_titulo' } : { ok: false, motivo: 'sin_relacion_con_nombre' };
+  // El token distintivo debe SER el dominio (contenido y de largo parecido),
+  // no solo aparecer suelto en el título.
+  const distintivo = toks.find((t) => t.length >= 4 && host.includes(t) && host.length <= t.length + 12);
+  return distintivo ? { ok: true, motivo: 'dominio_es_nombre' } : { ok: false, motivo: 'sin_relacion_con_nombre' };
 }
 
 /**
@@ -335,8 +258,7 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
       razonSocial: p.razon_social,
       documentoProspecto: p.documento,
       urlBase: data.base,
-      tituloWeb: data.titulo,
-      rucWeb: data.ruc,
+      rucsWeb: data.rucs,
     });
     if (!v.ok) {
       const score = await recalcularScore(idProspecto, {}, { permitirBajar: !!opciones.permitirBajar });

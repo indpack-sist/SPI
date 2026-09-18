@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { executeQuery } from '../config/database.js';
-import { validarRUC } from '../services/documento-cache.service.js';
+import { consultarPorRuc } from '../services/padron-ruc.service.js';
 import {
   crearProspectoDesdeDatos,
   buscarProspectoPorDocumento,
@@ -10,7 +10,6 @@ import {
   recalcularScore,
 } from '../services/prospectos.service.js';
 import { buscarRucPorNombre } from '../services/ruc-lookup.service.js';
-import { placesDisponible, RUBROS_OBJETIVO } from '../services/scraper-places.service.js';
 import { notificarJob } from '../services/scraping-worker.js';
 
 const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'Descartado'];
@@ -384,7 +383,7 @@ export async function ingestaLista(req, res) {
         const existente = await buscarProspectoPorDocumento(ruc);
         if (existente) { resumen.ya_prospecto++; detalle.push({ ruc, estado: 'ya_prospecto' }); continue; }
 
-        const val = await validarRUC(ruc);
+        const val = await consultarPorRuc(ruc);
         const d = val.datos || {};
 
         const datos = {
@@ -397,10 +396,14 @@ export async function ingestaLista(req, res) {
           provincia: d.provincia || null,
           distrito: d.distrito || null,
           direccion: d.direccion || null,
+          // CIIU real de SUNAT: código para la columna y detalle para el scoring.
+          ciiu: d.ciiu?.[0]?.codigo || null,
+          ciiu_detalle: d.ciiu || null,
           es_activo: d.es_activo,
           es_habido: d.es_habido,
           origen: 'sunat',
-          url: `https://dniruc.apisperu.com/api/v1/ruc/${ruc}`,
+          url: d.fuentes?.[0]?.url || null,
+          // Guarda todo lo público (incluye representantes legales = decisores).
           datos_raw: d,
         };
 
@@ -739,12 +742,6 @@ function genLote() {
   return 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function parseZonas(zonas) {
-  let lista = Array.isArray(zonas) ? zonas : String(zonas || '').split(/[\n;]+/);
-  lista = lista.map((z) => z.trim()).filter(Boolean);
-  return lista.length ? lista : ['Perú'];
-}
-
 // Crea un job genérico
 export async function crearJob(req, res) {
   try {
@@ -818,64 +815,23 @@ export async function getLotesActivos(req, res) {
   }
 }
 
-// Descubrimiento por rubro + zona vía Google Places
+// Descubrimiento por rubro/zona (ANTES vía Google Places). Google Places se
+// eliminó por generar falsos positivos (atribuía webs/teléfonos de otras
+// empresas). El descubrimiento por rubro se reemplazará por padrón SUNAT / CIIU;
+// mientras tanto, el flujo confiable es ingesta por RUC + enriquecimiento.
+const PLACES_RETIRADO = {
+  error: 'El descubrimiento por rubro con Google Places fue retirado (generaba falsos positivos). '
+    + 'Usa "Ingresar por RUC" para dar de alta empresas reales y luego "Enriquecer": '
+    + 'la web y los contactos se buscan anclados al RUC (sin datos de terceros).',
+  places_retirado: true,
+};
+
 export async function descubrirEmpresas(req, res) {
-  try {
-    if (!placesDisponible()) {
-      return res.status(400).json({
-        error: 'Google Places no está configurado. Define GOOGLE_PLACES_API_KEY en el .env del backend para activar el descubrimiento.',
-        requiere_key: true,
-      });
-    }
-    const { query, zona, segmento, limite } = req.body;
-    if (!query) return res.status(400).json({ error: 'Indica un rubro o término de búsqueda (ej. "distribuidora de alimentos")' });
-
-    const idJob = await encolarJob('google_places', {
-      query,
-      zona: zona || 'Perú',
-      segmento: segmento || 'Pequeno',
-      limite: Math.min(parseInt(limite || 20), 40),
-    }, req.user?.id_empleado);
-
-    res.status(201).json({ success: true, message: 'Búsqueda encolada', id_job: idJob });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  return res.status(410).json(PLACES_RETIRADO);
 }
 
-// Descubrimiento MASIVO: barre todos los rubros objetivo en las zonas dadas,
-// priorizando por afinidad (los mejores clientes potenciales primero).
 export async function descubrirTodo(req, res) {
-  try {
-    if (!placesDisponible()) {
-      return res.status(400).json({
-        error: 'Google Places no está configurado. Define GOOGLE_PLACES_API_KEY en el .env del backend.',
-        requiere_key: true,
-      });
-    }
-    const { zonas, segmento, limite } = req.body;
-    const listaZonas = parseZonas(zonas);
-    const lim = Math.min(parseInt(limite || 15), 20);
-
-    const lote = genLote();
-    let encolados = 0;
-    for (const rubro of RUBROS_OBJETIVO) {
-      for (const zona of listaZonas) {
-        await encolarJob('google_places', {
-          query: rubro.q, zona, segmento: segmento || 'Formal', limite: lim, lote, accion: 'descubrir',
-        }, req.user?.id_empleado, rubro.prioridad);
-        encolados++;
-      }
-    }
-
-    res.status(201).json({
-      success: true,
-      message: `${encolados} búsquedas encoladas (${RUBROS_OBJETIVO.length} rubros × ${listaZonas.length} zona(s)), priorizadas por afinidad`,
-      jobs: encolados,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  return res.status(410).json(PLACES_RETIRADO);
 }
 
 // Buscar el RUC de un prospecto por su nombre en ruc.pe (BAJO DEMANDA, gratis,
@@ -912,7 +868,28 @@ export async function buscarRucProspecto(req, res) {
       ya_cliente = true;
     }
 
-    // Recalcula con la vigencia leída de la ficha (activo/habido) → puede subir a caliente.
+    // Trae el resto de datos públicos por RUC (CIIU real, dirección, ubicación)
+    // para afinar el sector y el score. Best-effort: si falla, seguimos.
+    try {
+      const full = await consultarPorRuc(hit.ruc);
+      const fd = full?.datos;
+      if (fd) {
+        await executeQuery(
+          `UPDATE prospectos SET
+             ciiu = COALESCE(ciiu, ?),
+             direccion = COALESCE(NULLIF(direccion, ''), ?),
+             departamento = COALESCE(departamento, ?),
+             provincia = COALESCE(provincia, ?),
+             distrito = COALESCE(distrito, ?)
+           WHERE id_prospecto = ?`,
+          [fd.ciiu?.[0]?.codigo || null, fd.direccion || null, fd.departamento || null,
+           fd.provincia || null, fd.distrito || null, id]
+        );
+      }
+    } catch { /* best-effort */ }
+
+    // Recalcula con la vigencia leída de la ficha (activo/habido) y el CIIU ya
+    // guardado → puede subir a caliente.
     const score = await recalcularScore(id, { es_activo: d.es_activo, es_habido: d.es_habido });
 
     emitirCambioProspecto(req, { accion: 'buscar_ruc', id_prospecto: Number(id) });
@@ -992,6 +969,17 @@ export async function enriquecerMasivo(req, res) {
     // aporta re-enriquecer el prospecto (y su ficha de cliente nunca se toca).
     let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')";
 
+    // Candado "no tocar lo trabajado" (default ON): solo leads INTACTOS (estado
+    // Nuevo, sin gestor asignado y que no coinciden con un cliente). Así un lote
+    // masivo nunca altera prospectos gestionados/contactados, convertidos, ni
+    // los que ya son clientes (que pueden tener cotizaciones). Se puede abrir con
+    // respetar_gestionados=false, pero por defecto se protegen.
+    const respetarGestionados = req.body?.respetar_gestionados !== false;
+    if (respetarGestionados) {
+      where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL"
+        + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
+    }
+
     if (solo_con_web) where += " AND p.web IS NOT NULL AND p.web <> ''";
 
     // Salta los que ya tienen algún teléfono/correo (ahorra trabajo del worker).
@@ -1068,6 +1056,15 @@ export async function redescubrirMasivo(req, res) {
     // re-verifica nada que pertenezca a un cliente registrado.
     let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
       + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
+
+    // Candado "no tocar lo trabajado" (default ON): re-verificar PURGA los datos
+    // auto, así que solo se aplica a leads INTACTOS (Nuevo y sin gestor). Nunca
+    // se toca un prospecto gestionado/contactado, convertido ni cliente (que
+    // puede tener cotizaciones). Abrible con respetar_gestionados=false.
+    const respetarGestionados = req.body?.respetar_gestionados !== false;
+    if (respetarGestionados) {
+      where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL";
+    }
 
     // Por defecto, solo los que tienen datos auto (web/redes/Places) SIN URL de
     // origen: son los que necesitan re-trazado para ganar su link verificable.

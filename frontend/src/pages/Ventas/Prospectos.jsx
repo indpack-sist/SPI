@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
-  UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
+  UserPlus, Trash2, Eye, AlertTriangle, Activity, Zap, FileSpreadsheet,
   EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight,
   ExternalLink, RefreshCw, ShieldCheck
 } from 'lucide-react';
@@ -116,40 +116,11 @@ function Thumb({ p, size = 34 }) {
   return <img className="pros-thumb" style={{ width: size, height: size }} src={src} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />;
 }
 
-// Rubros objetivo: empresas que COMPRAN empaque industrial (burbupack,
-// stretch film, zunchos, esquineros, flejadoras…). Son negocios que mueven,
-// paletizan o protegen carga. El valor es el término que se busca en Maps.
-const RUBROS_OBJETIVO = [
-  { label: 'Agroexportadoras', q: 'empresa agroexportadora' },
-  { label: 'Operadores logísticos / almacenes', q: 'operador logistico almacen' },
-  { label: 'Centros de distribución', q: 'centro de distribucion' },
-  { label: 'E-commerce / tiendas online', q: 'empresa ecommerce tienda online' },
-  { label: 'Courier / paquetería', q: 'empresa courier paqueteria' },
-  { label: 'Empresas de mudanzas', q: 'empresa de mudanzas y embalaje' },
-  { label: 'Procesadoras de alimentos', q: 'planta procesadora de alimentos' },
-  { label: 'Plantas de bebidas', q: 'planta embotelladora de bebidas' },
-  { label: 'Distribuidoras mayoristas', q: 'distribuidora mayorista' },
-  { label: 'Importadoras', q: 'empresa importadora' },
-  { label: 'Fábricas / industrias', q: 'fabrica industrial' },
-  { label: 'Electrodomésticos / electrónica', q: 'distribuidora de electrodomesticos' },
-  { label: 'Vidrios / cerámicos', q: 'fabrica de vidrios y ceramicos' },
-  { label: 'Fábricas de muebles', q: 'fabrica de muebles' },
-  { label: 'Laboratorios / farmacéutica', q: 'laboratorio farmaceutico' },
-  { label: 'Ferreterías industriales', q: 'ferreteria industrial' },
-];
-
-// Los 25 departamentos del Perú (incluye Callao) para el selector de zonas del
-// descubrimiento. Se envían a Google como "<Departamento>, Perú".
-const DEPARTAMENTOS_PERU = [
-  'Amazonas', 'Áncash', 'Apurímac', 'Arequipa', 'Ayacucho', 'Cajamarca', 'Callao', 'Cusco',
-  'Huancavelica', 'Huánuco', 'Ica', 'Junín', 'La Libertad', 'Lambayeque', 'Lima', 'Loreto',
-  'Madre de Dios', 'Moquegua', 'Pasco', 'Piura', 'Puno', 'San Martín', 'Tacna', 'Tumbes', 'Ucayali',
-];
-
-// Etiqueta e ícono de la barra de progreso según la operación masiva en curso.
+// Etiqueta de la barra de progreso según la operación masiva en curso.
+// 'descubrir' se conserva solo para lotes antiguos (Google Places, retirado).
 const ACCION_LOTE = {
-  descubrir:   { label: 'Descubriendo empresas' },
-  enriquecer:  { label: 'Enriqueciendo empresas' },
+  descubrir:   { label: 'Procesando (histórico)' },
+  enriquecer:  { label: 'Buscando web y contactos' },
   redescubrir: { label: 'Re-verificando datos' },
 };
 
@@ -187,7 +158,6 @@ export default function Prospectos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [barridos, setBarridos] = useState([]);
 
   const [search, setSearch] = useState('');
   const [fSegmento, setFSegmento] = useState('');
@@ -229,10 +199,7 @@ export default function Prospectos() {
   const [convertData, setConvertData] = useState(null);
   const [convertLoading, setConvertLoading] = useState(false);
 
-  // Descubrimiento (Google Places)
-  const [descubrirOpen, setDescubrirOpen] = useState(false);
-  const [descubrirData, setDescubrirData] = useState({ query: '', zonasSel: ['Lima'], otras: '', segmento: 'Formal', limite: 20, todos: true });
-  const [descubrirLoading, setDescubrirLoading] = useState(false);
+  // Operaciones masivas de enriquecimiento / re-verificación
   const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
   const [redescMasivoLoading, setRedescMasivoLoading] = useState(false);
 
@@ -299,15 +266,7 @@ export default function Prospectos() {
     } catch { /* silencioso: si falla, los selects quedan vacíos */ }
   }, []);
 
-  // Barridos previos por zona: para avisar si una zona ya fue explorada.
-  const cargarBarridos = useCallback(async () => {
-    try {
-      const res = await prospectosAPI.getBarridos();
-      setBarridos(res.data.data || []);
-    } catch { /* silencioso */ }
-  }, []);
-
-  useEffect(() => { cargarFacetas(); cargarBarridos(); }, [cargarFacetas, cargarBarridos]);
+  useEffect(() => { cargarFacetas(); }, [cargarFacetas]);
 
   const notify = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3500); };
 
@@ -324,10 +283,10 @@ export default function Prospectos() {
           algoTermino = true;
         }
       }
-      if (algoTermino) { cargar(); cargarFacetas(); cargarBarridos(); }
+      if (algoTermino) { cargar(); cargarFacetas(); }
       return data;
     } catch { return []; }
-  }, [cargar, cargarFacetas, cargarBarridos]);
+  }, [cargar, cargarFacetas]);
 
   useEffect(() => {
     refreshJobs();
@@ -426,48 +385,6 @@ export default function Prospectos() {
     };
   }, [user?.id, recargarDetalleSilencioso]);
 
-  // Zonas finales a barrer: departamentos marcados (como "X, Perú") + otras
-  // localidades sueltas escritas a mano (una por línea).
-  const construirZonas = () => [
-    ...(descubrirData.zonasSel || []).map((d) => `${d}, Perú`),
-    ...(descubrirData.otras || '').split('\n').map((z) => z.trim()).filter(Boolean),
-  ];
-
-  const toggleDep = (dep) => setDescubrirData((d) => ({
-    ...d,
-    zonasSel: d.zonasSel.includes(dep) ? d.zonasSel.filter((x) => x !== dep) : [...d.zonasSel, dep],
-  }));
-  const marcarTodo = () => setDescubrirData((d) => ({ ...d, zonasSel: [...DEPARTAMENTOS_PERU] }));
-  const desmarcarTodo = () => setDescubrirData((d) => ({ ...d, zonasSel: [] }));
-
-  const hacerDescubrir = async () => {
-    try {
-      setDescubrirLoading(true);
-      const zonasArr = construirZonas();
-      const zonas = zonasArr.length ? zonasArr : ['Perú'];
-      const { segmento, limite } = descubrirData;
-
-      if (descubrirData.todos) {
-        const res = await prospectosAPI.descubrirTodo({ zonas, segmento, limite });
-        notify(res.data.message || 'Búsqueda masiva encolada.');
-      } else {
-        if (!descubrirData.query.trim()) { setError('Elige un rubro o escribe uno'); return; }
-        for (const z of zonas) {
-          await prospectosAPI.descubrir({ query: descubrirData.query, zona: z, segmento, limite });
-        }
-        notify(`Búsqueda encolada en ${zonas.length} zona(s).`);
-      }
-      setDescubrirOpen(false);
-      setJobsOpen(true);
-      refreshJobs();
-      cargarLotes();
-    } catch (err) {
-      setError(err.error || 'No se pudo iniciar el descubrimiento');
-    } finally {
-      setDescubrirLoading(false);
-    }
-  };
-
   // Filtros actuales (sin paginación) para reusarlos en la exportación.
   const filtrosActuales = () => {
     const params = { orden };
@@ -551,13 +468,14 @@ export default function Prospectos() {
   };
 
   // Enriquecimiento MASIVO: busca web + contactos para todas las empresas que
-  // aún no tienen contacto. No borra nada (solo agrega). Las que no tengan web
-  // usarán Google Places (consume cuota), por eso se confirma antes.
+  // aún no tienen contacto. No borra nada (solo agrega). La web se busca anclada
+  // al RUC y solo se aceptan datos de páginas que publican ese RUC.
   const enriquecerTodo = async () => {
     if (!window.confirm(
-      'Se buscarán web y contactos para TODAS las empresas que aún no tienen contacto.\n\n' +
+      'Se buscarán web y contactos para las empresas SIN contacto que aún están sin trabajar.\n\n' +
+      '• Solo se tocan prospectos en estado "Nuevo" y sin gestor. Los gestionados, contactados, convertidos y los que ya son clientes NO se tocan.\n' +
       '• No se borra ni se pisa nada (solo se agrega información).\n' +
-      '• Las que no tienen web usarán Google Places, que consume cuota (costo).\n' +
+      '• La web se busca por el RUC en buscadores gratuitos; solo se toman datos de páginas que publican ese RUC (cero falsos positivos).\n' +
       '• Se procesan en segundo plano; puede tardar horas.\n\n¿Continuar?'
     )) return;
     try {
@@ -579,11 +497,11 @@ export default function Prospectos() {
   // quede con su link verificable. No borra lo manual ni cambia el estado.
   const redescubrirTodo = async () => {
     if (!window.confirm(
-      'Se RE-VERIFICARÁN desde cero (sin caché) todas las empresas cuyos datos automáticos aún no tienen URL de origen.\n\n' +
-      '• Cada teléfono/correo/red quedará con el link exacto de dónde se obtuvo (verificable).\n' +
+      'Se RE-VERIFICARÁN desde cero (sin caché) los prospectos SIN TRABAJAR cuyos datos automáticos aún no tienen URL de origen.\n\n' +
+      '• Solo se tocan prospectos en estado "Nuevo" y sin gestor. Los gestionados, contactados, convertidos y los que ya son clientes NO se tocan.\n' +
       '• Se BORRA lo auto-recolectado para volver a confirmarlo; se CONSERVA lo que agregaste a mano.\n' +
-      '• NO cambia el estado comercial (Contactado, En gestión…), ni el gestor, ni las notas.\n' +
-      '• Las que no tengan web usarán Google Places (consume cuota). Corre en segundo plano.\n\n¿Continuar?'
+      '• Cada teléfono/correo/red quedará con el link exacto de dónde se obtuvo (verificable).\n' +
+      '• La web se re-busca por el RUC y solo se aceptan datos de páginas que lo publican. Corre en segundo plano.\n\n¿Continuar?'
     )) return;
     try {
       setRedescMasivoLoading(true);
@@ -742,13 +660,6 @@ export default function Prospectos() {
   const puedeLiberar = !!detalleDueno && (!bloqueado || esAdmin);
   const ACCION_LABEL = { estado: 'Cambió estado', liberar: 'Liberó la gestión', convertido: 'Convirtió a cliente' };
 
-  // Aviso de barrido: zonas elegidas en el modal que ya fueron exploradas antes.
-  const zonasElegidas = construirZonas();
-  const barridosMap = new Map(barridos.map((b) => [String(b.zona || '').toLowerCase(), b]));
-  const zonasYaBarridas = zonasElegidas
-    .map((z) => barridosMap.get(z.toLowerCase()))
-    .filter(Boolean);
-
   return (
     <div className="pros-wrap">
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -763,21 +674,18 @@ export default function Prospectos() {
               <span className="pros-live-dot" /> {enVivo ? 'En vivo' : 'Sin conexión'}
             </span>
           </div>
-          <div className="pros-subtitle">Captación e inteligencia comercial de empresas · scoring y anti-duplicados</div>
+          <div className="pros-subtitle">Captación por RUC + enriquecimiento verificado (datos anclados al RUC) · scoring y anti-duplicados</div>
         </div>
         <div className="pros-head-actions">
           <button className="btn btn-outline pros-activity-btn" onClick={() => setJobsOpen((v) => !v)} title="Actividad de búsquedas">
             <Activity size={16} /> Actividad
             {jobsActivos > 0 && <span className="pros-activity-dot">{jobsActivos}</span>}
           </button>
-          <button className="btn btn-outline" onClick={() => setDescubrirOpen(true)}>
-            <Compass size={16} /> Descubrir
-          </button>
           <button
             className="btn btn-outline"
             onClick={enriquecerTodo}
             disabled={enriqMasivoLoading}
-            title="Buscar web y contactos para todas las empresas sin contacto (usa Google Places; no borra nada)"
+            title="Buscar web y contactos (anclados al RUC) para todas las empresas sin contacto. No borra nada."
           >
             {enriqMasivoLoading ? <Loader size={16} className="pros-spin" /> : <Zap size={16} />} Enriquecer todo
           </button>
@@ -864,19 +772,19 @@ export default function Prospectos() {
               const rez = typeof j.resultado === 'string' ? safeParse(j.resultado) : (j.resultado || {});
               return (
                 <div className="pros-job-row" key={j.id_job}>
-                  {j.tipo === 'google_places' ? <Compass size={15} style={{ color: 'var(--accent)' }} /> : <Zap size={15} style={{ color: 'var(--accent)' }} />}
+                  <Zap size={15} style={{ color: 'var(--accent)' }} />
                   <div className="pros-job-desc">
                     {j.tipo === 'google_places'
-                      ? <>Descubrir “{par.query}” · <small>{par.zona}</small></>
-                      : <>Enriquecer web · <small>prospecto #{par.id_prospecto}</small></>}
+                      ? <>Descubrir “{par.query}” · <small>{par.zona} · histórico</small></>
+                      : <>Buscar web y contactos · <small>prospecto #{par.id_prospecto}</small></>}
                     {j.estado === 'completado' && (
                       <div><small>
                         {j.tipo === 'google_places'
                           ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes${rez.irrelevantes ? ` · ${rez.irrelevantes} descartados` : ''}`
                           : rez.rechazada
-                            ? `Web descartada: no corresponde al nombre/RUC · score ${rez.score ?? '—'}`
+                            ? `Web descartada: no publica el RUC del prospecto · score ${rez.score ?? '—'}`
                             : rez.purgado
-                              ? `Datos no verificables removidos · sin web propia · score ${rez.score ?? '—'}`
+                              ? `Datos no verificables removidos · sin web que publique el RUC · score ${rez.score ?? '—'}`
                               : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
                       </small></div>
                     )}
@@ -1188,7 +1096,7 @@ export default function Prospectos() {
                   )}
 
                   {/* Trazabilidad: todas las fuentes de las que se tomaron datos
-                      de este prospecto (SUNAT, su web, Maps…), verificables. */}
+                      de este prospecto (SUNAT, su web, redes…), verificables. */}
                   {(detalle.fuentes || []).length > 0 && (
                     <div className="pros-field">
                       <div className="pros-field-lbl"><ShieldCheck size={12} style={{ verticalAlign: -2 }} /> Fuentes de datos</div>
@@ -1361,7 +1269,7 @@ export default function Prospectos() {
       {/* ---------- Modal ingesta ---------- */}
       <Modal isOpen={ingestaOpen} onClose={() => setIngestaOpen(false)} title="Ingresar empresas por RUC" size="md">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
-          Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se validan con SUNAT y <b>se buscan sus datos de contacto automáticamente</b> (web, correos, teléfonos y redes), se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
+          Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se consultan en <b>fuentes públicas de SUNAT</b> (razón social, estado, dirección, <b>actividad CIIU</b> y representantes) y <b>se buscan sus datos de contacto automáticamente</b> (web, correos, teléfonos y redes) anclados al RUC. Se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
         </p>
         <label className="form-label">RUCs</label>
         <textarea
@@ -1388,7 +1296,7 @@ export default function Prospectos() {
           </div>
         )}
         {ingestaRes?.errores?.length > 0 && (
-          <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#e74c3c' }}>{ingestaRes.errores.length} RUC(s) con error o no encontrados en SUNAT.</div>
+          <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#e74c3c' }}>{ingestaRes.errores.length} RUC(s) con error o no encontrados en las fuentes públicas.</div>
         )}
 
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.2rem' }}>
@@ -1441,98 +1349,6 @@ export default function Prospectos() {
           <button className="btn btn-outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>Cancelar</button>
           <button className="btn btn-primary" onClick={exportarExcel} disabled={exportLoading}>
             {exportLoading ? <><Loader size={16} className="pros-spin" /> Generando…</> : <><FileSpreadsheet size={16} /> Descargar</>}
-          </button>
-        </div>
-      </Modal>
-
-      {/* ---------- Modal descubrir (Google Places) ---------- */}
-      <Modal isOpen={descubrirOpen} onClose={() => setDescubrirOpen(false)} title="Descubrir empresas por rubro y zona" size="md">
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
-          Busca en Google Maps <b>empresas que compran empaque industrial</b> (burbupack, stretch film, zunchos, esquineros…): negocios que mueven, paletizan o protegen carga. Se crean como prospectos con teléfono, web y foto, se puntúan y se marcan los que ya son clientes. <b>No duplica</b> lo que ya tienes.
-        </p>
-
-        <label className="pros-toggle">
-          <input type="checkbox" checked={descubrirData.todos} onChange={(e) => setDescubrirData({ ...descubrirData, todos: e.target.checked })} />
-          <span><b>Descubrir en TODOS los rubros objetivo</b><br /><small style={{ color: 'var(--text-secondary)' }}>Barre los {RUBROS_OBJETIVO.length} rubros, priorizando los de mayor afinidad (agroexport, logística, e-commerce… primero).</small></span>
-        </label>
-
-        {!descubrirData.todos && (
-          <>
-            <label className="form-label">Rubro objetivo</label>
-            <select className="form-select" value={descubrirData.query} onChange={(e) => setDescubrirData({ ...descubrirData, query: e.target.value })}>
-              <option value="">— Elige un rubro —</option>
-              {RUBROS_OBJETIVO.map((r) => <option key={r.q} value={r.q}>{r.label}</option>)}
-            </select>
-            <label className="form-label" style={{ marginTop: '0.6rem' }}>…o escribe uno personalizado</label>
-            <input className="form-input" placeholder="ej. exportadora de textiles, distribuidora de licores…"
-              value={descubrirData.query} onChange={(e) => setDescubrirData({ ...descubrirData, query: e.target.value })} />
-          </>
-        )}
-
-        <div className="pros-zonas-head">
-          <label className="form-label" style={{ margin: 0 }}>Ubicaciones — departamentos del Perú</label>
-          <div className="pros-zonas-actions">
-            <button type="button" className="btn btn-ghost btn-xs" onClick={marcarTodo}>Marcar todo</button>
-            <button type="button" className="btn btn-ghost btn-xs" onClick={desmarcarTodo}>Desmarcar todo</button>
-            <span className="pros-zonas-count">{descubrirData.zonasSel.length}/{DEPARTAMENTOS_PERU.length}</span>
-          </div>
-        </div>
-        <div className="pros-zonas-grid">
-          {DEPARTAMENTOS_PERU.map((dep) => {
-            const on = descubrirData.zonasSel.includes(dep);
-            return (
-              <label key={dep} className={`pros-zona-chk ${on ? 'on' : ''}`}>
-                <input type="checkbox" checked={on} onChange={() => toggleDep(dep)} />
-                <span>{dep}</span>
-              </label>
-            );
-          })}
-        </div>
-        <label className="form-label" style={{ marginTop: '0.6rem' }}>Otras localidades (opcional, una por línea — distritos, ciudades…)</label>
-        <textarea className="form-input" rows={2} placeholder={'ej. Trujillo\nChincha Alta'}
-          value={descubrirData.otras} onChange={(e) => setDescubrirData({ ...descubrirData, otras: e.target.value })}
-          style={{ resize: 'vertical' }} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }}>
-          <div>
-            <label className="form-label">Cantidad por búsqueda</label>
-            <input type="number" className="form-input" min={1} max={40} value={descubrirData.limite} onChange={(e) => setDescubrirData({ ...descubrirData, limite: e.target.value })} />
-          </div>
-          <div>
-            <label className="form-label">Segmento</label>
-            <select className="form-select" value={descubrirData.segmento} onChange={(e) => setDescubrirData({ ...descubrirData, segmento: e.target.value })}>
-              <option value="Formal">Formal</option>
-              <option value="Pequeno">Pequeño (compra libre)</option>
-              <option value="Informal">Informal</option>
-            </select>
-          </div>
-        </div>
-
-        {zonasYaBarridas.length > 0 && (
-          <div style={{ marginTop: '0.8rem', fontSize: '0.78rem', background: 'rgba(232,184,75,0.12)', border: '1px solid rgba(232,184,75,0.5)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e8b84b', fontWeight: 700, marginBottom: 4 }}>
-              <AlertTriangle size={15} /> Zona(s) ya exploradas — evita repetir
-            </div>
-            {zonasYaBarridas.map((b) => (
-              <div key={b.zona} style={{ color: 'var(--text-secondary)' }}>
-                <b style={{ color: 'var(--white)' }}>{b.zona}</b>: barrida el {String(b.ultima_fecha).slice(0, 16).replace('T', ' ')} por {b.ultimo_usuario} ({b.busquedas} búsqueda{b.busquedas === 1 ? '' : 's'}).
-              </div>
-            ))}
-            <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>
-              Repetir solo trae lo nuevo (los duplicados no se re-cobran), pero el Text Search sí consume cuota. Si solo quieres novedades, adelante; si no, cambia de zona.
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-          {descubrirData.todos
-            ? <>El modo “todos” lanza {RUBROS_OBJETIVO.length} búsquedas por ubicación y consume más cuota de Google. Recomendado 1 vez por zona; las siguientes veces solo trae lo nuevo (no re-cobra los duplicados).</>
-            : <>Requiere <b>GOOGLE_PLACES_API_KEY</b> en el backend. Si falta, el sistema te avisará.</>}
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
-          <button className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
-          <button className="btn btn-primary" onClick={hacerDescubrir} disabled={descubrirLoading || zonasElegidas.length === 0 || (!descubrirData.todos && !descubrirData.query.trim())}>
-            {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Encolando…</> : <><Compass size={16} /> {descubrirData.todos ? 'Descubrir todo' : 'Buscar'}</>}
           </button>
         </div>
       </Modal>

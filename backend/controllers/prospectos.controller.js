@@ -834,6 +834,111 @@ export async function descubrirTodo(req, res) {
   return res.status(410).json(PLACES_RETIRADO);
 }
 
+// ------------------------------------------------------------
+// Descubrimiento por PADRÓN SUNAT (reemplazo de "Descubrir todo").
+// Lee la tabla padron_empresas (empresas objetivo reales, ya filtradas del
+// Padrón Reducido de SUNAT por el script import-padron) y crea prospectos por
+// departamento + sector. Sin Google Places, sin falsos positivos.
+// ------------------------------------------------------------
+
+// Conteo disponible en el padrón, por departamento y por sector, para poblar el
+// modal de descubrimiento (y saber si hace falta correr el import).
+export async function padronStats(req, res) {
+  try {
+    const [tot, deptos, sectores] = await Promise.all([
+      executeQuery('SELECT COUNT(*) AS n, MAX(fecha_import) AS ultima FROM padron_empresas'),
+      executeQuery(`SELECT departamento AS valor, COUNT(*) AS total FROM padron_empresas
+                    WHERE departamento IS NOT NULL GROUP BY departamento ORDER BY total DESC`),
+      executeQuery(`SELECT sector AS valor, COUNT(*) AS total FROM padron_empresas
+                    WHERE sector IS NOT NULL GROUP BY sector ORDER BY total DESC`),
+    ]);
+    if (!tot.success) return res.status(500).json({ error: tot.error });
+    res.json({
+      success: true,
+      data: {
+        total: tot.data[0].n,
+        ultima_import: tot.data[0].ultima,
+        departamentos: deptos.success ? deptos.data : [],
+        sectores: sectores.success ? sectores.data : [],
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// Crea prospectos desde el padrón para los departamentos (y sectores) elegidos.
+// Solo empresas que NO existen ya como prospecto ni como cliente. Cada nuevo
+// prospecto queda listo y se le encola el enriquecimiento (web/contactos por RUC).
+export async function descubrirPadron(req, res) {
+  try {
+    const { departamentos, sectores, limite } = req.body || {};
+    const deps = Array.isArray(departamentos) ? departamentos.filter(Boolean) : [];
+    const secs = Array.isArray(sectores) ? sectores.filter(Boolean) : [];
+    if (!deps.length) return res.status(400).json({ error: 'Elige al menos un departamento' });
+    const lim = Math.min(Math.max(parseInt(limite || 100, 10) || 100, 1), 500);
+
+    const params = [];
+    let where = "WHERE pe.estado LIKE 'ACTIVO%'"
+      + ` AND pe.departamento IN (${deps.map(() => '?').join(',')})`;
+    params.push(...deps);
+    if (secs.length) {
+      where += ` AND pe.sector IN (${secs.map(() => '?').join(',')})`;
+      params.push(...secs);
+    }
+    // No recrear lo que ya es prospecto ni lo que ya es cliente.
+    where += ' AND NOT EXISTS (SELECT 1 FROM prospectos p WHERE p.documento = pe.ruc)';
+    where += ' AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.ruc = pe.ruc)';
+
+    const sel = await executeQuery(
+      `SELECT pe.* FROM padron_empresas pe ${where} ORDER BY pe.razon_social ASC LIMIT ${lim}`,
+      params
+    );
+    if (!sel.success) return res.status(500).json({ error: sel.error });
+
+    const resumen = { candidatos: sel.data.length, creados: 0, ya_existian: 0, ya_cliente: 0, errores: 0 };
+    for (const pe of sel.data) {
+      try {
+        const ins = await crearProspectoDesdeDatos({
+          segmento: 'Formal',
+          tipo_documento: 'RUC',
+          documento: pe.ruc,
+          razon_social: pe.razon_social,
+          departamento: pe.departamento,
+          provincia: pe.provincia,
+          distrito: pe.distrito,
+          direccion: pe.direccion,
+          sector: pe.sector,
+          es_activo: true, // el padrón solo trae los ACTIVO
+          es_habido: /HABIDO/i.test(pe.condicion || '') ? true : undefined,
+          origen: 'padron',
+          origen_query: `Padrón SUNAT · ${pe.sector || 'sin sector'}`,
+          datos_raw: { fuente: 'padron_sunat', ubigeo: pe.ubigeo },
+        }, req.user?.id_empleado);
+
+        if (!ins.success) { resumen.errores++; continue; }
+        if (ins.duplicado_prospecto) { resumen.ya_existian++; continue; }
+        if (ins.flag === 'Ya_cliente') resumen.ya_cliente++;
+        resumen.creados++;
+
+        // Enriquecimiento en segundo plano (web/contactos anclados al RUC).
+        if (ins.id_prospecto) {
+          await encolarJob('web_scrape', { id_prospecto: ins.id_prospecto, lote: undefined, accion: 'enriquecer' }, req.user?.id_empleado, 8);
+        }
+      } catch { resumen.errores++; }
+    }
+
+    if (resumen.creados > 0) emitirCambioProspecto(req, { accion: 'descubrir', creados: resumen.creados });
+    res.status(201).json({
+      success: true,
+      resumen,
+      message: `Descubrimiento por padrón: ${resumen.creados} prospecto(s) nuevo(s). El enriquecimiento corre en segundo plano.`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // Buscar el RUC de un prospecto por su nombre en ruc.pe (BAJO DEMANDA, gratis,
 // sin APISPeru). Se aplica solo si el nombre de la ficha calza con el prospecto.
 export async function buscarRucProspecto(req, res) {
@@ -967,17 +1072,16 @@ export async function enriquecerMasivo(req, res) {
     const params = [];
     // Excluye descartados y ya convertidos: a un cliente convertido no le
     // aporta re-enriquecer el prospecto (y su ficha de cliente nunca se toca).
-    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')";
+    // Protege SIEMPRE a clientes: no se re-busca nada de un prospecto convertido,
+    // descartado ni que ya coincide con un cliente (pueden tener cotizaciones).
+    let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
+      + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
 
-    // Candado "no tocar lo trabajado" (default ON): solo leads INTACTOS (estado
-    // Nuevo, sin gestor asignado y que no coinciden con un cliente). Así un lote
-    // masivo nunca altera prospectos gestionados/contactados, convertidos, ni
-    // los que ya son clientes (que pueden tener cotizaciones). Se puede abrir con
-    // respetar_gestionados=false, pero por defecto se protegen.
-    const respetarGestionados = req.body?.respetar_gestionados !== false;
-    if (respetarGestionados) {
-      where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL"
-        + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
+    // Los prospectos En gestión / Contactado SÍ se re-buscan por defecto (se les
+    // refrescan los datos); el enriquecimiento solo AGREGA y nunca toca su
+    // estado, gestor ni historial. solo_nuevos=true lo limita a los intactos.
+    if (req.body?.solo_nuevos) {
+      where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL";
     }
 
     if (solo_con_web) where += " AND p.web IS NOT NULL AND p.web <> ''";
@@ -1054,15 +1158,16 @@ export async function redescubrirMasivo(req, res) {
     const params = [];
     // Excluye descartados, convertidos y los ya ligados a un cliente: no se
     // re-verifica nada que pertenezca a un cliente registrado.
+    // Protege SIEMPRE a clientes: convertidos, descartados y los que ya coinciden
+    // con un cliente NO se re-verifican (pueden tener cotizaciones).
     let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
       + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
 
-    // Candado "no tocar lo trabajado" (default ON): re-verificar PURGA los datos
-    // auto, así que solo se aplica a leads INTACTOS (Nuevo y sin gestor). Nunca
-    // se toca un prospecto gestionado/contactado, convertido ni cliente (que
-    // puede tener cotizaciones). Abrible con respetar_gestionados=false.
-    const respetarGestionados = req.body?.respetar_gestionados !== false;
-    if (respetarGestionados) {
+    // Los En gestión / Contactado SÍ se re-buscan por defecto: se les REFRESCAN
+    // los datos (web/contactos/RUC), pero el worker solo purga contactos AUTO y
+    // NUNCA toca estado_workflow, id_gestor, fecha_gestion, notas ni el historial
+    // de gestión. solo_nuevos=true lo limita a los intactos.
+    if (req.body?.solo_nuevos) {
       where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL";
     }
 

@@ -1140,6 +1140,21 @@ export async function enriquecerMasivo(req, res) {
       WHERE j.tipo = 'web_scrape' AND j.estado IN ('pendiente','procesando')
         AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto)`;
 
+    // Ahorro de créditos de la API de búsqueda: salta los prospectos que YA se
+    // buscaron con un buscador que respondió y resultaron SIN web (job completado,
+    // o error de "no hay web" tipo sin_dominio/sin_ruc/solo_directorios). Así una
+    // segunda corrida (p.ej. con otra API key) NO re-gasta crédito confirmando otra
+    // vez que no tienen web y avanza sobre prospectos nuevos. SÍ se reintentan los
+    // que solo fallaron por 'busquedas_vacias' (buscador vacío / crédito agotado /
+    // corrida pre-API), que son justo los que valen la pena reintentar.
+    if (req.body?.saltar_ya_buscados) {
+      where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
+        WHERE j.tipo = 'web_scrape'
+          AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto
+          AND (j.estado = 'completado'
+               OR (j.estado = 'error' AND j.error NOT LIKE '%busquedas_vac%')))`;
+    }
+
     // Cuántos candidatos entran (para el aviso de respuesta).
     const cnt = await executeQuery(`SELECT COUNT(*) AS n FROM prospectos p${where}`, params);
     if (!cnt.success) return res.status(500).json({ error: cnt.error });

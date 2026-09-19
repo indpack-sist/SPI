@@ -32,13 +32,52 @@ let intervalo = null;
 // compiten por la cola sin pisarse. Ajustable por entorno.
 const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 4);
 
+// Tras cuántos intentos un job que se cuelga deja de reintentarse y se cierra como
+// error (evita que un job "veneno" reviva para siempre y clave la barra de progreso).
+const MAX_INTENTOS = Math.max(1, Number(process.env.PROSPECTOS_WORKER_MAX_INTENTOS) || 3);
+// Un job en 'procesando' más viejo que esto se considera colgado (fetch trabado) y
+// se recupera en caliente. En el arranque no se aplica el tiempo: TODO 'procesando'
+// es huérfano porque el worker es único y aún no tomó nada.
+const STALE_MIN = Math.max(1, Number(process.env.PROSPECTOS_WORKER_STALE_MIN) || 15);
+
+let ultimoStaleCheck = 0; // epoch ms del último barrido de huérfanos en caliente
+
 /** Arranca el worker. Se llama desde server.js con la instancia de socket.io. */
 export function startWorker(io) {
   socketIo = io;
   if (intervalo) clearInterval(intervalo);
   intervalo = setInterval(tick, 5000);
-  tick();
+  // Recupera jobs que quedaron en 'procesando' de una corrida anterior (deploy /
+  // reinicio a mitad de proceso). Son huérfanos: el worker que los tomó ya no
+  // existe. Se rescatan ANTES de la primera pasada para que se re-procesen y no
+  // dejen la barra de progreso pegada al 100 % con "N en curso" fantasma.
+  recuperarHuerfanos({ soloArranque: true })
+    .catch((e) => console.error('Error recuperando jobs huérfanos:', e.message))
+    .finally(() => tick());
   console.log('🛰️  Worker de prospección iniciado (cola scraping_jobs)');
+}
+
+// Rescata jobs atascados en 'procesando'. Los que aún tienen intentos disponibles
+// vuelven a 'pendiente' (se re-procesan); los que agotaron el cupo se cierran como
+// 'error' para que el lote deje de contarse como activo. En el arranque se rescata
+// todo lo 'procesando'; en caliente solo lo que lleva demasiado tiempo colgado.
+async function recuperarHuerfanos({ soloArranque = false } = {}) {
+  const filtroTiempo = soloArranque ? '' : ` AND fecha_inicio < (NOW() - INTERVAL ${STALE_MIN} MINUTE)`;
+
+  await executeQuery(
+    `UPDATE scraping_jobs SET estado = 'pendiente'
+     WHERE estado = 'procesando' AND intentos < ?${filtroTiempo}`,
+    [MAX_INTENTOS]
+  );
+  const cerr = await executeQuery(
+    `UPDATE scraping_jobs SET estado = 'error',
+       error = 'Interrumpido: proceso reiniciado o tarea colgada', fecha_fin = NOW()
+     WHERE estado = 'procesando' AND intentos >= ?${filtroTiempo}`,
+    [MAX_INTENTOS]
+  );
+  if (cerr.success && cerr.data.affectedRows > 0) {
+    emit('scraping:update', { estado: 'error', huerfanos_cerrados: cerr.data.affectedRows });
+  }
 }
 
 /** Despierta al worker de inmediato (lo llama el controller al encolar). */
@@ -54,6 +93,12 @@ async function tick() {
   if (procesando) return;
   procesando = true;
   try {
+    // Red de seguridad: cada ~2 min rescata jobs colgados en 'procesando' (fetch
+    // trabado sin que el proceso se haya reiniciado). Barato: casi siempre 0 filas.
+    if (Date.now() - ultimoStaleCheck > 120000) {
+      ultimoStaleCheck = Date.now();
+      await recuperarHuerfanos({ soloArranque: false }).catch(() => {});
+    }
     // Lanza CONCURRENCIA obreros que compiten por la cola en paralelo. Cada uno
     // drena jobs mientras haya; el claim atómico evita que dos tomen el mismo.
     await Promise.all(Array.from({ length: CONCURRENCIA }, () => obrero()));

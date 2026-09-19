@@ -916,8 +916,12 @@ export async function descubrirPadron(req, res) {
       params.push(...secs);
     }
     // No recrear lo que ya es prospecto ni lo que ya es cliente.
-    where += ' AND NOT EXISTS (SELECT 1 FROM prospectos p WHERE p.documento = pe.ruc)';
-    where += ' AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.ruc = pe.ruc)';
+    // padron_empresas quedó en utf8mb4_0900_ai_ci (default de MySQL 8) mientras que
+    // prospectos/clientes usan utf8mb4_unicode_ci; sin forzar la collation en la
+    // comparación, MySQL lanza "Illegal mix of collations". Se ancla pe.ruc a la
+    // collation de las otras tablas.
+    where += ' AND NOT EXISTS (SELECT 1 FROM prospectos p WHERE p.documento = pe.ruc COLLATE utf8mb4_unicode_ci)';
+    where += ' AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.ruc = pe.ruc COLLATE utf8mb4_unicode_ci)';
 
     // Orden por POTENCIAL: mayor afinidad de sector primero; empate, alfabético.
     // Así, con el lote topado, se crean primero los mejores clientes potenciales.

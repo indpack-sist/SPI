@@ -150,9 +150,50 @@ async function buscarDuckDuckGo(q) {
   return urls;
 }
 
-// Pool de buscadores. Hoy solo DDG; la estructura de pool se conserva para poder
-// sumar otro motor (o una API) sin reescribir el descubrimiento.
-const MOTORES = [buscarDuckDuckGo];
+// ------------------------------------------------------------------
+// API de búsqueda (Serper.dev — resultados de Google en JSON). Es la vía FIABLE:
+// funciona desde IPs de datacenter (Render/Railway), donde los scrapers HTML de
+// DDG/Bing devuelven vacío o señuelo. Queda DORMIDA hasta que se define la env
+// SERPER_API_KEY; con la key, el pool voltea a la API automáticamente.
+//
+// A diferencia del scraping, la API admite concurrencia: NO pasa por el throttle
+// de esperarTurno (el gap anti-baneo no aplica). Para cambiar de proveedor
+// (SerpAPI, Brave Search API, Google CSE) basta reescribir esta función.
+// ------------------------------------------------------------------
+const SERPER_API_KEY = process.env.SERPER_API_KEY || '';
+
+async function buscarSerper(q) {
+  if (!SERPER_API_KEY) return [];
+  try {
+    const r = await axios.post(
+      'https://google.serper.dev/search',
+      { q, gl: 'pe', hl: 'es', num: 10 },
+      {
+        timeout: TIMEOUT,
+        headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' },
+        validateStatus: (s) => s < 500,
+      }
+    );
+    if (r.status >= 400) {
+      // 401 = key inválida; 429 = cuota agotada. Se registra una vez por claridad.
+      console.error(`Serper HTTP ${r.status}: ${r.data?.message || 'sin detalle'}`);
+      return [];
+    }
+    const d = r.data || {};
+    const urls = [];
+    if (d.knowledgeGraph?.website) urls.push(d.knowledgeGraph.website); // sitio oficial del panel
+    for (const o of d.organic || []) if (o.link) urls.push(o.link);
+    return urls;
+  } catch (e) {
+    console.error('Serper fallo de red:', e.message);
+    return [];
+  }
+}
+
+// Pool de buscadores. Si hay API key, se usa la API (fiable desde el servidor);
+// si no, cae al scraping de DDG (solo útil desde IPs no-datacenter). La estructura
+// de pool se conserva para poder sumar más motores sin reescribir el descubrimiento.
+const MOTORES = SERPER_API_KEY ? [buscarSerper] : [buscarDuckDuckGo];
 let rrMotor = 0;
 function tomarMotores() {
   // Devuelve los motores empezando por el siguiente en la rotación: el primero es

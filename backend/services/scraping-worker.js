@@ -199,6 +199,7 @@ async function procesarWebScrape(job, params) {
 
   let url = redescubrir ? null : params.url;
   let webVerificada = false; // el descubridor ya confirmó que la web es del prospecto
+  let motivoNoWeb = null;    // por qué el descubrimiento no halló web (diagnóstico)
 
   // Si no vino URL en el job, resolvemos en este orden:
   //   1) la web que el prospecto YA tiene guardada  → se raspa directo.
@@ -242,9 +243,10 @@ async function procesarWebScrape(job, params) {
       const zona = p.distrito ? `${p.distrito}, ${p.provincia || 'Perú'}` : 'Perú';
       const disc = await descubrirWeb(p.razon_social, { ruc: documento, zona });
       url = disc?.web || null;
+      motivoNoWeb = disc?.motivo || null;
       // Descubrimiento anclado en RUC ya viene verificado (RUC en la página o
       // dominio == nombre): no hace falta re-verificar al raspar.
-      webVerificada = !!disc;
+      webVerificada = !!disc?.web;
     }
   }
 
@@ -257,7 +259,9 @@ async function procesarWebScrape(job, params) {
       emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
       return completar(job.id_job, { id_prospecto: idProspecto, redescubierto: true, web_no_encontrada: true, purgado: true, score });
     }
-    return fallar(job.id_job, 'No se encontró una web que publique el RUC del prospecto (búsqueda por RUC en buscadores gratis).');
+    // El motivo permite distinguir IP bloqueada (busquedas_vacias) de web sin RUC
+    // visible (sin_ruc_en_paginas) al agrupar los errores por mensaje.
+    return fallar(job.id_job, `No se encontró web verificable [${motivoNoWeb || 'desconocido'}].`);
   }
 
   // Verificación de correspondencia de la web: activa por defecto. Se omite si

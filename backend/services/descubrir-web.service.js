@@ -111,21 +111,15 @@ async function fetchHtml(url) {
 // -----------------------------------------------------------------
 // Buscadores HTML gratis: devuelven URLs candidatas para una consulta.
 // Cada uno respeta su PROPIO throttle (esperarTurno con su id). El descubrimiento
-// REPARTE las consultas entre todos en round-robin, así el rendimiento agregado
-// es ~N× el de un solo motor SIN pegarle a ninguno más rápido que su gap.
+// reparte las consultas entre los del pool en round-robin.
+//
+// Estado real (probado 2026-09): SOLO DuckDuckGo sirve resultados usables.
+//   - Bing: sirve una página SEÑUELO al detectar scraper (resultados basura no
+//     relacionados) → excluido, metía ruido y suprimía el fallback a DDG.
+//   - Brave (HTTP 429) y Mojeek (HTTP 403): bloquean a los scrapers.
+// Si algún día DDG deja de devolver resultados (markup nuevo o IP bloqueada),
+// el error de los jobs saldrá como 'busquedas_vacias' (ver descubrirWeb).
 // -----------------------------------------------------------------
-
-// Extractor genérico: saca los href http(s) de un HTML de resultados y descarta
-// los del propio buscador. Sirve para Bing, Brave y Mojeek (marcado uniforme).
-function extraerEnlaces(html, propioRe) {
-  const urls = [];
-  for (const m of html.matchAll(/<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
-    const u = m[1];
-    if (propioRe.test(u)) continue;
-    urls.push(u);
-  }
-  return urls;
-}
 
 async function buscarDuckDuckGo(q) {
   await esperarTurno('ddg');
@@ -143,34 +137,22 @@ async function buscarDuckDuckGo(q) {
     );
     html = typeof r.data === 'string' ? r.data : '';
   } catch { return []; }
+  // Markup actual de html.duckduckgo.com: <a class="result__a" href="URL_REAL">
+  // con la URL DIRECTA (ya no el redirect /l/?uddg=<enc> de antes). Se soporta la
+  // variante vieja por si algún resultado aún la trae.
   const urls = [];
-  for (const m of html.matchAll(/[?&]uddg=([^&"']+)/g)) {
-    try { urls.push(decodeURIComponent(m[1])); } catch { /* skip */ }
+  for (const m of html.matchAll(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"/gi)) {
+    let u = m[1].replace(/&amp;/g, '&');
+    const rd = u.match(/[?&]uddg=([^&]+)/);
+    if (rd) { try { u = decodeURIComponent(rd[1]); } catch { /* skip */ } }
+    if (/^https?:\/\//i.test(u)) urls.push(u);
   }
   return urls;
 }
 
-async function buscarBing(q) {
-  await esperarTurno('bing');
-  const html = await fetchHtml(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=es&cc=PE`);
-  return html ? extraerEnlaces(html, /bing\.com|microsoft\.com|msn\.com|go\.microsoft/i) : [];
-}
-
-async function buscarBrave(q) {
-  await esperarTurno('brave');
-  const html = await fetchHtml(`https://search.brave.com/search?q=${encodeURIComponent(q)}&source=web`);
-  return html ? extraerEnlaces(html, /brave\.com/i) : [];
-}
-
-async function buscarMojeek(q) {
-  await esperarTurno('mojeek');
-  const html = await fetchHtml(`https://www.mojeek.com/search?q=${encodeURIComponent(q)}`);
-  return html ? extraerEnlaces(html, /mojeek\.com/i) : [];
-}
-
-// Pool de buscadores. El orden no importa; se rota globalmente para que
-// prospectos consecutivos golpeen motores distintos y se solapen en el tiempo.
-const MOTORES = [buscarDuckDuckGo, buscarBing, buscarBrave, buscarMojeek];
+// Pool de buscadores. Hoy solo DDG; la estructura de pool se conserva para poder
+// sumar otro motor (o una API) sin reescribir el descubrimiento.
+const MOTORES = [buscarDuckDuckGo];
 let rrMotor = 0;
 function tomarMotores() {
   // Devuelve los motores empezando por el siguiente en la rotación: el primero es
@@ -206,7 +188,10 @@ async function candidatosDeConsulta(q, vistos) {
     bases.push(base);
     if (bases.length >= 6) break;
   }
-  return bases;
+  // `crudos` = cuántas URLs devolvió el buscador ANTES de filtrar directorios: sirve
+  // para distinguir "el buscador no devolvió nada" (IP bloqueada) de "devolvió solo
+  // directorios/redes" (sí respondió, pero no había web propia).
+  return { bases, crudos: urls.length };
 }
 
 // Rutas donde una empresa suele publicar su RUC (pie, contacto, nosotros).
@@ -233,32 +218,46 @@ async function dominioPublicaRuc(base, ruc) {
  * Encuentra la web oficial de una empresa, anclando en el RUC.
  * @param {string} nombre  razón social
  * @param {object} [opts]  { ruc, zona }
- * @returns {Promise<{web:string, fuente:string, verificado_por:string}|null>}
+ * @returns {Promise<{web:(string|null), fuente?:string, verificado_por?:string, motivo?:string, candidatos?:number}>}
+ *   Siempre devuelve un objeto. `web` es la URL si se verificó, o null si no; en
+ *   ese caso `motivo` explica por qué (para diagnosticar el 100 % de fallos):
+ *     - 'busquedas_vacias'   → ningún buscador devolvió resultados (posible IP bloqueada)
+ *     - 'solo_directorios'   → hubo resultados pero solo directorios/redes, ninguna web propia
+ *     - 'sin_ruc_en_paginas' → se hallaron webs pero ninguna publica el RUC del prospecto
+ *     - 'sin_dominio_nombre' → sin RUC, ninguna web coincide con el nombre
  */
 export async function descubrirWeb(nombre, opts = {}) {
   const ruc = String(opts.ruc || '').replace(/\D/g, '');
-  if ((!nombre || nombre.trim().length < 3) && !/^\d{11}$/.test(ruc)) return null;
+  if ((!nombre || nombre.trim().length < 3) && !/^\d{11}$/.test(ruc)) {
+    return { web: null, motivo: 'sin_datos_consulta' };
+  }
 
   const tieneRuc = /^\d{11}$/.test(ruc);
 
-  // Consultas priorizadas: primero por RUC (máxima precisión), luego por nombre
-  // exacto entre comillas. La zona ayuda a desambiguar homónimos. Se PROCESAN una
-  // a una con salida temprana; en la mayoría de los casos la primera (por RUC)
-  // ya resuelve, evitando las 3-4 búsquedas que antes se lanzaban siempre.
+  // Consultas priorizadas. Van por NOMBRE primero: en la práctica la búsqueda por
+  // el número de RUC devuelve casi solo directorios (datosperu, universidadperu…),
+  // que se filtran, malgastando una consulta; el nombre es el que hace aflorar el
+  // sitio propio de la empresa. La búsqueda por RUC queda de respaldo. Se procesan
+  // una a una con salida temprana: hallado el sitio, se verifica con RUC-en-página
+  // (o token del nombre en el dominio) y se retorna, normalmente tras 1 búsqueda.
   const consultas = [];
-  if (tieneRuc) consultas.push(`"${ruc}"`);
   if (nombre) {
     consultas.push(`"${nombre}" RUC`);
     consultas.push(`${nombre} ${opts.zona || 'Perú'}`);
   }
+  if (tieneRuc) consultas.push(`"${ruc}"`);
 
   const toks = tokensSignificativos(nombre);
   const vistos = new Set();          // hosts ya vistos en resultados de búsqueda
   const rucChequeados = new Set();   // hosts ya sondeados por RUC (no re-fetchear)
   let fallbackNombre = null;         // primer match por token de nombre (respaldo)
+  let huboResultados = false;        // algún buscador devolvió al menos 1 URL cruda
+  let totalCandidatos = 0;           // webs propias (tras filtrar directorios)
 
   for (const q of consultas) {
-    const candidatos = await candidatosDeConsulta(q, vistos);
+    const { bases: candidatos, crudos } = await candidatosDeConsulta(q, vistos);
+    if (crudos > 0) huboResultados = true;
+    totalCandidatos += candidatos.length;
     if (!candidatos.length) continue;
 
     // 1) Candado fuerte: primer dominio que PUBLIQUE el RUC → retorno inmediato.
@@ -297,5 +296,12 @@ export async function descubrirWeb(nombre, opts = {}) {
   if (fallbackNombre) {
     return { web: fallbackNombre, fuente: 'busqueda_nombre', verificado_por: 'dominio_nombre' };
   }
-  return null; // nada verificable → no se arriesga un falso positivo
+
+  // Nada verificable → no se arriesga un falso positivo. Se reporta el PORQUÉ para
+  // poder diagnosticar el patrón de fallos sin adivinar.
+  let motivo;
+  if (!huboResultados) motivo = 'busquedas_vacias';
+  else if (totalCandidatos === 0) motivo = 'solo_directorios';
+  else motivo = tieneRuc ? 'sin_ruc_en_paginas' : 'sin_dominio_nombre';
+  return { web: null, motivo, candidatos: totalCandidatos };
 }

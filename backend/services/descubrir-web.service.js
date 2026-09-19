@@ -22,12 +22,15 @@ import { similitudNombre } from './ruc-lookup.service.js';
 // ============================================================
 
 const UA = 'Mozilla/5.0 (compatible; INDPACK-Prospector/1.0; +https://indpack.pe)';
-const TIMEOUT = 12000;
+// Timeout de las llamadas a BUSCADORES y del sondeo de RUC. Más corto que antes
+// (12 s) porque un sitio que no responde rápido rara vez es el que buscamos y,
+// en el caso de "sin web", cada segundo de espera se multiplica por miles.
+const TIMEOUT = Number(process.env.WEB_LOOKUP_TIMEOUT_MS) || 8000;
 const DIACRITICOS = /[̀-ͯ]/g;
 
 // Dominios que NO son la web propia de una empresa: directorios, redes,
 // buscadores, agregadores. Nunca se toman como "web oficial".
-const DOMINIO_NO_OFICIAL = /(^|\.)(facebook|instagram|linkedin|twitter|x|tiktok|youtube|wa\.me|whatsapp|google|goo\.gl|maps|bing|duckduckgo|yahoo|wikipedia|mercadolibre|olx|paginasamarillas|paginasblancas|guiatelefonica|ruc\.pe|universidadperu|datosperu|peruinforma|deperu|clave-?unica|gob\.pe|sunat|infobae|blogspot|wordpress\.com|wixsite|amazonaws|indeed|computrabajo|bumeran|glassdoor|slideshare|scribd|issuu|pinterest|tripadvisor)\./i;
+const DOMINIO_NO_OFICIAL = /(^|\.)(facebook|instagram|linkedin|twitter|x|tiktok|youtube|wa\.me|whatsapp|google|goo\.gl|maps|bing|duckduckgo|brave|mojeek|yahoo|wikipedia|mercadolibre|olx|paginasamarillas|paginasblancas|guiatelefonica|ruc\.pe|universidadperu|datosperu|peruinforma|deperu|clave-?unica|gob\.pe|sunat|infobae|blogspot|wordpress\.com|wixsite|amazonaws|indeed|computrabajo|bumeran|glassdoor|slideshare|scribd|issuu|pinterest|tripadvisor)\./i;
 
 // Palabras genéricas/geográficas que NO distinguen una empresa de otra.
 const GENERICOS = new Set([
@@ -107,7 +110,23 @@ async function fetchHtml(url) {
 
 // -----------------------------------------------------------------
 // Buscadores HTML gratis: devuelven URLs candidatas para una consulta.
+// Cada uno respeta su PROPIO throttle (esperarTurno con su id). El descubrimiento
+// REPARTE las consultas entre todos en round-robin, así el rendimiento agregado
+// es ~N× el de un solo motor SIN pegarle a ninguno más rápido que su gap.
 // -----------------------------------------------------------------
+
+// Extractor genérico: saca los href http(s) de un HTML de resultados y descarta
+// los del propio buscador. Sirve para Bing, Brave y Mojeek (marcado uniforme).
+function extraerEnlaces(html, propioRe) {
+  const urls = [];
+  for (const m of html.matchAll(/<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
+    const u = m[1];
+    if (propioRe.test(u)) continue;
+    urls.push(u);
+  }
+  return urls;
+}
+
 async function buscarDuckDuckGo(q) {
   await esperarTurno('ddg');
   let html = '';
@@ -134,14 +153,30 @@ async function buscarDuckDuckGo(q) {
 async function buscarBing(q) {
   await esperarTurno('bing');
   const html = await fetchHtml(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=es&cc=PE`);
-  if (!html) return [];
-  const urls = [];
-  for (const m of html.matchAll(/<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
-    const u = m[1];
-    if (/bing\.com|microsoft\.com|msn\.com|go\.microsoft/i.test(u)) continue;
-    urls.push(u);
-  }
-  return urls;
+  return html ? extraerEnlaces(html, /bing\.com|microsoft\.com|msn\.com|go\.microsoft/i) : [];
+}
+
+async function buscarBrave(q) {
+  await esperarTurno('brave');
+  const html = await fetchHtml(`https://search.brave.com/search?q=${encodeURIComponent(q)}&source=web`);
+  return html ? extraerEnlaces(html, /brave\.com/i) : [];
+}
+
+async function buscarMojeek(q) {
+  await esperarTurno('mojeek');
+  const html = await fetchHtml(`https://www.mojeek.com/search?q=${encodeURIComponent(q)}`);
+  return html ? extraerEnlaces(html, /mojeek\.com/i) : [];
+}
+
+// Pool de buscadores. El orden no importa; se rota globalmente para que
+// prospectos consecutivos golpeen motores distintos y se solapen en el tiempo.
+const MOTORES = [buscarDuckDuckGo, buscarBing, buscarBrave, buscarMojeek];
+let rrMotor = 0;
+function tomarMotores() {
+  // Devuelve los motores empezando por el siguiente en la rotación: el primero es
+  // el "principal" de esta consulta; los demás quedan como respaldo si viene poco.
+  const inicio = rrMotor++ % MOTORES.length;
+  return MOTORES.slice(inicio).concat(MOTORES.slice(0, inicio));
 }
 
 /**
@@ -149,12 +184,16 @@ async function buscarBing(q) {
  * anteriores), filtra directorios/redes. Devuelve hasta 6 dominios propios.
  * Se procesa consulta a consulta (no todas de golpe) para permitir salir apenas
  * una verifique — así el caso común resuelve con UNA sola búsqueda.
+ * Reparte la consulta en round-robin entre los buscadores del pool; solo recurre
+ * a un segundo motor si el principal devolvió muy pocos resultados.
  */
 async function candidatosDeConsulta(q, vistos) {
+  const motores = tomarMotores();
   let urls = [];
-  try { urls = await buscarDuckDuckGo(q); } catch { /* noop */ }
-  if (urls.length < 3) {
-    try { urls = urls.concat(await buscarBing(q)); } catch { /* noop */ }
+  try { urls = await motores[0](q); } catch { /* noop */ }
+  // Respaldo: si el motor principal trajo poco, prueba con el siguiente del pool.
+  if (urls.length < 3 && motores[1]) {
+    try { urls = urls.concat(await motores[1](q)); } catch { /* noop */ }
   }
   const bases = [];
   for (const url of urls) {
@@ -173,16 +212,21 @@ async function candidatosDeConsulta(q, vistos) {
 // Rutas donde una empresa suele publicar su RUC (pie, contacto, nosotros).
 const RUTAS_RUC = ['', '/contacto', '/contactenos', '/nosotros'];
 
-/** ¿La página (home + contacto) del dominio publica el RUC dado? */
+/** ¿Esta página publica el RUC (con o sin separadores/etiqueta)? */
+async function paginaTieneRuc(url, ruc) {
+  const html = await fetchHtml(url);
+  if (!html) return false;
+  return html.replace(/[.\-\s]/g, '').includes(ruc);
+}
+
+/** ¿La web (home + contacto/nosotros) del dominio publica el RUC dado? */
 async function dominioPublicaRuc(base, ruc) {
-  for (const ruta of RUTAS_RUC) {
-    const html = await fetchHtml(base + ruta);
-    if (!html) continue;
-    // RUC con o sin separadores/etiqueta: 20xxxxxxxxx dentro del contenido.
-    const soloDig = html.replace(/[.\-\s]/g, '');
-    if (soloDig.includes(ruc)) return true;
-  }
-  return false;
+  // La home concentra el RUC (pie de página): se prueba sola primero y, si acierta,
+  // no se descarga nada más. Si no, se sondean las páginas de contacto EN PARALELO
+  // (acorta el peor caso "sin RUC" de 4 fetches en serie a 1 + 1 tanda paralela).
+  if (await paginaTieneRuc(base + RUTAS_RUC[0], ruc)) return true;
+  const resto = await Promise.all(RUTAS_RUC.slice(1).map((r) => paginaTieneRuc(base + r, ruc)));
+  return resto.some(Boolean);
 }
 
 /**

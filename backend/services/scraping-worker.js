@@ -30,7 +30,7 @@ let intervalo = null;
 // los buscadores ni perder precisión. La toma de jobs ya es atómica
 // (tomarSiguienteJob reclama con UPDATE optimista), así que varios obreros
 // compiten por la cola sin pisarse. Ajustable por entorno.
-const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 4);
+const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 8);
 
 // Tras cuántos intentos un job que se cuelga deja de reintentarse y se cierra como
 // error (evita que un job "veneno" reviva para siempre y clave la barra de progreso).

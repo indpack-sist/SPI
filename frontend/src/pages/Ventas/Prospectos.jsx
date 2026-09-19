@@ -519,14 +519,25 @@ export default function Prospectos() {
   const enriquecerTodo = async () => {
     if (!window.confirm(
       'Se buscarán web y contactos para las empresas SIN contacto que aún están sin trabajar.\n\n' +
-      '• Solo se tocan prospectos en estado "Nuevo" y sin gestor. Los gestionados, contactados, convertidos y los que ya son clientes NO se tocan.\n' +
       '• No se borra ni se pisa nada (solo se agrega información).\n' +
-      '• La web se busca por el RUC en buscadores gratuitos; solo se toman datos de páginas que publican ese RUC (cero falsos positivos).\n' +
-      '• Se procesan en segundo plano; puede tardar horas.\n\n¿Continuar?'
+      '• Se SALTAN los que ya se buscaron y no tienen web (no se re-gasta crédito de la API en ellos); sí se reintentan los que quedaron pendientes por falta de crédito.\n' +
+      '• Se procesan de mayor a menor potencial (score), en segundo plano.\n\n¿Continuar?'
     )) return;
+    // Tope opcional por corrida: útil para no exceder los créditos de la API de
+    // búsqueda (p.ej. 2400 por key). Vacío / 0 = sin tope (procesa todos).
+    const limStr = window.prompt(
+      '¿Cuántos procesar en esta corrida? (para no pasarte de los créditos de la API)\n\nDeja vacío o 0 para procesar TODOS.',
+      '2400'
+    );
+    if (limStr === null) return; // canceló
+    const limite = parseInt(limStr, 10);
     try {
       setEnriqMasivoLoading(true);
-      const res = await prospectosAPI.enriquecerMasivo({ solo_sin_contacto: true });
+      const res = await prospectosAPI.enriquecerMasivo({
+        solo_sin_contacto: true,
+        saltar_ya_buscados: true,
+        ...(Number.isFinite(limite) && limite > 0 ? { limite } : {}),
+      });
       notify(res.data.message || `Se encolaron ${res.data.encolados} enriquecimientos.`);
       setJobsOpen(true);
       refreshJobs();

@@ -39,22 +39,25 @@ const GENERICOS = new Set([
   'la', 'el', 'los', 'las', 'and', 'representaciones', 'soluciones',
 ]);
 
-// Throttle global anti-baneo: los buscadores HTML limitan ráfagas, así que las
-// consultas salen como máximo 1 cada MIN_GAP_MS. Implementado como una CADENA de
-// promesas (no como una lectura de timestamp) para que sea correcto aunque haya
-// varios obreros del worker pidiendo turno en paralelo: cada llamada se encola
-// detrás de la anterior y respeta el gap, garantizando el ritmo global exacto.
+// Throttle anti-baneo POR BUSCADOR: cada motor (DuckDuckGo, Bing) limita ráfagas
+// por su cuenta, así que cada uno tiene su PROPIA cadena de turnos y respeta el
+// gap de forma independiente. Antes compartían una sola cadena y se serializaban
+// entre sí sin necesidad (una consulta a Bing esperaba a la de DDG aunque son
+// hosts distintos), lo que reducía el throughput a la mitad sin ganar seguridad.
+// Cadena de promesas (no lectura de timestamp) para ser correcto con varios
+// obreros pidiendo turno en paralelo: cada llamada se encola tras la anterior.
 const MIN_GAP_MS = Number(process.env.WEB_LOOKUP_GAP_MS) || 1200;
-let cadenaTurno = Promise.resolve();
-let ultimaPeticion = 0;
-function esperarTurno() {
-  const turno = cadenaTurno.then(async () => {
-    const espera = ultimaPeticion + MIN_GAP_MS - Date.now();
+const throttles = new Map(); // motor -> { cadena, ultima }
+function esperarTurno(motor = 'default') {
+  const t = throttles.get(motor) || { cadena: Promise.resolve(), ultima: 0 };
+  throttles.set(motor, t);
+  const turno = t.cadena.then(async () => {
+    const espera = t.ultima + MIN_GAP_MS - Date.now();
     if (espera > 0) await new Promise((r) => setTimeout(r, espera));
-    ultimaPeticion = Date.now();
+    t.ultima = Date.now();
   });
   // La cadena avanza aunque un turno falle (no debe romper el throttle).
-  cadenaTurno = turno.catch(() => {});
+  t.cadena = turno.catch(() => {});
   return turno;
 }
 
@@ -106,7 +109,7 @@ async function fetchHtml(url) {
 // Buscadores HTML gratis: devuelven URLs candidatas para una consulta.
 // -----------------------------------------------------------------
 async function buscarDuckDuckGo(q) {
-  await esperarTurno();
+  await esperarTurno('ddg');
   let html = '';
   try {
     const r = await axios.post(
@@ -129,7 +132,7 @@ async function buscarDuckDuckGo(q) {
 }
 
 async function buscarBing(q) {
-  await esperarTurno();
+  await esperarTurno('bing');
   const html = await fetchHtml(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=es&cc=PE`);
   if (!html) return [];
   const urls = [];
@@ -141,33 +144,34 @@ async function buscarBing(q) {
   return urls;
 }
 
-/** Junta candidatos de varios buscadores, dedup por host, filtra directorios. */
-async function candidatosDominios(consultas) {
-  const vistos = new Set();
+/**
+ * Candidatos de UNA consulta: dedup por host (contra los ya vistos en consultas
+ * anteriores), filtra directorios/redes. Devuelve hasta 6 dominios propios.
+ * Se procesa consulta a consulta (no todas de golpe) para permitir salir apenas
+ * una verifique — así el caso común resuelve con UNA sola búsqueda.
+ */
+async function candidatosDeConsulta(q, vistos) {
+  let urls = [];
+  try { urls = await buscarDuckDuckGo(q); } catch { /* noop */ }
+  if (urls.length < 3) {
+    try { urls = urls.concat(await buscarBing(q)); } catch { /* noop */ }
+  }
   const bases = [];
-  for (const q of consultas) {
-    let urls = [];
-    try { urls = await buscarDuckDuckGo(q); } catch { /* noop */ }
-    if (urls.length < 3) {
-      try { urls = urls.concat(await buscarBing(q)); } catch { /* noop */ }
-    }
-    for (const url of urls) {
-      const base = baseDeUrl(url);
-      if (!base) continue;
-      const host = hostDe(base);
-      if (!host || vistos.has(host)) continue;
-      vistos.add(host);
-      if (DOMINIO_NO_OFICIAL.test(host + '.')) continue;
-      bases.push(base);
-      if (bases.length >= 8) break;
-    }
-    if (bases.length >= 8) break;
+  for (const url of urls) {
+    const base = baseDeUrl(url);
+    if (!base) continue;
+    const host = hostDe(base);
+    if (!host || vistos.has(host)) continue;
+    vistos.add(host);
+    if (DOMINIO_NO_OFICIAL.test(host + '.')) continue;
+    bases.push(base);
+    if (bases.length >= 6) break;
   }
   return bases;
 }
 
 // Rutas donde una empresa suele publicar su RUC (pie, contacto, nosotros).
-const RUTAS_RUC = ['', '/contacto', '/contactenos', '/nosotros', '/contact'];
+const RUTAS_RUC = ['', '/contacto', '/contactenos', '/nosotros'];
 
 /** ¿La página (home + contacto) del dominio publica el RUC dado? */
 async function dominioPublicaRuc(base, ruc) {
@@ -191,45 +195,63 @@ export async function descubrirWeb(nombre, opts = {}) {
   const ruc = String(opts.ruc || '').replace(/\D/g, '');
   if ((!nombre || nombre.trim().length < 3) && !/^\d{11}$/.test(ruc)) return null;
 
+  const tieneRuc = /^\d{11}$/.test(ruc);
+
   // Consultas priorizadas: primero por RUC (máxima precisión), luego por nombre
-  // exacto entre comillas. La zona ayuda a desambiguar homónimos.
+  // exacto entre comillas. La zona ayuda a desambiguar homónimos. Se PROCESAN una
+  // a una con salida temprana; en la mayoría de los casos la primera (por RUC)
+  // ya resuelve, evitando las 3-4 búsquedas que antes se lanzaban siempre.
   const consultas = [];
-  if (/^\d{11}$/.test(ruc)) {
-    consultas.push(`"${ruc}"`);
-    if (nombre) consultas.push(`"${ruc}" ${nombre}`);
-  }
+  if (tieneRuc) consultas.push(`"${ruc}"`);
   if (nombre) {
     consultas.push(`"${nombre}" RUC`);
     consultas.push(`${nombre} ${opts.zona || 'Perú'}`);
   }
 
-  const candidatos = await candidatosDominios(consultas);
-  if (!candidatos.length) return null;
-
-  // 1) Candado fuerte: aceptar el primer dominio que PUBLIQUE el RUC.
-  if (/^\d{11}$/.test(ruc)) {
-    for (const base of candidatos.slice(0, 6)) {
-      try {
-        if (await dominioPublicaRuc(base, ruc)) {
-          return { web: base, fuente: 'busqueda_ruc', verificado_por: 'ruc_en_pagina' };
-        }
-      } catch { /* best-effort */ }
-    }
-  }
-
-  // 2) Sin RUC verificable: aceptar solo si el token distintivo ES el dominio.
   const toks = tokensSignificativos(nombre);
-  if (toks.length) {
-    for (const base of candidatos) {
-      const host = hostCompacto(base);
-      // El token distintivo debe estar contenido en el dominio Y el dominio no
-      // debe ser mucho más largo (evita coincidencias accidentales).
-      const distintivo = toks.find((t) => t.length >= 4 && host.includes(t));
-      if (distintivo && host.length <= distintivo.length + 12) {
-        return { web: base, fuente: 'busqueda_nombre', verificado_por: 'dominio_nombre' };
+  const vistos = new Set();          // hosts ya vistos en resultados de búsqueda
+  const rucChequeados = new Set();   // hosts ya sondeados por RUC (no re-fetchear)
+  let fallbackNombre = null;         // primer match por token de nombre (respaldo)
+
+  for (const q of consultas) {
+    const candidatos = await candidatosDeConsulta(q, vistos);
+    if (!candidatos.length) continue;
+
+    // 1) Candado fuerte: primer dominio que PUBLIQUE el RUC → retorno inmediato.
+    if (tieneRuc) {
+      for (const base of candidatos.slice(0, 4)) {
+        const host = hostDe(base);
+        if (rucChequeados.has(host)) continue;
+        rucChequeados.add(host);
+        try {
+          if (await dominioPublicaRuc(base, ruc)) {
+            return { web: base, fuente: 'busqueda_ruc', verificado_por: 'ruc_en_pagina' };
+          }
+        } catch { /* best-effort */ }
       }
     }
+
+    // 2) Guarda el primer match por token de nombre como respaldo. El token
+    // distintivo debe estar contenido en el dominio y este no ser mucho más
+    // largo (evita coincidencias accidentales).
+    if (!fallbackNombre && toks.length) {
+      for (const base of candidatos) {
+        const host = hostCompacto(base);
+        const distintivo = toks.find((t) => t.length >= 4 && host.includes(t));
+        if (distintivo && host.length <= distintivo.length + 12) { fallbackNombre = base; break; }
+      }
+    }
+
+    // Sin RUC que verificar, el match por nombre es lo mejor posible → retorna ya.
+    if (!tieneRuc && fallbackNombre) {
+      return { web: fallbackNombre, fuente: 'busqueda_nombre', verificado_por: 'dominio_nombre' };
+    }
   }
 
+  // Agotadas las consultas sin publicar el RUC: se acepta el match por nombre
+  // como último recurso (misma precisión que antes, cero falsos positivos).
+  if (fallbackNombre) {
+    return { web: fallbackNombre, fuente: 'busqueda_nombre', verificado_por: 'dominio_nombre' };
+  }
   return null; // nada verificable → no se arriesga un falso positivo
 }

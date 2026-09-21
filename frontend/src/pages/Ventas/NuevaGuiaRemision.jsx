@@ -29,6 +29,9 @@ function NuevaGuiaRemision() {
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
   
   const [orden, setOrden] = useState(null);
+  // Guías vigentes ya existentes de esta OV (entregas parciales): se muestran como referencia para
+  // que el usuario vea que parte del pedido ya está en guías y solo despache el saldo.
+  const [guiasPreviasOV, setGuiasPreviasOV] = useState([]);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   const [validacionProductos, setValidacionProductos] = useState({});
   const [conductores, setConductores] = useState([]);
@@ -152,7 +155,14 @@ function NuevaGuiaRemision() {
       if (response.data.success) {
         const ordenData = response.data.data;
         setOrden(ordenData);
-        
+
+        // Guías vigentes ya emitidas/creadas para esta OV (entregas parciales previas).
+        try {
+          const gr = await guiasRemisionAPI.getAll({ id_orden_venta: id });
+          const previas = (gr.data?.success ? (gr.data.data || []) : []).filter((g) => g.estado !== 'Anulada');
+          setGuiasPreviasOV(previas);
+        } catch { /* no crítico: solo es referencia visual */ }
+
         // Una guía es un documento de despacho: se permite en cualquier estado activo
         // de la OV, bloqueando solo canceladas o ya entregadas (alineado con el backend).
         if (ordenData.estado === 'Cancelada' || ordenData.estado === 'Entregada') {
@@ -162,7 +172,13 @@ function NuevaGuiaRemision() {
         
         // Mapear productos con toda la información necesaria
         const productosConDisponibilidad = ordenData.detalle.map(item => {
-          const cantidadDisponible = parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0);
+          // Entregas parciales: el saldo real descuenta lo ya comprometido en guías vigentes
+          // (cantidad_en_guias), no solo lo ya despachado. Así, tras crear una guía parcial, la
+          // siguiente solo ofrece el resto. Fallback a cantidad_despachada si el backend no lo trae.
+          const comprometido = item.cantidad_en_guias != null
+            ? parseFloat(item.cantidad_en_guias || 0)
+            : parseFloat(item.cantidad_despachada || 0);
+          const cantidadDisponible = parseFloat(item.cantidad) - comprometido;
           return {
             id_detalle: item.id_detalle,
             id_producto: item.id_producto,
@@ -171,6 +187,7 @@ function NuevaGuiaRemision() {
             unidad_medida: item.unidad_medida,
             cantidad_total: parseFloat(item.cantidad),
             cantidad_despachada: parseFloat(item.cantidad_despachada || 0),
+            cantidad_en_guias: parseFloat(item.cantidad_en_guias || 0),
             cantidad_disponible: cantidadDisponible,
             stock_actual: parseFloat(item.stock_disponible || 0),
             // Peso por unidad heredado de la OV (el detalle de la orden lo devuelve como
@@ -1121,6 +1138,29 @@ function NuevaGuiaRemision() {
           </div>
         )}
 
+        {guiasPreviasOV.length > 0 && (
+          <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+            <div className="font-semibold text-amber-800 flex items-center gap-1">
+              <FileText size={15} /> Esta orden ya tiene {guiasPreviasOV.length} guía(s) de remisión (entrega parcial)
+            </div>
+            <ul className="mt-1 space-y-0.5">
+              {guiasPreviasOV.map((g) => {
+                const ref = (g.serie_sunat && g.numero_sunat) ? `${g.serie_sunat}-${g.numero_sunat}` : g.numero_guia;
+                return (
+                  <li key={g.id_guia} className="text-amber-900 flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-bold">{ref}</span>
+                    <span className="badge badge-secondary text-xs">{g.sunat_estado || g.estado}</span>
+                    <span className="text-xs text-amber-700">{g.total_items} ítem(s)</span>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-1 text-xs text-amber-700">
+              Solo puedes despachar el saldo pendiente por línea (ver columna "Pendiente Orden"). El total nunca puede superar lo pedido.
+            </div>
+          </div>
+        )}
+
         <div className="card mb-4">
           <div className="card-header bg-gradient-to-r from-gray-50 to-white">
             <h2 className="card-title">
@@ -1188,6 +1228,11 @@ function NuevaGuiaRemision() {
                               <span className="font-bold text-primary">
                                 {parseFloat(producto?.cantidad_disponible || 0).toFixed(4)}
                               </span>
+                              {parseFloat(producto?.cantidad_en_guias || 0) > 0 && (
+                                <div className="text-[10px] text-muted">
+                                  de {parseFloat(producto?.cantidad_total || 0).toFixed(2)} · {parseFloat(producto?.cantidad_en_guias || 0).toFixed(2)} ya en guías
+                                </div>
+                              )}
                             </td>
                             <td>
                               <input

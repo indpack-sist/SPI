@@ -455,24 +455,22 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // Regla: una GRE activa por orden. Una guía cubre el despacho de la orden, así que
-    // no se permite crear otra mientras exista una guía vigente (no anulada). Esto evita
-    // duplicados accidentales al volver a entrar a la orden y, en PROD (Fase 16), impide
-    // emitir dos GRE reales para el mismo despacho. Para rehacerla, anule la existente.
-    const guiaExistenteResult = await executeQuery(
-      `SELECT id_guia, numero_guia, estado FROM guias_remision
-       WHERE id_orden_venta = ? AND estado <> 'Anulada'
-       ORDER BY id_guia DESC LIMIT 1`,
+    // Entregas parciales: una OV puede tener VARIAS guías vigentes, cada una por una parte del
+    // pedido (ya no se bloquea por "una guía activa por orden"). El tope por línea (más abajo)
+    // garantiza que la suma de cantidades en guías NO anuladas nunca supere lo pedido, incluso
+    // antes de despachar. Aquí se precomputa lo ya comprometido en guías vigentes, por línea.
+    const enGuiasResult = await executeQuery(
+      `SELECT dgr.id_detalle_orden AS id_detalle, COALESCE(SUM(dgr.cantidad), 0) AS en_guias
+         FROM detalle_guia_remision dgr
+         JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
+        WHERE gr.id_orden_venta = ? AND gr.estado <> 'Anulada'
+        GROUP BY dgr.id_detalle_orden`,
       [id_orden_venta]
     );
-    if (guiaExistenteResult.success && guiaExistenteResult.data.length > 0) {
-      const g = guiaExistenteResult.data[0];
-      return res.status(409).json({
-        success: false,
-        error: `Esta orden ya tiene una guía de remisión (${g.numero_guia}, estado "${g.estado}"). Anúlela antes de crear otra.`,
-        id_guia_existente: g.id_guia
-      });
-    }
+    const mapaEnGuias = new Map(
+      (enGuiasResult.success ? enGuiasResult.data : []).map((r) => [Number(r.id_detalle), parseFloat(r.en_guias) || 0])
+    );
+    const EPS_GUIA = 0.0001;
 
     // Transporte público (tercero transportista) vs privado (conductor+vehículo propios).
     // Fuente del transportista, en orden de prioridad:
@@ -556,18 +554,22 @@ export async function createGuiaRemision(req, res) {
       
       const detalleOrden = detalleOrdenResult.data[0];
       const cantidadOrden = parseFloat(detalleOrden.cantidad);
-      const cantidadDespachada = parseFloat(detalleOrden.cantidad_despachada || 0);
-      const cantidadDisponibleOrden = cantidadOrden - cantidadDespachada;
+      // Pendiente = pedido − lo ya comprometido en guías vigentes (no anuladas) de esta OV. Así, al
+      // crear guías parciales sucesivas, la suma nunca supera lo pedido (aunque aún no se despachen).
+      const yaEnGuias = mapaEnGuias.get(Number(item.id_detalle_orden)) || 0;
+      const cantidadDisponibleOrden = cantidadOrden - yaEnGuias;
       const cantidadSolicitada = parseFloat(item.cantidad);
       const stockActual = parseFloat(detalleOrden.stock_actual);
-      
-      // Validar que no exceda lo pendiente de la orden
-      if (cantidadSolicitada > cantidadDisponibleOrden) {
+
+      // Validar que no exceda lo pendiente de la orden (considerando otras guías vigentes)
+      if (cantidadSolicitada > cantidadDisponibleOrden + EPS_GUIA) {
         return res.status(400).json({
           success: false,
-          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${cantidadDisponibleOrden.toFixed(4)})`
+          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${Math.max(0, cantidadDisponibleOrden).toFixed(4)})`
         });
       }
+      // Reserva local: si el detalle repite la misma línea, acumula para no exceder al sumar.
+      mapaEnGuias.set(Number(item.id_detalle_orden), yaEnGuias + cantidadSolicitada);
       
       // Validar stock disponible
       if (cantidadSolicitada > stockActual) {
@@ -1018,7 +1020,13 @@ export async function despacharGuiaRemision(req, res) {
     }
     
     const guia = guiaResult.data[0];
-    
+    // Rótulo del despacho: preferir el comprobante SUNAT (serie-número, p.ej. TE01-6) cuando la guía
+    // ya está emitida; si no, el correlativo interno (T001-…). Evita confundir el nº interno con la
+    // serie SUNAT (y con un intento rechazado previo).
+    const refGuia = (guia.serie_sunat && guia.numero_sunat)
+      ? `${guia.serie_sunat}-${guia.numero_sunat}`
+      : guia.numero_guia;
+
     if (guia.estado !== 'Emitida') {
       return res.status(400).json({
         success: false,
@@ -1105,7 +1113,7 @@ export async function despacharGuiaRemision(req, res) {
       totalPrecio,
       'PEN',
       id_usuario,
-      `Despacho Guía ${guia.numero_guia} - Orden ${guia.numero_orden_venta}`,
+      `Despacho Guía ${refGuia} - Orden ${guia.numero_orden_venta}`,
       'Activo',
       fecha_despacho || getFechaPeru()
     ]);
@@ -1184,13 +1192,24 @@ export async function despacharGuiaRemision(req, res) {
       WHERE id_guia = ?
     `, [id]);
     
-    // Actualizar estado de la orden y apuntar al último despacho (id_salida), igual que
-    // "Registrar Despacho", para que el cruce factura↔despacho y el historial funcionen.
+    // Estado de la orden según lo despachado en TODAS sus líneas: 'Despachada' solo si cada línea
+    // está completa; si aún queda saldo (entrega parcial con varias guías), 'Despacho Parcial'.
+    // Antes se forzaba 'Despachada' siempre, lo que marcaba mal la OV al despachar una guía parcial.
+    const resumenDespachoResult = await executeQuery(`
+      SELECT COUNT(*) AS total_items,
+             SUM(CASE WHEN cantidad_despachada >= cantidad THEN 1 ELSE 0 END) AS items_completos
+      FROM detalle_orden_venta WHERE id_orden_venta = ?
+    `, [guia.id_orden_venta]);
+    const resDesp = resumenDespachoResult.data?.[0] || {};
+    const estadoOrdenDespacho = (Number(resDesp.total_items) > 0 && Number(resDesp.items_completos) >= Number(resDesp.total_items))
+      ? 'Despachada'
+      : 'Despacho Parcial';
+    // Apunta al último despacho (id_salida) para el cruce factura↔despacho y el historial.
     await executeQuery(`
       UPDATE ordenes_venta
-      SET estado = 'Despachada', id_salida = ?
+      SET estado = ?, id_salida = ?
       WHERE id_orden_venta = ?
-    `, [id_salida, guia.id_orden_venta]);
+    `, [estadoOrdenDespacho, id_salida, guia.id_orden_venta]);
     
     res.json({
       success: true,

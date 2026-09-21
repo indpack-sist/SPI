@@ -257,6 +257,24 @@ export async function getGuiaRemisionById(req, res) {
       }));
     }
 
+    // Historial de emisiones SUNAT (append-only): cada intento (incluido el rechazado que se
+    // sobrescribió en la cabecera al reemitir) con su estado, motivo y documentos. Alimenta el
+    // historial del panel + el PDF por intento (con marca RECHAZADO). Best-effort: si la tabla aún
+    // no existe (sin el DDL nuevo) simplemente no hay historial.
+    try {
+      const emisionesResult = await executeQuery(
+        `SELECT id_emision, serie_sunat, numero_sunat, sunat_estado, sunat_response_code,
+                sunat_response_desc, sunat_ticket, xml_url, cdr_url,
+                DATE_FORMAT(created_at, '%d/%m/%Y %H:%i') AS created_at
+           FROM guias_remision_emisiones WHERE id_guia = ? ORDER BY id_emision`,
+        [id]);
+      guia.emisiones = (emisionesResult.success ? emisionesResult.data : []).map((e) => ({
+        ...e,
+        xml_url: extraerUrl(e.xml_url),
+        cdr_url: extraerUrl(e.cdr_url),
+      }));
+    } catch { guia.emisiones = []; }
+
     // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
     // Se devuelven siempre (arrays vacíos en guías domésticas) para que el front pueda mostrar/editar
     // una guía comex ya creada. El orden de inserción == el del XML emitido (ver gre-emision.service.js).

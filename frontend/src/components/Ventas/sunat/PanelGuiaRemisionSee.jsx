@@ -279,6 +279,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
   const handleVerificar = () => tras(() => sunatAPI.estadoGuia(guia.id_guia), 'Estado consultado en SUNAT.');
   const handlePdf = async () => { try { await sunatAPI.verPdfGuia(guia.id_guia); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
+  // Historial: PDF de un intento archivado (rechazado con su marca/motivo) + descarga directa de sus XML/CDR.
+  const handlePdfEmision = async (idEmision) => { try { await sunatAPI.verPdfGuiaEmision(guia.id_guia, idEmision); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
+  const handleDescargarUrl = async (url) => { try { await sunatAPI.descargarArchivoUrl(url); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
   const archivoUrl = (v) => {
     if (!v) return null;
     if (Array.isArray(v)) return archivoUrl(v[0]);
@@ -443,6 +446,49 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       )}
       {!estado && guiaVigente && ordenDespachada && faltantes.length === 0 && (
         <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
+      )}
+
+      {/* Historial de emisiones SUNAT: cada intento (incluidos los rechazados que se sobrescribieron
+          al reemitir) con su estado, motivo y documentos. Espeja el historial de facturas. */}
+      {(guia?.emisiones || []).length > 0 && (
+        <div className="border border-gray-200 rounded p-2 space-y-2">
+          <div className="text-[10px] text-muted uppercase">Historial de emisiones SUNAT</div>
+          {guia.emisiones.map((em) => {
+            const rechazo = em.sunat_estado === 'RECHAZADO' || em.sunat_estado === 'ERROR';
+            const ok = em.sunat_estado === 'ACEPTADO';
+            return (
+              <div key={em.id_emision} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${rechazo ? 'border-red-200 bg-red-50/40' : ok ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+                <span className="font-mono font-bold text-xs">{em.serie_sunat && em.numero_sunat ? `${em.serie_sunat}-${em.numero_sunat}` : '—'}</span>
+                <BadgeEstadoSunat estado={em.sunat_estado} />
+                {rechazo && <span className="badge badge-danger text-xs">Rechazada — sin validez</span>}
+                {ok && <span className="badge badge-success text-xs">Aceptada</span>}
+                {em.created_at && <span className="text-[11px] text-muted">{em.created_at}</span>}
+                <div className="flex flex-wrap items-center gap-1 ml-auto">
+                  <button className="btn btn-xs btn-outline" onClick={() => handlePdfEmision(em.id_emision)} disabled={procesando}
+                    title={rechazo ? 'Ver PDF (rechazado, con marca de agua y motivo)' : 'Ver PDF de este intento'}>
+                    <FileText size={13} className="mr-1" /> PDF
+                  </button>
+                  {em.xml_url && (
+                    <button className="btn btn-xs btn-outline" onClick={() => handleDescargarUrl(em.xml_url)} disabled={procesando} title="Descargar XML firmado">
+                      <FileCode size={13} className="mr-1" /> XML
+                    </button>
+                  )}
+                  {em.cdr_url && (
+                    <button className="btn btn-xs btn-outline" onClick={() => handleDescargarUrl(em.cdr_url)} disabled={procesando} title="Descargar CDR de SUNAT">
+                      <FileCheck size={13} className="mr-1" /> CDR
+                    </button>
+                  )}
+                </div>
+                {rechazo && (em.sunat_response_desc || em.sunat_response_code) && (
+                  <div className="w-full text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1">
+                    <span className="font-semibold">Motivo del rechazo{em.sunat_response_code ? ` (${em.sunat_response_code})` : ''}:</span>{' '}
+                    {em.sunat_response_desc || 'Sin detalle. Usa "Estado" para consultar el CDR en SUNAT.'}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Wizard de emisión estilo SUNAT: 3 pasos + Retroceder/Cancelar/Emitir */}

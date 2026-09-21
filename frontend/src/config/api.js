@@ -1360,6 +1360,8 @@ export const sunatAPI = {
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
   confirmarBajaGuia: (id, datos) => api.post(`/sunat/guias/${id}/baja/confirmar`, datos),
   verPdfGuia: (id) => descargarPdfSunat(`/sunat/guias/${id}/pdf`),
+  // PDF de un intento histórico de emisión (típicamente RECHAZADO), con su marca de agua y motivo.
+  verPdfGuiaEmision: (id, idEmision) => descargarPdfSunat(`/sunat/guias/${id}/pdf?emision=${idEmision}`),
   descargarXmlGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/xml`, 'guia.xml'),
   descargarCdrGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/cdr`, 'cdr.zip'),
 

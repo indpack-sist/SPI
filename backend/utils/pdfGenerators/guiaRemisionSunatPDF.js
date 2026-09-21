@@ -278,6 +278,21 @@ export async function generarGuiaRemisionSunatPDF({
 
       drawMainHeader();
 
+      // Banda de estado (rojo): deja constancia impresa de un intento RECHAZADO por SUNAT + su motivo.
+      if (g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR') {
+        const motivoRechazo = limpio(g.motivo_estado, 'Guía rechazada por SUNAT.');
+        doc.font('Helvetica').fontSize(7.3);
+        const hBand = doc.heightOfString(`Motivo: ${motivoRechazo}`, { width: W - 16 }) + 24;
+        ensureSpace(hBand + 6);
+        doc.roundedRect(X, y, W, hBand, 3).fillAndStroke('#FDECEA', COLOR.danger);
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR.danger)
+          .text('GUÍA RECHAZADA POR SUNAT — SIN VALIDEZ', X + 8, y + 6, { width: W - 16 });
+        doc.font('Helvetica').fontSize(7.3).fillColor(COLOR.danger)
+          .text(`Motivo: ${motivoRechazo}`, X + 8, y + 18, { width: W - 16 });
+        y += hBand + 6;
+        resetText();
+      }
+
       // Datos principales: mismo contenido de la representación SUNAT, con mayor jerarquía visual.
       const routeRows = [
         [
@@ -550,9 +565,11 @@ export async function generarGuiaRemisionSunatPDF({
         .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 25, { width: 407, lineGap: 1.2 });
       doc.font('Helvetica-Bold').fontSize(6.3).fillColor(COLOR.muted)
         .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 58, { width: 407 });
-      // Marca de agua para guías invalidadas.
+      // Marca de agua para guías invalidadas o rechazadas.
+      const rechazado = g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR';
       const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
-        : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA' : null;
+        : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA'
+        : rechazado ? 'RECHAZADO' : null;
       if (watermark) {
         const range = doc.bufferedPageRange();
         for (let i = range.start; i < range.start + range.count; i += 1) {
@@ -565,7 +582,8 @@ export async function generarGuiaRemisionSunatPDF({
         doc.switchToPage(range.start + range.count - 1);
         const nota = g.sunat_estado === 'REEMPLAZADA' && g.reemplazo_ref
           ? `Reemplazada por la guía ${g.reemplazo_ref}`
-          : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}` : '');
+          : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}`
+            : (rechazado && g.motivo_estado ? `Motivo del rechazo: ${g.motivo_estado}` : ''));
         if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX, footerY + 74, { width: 401 });
       }
 

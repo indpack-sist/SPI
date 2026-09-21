@@ -362,6 +362,13 @@ export async function getOrdenVentaById(req, res) {
         dov.*,
         dov.cantidad_despachada,
         (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
+        -- Cantidad ya comprometida en guías de remisión vigentes (no anuladas) de esta OV. Permite
+        -- calcular el saldo real para emitir guías parciales (pedido − en guías), aunque aún no se
+        -- hayan despachado. Ver createGuiaRemision (tope acumulado por línea).
+        (SELECT COALESCE(SUM(dgr.cantidad), 0)
+           FROM detalle_guia_remision dgr
+           JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
+          WHERE dgr.id_detalle_orden = dov.id_detalle AND gr.estado <> 'Anulada') AS cantidad_en_guias,
         dov.subtotal AS valor_venta,
         CASE
             WHEN dov.precio_base > 0 THEN

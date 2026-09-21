@@ -64,8 +64,9 @@ function DetalleOrdenVenta() {
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [guiasRemision, setGuiasRemision] = useState([]);
-  // Detalle completo de la GRE activa de la orden (para la card SEE embebida en el detalle de la OV).
-  const [guiaDetalleSee, setGuiaDetalleSee] = useState(null);
+  // Detalle completo de las GRE vigentes de la orden (para las cards SEE embebidas). Con entregas
+  // parciales pueden coexistir varias guías por OV, cada una por una parte del pedido.
+  const [guiasDetalleSee, setGuiasDetalleSee] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -460,19 +461,25 @@ function DetalleOrdenVenta() {
       // Guías de la orden + detalle completo de la activa (para la card SEE embebida).
       const guiasData = guiasRes?.data?.success ? (guiasRes.data.data || []) : [];
       setGuiasRemision(guiasData);
-      // Prioriza la GRE activa. Si una versión anterior de SPI la anuló solo localmente, carga esa
-      // fila para permitir confirmar/sincronizar ahora la baja que ya se hizo en SUNAT SOL.
-      const activa = guiasData.find(g => g.estado !== 'Anulada')
-        || guiasData.find(g =>
-          g.estado === 'Anulada'
-          && ['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)
-          && Number(g.baja_sunat_confirmada) !== 1
+      // Entregas parciales: pueden coexistir varias GRE vigentes por OV. Se carga el detalle
+      // completo de cada una (para su card SEE). Se incluye también una guía anulada solo
+      // localmente que aún requiera sincronizar/confirmar su baja hecha en SUNAT SOL.
+      const vigentes = guiasData.filter(g => g.estado !== 'Anulada');
+      const anuladasPorSincronizar = guiasData.filter(g =>
+        g.estado === 'Anulada'
+        && ['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)
+        && Number(g.baja_sunat_confirmada) !== 1
+      );
+      const paraDetalle = [...vigentes, ...anuladasPorSincronizar];
+      if (paraDetalle.length > 0) {
+        const detalles = await Promise.all(
+          paraDetalle.map(g => guiasRemisionAPI.getById(g.id_guia)
+            .then(r => (r?.data?.success ? r.data.data : null))
+            .catch(() => null))
         );
-      if (activa) {
-        const detRes = await guiasRemisionAPI.getById(activa.id_guia).catch(() => null);
-        setGuiaDetalleSee(detRes?.data?.success ? detRes.data.data : null);
+        setGuiasDetalleSee(detalles.filter(Boolean));
       } else {
-        setGuiaDetalleSee(null);
+        setGuiasDetalleSee([]);
       }
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
@@ -1674,9 +1681,17 @@ function DetalleOrdenVenta() {
     return pendientes;
   };
 
-  // Regla: una GRE activa (no anulada) por orden. Si ya existe, en vez de "Crear Guía"
-  // se enlaza a la existente (evita GRE duplicadas; el backend también lo bloquea).
+  // Con entregas parciales pueden coexistir varias GRE vigentes por OV. `guiaActiva` es la más
+  // reciente vigente (para acciones legacy a nivel de OV, p.ej. "Poner en Tránsito").
   const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
+  // Saldo pendiente de despachar en guías (por línea: pedido − lo ya comprometido en guías
+  // vigentes). > 0 habilita crear la siguiente guía parcial, hasta cubrir el total (nunca de más).
+  const pendienteGuias = (orden?.detalle || []).reduce((acc, it) => {
+    const enGuias = it.cantidad_en_guias != null
+      ? parseFloat(it.cantidad_en_guias || 0)
+      : parseFloat(it.cantidad_despachada || 0);
+    return acc + Math.max(0, parseFloat(it.cantidad || 0) - enGuias);
+  }, 0);
   const guiasHistorial = guiasRemision.filter(g =>
     g.estado === 'Anulada' || ['ANULADA', 'REEMPLAZADA', 'RECHAZADO'].includes(g.sunat_estado)
   );
@@ -2270,14 +2285,14 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          {!guiaActiva && puedeDespachar() && esGREAplicable && (
+          {pendienteGuias > 0 && puedeDespachar() && esGREAplicable && (
              <button
                className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
                disabled={procesando}
-               title="Crear Guía de Remisión (GRE) para esta orden"
+               title={guiaActiva ? 'Crear otra Guía de Remisión (entrega parcial)' : 'Crear Guía de Remisión (GRE) para esta orden'}
              >
-               <FileText size={20} /> Crear Guía de Remisión
+               <FileText size={20} /> {guiaActiva ? 'Crear Guía (parcial)' : 'Crear Guía de Remisión'}
              </button>
           )}
 
@@ -3096,34 +3111,46 @@ function DetalleOrdenVenta() {
             <PanelFacturacionSee orden={orden} facturas={facturasSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
         )}
 
-        {/* Guía de Remisión Electrónica (SEE · GRE 09) — misma experiencia que la factura,
-            embebida en el detalle de la OV: emitir, ver estado SUNAT y descargar el PDF aquí mismo.
-            La card completa aparece cuando ya existe la guía; si no, se ofrece crearla. */}
+        {/* Guías de Remisión Electrónicas (SEE · GRE 09) — misma experiencia que la factura,
+            embebidas en el detalle de la OV. Con entregas parciales pueden coexistir VARIAS guías,
+            cada una por una parte del pedido; se muestra una card por cada guía vigente y se ofrece
+            crear la siguiente mientras quede saldo por despachar (nunca más del total). */}
         {puedeVerSee && esGREAplicable && (
-            guiaDetalleSee ? (
-                <div>
-                    <PanelGuiaRemisionSee guia={guiaDetalleSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
-                    <button
-                        className="btn btn-ghost btn-xs -mt-2 mb-4 hover:underline"
-                        onClick={() => navigate(`/ventas/guias-remision/${guiaDetalleSee.id_guia}`)}
-                    >
-                        Ver guía completa (despacho / entrega) →
-                    </button>
-                </div>
-            ) : !seeSoloLectura && puedeDespachar() && (
-                <div className="card p-3 space-y-3 mb-4">
-                    <h3 className="flex items-center gap-2 font-semibold text-sm">
-                        <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
-                    </h3>
-                    <p className="text-xs text-muted">Aún no se ha creado la guía de remisión de esta orden.</p>
-                    <button
-                        className="btn btn-sm btn-primary self-start"
-                        onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
-                    >
-                        <FileText size={14} className="mr-1" /> Crear guía
-                    </button>
-                </div>
-            )
+            <>
+                {guiasDetalleSee.map((g) => (
+                    <div key={g.id_guia}>
+                        <PanelGuiaRemisionSee guia={g} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
+                        <button
+                            className="btn btn-ghost btn-xs -mt-2 mb-4 hover:underline"
+                            onClick={() => navigate(`/ventas/guias-remision/${g.id_guia}`)}
+                        >
+                            Ver guía completa (despacho / entrega) →
+                        </button>
+                    </div>
+                ))}
+                {!seeSoloLectura && puedeDespachar() && (
+                    pendienteGuias > 0 ? (
+                        <div className="card p-3 space-y-3 mb-4">
+                            <h3 className="flex items-center gap-2 font-semibold text-sm">
+                                <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
+                            </h3>
+                            <p className="text-xs text-muted">
+                                {guiasDetalleSee.length > 0
+                                    ? `Quedan ${Number(pendienteGuias).toLocaleString('en-US', { maximumFractionDigits: 4 })} unidad(es) por despachar. Puedes crear otra guía (entrega parcial).`
+                                    : 'Aún no se ha creado la guía de remisión de esta orden.'}
+                            </p>
+                            <button
+                                className="btn btn-sm btn-primary self-start"
+                                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
+                            >
+                                <FileText size={14} className="mr-1" /> {guiasDetalleSee.length > 0 ? 'Crear otra guía (parcial)' : 'Crear guía'}
+                            </button>
+                        </div>
+                    ) : guiasDetalleSee.length > 0 && (
+                        <p className="text-xs text-muted mb-4">Todo el pedido ya está cubierto por guías de remisión.</p>
+                    )
+                )}
+            </>
         )}
 
         {puedeVerSee && guiasHistorial.length > 0 && (

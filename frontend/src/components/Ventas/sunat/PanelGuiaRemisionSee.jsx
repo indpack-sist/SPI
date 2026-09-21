@@ -464,10 +464,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 {ok && <span className="badge badge-success text-xs">Aceptada</span>}
                 {em.created_at && <span className="text-[11px] text-muted">{em.created_at}</span>}
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
-                  <button className="btn btn-xs btn-outline" onClick={() => handlePdfEmision(em.id_emision)} disabled={procesando}
-                    title={rechazo ? 'Ver PDF (rechazado, con marca de agua y motivo)' : 'Ver PDF de este intento'}>
-                    <FileText size={13} className="mr-1" /> PDF
-                  </button>
+                  {/* El PDF solo aplica si el intento guardó snapshot. Un registro reconstruido para
+                      trazabilidad (p.ej. una emisión rechazada anterior a esta función) no lo tiene. */}
+                  {em.tiene_snapshot ? (
+                    <button className="btn btn-xs btn-outline" onClick={() => handlePdfEmision(em.id_emision)} disabled={procesando}
+                      title={rechazo ? 'Ver PDF (rechazado, con marca de agua y motivo)' : 'Ver PDF de este intento'}>
+                      <FileText size={13} className="mr-1" /> PDF
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-muted italic">Registro histórico (sin PDF)</span>
+                  )}
                   {em.xml_url && (
                     <button className="btn btn-xs btn-outline" onClick={() => handleDescargarUrl(em.xml_url)} disabled={procesando} title="Descargar XML firmado">
                       <FileCode size={13} className="mr-1" /> XML

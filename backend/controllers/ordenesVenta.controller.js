@@ -4,6 +4,7 @@ import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPedidoVentaPDF } from '../utils/pdfGenerators/pedidoVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
+import { resolverGuiaSunatEnObservacion } from '../utils/observacionGuiaSunat.js';
 import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
 import { clientePermitido } from '../utils/asignacionClientes.js';
 import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
@@ -2416,6 +2417,9 @@ export async function descargarPDFDespacho(req, res) {
 
     const salida = salidaResult.data[0];
     salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
+    // Resuelve el nº interno de guía (T001-…) al comprobante SUNAT vigente (p. ej. TE01-6),
+    // igual que el detalle de OV en pantalla, para que el PDF no muestre el interno desfasado.
+    salida.observaciones = await resolverGuiaSunatEnObservacion(salida.observaciones);
 
     // El precio unitario se toma de detalle_orden_venta (precisión completa, hasta 6
     // decimales), no de detalle_salidas (que puede estar truncado a 2). Fallback a ds.

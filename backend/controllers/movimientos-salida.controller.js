@@ -1,5 +1,6 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
+import { resolverGuiaSunatEnObservacion } from '../utils/observacionGuiaSunat.js';
 import { PERMISOS_POR_ROL } from '../middleware/auth.js';
 
 // Roles que NUNCA deben ver montos en el módulo de Salidas, sin importar su flag
@@ -606,7 +607,10 @@ export const generarPDFSalidaController = async (req, res, next) => {
       ...salidasResult.data[0],
       detalles: detallesResult.success ? detallesResult.data : []
     };
-    
+    // Resuelve el nº interno de guía (T001-…) al comprobante SUNAT vigente (p. ej. TE01-6),
+    // igual que el detalle de OV en pantalla, para que el PDF no muestre el interno desfasado.
+    salida.observaciones = await resolverGuiaSunatEnObservacion(salida.observaciones);
+
     const pdfBuffer = await generarPDFSalida(salida);
     
     res.setHeader('Content-Type', 'application/pdf');

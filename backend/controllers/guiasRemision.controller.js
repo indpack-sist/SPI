@@ -265,6 +265,7 @@ export async function getGuiaRemisionById(req, res) {
       const emisionesResult = await executeQuery(
         `SELECT id_emision, serie_sunat, numero_sunat, sunat_estado, sunat_response_code,
                 sunat_response_desc, sunat_ticket, xml_url, cdr_url,
+                (snapshot_json IS NOT NULL) AS tiene_snapshot,
                 DATE_FORMAT(created_at, '%d/%m/%Y %H:%i') AS created_at
            FROM guias_remision_emisiones WHERE id_guia = ? ORDER BY id_emision`,
         [id]);

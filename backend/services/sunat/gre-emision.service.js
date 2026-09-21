@@ -46,8 +46,86 @@ async function finalizarReemplazoSiAplica(idGuiaCerrada, aceptado) {
   }
 }
 
+// Construye el snapshot INMUTABLE de un intento de emisión, en la MISMA forma que
+// generarPdfGuia pasa a generarGuiaRemisionSunatPDF. Así el PDF histórico (con marca de agua
+// RECHAZADO) se reimprime fielmente aunque la guía/OV cambien después. Ver docs/sql_gre_emisiones_historial.sql.
+function construirSnapshotPdfGre({
+  g, serie, numero, empresa, destinatario, proveedor, docRelacionado,
+  carrier, registrar, conductores, vehiculos, indicadores, modalidad,
+  fechaEntregaTransportista, comex, detalleEmision, fechaTraslado,
+  emision, hora, observacion, esCompra, esComex,
+}) {
+  const isoAFmt = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
+  const fechaEmisionFmt = `${isoAFmt(emision) || emision} ${hora || ''}`.trim();
+  const clientePdf = esCompra
+    ? { razon_social: empresa.razon_social, ruc: empresa.ruc, direccion: empresa.direccion }
+    : {
+        razon_social: destinatario?.razon_social,
+        ruc: destinatario?.ruc || destinatario?.numero_documento || null,
+        numero_documento: destinatario?.numero_documento || null,
+        tipo_documento: destinatario?.tipo_documento || null,
+        direccion: destinatario?.direccion || destinatario?.direccion_despacho || null,
+      };
+  const conductoresPdf = (conductores || []).map((c) => ({ dni: c.dni, nombre_completo: c.nombre, licencia_conducir: c.licencia }));
+  const vehiculosPdf = (vehiculos || []).map((v) => ({ placa: v.placa, tuce: v.tuce || null, autorizacion: v.autorizacion || null }));
+  const detallePdf = (detalleEmision || []).map((d) => ({
+    cantidad: d.cantidad,
+    subpartida_nacional: d.subpartida_nacional || null,
+    codigo: d.codigo,
+    nombre: d.nombre,
+    codigo_unidad_sunat: d.codigo_unidad_sunat,
+    codigo_bien: d.codigo_bien || null,
+  }));
+  let comexPdf = null;
+  if (esComex && comex) {
+    comexPdf = {
+      destinatario: destinatario ? { razon_social: destinatario.razon_social, ruc: destinatario.ruc } : null,
+      docsRelacionados: comex.docsRelacionados || [],
+      contenedores: comex.contenedores || [],
+      trasladoTotalDam: !!comex.trasladoTotalDam,
+      unidadPeso: 'KGM',
+    };
+  }
+  const [docSerie, docNumero] = String(docRelacionado?.numero || '').split('-');
+  return {
+    guia: {
+      serie_sunat: serie, numero_sunat: numero,
+      fecha_emision: fechaEmisionFmt, fecha_traslado: isoAFmt(fechaTraslado),
+      motivo_traslado_cod: g.motivo_traslado_cod, peso_bruto_kg: g.peso_bruto_kg,
+      ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
+      ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
+      observaciones: observacion, es_comercio_exterior: esComex ? 1 : 0,
+      tipo_origen: g.tipo_origen,
+    },
+    cliente: clientePdf,
+    detalle: detallePdf,
+    transportista: carrier ? { razon: carrier.razon, ruc: carrier.ruc, mtc: carrier.mtc } : null,
+    conductores: conductoresPdf,
+    vehiculos: vehiculosPdf,
+    indicadores: indicadores || {},
+    registrar: !!registrar,
+    modalidad,
+    fechaEntrega: fechaEntregaTransportista || null,
+    comex: comexPdf,
+    proveedor: proveedor ? { razon_social: proveedor.razon_social, ruc: proveedor.ruc } : null,
+    docRelacionado: docRelacionado ? { tipo_desc: docRelacionado.tipo_desc, serie: docSerie || null, numero: docNumero || null } : null,
+  };
+}
+
+// Resuelve el intento (fila de guias_remision_emisiones) todavía abierto de una guía, para que la
+// reconciliación por ticket (job de reintentos / botón "Estado") actualice la fila correcta cuando
+// no se le pasa el id explícito.
+async function resolverEmisionAbierta(idGuia) {
+  const [[row]] = await pool.query(
+    `SELECT id_emision FROM guias_remision_emisiones
+      WHERE id_guia = ? AND (sunat_estado IS NULL OR sunat_estado NOT IN ('ACEPTADO','RECHAZADO'))
+      ORDER BY id_emision DESC LIMIT 1`, [idGuia]);
+  return row?.id_emision || null;
+}
+
 // Cierra el ticket de una GRE contra el CDR (o el mock BETA) y persiste el estado.
-export async function cerrarTicketGre(idGuia, nombre, ticket, st, t0) {
+// `emisionId` (opcional) apunta al intento archivado; si no llega se resuelve el intento abierto.
+export async function cerrarTicketGre(idGuia, nombre, ticket, st, t0, emisionId = null) {
   const aceptado = st.codRespuesta === '0';
   const estadoFinal = aceptado ? 'ACEPTADO' : (st.codRespuesta === '99' ? 'RECHAZADO' : 'ENVIADO');
   let cdr = null, cdrUrl = null, qrUrl = null;
@@ -65,6 +143,19 @@ export async function cerrarTicketGre(idGuia, nombre, ticket, st, t0) {
        cdr_url = COALESCE(?, cdr_url), sunat_qr_url = COALESCE(?, sunat_qr_url) WHERE id_guia = ?`,
     [estadoFinal, st.codRespuesta, String(descripcion).slice(0, 4000),
      cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, qrUrl, idGuia]);
+  // Espeja el estado final en el intento archivado (historial de emisiones). Best-effort: no debe
+  // romper el cierre si la tabla aún no existe (instalaciones sin el DDL nuevo).
+  try {
+    const idEm = emisionId || await resolverEmisionAbierta(idGuia);
+    if (idEm) {
+      await pool.query(
+        `UPDATE guias_remision_emisiones SET sunat_estado = ?, sunat_response_code = ?,
+           sunat_response_desc = ?, cdr_url = COALESCE(?, cdr_url), sunat_qr_url = COALESCE(?, sunat_qr_url)
+         WHERE id_emision = ?`,
+        [estadoFinal, st.codRespuesta, String(descripcion).slice(0, 4000),
+         cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, qrUrl, idEm]);
+    }
+  } catch (e) { console.warn('[SUNAT] archivar cierre GRE emisión falló:', e.message); }
   await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'consultarGuia',
     exito: aceptado, httpStatus: 200, detalle: `${st.codRespuesta} ${descripcion}`.slice(0, 4000),
     duracionMs: Date.now() - t0 });
@@ -420,10 +511,30 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
          sunat_digest_value = ?, sunat_fecha_envio = ? WHERE id_guia = ?`,
       [serie, numero, digestValue, emisionDateTime, idGuia]);
 
-    return { numero, nombre, xmlFirmado };
+    // Archiva ESTE intento (historial de emisiones): al reemitir tras un rechazo, la cabecera se
+    // sobrescribe con el nuevo correlativo; aquí queda el snapshot inmutable de cada intento para
+    // reimprimir su PDF con marca RECHAZADO + su motivo. Best-effort: no aborta la emisión si la
+    // tabla aún no existe (instalaciones sin el DDL nuevo).
+    let emisionId = null;
+    try {
+      const snapshot = construirSnapshotPdfGre({
+        g, serie, numero, empresa, destinatario, proveedor, docRelacionado,
+        carrier, registrar, conductores, vehiculos, indicadores, modalidad,
+        fechaEntregaTransportista, comex, detalleEmision: detalleEmision, fechaTraslado,
+        emision, hora, observacion, esCompra, esComex,
+      });
+      const [ins] = await conn.query(
+        `INSERT INTO guias_remision_emisiones
+           (id_guia, serie_sunat, numero_sunat, sunat_estado, sunat_digest_value, snapshot_json)
+         VALUES (?, ?, ?, 'ENVIADO', ?, ?)`,
+        [idGuia, serie, numero, digestValue, JSON.stringify(snapshot)]);
+      emisionId = ins.insertId;
+    } catch (e) { console.warn('[SUNAT] archivar intento GRE falló:', e.message); }
+
+    return { numero, nombre, xmlFirmado, emisionId };
   });
 
-  const { numero, nombre, xmlFirmado } = prep;
+  const { numero, nombre, xmlFirmado, emisionId } = prep;
   await copiaLocal(`${nombre}.xml`, xmlFirmado);
   const zipBuf = zipXml(`${nombre}.xml`, xmlFirmado);
 
@@ -440,6 +551,13 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     await pool.query(
       `UPDATE guias_remision SET sunat_estado = 'ERROR', sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_guia = ?`,
       [String(e.message).slice(0, 4000), idGuia]);
+    if (emisionId) {
+      try {
+        await pool.query(
+          `UPDATE guias_remision_emisiones SET sunat_estado = 'ERROR', sunat_response_desc = ? WHERE id_emision = ?`,
+          [String(e.message).slice(0, 4000), emisionId]);
+      } catch { /* best-effort: historial no debe romper el flujo */ }
+    }
     await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'enviarGuia',
       exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
     return { httpStatus: 502, body: { ok: false, estado: 'ERROR', idGuia, error: e.message, tokenOk, tokenError } };
@@ -451,6 +569,13 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
   await pool.query(
     `UPDATE guias_remision SET sunat_ticket = ?, xml_url = COALESCE(?, xml_url) WHERE id_guia = ?`,
     [ticket, xmlUrl ? JSON.stringify({ url: xmlUrl }) : null, idGuia]);
+  if (emisionId) {
+    try {
+      await pool.query(
+        `UPDATE guias_remision_emisiones SET sunat_ticket = ?, xml_url = COALESCE(?, xml_url) WHERE id_emision = ?`,
+        [ticket, xmlUrl ? JSON.stringify({ url: xmlUrl }) : null, emisionId]);
+    } catch { /* best-effort */ }
+  }
   console.log('[SUNAT] emitirGuia ->', JSON.stringify({ idGuia, comprobante: `${serie}-${numero}`, ticket }));
 
   // Poll consultarGuia (en BETA el mock resuelve al instante; en PROD 15s × 3).
@@ -464,7 +589,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       continue;
     }
     if (st.codRespuesta === '98') continue;
-    const r = await cerrarTicketGre(idGuia, nombre, ticket, st, t0);
+    const r = await cerrarTicketGre(idGuia, nombre, ticket, st, t0, emisionId);
     return { httpStatus: 200, body: {
       ok: r.aceptado, estado: r.estadoFinal, idGuia, serie, numero, comprobante: `${serie}-${numero}`,
       ticket, codRespuesta: r.codRespuesta, descripcion: r.descripcion, xmlUrl, cdrUrl: r.cdrUrl,

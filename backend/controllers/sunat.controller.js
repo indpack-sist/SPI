@@ -1538,6 +1538,45 @@ export async function generarPdfGuia(req, res, next) {
   const idGuia = Number(req.params.id);
   try {
     if (!idGuia) throw new AppError('id de guía inválido', 400);
+
+    // ── PDF de un INTENTO histórico (?emision=<id>) ──────────────────────────────────────────────
+    // Reimprime un intento archivado (típicamente RECHAZADO) desde su snapshot inmutable, con la
+    // banda + marca de agua de estado y su motivo. No pasa por el guard de estado de la cabecera.
+    const idEmision = Number(req.query.emision);
+    if (idEmision) {
+      const [[em]] = await pool.query(
+        'SELECT * FROM guias_remision_emisiones WHERE id_emision = ? AND id_guia = ?', [idEmision, idGuia]);
+      if (!em) throw new AppError('Intento de emisión no encontrado', 404);
+      const snap = typeof em.snapshot_json === 'string' ? JSON.parse(em.snapshot_json) : (em.snapshot_json || {});
+      const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+      // QR de validez SUNAT solo tiene sentido si el intento fue ACEPTADO y quedó su qr_url.
+      let qrBuffer = null;
+      if (em.sunat_estado === 'ACEPTADO' && em.sunat_qr_url) {
+        try { qrBuffer = await qrPng(extraerUrl(em.sunat_qr_url) || em.sunat_qr_url); } catch { /* QR opcional */ }
+      }
+      const pdf = await generarGuiaRemisionSunatPDF({
+        guia: { ...(snap.guia || {}), sunat_estado: em.sunat_estado, motivo_estado: em.sunat_response_desc },
+        emisor,
+        cliente: snap.cliente || null,
+        detalle: snap.detalle || [],
+        transportista: snap.transportista || null,
+        conductores: snap.conductores || [],
+        vehiculos: snap.vehiculos || [],
+        indicadores: snap.indicadores || {},
+        registrar: snap.registrar !== false,
+        modalidad: snap.modalidad || null,
+        fechaEntrega: snap.fechaEntrega || null,
+        comex: snap.comex || null,
+        proveedor: snap.proveedor || null,
+        docRelacionado: snap.docRelacionado || null,
+        qrBuffer,
+      });
+      const nombreEm = `${sunatConfig.ruc}-09-${em.serie_sunat}-${em.numero_sunat}-${em.sunat_estado || 'INTENTO'}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${nombreEm}"`);
+      return res.send(pdf);
+    }
+
     const [[g]] = await pool.query(
       "SELECT g.*, DATE_FORMAT(COALESCE(g.sunat_fecha_envio, g.fecha_emision), '%d/%m/%Y %H:%i:%s') AS fecha_emision_fmt, " +
       "DATE_FORMAT(g.fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt, ov.orden_compra_cliente, " +

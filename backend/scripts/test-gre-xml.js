@@ -130,8 +130,9 @@ const dt = parser.parse(xmlT).DespatchAdvice;
 const shipT = dt?.Shipment;
 const stageT = shipT?.ShipmentStage;
 check('TransportModeCode = 01 (público)', String(stageT?.TransportModeCode?.['#text']) === '01');
-// El portal SUNAT (EG07-220/309, Casos 2 y 3 con veh+cond) NO emite este indicador → el builder tampoco.
-check('SIN SpecialInstructions auto (patrón portal EG07-220/309)',
+// El builder es PURO: sin el flag ind.registrarTransp no emite el indicador. El servicio de emisión
+// SÍ lo activa en público+registrar (ver test positivo abajo) — es obligatorio en modalidad pública.
+check('builder sin flag → sin IndicadorVehiculoConductoresTransp',
   !String(shipT?.SpecialInstructions || '').includes('IndicadorVehiculoConductoresTransp'));
 check('LoadingTransportEvent (fecha entrega al transportista)',
   String(stageT?.LoadingTransportEvent?.OccurrenceDate) === '2026-08-27');
@@ -151,6 +152,17 @@ check('Veh. secundario autorización',
   String(teq?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
+
+// Público + registrar veh/cond CON el flag que activa el servicio (esTercero && registrar): el XML
+// DEBE llevar SUNAT_Envio_IndicadorVehiculoConductoresTransp. Calcado de EG07-325/EG07-318 (domésticos
+// aceptados). Sin este indicador SUNAT rechaza con 3354 "no debe ingresar información de vehículo principal".
+const datosTerceroReg = { ...datosTercero, indicadores: { registrarTransp: true } };
+const { xml: xmlTR } = construirDespatchAdviceXML(datosTerceroReg);
+check('XML tercero+registrar bien-formado', XMLValidator.validate(xmlTR) === true);
+const siTR = parser.parse(xmlTR).DespatchAdvice?.Shipment?.SpecialInstructions;
+const siTRArr = Array.isArray(siTR) ? siTR : [siTR];
+check('[Público+registrar] emite IndicadorVehiculoConductoresTransp (fix 3354)',
+  siTRArr.some((s) => String(s).includes('SUNAT_Envio_IndicadorVehiculoConductoresTransp')));
 
 // ── Escenario CASO 1 (tercero 01, registrar=OFF): SOLO CarrierParty (espeja EG07-81) ─────────
 // Interruptor "registrar vehículos y conductores del transportista" DESACTIVADO: la GRE del
@@ -193,9 +205,9 @@ const { xml: xmlI } = construirDespatchAdviceXML(datosInd);
 check('XML indicadores bien-formado', XMLValidator.validate(xmlI) === true);
 const siList = parser.parse(xmlI).DespatchAdvice?.Shipment?.SpecialInstructions;
 const siArr = Array.isArray(siList) ? siList : [siList];
-// Solo los 3 indicadores opcionales explícitos; el de vehículos/conductores ya no se auto-emite (patrón portal).
+// Aquí no se pasa registrarTransp, así que solo van los 3 indicadores opcionales explícitos.
 check('3 SpecialInstructions (solo indicadores explícitos)', siArr.length === 3, `n=${siArr.length}`);
-check('SIN indicador vehículos/conductores auto', !siArr.some((s) => String(s).includes('IndicadorVehiculoConductoresTransp')));
+check('SIN indicador vehículos/conductores (flag no pasado)', !siArr.some((s) => String(s).includes('IndicadorVehiculoConductoresTransp')));
 check('Incluye transbordo', siArr.some((s) => String(s).includes('Transbordo')));
 check('Incluye M1L', siArr.some((s) => String(s).includes('VehiculoM1L')));
 check('Incluye retorno vacíos', siArr.some((s) => String(s).includes('RetornoVehiculoEnvaseVacio')));

@@ -176,10 +176,11 @@ export function construirDespatchAdviceXML(d) {
   const indicadores = [];
   // Comex/exportación: el indicador de traslado total de la DAM/DS va PRIMERO (calcado de EG07-273).
   if (comex?.trasladoTotalDam) indicadores.push(IND.trasladoTotalDam);
-  // NOTA: SUNAT_Envio_IndicadorVehiculoConductoresTransp NO se auto-emite en guías domésticas: los 3 XML
-  // del portal SUNAT (EG07-81/220/309), incluso Casos 2/3 con vehículo+conductor declarados, NO lo llevan.
-  // Queda tras el flag explícito (ind.registrarTransp). En export SÍ se emite (el molde EG07-273 lo lleva):
-  // el servicio de emisión activa ind.registrarTransp cuando es comex + se declaran veh/cond.
+  // SUNAT_Envio_IndicadorVehiculoConductoresTransp: el builder lo emite según el flag explícito
+  // ind.registrarTransp (no lo auto-deduce). El servicio de emisión lo activa SIEMPRE que es público
+  // (tercero) + registrar veh/cond, tanto en guías domésticas como en export. Es OBLIGATORIO cuando el
+  // remitente declara el vehículo/conductor del transportista en modalidad pública: sin él SUNAT
+  // rechaza con 3354. Confirmado contra XML reales aceptados EG07-325/EG07-318 (doméstico) y EG07-273 (export).
   if (ind.registrarTransp) indicadores.push(IND.registrarTransp);
   if (ind.transbordo) indicadores.push(IND.transbordo);
   if (ind.m1l) indicadores.push(IND.m1l);

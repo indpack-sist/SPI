@@ -3717,7 +3717,22 @@ function DetalleOrdenVenta() {
                              </span>
                            )
                          },
-                         { header: 'Observaciones', accessor: 'observaciones' },
+                         {
+                           header: 'Observaciones',
+                           accessor: 'observaciones',
+                           // Resuelve el nº interno de guía (T001-xxxxxxxx) al comprobante SUNAT
+                           // (p.ej. TE01-6) cuando la guía ya está emitida. Corrige despachos previos
+                           // cuya observación se guardó con el correlativo interno.
+                           render: (obs) => {
+                             if (!obs) return obs;
+                             return String(obs).replace(/T\d{3}-\d{4,}/g, (match) => {
+                               const g = guiasRemision.find((x) => x.numero_guia === match);
+                               return (g && g.serie_sunat && g.numero_sunat)
+                                 ? `${g.serie_sunat}-${g.numero_sunat}`
+                                 : match;
+                             });
+                           }
+                         },
                          ...(verFinanzas ? [{
                            header: 'Factura (cruce)',
                            accessor: 'factura',

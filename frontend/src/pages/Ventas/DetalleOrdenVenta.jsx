@@ -470,7 +470,10 @@ function DetalleOrdenVenta() {
         && ['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)
         && Number(g.baja_sunat_confirmada) !== 1
       );
-      const paraDetalle = [...vigentes, ...anuladasPorSincronizar];
+      // Orden cronológico (1ª entrega primero) para entregas parciales: se ordena por id_guia
+      // ascendente, así las cards se leen en el orden en que se despachó el pedido.
+      const paraDetalle = [...vigentes, ...anuladasPorSincronizar]
+        .sort((a, b) => (Number(a.id_guia) || 0) - (Number(b.id_guia) || 0));
       if (paraDetalle.length > 0) {
         const detalles = await Promise.all(
           paraDetalle.map(g => guiasRemisionAPI.getById(g.id_guia)

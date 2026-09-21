@@ -467,34 +467,37 @@ export async function generarGuiaRemisionSunatPDF({
 
       const esTercero = !!transportista?.ruc;
       const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
-      const trasladoRows = [
+      // La modalidad va como fila propia arriba (antes del transportista). Los indicadores quedan en
+      // grilla después. El indicador "registrar veh/cond" solo aplica en público (tercero).
+      const indicadorRows = [
         [
-          ['Modalidad de traslado:', modalidadTexto, { labelWidth: 116, boldValue: true }],
-          ['Indicador de transbordo programado:', siNo(indicadores.transbordo), { labelWidth: 174, boldValue: true }]
+          ['Indicador de transbordo programado:', siNo(indicadores.transbordo), { labelWidth: 174, boldValue: true }],
+          ['Indicador de traslado en vehículos de categoría M1 o L:', siNo(indicadores.m1l), { labelWidth: 203, boldValue: true }]
         ],
         [
-          ['Indicador de traslado en vehículos de categoría M1 o L:', siNo(indicadores.m1l), { labelWidth: 203, boldValue: true }],
-          ['Indicador de retorno de vehículo con envases o embalajes vacíos:', siNo(indicadores.retornoVacio), { labelWidth: 215, boldValue: true }]
-        ],
-        [
-          ['Indicador de retorno de vehículo vacío:', siNo(indicadores.retornoVehiculoVacio), { labelWidth: 181, boldValue: true }],
-          esTercero
-            ? ['Indicador de registrar vehículos/conductores:', siNo(registrar), { labelWidth: 198, boldValue: true }]
-            : null
+          ['Indicador de retorno de vehículo con envases o embalajes vacíos:', siNo(indicadores.retornoVacio), { labelWidth: 215, boldValue: true }],
+          ['Indicador de retorno de vehículo vacío:', siNo(indicadores.retornoVehiculoVacio), { labelWidth: 181, boldValue: true }]
         ]
       ];
+      if (esTercero) indicadorRows.push([
+        ['Indicador de registrar vehículos/conductores:', siNo(registrar), { labelWidth: 198, boldValue: true }],
+        null
+      ]);
       const transportistaText = transportista?.ruc
         ? `${limpio(transportista.razon)} · RUC ${limpio(transportista.ruc)}${transportista.mtc ? ` · Registro MTC ${transportista.mtc}` : ''}`
         : '';
-      let trasladoBodyHeight = twoColumnHeight(trasladoRows);
+      // Orden pedido: Modalidad → Empresa transportista → Fecha entrega → grilla de indicadores.
+      let trasladoBodyHeight = fullWidthHeight('Modalidad de traslado:', modalidadTexto, { labelWidth: 116 });
       if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
       if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
+      trasladoBodyHeight += twoColumnHeight(indicadorRows);
       top = sectionStart('Datos del traslado', '', sectionHeight(trasladoBodyHeight), { whiteHeader: true, borderless: true });
-      twoColumnRows(trasladoRows, { separators: false });
+      fullWidthRow('Modalidad de traslado:', modalidadTexto, { labelWidth: 116, boldValue: true });
       if (transportista?.ruc) {
         fullWidthRow('Empresa transportista:', transportistaText, { labelWidth: 125 });
       }
       if (fechaEntrega) fullWidthRow('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
+      twoColumnRows(indicadorRows, { separators: false });
       sectionEnd(top, 4, { borderless: true });
 
       const normalizedConductores = Array.isArray(conductores) && conductores.length

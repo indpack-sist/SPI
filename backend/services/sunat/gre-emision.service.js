@@ -350,6 +350,13 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     }
     // ¿Se declaran vehículos y conductores? No tercero siempre; tercero solo si registrar=true.
     const declararVC = !esTercero || registrar;
+    // Público (tercero) + registrar veh/cond (Caso 2/3): el remitente declara el vehículo y conductor
+    // del transportista, lo que EXIGE el indicador SUNAT_Envio_IndicadorVehiculoConductoresTransp.
+    // Sin él, SUNAT rechaza con 3354 "no debe ingresar información de vehículo principal" (nodo
+    // cac:TransportEquipment/cbc:ID). Confirmado contra XML reales aceptados EG07-325 (2 veh) y
+    // EG07-318 (1 veh), ambos domésticos. En privado (modalidad 02, vehículo propio) NO aplica: el
+    // vehículo es del remitente y va sin indicador (calcado de EG07-294, placa sin TUCE).
+    if (esTercero && registrar) indicadores.registrarTransp = true;
     // fecha_traslado como string 'YYYY-MM-DD' (sin corrimiento de zona).
     const [[ft]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);
     const fechaTraslado = ft?.f || emision;
@@ -453,9 +460,8 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
         damNumero: dam?.numero || null,
         deliveryEstablishmentCode: destCat?.codigo_establecimiento || '0',
       };
-      // El molde EG07-273 emite SUNAT_Envio_IndicadorVehiculoConductoresTransp cuando el export declara
-      // vehículos/conductores del transportista (público + registrar). Se activa solo en comex.
-      if (declararVC) indicadores.registrarTransp = true;
+      // El indicador SUNAT_Envio_IndicadorVehiculoConductoresTransp ya se activa arriba para todo
+      // público + registrar (doméstico y comex; molde EG07-273). No se duplica aquí.
     }
 
     const numero = await obtenerCorrelativo(conn, tipo, serie);

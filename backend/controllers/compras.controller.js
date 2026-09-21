@@ -230,7 +230,14 @@ export async function getCompraById(req, res) {
         COALESCE(p.unidad_medida, 'UND') AS unidad_medida,
         p.codigo_unidad_sunat,
         p.stock_actual AS stock_disponible,
-        ti.nombre AS tipo_inventario
+        ti.nombre AS tipo_inventario,
+        COALESCE((
+          SELECT SUM(dgr.cantidad)
+            FROM detalle_guia_remision dgr
+            JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
+           WHERE dgr.id_detalle_compra = doc.id_detalle
+             AND gr.tipo_origen = 'Compra' AND gr.estado <> 'Anulada'
+        ), 0) AS cantidad_despachada_guias
       FROM detalle_orden_compra doc
       LEFT JOIN productos p ON doc.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario

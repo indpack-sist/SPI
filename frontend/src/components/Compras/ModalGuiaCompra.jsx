@@ -39,6 +39,9 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
       .filter((d) => d.id_producto)
       .map((d) => {
         const conservaDocumento = !!(d.codigo_documento && d.descripcion_documento && d.unidad_documento_sunat);
+        const comprada = parseFloat(d.cantidad) || 0;
+        const despachada = parseFloat(d.cantidad_despachada_guias) || 0;
+        const pendiente = Math.max(0, +(comprada - despachada).toFixed(4));
         return {
           id_detalle_compra: d.id_detalle,
           id_producto: d.id_producto,
@@ -47,7 +50,11 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
           producto_interno: d.producto || d.codigo_producto,
           unidad: conservaDocumento ? d.unidad_documento_sunat : '',
           conserva_documento_xml: conservaDocumento,
-          cantidad: parseFloat(d.cantidad) || 0,
+          cantidad_comprada: comprada,
+          cantidad_despachada: despachada,
+          pendiente,
+          // Por defecto se propone lo que FALTA por despachar (parcial); nunca más que eso.
+          cantidad: pendiente,
         };
       }));
     Promise.all([ordenesVentaAPI.getConductores(), ordenesVentaAPI.getVehiculos()])
@@ -71,7 +78,16 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (campo, val) => setForm((f) => ({ ...f, [campo]: val }));
-  const setItem = (i, val) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, cantidad: val } : it));
+  // La cantidad a despachar se limita a lo pendiente: nunca se puede colocar de más.
+  const setItem = (i, val) => setItems((prev) => prev.map((it, idx) => {
+    if (idx !== i) return it;
+    if (val === '') return { ...it, cantidad: '' };
+    let n = parseFloat(val);
+    if (isNaN(n)) return { ...it, cantidad: val };
+    if (n < 0) n = 0;
+    if (n > it.pendiente) n = it.pendiente;
+    return { ...it, cantidad: n };
+  }));
   const setItemCampo = (i, campo, val) => setItems((prev) => prev.map((it, idx) => (
     idx === i ? { ...it, [campo]: val } : it
   )));
@@ -95,7 +111,9 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
     const legadoIncompleto = items.find((it) => parseFloat(it.cantidad) > 0 && !it.conserva_documento_xml
       && (!it.codigo_documento?.trim() || !it.nombre_documento?.trim() || !it.unidad?.trim()));
     if (legadoIncompleto) return 'Completa código, descripción y unidad SUNAT del comprobante para los productos históricos.';
-    if (!items.some((it) => parseFloat(it.cantidad) > 0)) return 'Indica la cantidad recibida de al menos un producto.';
+    const excede = items.find((it) => parseFloat(it.cantidad) > it.pendiente + 0.0001);
+    if (excede) return `No puedes despachar más de lo pendiente en "${excede.nombre_documento || excede.producto_interno}" (pendiente: ${excede.pendiente}).`;
+    if (!items.some((it) => parseFloat(it.cantidad) > 0)) return 'Indica la cantidad a despachar de al menos un producto.';
     return null;
   };
 
@@ -233,19 +251,21 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
 
       {/* Ítems recibidos */}
       <div className="mb-4">
-        <h3 className="font-semibold flex items-center gap-2 mb-2"><Package size={16} /> Cantidad recibida</h3>
-        <p className="text-muted text-sm mb-2">Ajusta la cantidad que realmente llega (puede ser parcial o mayor a la facturada).</p>
+        <h3 className="font-semibold flex items-center gap-2 mb-2"><Package size={16} /> Cantidad a despachar</h3>
+        <p className="text-muted text-sm mb-2">Puedes emitir guías parciales; la cantidad se limita a lo <b>pendiente</b> (nunca más que lo comprado). Por defecto se propone todo lo que falta.</p>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b">
               <th className="p-2">Producto</th>
               <th className="p-2">Unid.</th>
-              <th className="p-2 text-right">Recibido</th>
+              <th className="p-2 text-right">Comprado</th>
+              <th className="p-2 text-right">Pendiente</th>
+              <th className="p-2 text-right">A despachar</th>
             </tr>
           </thead>
           <tbody>
             {items.map((it, i) => (
-              <tr key={it.id_detalle_compra || `${it.id_producto}-${i}`} className="border-b">
+              <tr key={it.id_detalle_compra || `${it.id_producto}-${i}`} className={`border-b ${it.pendiente <= 0 ? 'opacity-60' : ''}`}>
                 <td className="p-2">
                   {it.conserva_documento_xml ? (
                     <>
@@ -274,14 +294,24 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
                       placeholder="KGM" />
                   )}
                 </td>
+                <td className="p-2 text-right font-mono">{it.cantidad_comprada}</td>
+                <td className="p-2 text-right font-mono">
+                  {it.pendiente > 0
+                    ? <span className="font-semibold">{it.pendiente}</span>
+                    : <span className="text-success text-xs">Completo</span>}
+                  {it.cantidad_despachada > 0 && (
+                    <div className="text-[10px] text-muted">ya en guías: {it.cantidad_despachada}</div>
+                  )}
+                </td>
                 <td className="p-2 text-right">
-                  <input type="number" step="0.0001" min="0" className="form-input form-input-sm w-28 text-right"
+                  <input type="number" step="0.0001" min="0" max={it.pendiente} disabled={it.pendiente <= 0}
+                    className="form-input form-input-sm w-28 text-right disabled:bg-gray-100"
                     value={it.cantidad} onChange={(e) => setItem(i, e.target.value)} />
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={3} className="p-3 text-center text-muted">La compra no tiene productos de catálogo para trasladar.</td></tr>
+              <tr><td colSpan={5} className="p-3 text-center text-muted">La compra no tiene productos de catálogo para trasladar.</td></tr>
             )}
           </tbody>
         </table>

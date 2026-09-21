@@ -822,12 +822,25 @@ export async function createGuiaCompra(req, res) {
 
       // Precio + tipo de inventario por producto salen de la COMPRA (no de la guía).
       const [lineasCompra] = await conn.query(
-        `SELECT doc.id_detalle, doc.id_producto, doc.precio_unitario, doc.descuento_porcentaje,
+        `SELECT doc.id_detalle, doc.id_producto, doc.cantidad AS cantidad_comprada,
+                doc.precio_unitario, doc.descuento_porcentaje,
                 doc.codigo_documento, doc.descripcion_documento, doc.unidad_documento_sunat,
                 p.id_tipo_inventario, p.codigo, p.unidad_medida, p.codigo_unidad_sunat, p.nombre
            FROM detalle_orden_compra doc JOIN productos p ON p.id_producto = doc.id_producto
           WHERE doc.id_orden_compra = ?`, [id_orden_compra]);
       const mapaCompra = new Map(lineasCompra.map((l) => [Number(l.id_detalle), l]));
+
+      // Cuánto se ha despachado ya por línea en guías previas de esta MISMA compra (las anuladas
+      // liberan su cantidad). La OC está bloqueada con FOR UPDATE arriba → dos guías concurrentes de
+      // la misma compra se serializan y esta suma es consistente. Sirve para no despachar de más.
+      const [despachadoRows] = await conn.query(
+        `SELECT dgr.id_detalle_compra AS id_detalle, COALESCE(SUM(dgr.cantidad), 0) AS despachado
+           FROM detalle_guia_remision dgr
+           JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
+          WHERE gr.id_orden_compra = ? AND gr.tipo_origen = 'Compra' AND gr.estado <> 'Anulada'
+          GROUP BY dgr.id_detalle_compra`, [id_orden_compra]);
+      const mapaDespachado = new Map(despachadoRows.map((r) => [Number(r.id_detalle), parseFloat(r.despachado) || 0]));
+      const EPS = 0.0001;
 
       const items = [];
       for (const it of detalle) {
@@ -839,6 +852,20 @@ export async function createGuiaCompra(req, res) {
         }
                 const cantidad = parseFloat(it.cantidad);
         if (!(cantidad > 0)) throw fail(400, `Cantidad recibida inválida para "${base.nombre}"`);
+
+        // Tope por línea: lo despachado en guías + esta cantidad NUNCA puede superar lo comprado.
+        // Evita emitir más de lo que dice la factura (sobre-despacho / doble emisión).
+        const cantidadComprada = parseFloat(base.cantidad_comprada) || 0;
+        const yaDespachado = mapaDespachado.get(idDetalleCompra) || 0;
+        if (yaDespachado + cantidad > cantidadComprada + EPS) {
+          const pendiente = Math.max(0, cantidadComprada - yaDespachado);
+          const nombreItem = base.descripcion_documento || base.nombre;
+          throw fail(422, `"${nombreItem}": intentas despachar ${cantidad} pero solo quedan ${pendiente} por despachar `
+            + `(comprado ${cantidadComprada}, ya en guías ${yaDespachado}).`);
+        }
+        // Reserva local para el resto de líneas del MISMO producto dentro de esta guía (si el
+        // detalle trae la línea repetida) y para no exceder al acumular.
+        mapaDespachado.set(idDetalleCompra, yaDespachado + cantidad);
 
         // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
         if (it.codigo_bien && !codigoBienValido(it.codigo_bien)) {

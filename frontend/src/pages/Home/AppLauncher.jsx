@@ -56,6 +56,10 @@ const AppLauncher = () => {
   return (
     <div className="launcher-container">
 
+      {/* Capas de atmósfera del fondo (halo + viñeta + grano) */}
+      <div className="launcher-atmosphere" aria-hidden="true"></div>
+      <div className="launcher-grain" aria-hidden="true"></div>
+
       {/* Partículas de fondo */}
       <ul className="background-shapes">
         <li></li><li></li><li></li><li></li><li></li>

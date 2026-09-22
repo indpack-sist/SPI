@@ -41,6 +41,9 @@
   --safe-top: env(safe-area-inset-top, 0px);
 
   --launcher-grid: rgba(255, 255, 255, 0.025);
+  --launcher-grid-major: rgba(255, 255, 255, 0.045);
+  --launcher-glow: rgba(232, 184, 75, 0.07);
+  --launcher-vignette: rgba(0, 0, 0, 0.55);
 
   /* Alias usados por algunas páginas (HistorialTipoCambio, etc.).
      Apuntan a tokens del tema, por lo que se invierten automáticamente. */
@@ -91,6 +94,9 @@
   --accent-border: rgba(212, 160, 23, 0.45);
 
   --launcher-grid: rgba(0, 0, 0, 0.04);
+  --launcher-grid-major: rgba(0, 0, 0, 0.07);
+  --launcher-glow: rgba(212, 160, 23, 0.10);
+  --launcher-vignette: rgba(100, 116, 139, 0.18);
 }
 
 /* --- Ajustes de primer plano sobre el dorado (el token que hacía de

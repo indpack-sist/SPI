@@ -18,16 +18,44 @@
   font-family: 'Barlow', sans-serif;
 }
 
-/* Cuadrícula de fondo estática */
+/* Cuadrícula de fondo estática — jerárquica tipo blueprint (mayor + fina) */
 .launcher-container::before {
   content: '';
   position: fixed;
   inset: 0;
   background-image:
-    repeating-linear-gradient(0deg, transparent, transparent 59px, var(--launcher-grid) 59px, var(--launcher-grid) 60px),
+    /* cuadrícula MAYOR cada 300px (líneas de plano) */
+    repeating-linear-gradient(0deg,  transparent, transparent 299px, var(--launcher-grid-major) 299px, var(--launcher-grid-major) 300px),
+    repeating-linear-gradient(90deg, transparent, transparent 299px, var(--launcher-grid-major) 299px, var(--launcher-grid-major) 300px),
+    /* cuadrícula fina cada 60px */
+    repeating-linear-gradient(0deg,  transparent, transparent 59px, var(--launcher-grid) 59px, var(--launcher-grid) 60px),
     repeating-linear-gradient(90deg, transparent, transparent 59px, var(--launcher-grid) 59px, var(--launcher-grid) 60px);
   pointer-events: none;
   z-index: 0;
+}
+
+/* Halo cálido superior + viñeta de bordes (profundidad, enfoca el centro) */
+.launcher-container .launcher-atmosphere {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(120% 75% at 50% -8%, var(--launcher-glow), transparent 55%),
+    radial-gradient(135% 125% at 50% 42%, transparent 48%, var(--launcher-vignette) 100%);
+}
+
+/* Grano / textura de película (acabado mate, mata el "plano digital") */
+.launcher-container .launcher-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
 
 /* Línea de acento superior */

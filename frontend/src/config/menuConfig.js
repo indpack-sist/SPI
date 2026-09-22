@@ -7,7 +7,7 @@ import {
   TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
   ShieldAlert, PackageSearch, // <--- Módulo Calidad
   Radar, // <--- Módulo Prospección
-  ReceiptText // <--- Facturación Electrónica (SEE)
+  Receipt // <--- Facturación Electrónica (SEE)
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -83,7 +83,7 @@ export const menuConfig = [
     items: [
       {
         label: 'Facturación Electrónica',
-        icon: ReceiptText,
+        icon: Receipt,
         modulo: 'facturacion',
         color: '#6366F1',
         subItems: [

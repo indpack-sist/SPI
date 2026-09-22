@@ -1681,9 +1681,11 @@ export async function generarPdfGuia(req, res, next) {
       }
     }
       const [detalle] = await pool.query(
-  'SELECT d.cantidad, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento, ' +
+  'SELECT d.id_producto, d.cantidad, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento, ' +
   'd.unidad_medida AS unidad_documento_sunat, d.codigo_bien, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
-  'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ? ORDER BY d.id_detalle', [idGuia]);
+  'LEFT JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ? ORDER BY d.id_detalle', [idGuia]);
+    // Ítems de MUESTRA de texto libre (id_producto NULL): nombre/unidad salen de la propia línea de la
+    // guía (NIU por defecto), sin código interno. Igual que gre-emision.service.js (XML) y el snapshot.
     const detallePdf = esCompra
       ? detalle.map((d) => ({
           ...d,
@@ -1691,7 +1693,15 @@ export async function generarPdfGuia(req, res, next) {
           nombre: d.descripcion_documento || d.nombre,
           codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat,
         }))
-      : detalle;
+      : detalle.map((d) => {
+          const esLibre = d.id_producto == null;
+          return {
+            ...d,
+            codigo: d.codigo || null,
+            nombre: d.nombre || d.descripcion_documento,
+            codigo_unidad_sunat: esLibre ? (d.unidad_documento_sunat || 'NIU') : d.codigo_unidad_sunat,
+          };
+        });
 
     // Comercio exterior (exportación): documentos relacionados (DAM) + contenedores/precintos, en el
     // MISMO orden de inserción con que se emitió el XML (sin ORDER BY, igual que gre-emision.service.js
@@ -1730,7 +1740,8 @@ export async function generarPdfGuia(req, res, next) {
       guia: {
         serie_sunat: g.serie_sunat, numero_sunat: g.numero_sunat,
         fecha_emision: g.fecha_emision_fmt, fecha_traslado: g.fecha_traslado_fmt,
-        motivo_traslado_cod: g.motivo_traslado_cod, peso_bruto_kg: g.peso_bruto_kg,
+        motivo_traslado_cod: g.motivo_traslado_cod, motivo_descripcion: g.motivo_descripcion,
+        peso_bruto_kg: g.peso_bruto_kg,
         ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
         sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,

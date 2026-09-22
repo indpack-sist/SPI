@@ -1368,6 +1368,19 @@ export const sunatAPI = {
   // Monitor SUNAT (Fase 15): conteo por estado, tickets abiertos, rechazos y errores del log.
   monitor: () => api.get('/sunat/monitor'),
 
+  // Trazabilidad SEE (solo lectura): listados detallados con filtros.
+  // filtros comprobantes: { tipo, estado, desde, hasta, q }; guías: { estado, desde, hasta, q }.
+  trazabilidadComprobantes: (filtros = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filtros).forEach(([k, v]) => { if (v) params.append(k, v); });
+    return api.get(`/sunat/trazabilidad/comprobantes?${params.toString()}`);
+  },
+  trazabilidadGuias: (filtros = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filtros).forEach(([k, v]) => { if (v) params.append(k, v); });
+    return api.get(`/sunat/trazabilidad/guias?${params.toString()}`);
+  },
+
   // Estado del módulo (BETA/PROD).
   ping: () => api.get('/sunat/ping'),
 };

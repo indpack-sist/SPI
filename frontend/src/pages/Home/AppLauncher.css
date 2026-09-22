@@ -111,7 +111,7 @@
 .launcher-content {
   z-index: 2;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1240px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -210,18 +210,69 @@
 }
 
 /* =====================================================
-   GRID DE APPS
+   TABLA PERIÓDICA — bloques por área
    ===================================================== */
 
-.launcher-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 1px;
+.launcher-periodic {
   width: 100%;
-  animation: fadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: 0.1s;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+/* Cada área ocupa el ancho que necesiten sus módulos y va creciendo
+   en columnas de tiles. Los bloques fluyen y se acomodan solos. */
+.launcher-block {
+  flex: 1 1 auto;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.launcher-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.launcher-block-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.launcher-block-count {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--carbon);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  line-height: 1.4;
+}
+
+.launcher-block-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1px;
   border: 1px solid var(--border);
   background-color: var(--border);
+}
+
+/* Celda que envuelve cada tarjeta (portadora de la animación de entrada).
+   El Link interior rellena la celda por completo. */
+.launcher-card-cell {
+  display: flex;
+  min-width: 0;
 }
 
 /* =====================================================
@@ -235,14 +286,16 @@
   justify-content: center;
   text-decoration: none;
   color: var(--mist);
-  padding: 2rem 1.25rem;
+  padding: 1.5rem 1rem;
   background-color: var(--bg-primary);
   position: relative;
   overflow: hidden;
   transition: background-color 0.2s ease, color 0.2s ease;
-  aspect-ratio: 1 / 1.1;
-  gap: 1rem;
+  aspect-ratio: 1 / 1;
+  gap: 0.85rem;
   border: none;
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .launcher-card::before {
@@ -269,9 +322,9 @@
 
 /* Ícono */
 .launcher-icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 2px;
+  width: 86px;
+  height: 86px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -399,31 +452,39 @@
   .launcher-brand { text-align: center; }
   .launcher-brand-name { font-size: 2.6rem; }
 
-  .launcher-grid {
+  .launcher-periodic {
+    gap: 1.25rem;
+  }
+
+  .launcher-block {
+    flex-basis: 100%;
+  }
+
+  .launcher-block-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 1px;
   }
 
   .launcher-card {
-    padding: 1.5rem 0.75rem;
-    aspect-ratio: 1 / 1.15;
+    padding: 1.25rem 0.75rem;
+    aspect-ratio: 1 / 1.05;
   }
 
   .launcher-icon-wrapper {
-    width: 44px;
-    height: 44px;
+    width: 62px;
+    height: 62px;
   }
 
   .launcher-icon-wrapper svg {
-    width: 22px;
-    height: 22px;
+    width: 30px;
+    height: 30px;
   }
 
   .launcher-label { font-size: 0.75rem; }
 }
 
 @media (max-width: 480px) {
-  .launcher-grid {
+  .launcher-block-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -437,7 +498,7 @@
 }
 
 @media (max-width: 360px) {
-  .launcher-icon-wrapper { width: 38px; height: 38px; }
-  .launcher-icon-wrapper svg { width: 18px; height: 18px; }
+  .launcher-icon-wrapper { width: 54px; height: 54px; }
+  .launcher-icon-wrapper svg { width: 26px; height: 26px; }
   .launcher-label { font-size: 0.7rem; }
 }

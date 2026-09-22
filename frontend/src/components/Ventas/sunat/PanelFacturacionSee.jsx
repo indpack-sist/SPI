@@ -154,7 +154,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     && Number(orden?.facturado_sunat) !== 1
     && !facturaEnCursoOV;
 
-  const errorMsg = (e) => e?.response?.data?.error || e?.message || 'Error inesperado';
+  const errorMsg = (e) => {
+    const d = e?.response?.data;
+    // Bloqueo por validación previa (422): además del resumen, se listan los errores concretos.
+    if (d?.errores?.length) return `${d.error || 'Validación previa'} → ${d.errores.map((x) => x.mensaje).join(' • ')}`;
+    return d?.error || e?.message || 'Error inesperado';
+  };
   const tras = async (fn, okMsg) => {
     setProcesando(true); setAlerta(null);
     try {
@@ -166,6 +171,32 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
       setAlerta({ type: 'error', message: errorMsg(e) });
     } finally { setProcesando(false); }
   };
+
+  // Render de la validación previa: errores (rojo, bloquean) + observaciones (amarillo, avisan).
+  const ListaHallazgos = ({ errores = [], observaciones = [] }) => (
+    <>
+      {errores.length > 0 && (
+        <div className="rounded border border-red-300 bg-red-50 p-2 text-xs">
+          <div className="font-semibold text-red-700 mb-1">
+            ⛔ {errores.length} error(es) impiden emitir — corríjalos (NO se pierde correlativo):
+          </div>
+          <ul className="list-disc pl-4 space-y-0.5 text-red-700">
+            {errores.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
+          </ul>
+        </div>
+      )}
+      {observaciones.length > 0 && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs">
+          <div className="font-semibold text-amber-700 mb-1">
+            ⚠️ {observaciones.length} observación(es) — SUNAT podría aceptar con reparos (no bloquean):
+          </div>
+          <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
+            {observaciones.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
+          </ul>
+        </div>
+      )}
+    </>
+  );
 
   const handleEmitir = async () => {
     const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta, {
@@ -576,9 +607,13 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
           {previewError && <Alert type="error" message={previewError} onClose={() => setPreviewError(null)} />}
           {preview?.avisos?.length > 0 && <Alert type="warning" message={preview.avisos.join(' ')} />}
 
+          {/* Validación previa: errores bloquean el botón; observaciones solo avisan. */}
+          <ListaHallazgos errores={preview?.errores} observaciones={preview?.observaciones} />
+
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={() => setEmitStep(2)} disabled={procesando || previewLoading || !preview?.lineas?.length}>
+            <button className="btn btn-sm btn-primary" onClick={() => setEmitStep(2)}
+              disabled={procesando || previewLoading || !preview?.lineas?.length || preview?.bloqueaEmision}>
               {previewLoading ? 'Calculando…' : 'Continuar'}
             </button>
           </div>
@@ -734,11 +769,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </>
           )}
 
+          {/* Recordatorio de la validación previa también antes de emitir. */}
+          <ListaHallazgos errores={preview?.errores} observaciones={preview?.observaciones} />
+
           <div className="flex justify-between gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setEmitStep(1)} disabled={procesando}>Retroceder</button>
             <div className="flex gap-2">
               <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-              <button className="btn btn-sm btn-primary" onClick={handleEmitir} disabled={procesando || previewLoading || !preview?.lineas?.length}>
+              <button className="btn btn-sm btn-primary" onClick={handleEmitir}
+                disabled={procesando || previewLoading || !preview?.lineas?.length || preview?.bloqueaEmision}>
                 {procesando ? 'Emitiendo…' : 'Emitir'}
               </button>
             </div>
@@ -1060,11 +1099,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               </>
             )}
 
+            {/* Validación previa de la nota: errores bloquean, observaciones avisan. */}
+            <ListaHallazgos errores={notaPreview?.errores} observaciones={notaPreview?.observaciones} />
+
             <div className="flex justify-between gap-2 pt-2 border-t border-gray-200">
               <button className="btn btn-sm btn-outline" onClick={() => setNotaStep(1)} disabled={procesando}>Retroceder</button>
               <div className="flex gap-2">
                 <button className="btn btn-sm btn-outline" onClick={() => setModalNota(null)} disabled={procesando}>Cerrar</button>
-                <button className="btn btn-sm btn-primary" onClick={handleEmitirNota} disabled={procesando || notaPreviewLoading || !notaPreview}>
+                <button className="btn btn-sm btn-primary" onClick={handleEmitirNota}
+                  disabled={procesando || notaPreviewLoading || !notaPreview || notaPreview?.bloqueaEmision}>
                   {procesando ? 'Emitiendo…' : 'Emitir'}
                 </button>
               </div>

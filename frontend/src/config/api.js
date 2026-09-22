@@ -1363,6 +1363,8 @@ export const sunatAPI = {
   // payload del wizard de emisión: { observaciones, direccion_llegada, ubigeo_llegada, ciudad_llegada,
   // peso_bruto_kg, motivo_traslado_cod, es_comercio_exterior, transporte:{ modo, placa, dni, conductor, licencia, id_conductor, id_vehiculo } }
   emitirGuia: (id, payload = {}) => api.post(`/sunat/guias/${id}/emitir`, payload || {}),
+  // Validación previa (read-only): errores/observaciones antes de emitir la GRE (no numera).
+  validarGuia: (id) => api.get(`/sunat/guias/${id}/validar`),
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
   confirmarBajaGuia: (id, datos) => api.post(`/sunat/guias/${id}/baja/confirmar`, datos),
   verPdfGuia: (id) => descargarPdfSunat(`/sunat/guias/${id}/pdf`),

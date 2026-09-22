@@ -47,6 +47,8 @@ router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'
 router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstado);
 
 // GRE Remitente (09) por API REST — Fase 10.
+// Validación previa (solo lectura): errores/observaciones antes de emitir (no numera ni envía).
+router.get('/guias/:id/validar', verificarToken, verificarPermiso('facturacion'), c.validarGuia);
 router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.emitirGuiaRemision);
 router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
 // Confirma/sincroniza una baja GRE realizada previamente en SUNAT SOL (SUNAT no publica una baja

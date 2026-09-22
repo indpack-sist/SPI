@@ -7,7 +7,7 @@ import {
   TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
   ShieldAlert, PackageSearch, // <--- Módulo Calidad
   Radar, // <--- Módulo Prospección
-  Receipt // <--- Facturación Electrónica (SEE)
+  Receipt, Activity // <--- Facturación Electrónica (SEE)
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -81,16 +81,9 @@ export const menuConfig = [
     // Solo la ven roles con permiso 'facturacion' (Administrador / Administrativo).
     title: 'Facturación Electrónica',
     items: [
-      {
-        label: 'Facturación Electrónica',
-        icon: Receipt,
-        modulo: 'facturacion',
-        color: '#6366F1',
-        subItems: [
-          { path: '/facturacion/trazabilidad', label: 'Trazabilidad SEE', modulo: 'facturacion' },
-          { path: '/reportes/monitor-sunat', label: 'Monitor SUNAT', modulo: 'facturacion' },
-        ]
-      }
+      // iconImg: logo SUNAT (public/logo-sunat.png); icon lucide = respaldo si la imagen no carga.
+      { path: '/facturacion/trazabilidad', icon: Receipt, iconImg: '/logo-sunat.png', label: 'Trazabilidad SEE', modulo: 'facturacion', color: '#6366F1' },
+      { path: '/reportes/monitor-sunat', icon: Activity, iconImg: '/logo-sunat.png', label: 'Monitor SUNAT', modulo: 'facturacion', color: '#16A085' }
     ]
   },
   {

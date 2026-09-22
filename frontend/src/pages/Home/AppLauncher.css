@@ -18,36 +18,61 @@
   font-family: 'Barlow', sans-serif;
 }
 
-/* Cuadrícula de fondo estática — jerárquica tipo blueprint (mayor + fina) */
+/* Fondo blueprint estático: cruces técnicas + rejilla mayor + rejilla fina */
 .launcher-container::before {
   content: '';
   position: fixed;
   inset: 0;
   background-image:
+    /* cruces técnicas (+) en el centro de cada celda mayor */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cg stroke='rgba(255,255,255,0.08)' stroke-width='1'%3E%3Cline x1='150' y1='142' x2='150' y2='158'/%3E%3Cline x1='142' y1='150' x2='158' y2='150'/%3E%3C/g%3E%3C/svg%3E"),
     /* cuadrícula MAYOR cada 300px (líneas de plano) */
     repeating-linear-gradient(0deg,  transparent, transparent 299px, var(--launcher-grid-major) 299px, var(--launcher-grid-major) 300px),
     repeating-linear-gradient(90deg, transparent, transparent 299px, var(--launcher-grid-major) 299px, var(--launcher-grid-major) 300px),
     /* cuadrícula fina cada 60px */
     repeating-linear-gradient(0deg,  transparent, transparent 59px, var(--launcher-grid) 59px, var(--launcher-grid) 60px),
     repeating-linear-gradient(90deg, transparent, transparent 59px, var(--launcher-grid) 59px, var(--launcher-grid) 60px);
+  background-size: 300px 300px, auto, auto, auto, auto;
   pointer-events: none;
   z-index: 0;
 }
 
-/* Halo cálido superior + viñeta de bordes (profundidad, enfoca el centro) */
-.launcher-container .launcher-atmosphere {
-  content: '';
+/* Viñeta estática de bordes (profundidad, enfoca el centro) */
+.launcher-atmosphere {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(120% 75% at 50% -8%, var(--launcher-glow), transparent 55%),
-    radial-gradient(135% 125% at 50% 42%, transparent 48%, var(--launcher-vignette) 100%);
+  overflow: hidden;
+  background: radial-gradient(135% 125% at 50% 42%, transparent 48%, var(--launcher-vignette) 100%);
+}
+
+/* Halo cálido superior que "respira" — movimiento sutil y lento */
+.launcher-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 78% at 50% -8%, var(--launcher-glow), transparent 55%);
+  transform-origin: 50% 0%;
+  animation: bp-halo 12s ease-in-out infinite;
+}
+
+/* Barrido de luz lento, como una lámpara pasando sobre la mesa de dibujo */
+.launcher-atmosphere::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, var(--launcher-glow), transparent);
+  transform: translateX(-130%) skewX(-12deg);
+  animation: bp-sweep 17s linear infinite;
+  will-change: transform;
 }
 
 /* Grano / textura de película (acabado mate, mata el "plano digital") */
-.launcher-container .launcher-grain {
+.launcher-grain {
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -56,6 +81,24 @@
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 160px 160px;
+}
+
+@keyframes bp-halo {
+  0%, 100% { opacity: 0.5;  transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.05); }
+}
+
+@keyframes bp-sweep {
+  0%   { transform: translateX(-130%) skewX(-12deg); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(360%) skewX(-12deg); opacity: 0; }
+}
+
+/* Respeta a quien desactiva animaciones */
+@media (prefers-reduced-motion: reduce) {
+  .launcher-atmosphere::before { animation: none; opacity: 0.8; }
+  .launcher-atmosphere::after  { animation: none; opacity: 0; }
 }
 
 /* Línea de acento superior */

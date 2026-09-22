@@ -64,14 +64,11 @@ const AppLauncher = () => {
 
       <div className="launcher-content">
 
-        {/* Header — logo local (ícono + wordmark) sobre panel claro + título legible */}
+        {/* Header — solo título centrado */}
         <div className="launcher-header">
-          <div className="launcher-logo-box">
-            <img src="/logo%20600x300.png" alt="IndPack" />
-          </div>
           <div className="launcher-brand">
             <div className="launcher-brand-name">Sistema de Gestión</div>
-            <div className="launcher-brand-sub">Industrial Packaging</div>
+            <div className="launcher-brand-sub">Empaques Industriales</div>
           </div>
         </div>
 

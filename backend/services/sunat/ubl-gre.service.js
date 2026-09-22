@@ -9,7 +9,7 @@ const MOTIVOS_TRASLADO = {
   '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
   '08': 'IMPORTACION',
   '09': 'EXPORTACION',
-  '13': 'OTROS',
+  '13': 'Otros (no especificados en los anteriores)',
   '14': 'VENTA SUJETA A CONFIRMACION DEL COMPRADOR',
   '18': 'TRASLADO EMISOR ITINERANTE CP'
 };
@@ -300,13 +300,20 @@ export function construirDespatchAdviceXML(d) {
     const prop7022 = itemProp('Indicador de bien regulado por SUNAT', '7022', '0');
     const prop7021 = comex?.damNumero ? itemProp('Numeracion de la DAM o DS', '7021', comex.damNumero) : '';
     const prop7023 = it.dam_serie ? itemProp('Numero de serie en la DAM o DS', '7023', it.dam_serie) : '';
+    // Código del bien: GTIN o código interno. Un ítem de MUESTRA de texto libre no tiene ninguno; en
+    // ese caso se omite SellersItemIdentification (calca el XML de portal EG07-321, que solo lleva la
+    // descripción). Con producto real, se emite como siempre.
+    const itemCodigo = it.codigo_bien || it.codigo || (it.id_producto != null ? String(it.id_producto) : '');
+    const sellerIdXml = itemCodigo
+      ? `
+      <cac:SellersItemIdentification><cbc:ID>${cdata(itemCodigo)}</cbc:ID></cac:SellersItemIdentification>`
+      : '';
     return `  <cac:DespatchLine>
     <cbc:ID>${i + 1}</cbc:ID>
     <cbc:DeliveredQuantity unitCode="${it.codigo_unidad_sunat}" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">${Number(it.cantidad)}</cbc:DeliveredQuantity>
     <cac:OrderLineReference><cbc:LineID>${i + 1}</cbc:LineID></cac:OrderLineReference>
     <cac:Item>
-      <cbc:Description>${cdata(trunc(it.nombre || it.codigo, 250))}</cbc:Description>
-      <cac:SellersItemIdentification><cbc:ID>${cdata(it.codigo_bien || it.codigo || it.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>${prop7020}${prop7022}${prop7021}${prop7023}    </cac:Item>
+      <cbc:Description>${cdata(trunc(it.nombre || it.codigo, 250))}</cbc:Description>${sellerIdXml}${prop7020}${prop7022}${prop7021}${prop7023}    </cac:Item>
   </cac:DespatchLine>`;
   }).join('\n');
 

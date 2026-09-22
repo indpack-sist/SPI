@@ -475,12 +475,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 className="form-input w-full text-sm"
                 maxLength={OC_MAX}
                 value={ordenCompra}
-                onChange={(e) => setOrdenCompra(e.target.value)}
-                placeholder="Ej: 15152"
+                onChange={(e) => setOrdenCompra(e.target.value.replace(/\s+/g, ''))}
+                placeholder="Ej: 15152 (solo el número, sin OC ni espacios)"
                 disabled={procesando || previewLoading}
               />
               <div className="text-[10px] text-muted mt-0.5">
-                Viaja como campo propio del comprobante (cac:OrderReference) y se rotula aparte en el PDF, igual que en SUNAT.
+                Coloque solo el número, sin "OC" adelante y sin espacios. Ejemplo correcto: <strong>15152</strong>. Ejemplos incorrectos: <span className="line-through">OC 15152</span>, <span className="line-through">O/C-15152</span>, <span className="line-through">151 52</span>. Viaja como campo propio del comprobante (cac:OrderReference) y se rotula aparte en el PDF, igual que en SUNAT. Si atiende dos órdenes, coloque ambas directamente en Observaciones.
               </div>
             </div>
             {/* Observaciones → cbc:Note (texto libre). */}
@@ -495,11 +495,11 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 maxLength={OBS_MAX}
                 value={observaciones}
                 onChange={(e) => setObservaciones(e.target.value)}
-                placeholder={"Notas libres del comprobante.\nUsa Enter para separar por líneas (p. ej. OC, ACOMPAÑANTES)."}
+                placeholder={"Notas libres del comprobante.\nUsa Enter para separar por líneas (p. ej. ACOMPAÑANTES).\nSi atiendes dos órdenes de compra, colócalas aquí directamente."}
                 disabled={procesando || previewLoading}
               />
               <div className="text-[10px] text-muted mt-0.5">
-                Texto libre que viaja en el comprobante (cbc:Note) y verás en SUNAT. No repitas aquí la orden de compra (ya viaja como campo propio).
+                Texto libre que viaja en el comprobante (cbc:Note) y verás en SUNAT. No repitas aquí una única orden de compra (ya viaja como campo propio); pero si atiendes dos órdenes, colócalas ambas aquí. Ejemplo: <strong>OC: 15152 y 15153</strong>.
               </div>
             </div>
           </div>

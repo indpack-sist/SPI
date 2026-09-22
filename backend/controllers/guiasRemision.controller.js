@@ -227,13 +227,13 @@ export async function getGuiaRemisionById(req, res) {
       SELECT
         dgr.*,
         p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida AS unidad_medida_producto,
+        COALESCE(p.nombre, dgr.descripcion) AS producto,
+        COALESCE(p.unidad_medida, dgr.unidad_medida) AS unidad_medida_producto,
         p.stock_actual,
         p.id_tipo_inventario,
         ti.nombre AS tipo_inventario
       FROM detalle_guia_remision dgr
-      INNER JOIN productos p ON dgr.id_producto = p.id_producto
+      LEFT JOIN productos p ON dgr.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dgr.id_guia = ?
       ORDER BY dgr.id_detalle
@@ -344,6 +344,7 @@ export async function createGuiaRemision(req, res) {
       id_vehiculo,
       id_transportista,
       motivo_traslado_cod,
+      motivo_descripcion,   // "Especifique" cuando el motivo es Otros (cat.20 = 13), ej. MUESTRAS
       detalle,
       // Comercio exterior (exportación). Solo se persisten si la OV es export (esComex).
       destinatario_ruc,
@@ -360,10 +361,13 @@ export async function createGuiaRemision(req, res) {
       'Venta': '01',
       'Traslado entre Almacenes': '04',
       'Devolución': '13', // 13 = Otros
+      'Otros': '13',      // 13 = Otros (muestras) → descripción libre en motivo_descripcion
       'Exportación': '09', // Comercio exterior (cat.20)
       'Importación': '08'
     };
     let motivoCod = motivo_traslado_cod || MOTIVO_TRASLADO_COD[motivo_traslado] || '01';
+    // "Especifique" del motivo Otros (cat.20 = 13): texto libre que viaja como HandlingInstructions.
+    const motivoDescripcion = motivoCod === '13' ? (String(motivo_descripcion || '').trim() || null) : null;
     
     if (!id_orden_venta) {
       return res.status(400).json({
@@ -531,69 +535,76 @@ export async function createGuiaRemision(req, res) {
     
     // Validar cada producto del detalle
     for (const item of detalle) {
-      // Validar detalle de orden
+      // Validar detalle de orden. LEFT JOIN productos: los ítems de muestra pueden ser de texto
+      // libre (id_producto NULL, sin fila en productos) y deben pasar la validación igual.
       const detalleOrdenResult = await executeQuery(`
-        SELECT 
+        SELECT
           dov.cantidad,
           dov.cantidad_despachada,
-          p.id_producto,
+          dov.es_producto_libre,
+          dov.descripcion_libre,
+          dov.id_producto,
           p.codigo,
           p.nombre,
           p.stock_actual,
           p.id_tipo_inventario
         FROM detalle_orden_venta dov
-        INNER JOIN productos p ON dov.id_producto = p.id_producto
+        LEFT JOIN productos p ON dov.id_producto = p.id_producto
         WHERE dov.id_detalle = ?
       `, [item.id_detalle_orden]);
-      
+
       if (!detalleOrdenResult.success || detalleOrdenResult.data.length === 0) {
         return res.status(400).json({
           success: false,
           error: 'Detalle de orden inválido'
         });
       }
-      
+
       const detalleOrden = detalleOrdenResult.data[0];
+      const esLibre = Number(detalleOrden.es_producto_libre) === 1;
+      const nombreItem = detalleOrden.nombre || detalleOrden.descripcion_libre || 'Ítem';
+      const codigoItem = detalleOrden.codigo || 'libre';
       const cantidadOrden = parseFloat(detalleOrden.cantidad);
       // Pendiente = pedido − lo ya comprometido en guías vigentes (no anuladas) de esta OV. Así, al
       // crear guías parciales sucesivas, la suma nunca supera lo pedido (aunque aún no se despachen).
       const yaEnGuias = mapaEnGuias.get(Number(item.id_detalle_orden)) || 0;
       const cantidadDisponibleOrden = cantidadOrden - yaEnGuias;
       const cantidadSolicitada = parseFloat(item.cantidad);
-      const stockActual = parseFloat(detalleOrden.stock_actual);
 
       // Validar que no exceda lo pendiente de la orden (considerando otras guías vigentes)
       if (cantidadSolicitada > cantidadDisponibleOrden + EPS_GUIA) {
         return res.status(400).json({
           success: false,
-          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${Math.max(0, cantidadDisponibleOrden).toFixed(4)})`
+          error: `${nombreItem} (${codigoItem}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${Math.max(0, cantidadDisponibleOrden).toFixed(4)})`
         });
       }
       // Reserva local: si el detalle repite la misma línea, acumula para no exceder al sumar.
       mapaEnGuias.set(Number(item.id_detalle_orden), yaEnGuias + cantidadSolicitada);
-      
-      // Validar stock disponible
-      if (cantidadSolicitada > stockActual) {
-        return res.status(400).json({
-          success: false,
-          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Stock insuficiente. Disponible: ${stockActual.toFixed(4)}, Requerido: ${cantidadSolicitada.toFixed(4)}`
-        });
-      }
-      
-      // Validar que el id_producto coincida
-            // Validar que el id_producto coincida
-      if (item.id_producto !== detalleOrden.id_producto) {
-        return res.status(400).json({
-          success: false,
-          error: `El producto del detalle no coincide con el de la orden`
-        });
+
+      // Ítem libre (muestra sin producto de catálogo): no hay stock ni id_producto que validar.
+      if (!esLibre) {
+        const stockActual = parseFloat(detalleOrden.stock_actual);
+        // Validar stock disponible
+        if (cantidadSolicitada > stockActual) {
+          return res.status(400).json({
+            success: false,
+            error: `${nombreItem} (${codigoItem}): Stock insuficiente. Disponible: ${stockActual.toFixed(4)}, Requerido: ${cantidadSolicitada.toFixed(4)}`
+          });
+        }
+        // Validar que el id_producto coincida
+        if (item.id_producto !== detalleOrden.id_producto) {
+          return res.status(400).json({
+            success: false,
+            error: `El producto del detalle no coincide con el de la orden`
+          });
+        }
       }
 
       // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
       if (item.codigo_bien && !codigoBienValido(item.codigo_bien)) {
         return res.status(400).json({
           success: false,
-          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Código de bien inválido (debe tener 13 dígitos)`
+          error: `${nombreItem} (${codigoItem}): Código de bien inválido (debe tener 13 dígitos)`
         });
       }
     }
@@ -631,6 +642,7 @@ export async function createGuiaRemision(req, res) {
         id_vehiculo,
         id_transportista,
         motivo_traslado_cod,
+        motivo_descripcion,
         transporte_modo,
         transporte_placa,
         transporte_conductor,
@@ -642,7 +654,7 @@ export async function createGuiaRemision(req, res) {
         traslado_total_dam,
         puerto_codigo,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
@@ -666,6 +678,7 @@ export async function createGuiaRemision(req, res) {
       idVehiculoFinal,
       idTransportistaFinal,
       motivoCod,
+      motivoDescripcion,
       modoGuia,
       guiaTransportePlaca,
       guiaTransporteConductor,
@@ -708,9 +721,9 @@ export async function createGuiaRemision(req, res) {
       `, [
         idGuia,
         item.id_detalle_orden,
-        item.id_producto,
+        item.id_producto || null,
         parseFloat(item.cantidad),
-        item.unidad_medida || 'UND',
+        item.unidad_medida || 'NIU',
         item.descripcion || item.producto || '',
         parseFloat(item.peso_unitario_kg) || 0,
         pesoTotal,
@@ -1037,16 +1050,16 @@ export async function despacharGuiaRemision(req, res) {
     
     // Obtener detalle de la guía con información completa del producto
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dgr.*,
         p.id_tipo_inventario,
         p.costo_unitario_promedio,
         p.stock_actual,
         p.codigo,
-        p.nombre AS producto,
-        p.unidad_medida AS unidad_producto
+        COALESCE(p.nombre, dgr.descripcion) AS producto,
+        COALESCE(p.unidad_medida, dgr.unidad_medida) AS unidad_producto
       FROM detalle_guia_remision dgr
-      INNER JOIN productos p ON dgr.id_producto = p.id_producto
+      LEFT JOIN productos p ON dgr.id_producto = p.id_producto
       WHERE dgr.id_guia = ?
       ORDER BY dgr.id_detalle
     `, [id]);
@@ -1059,12 +1072,15 @@ export async function despacharGuiaRemision(req, res) {
     }
     
     const detalle = detalleResult.data;
-    
-    // Validar stock actual antes de despachar
-    for (const item of detalle) {
+    // Los ítems de MUESTRA de texto libre (id_producto NULL) no tienen stock ni costo: no generan
+    // línea de salida ni descuento de inventario. Solo los productos reales mueven stock.
+    const detalleReal = detalle.filter((it) => it.id_producto != null);
+
+    // Validar stock actual antes de despachar (solo productos reales)
+    for (const item of detalleReal) {
       const stockActual = parseFloat(item.stock_actual);
       const cantidadDespachar = parseFloat(item.cantidad);
-      
+
       if (stockActual < cantidadDespachar) {
         return res.status(400).json({
           success: false,
@@ -1072,112 +1088,113 @@ export async function despacharGuiaRemision(req, res) {
         });
       }
     }
-    
-    // Usar el tipo de inventario del primer producto (todos deberían ser del mismo tipo en una guía)
-    const id_tipo_inventario = detalle[0].id_tipo_inventario;
-    
-    // Calcular totales
+
+    // Tipo de inventario del primer producto real (todos deberían ser del mismo tipo en una guía).
+    const primerReal = detalleReal[0];
+    const id_tipo_inventario = primerReal ? primerReal.id_tipo_inventario : 3;
+
+    // Calcular totales (solo productos reales)
     let totalCosto = 0;
     let totalPrecio = 0;
-    
-    for (const item of detalle) {
+
+    for (const item of detalleReal) {
       const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
       const cantidad = parseFloat(item.cantidad);
-      
+
       totalCosto += cantidad * costoUnitario;
       totalPrecio += cantidad * costoUnitario;
     }
-    
-    // Crear la salida de inventario. Se vincula a la OV por FK (id_orden_venta) igual que
-    // "Registrar Despacho", para que aparezca en el "Historial de Despachos" de la orden y
-    // pueda cruzarse con facturas por id_salida. La fecha va en hora de Lima (getFechaPeru).
-    const salidaResult = await executeQuery(`
-      INSERT INTO salidas (
-        id_tipo_inventario,
-        tipo_movimiento,
-        id_cliente,
-        id_orden_venta,
-        total_costo,
-        total_precio,
-        moneda,
-        id_registrado_por,
-        observaciones,
-        estado,
-        fecha_movimiento
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      id_tipo_inventario,
-      'Venta',
-      guia.id_cliente,
-      guia.id_orden_venta,
-      totalCosto,
-      totalPrecio,
-      'PEN',
-      id_usuario,
-      `Despacho Guía ${refGuia} - Orden ${guia.numero_orden_venta}`,
-      'Activo',
-      fecha_despacho || getFechaPeru()
-    ]);
-    
-    if (!salidaResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: `Error al crear salida: ${salidaResult.error}`
-      });
-    }
-    
-    const id_salida = salidaResult.data.insertId;
-    
-    // Procesar cada producto
-    for (const item of detalle) {
-      const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
-      const cantidad = parseFloat(item.cantidad);
-      
-      // Insertar detalle de salida
-      const detalleSalidaResult = await executeQuery(`
-        INSERT INTO detalle_salidas (
-          id_salida,
-          id_producto,
-          cantidad,
-          costo_unitario,
-          precio_unitario
-        ) VALUES (?, ?, ?, ?, ?)
+
+    // Crear la salida de inventario solo si hay productos reales que descontar (una muestra con
+    // exclusivamente ítems libres no mueve stock). Se vincula a la OV por FK (id_orden_venta) igual
+    // que "Registrar Despacho", para que aparezca en el "Historial de Despachos" de la orden y pueda
+    // cruzarse con facturas por id_salida. La fecha va en hora de Lima (getFechaPeru).
+    let id_salida = null;
+    if (detalleReal.length > 0) {
+      const salidaResult = await executeQuery(`
+        INSERT INTO salidas (
+          id_tipo_inventario,
+          tipo_movimiento,
+          id_cliente,
+          id_orden_venta,
+          total_costo,
+          total_precio,
+          moneda,
+          id_registrado_por,
+          observaciones,
+          estado,
+          fecha_movimiento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        id_salida,
-        item.id_producto,
-        cantidad,
-        costoUnitario,
-        costoUnitario
+        id_tipo_inventario,
+        'Venta',
+        guia.id_cliente,
+        guia.id_orden_venta,
+        totalCosto,
+        totalPrecio,
+        'PEN',
+        id_usuario,
+        `Despacho Guía ${refGuia} - Orden ${guia.numero_orden_venta}`,
+        'Activo',
+        fecha_despacho || getFechaPeru()
       ]);
-      
-      if (!detalleSalidaResult.success) {
+
+      if (!salidaResult.success) {
         return res.status(500).json({
           success: false,
-          error: `Error al crear detalle de salida para ${item.producto}: ${detalleSalidaResult.error}`
+          error: `Error al crear salida: ${salidaResult.error}`
         });
       }
-      
-      // Actualizar stock del producto
-      const updateStockResult = await executeQuery(`
-        UPDATE productos 
-        SET stock_actual = stock_actual - ?
-        WHERE id_producto = ?
-      `, [cantidad, item.id_producto]);
-      
-      if (!updateStockResult.success) {
-        return res.status(500).json({
-          success: false,
-          error: `Error al actualizar stock de ${item.producto}: ${updateStockResult.error}`
-        });
+
+      id_salida = salidaResult.data.insertId;
+
+      // Línea de salida + descuento de stock por cada producto real
+      for (const item of detalleReal) {
+        const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const cantidad = parseFloat(item.cantidad);
+
+        const detalleSalidaResult = await executeQuery(`
+          INSERT INTO detalle_salidas (
+            id_salida,
+            id_producto,
+            cantidad,
+            costo_unitario,
+            precio_unitario
+          ) VALUES (?, ?, ?, ?, ?)
+        `, [id_salida, item.id_producto, cantidad, costoUnitario, costoUnitario]);
+
+        if (!detalleSalidaResult.success) {
+          return res.status(500).json({
+            success: false,
+            error: `Error al crear detalle de salida para ${item.producto}: ${detalleSalidaResult.error}`
+          });
+        }
+
+        const updateStockResult = await executeQuery(`
+          UPDATE productos
+          SET stock_actual = stock_actual - ?
+          WHERE id_producto = ?
+        `, [cantidad, item.id_producto]);
+
+        if (!updateStockResult.success) {
+          return res.status(500).json({
+            success: false,
+            error: `Error al actualizar stock de ${item.producto}: ${updateStockResult.error}`
+          });
+        }
       }
-      
-      // Actualizar cantidad despachada en la orden
+    }
+
+    // Actualizar cantidad despachada en la orden para TODAS las líneas (reales y libres), para que
+    // el estado de la OV pueda llegar a 'Despachada' aunque haya ítems de muestra sin stock.
+    for (const item of detalle) {
+      const cantidad = parseFloat(item.cantidad);
       const updateOrdenResult = await executeQuery(`
         UPDATE detalle_orden_venta
         SET cantidad_despachada = cantidad_despachada + ?
         WHERE id_detalle = ?
       `, [cantidad, item.id_detalle_orden]);
-      
+
       if (!updateOrdenResult.success) {
         return res.status(500).json({
           success: false,
@@ -1462,12 +1479,12 @@ export async function descargarPDFGuiaRemision(req, res) {
     const guia = guiaResult.data[0];
     
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dgr.*,
         p.codigo AS codigo_producto,
-        p.nombre AS producto
+        COALESCE(p.nombre, dgr.descripcion) AS producto
       FROM detalle_guia_remision dgr
-      INNER JOIN productos p ON dgr.id_producto = p.id_producto
+      LEFT JOIN productos p ON dgr.id_producto = p.id_producto
       WHERE dgr.id_guia = ?
       ORDER BY dgr.id_detalle
     `, [id]);

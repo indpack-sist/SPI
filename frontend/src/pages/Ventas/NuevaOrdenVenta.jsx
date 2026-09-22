@@ -108,6 +108,7 @@ function NuevaOrdenVenta() {
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     es_exportacion: 0,
+    es_muestra: 0,
     prioridad: 'Media',
     tipo_venta: 'Contado', 
     dias_credito: 0,       
@@ -293,6 +294,7 @@ useEffect(() => {
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: orden.es_exportacion ? 0 : configImpuesto.porcentaje,
           es_exportacion: orden.es_exportacion ? 1 : 0,
+          es_muestra: orden.es_muestra ? 1 : 0,
           prioridad: orden.prioridad,
           tipo_venta: orden.tipo_venta || 'Contado',
           dias_credito: orden.dias_credito || 0,
@@ -356,6 +358,10 @@ useEffect(() => {
             return {
               id_detalle: item.id_detalle,
               id_producto: item.id_producto,
+              es_producto_libre: item.es_producto_libre ? true : false,
+              descripcion_libre: item.descripcion_libre || '',
+              unidad_medida_libre: item.unidad_medida_libre || '',
+              codigo_bien: item.codigo_bien || '',
               codigo_producto: item.codigo_producto,
               producto: item.producto,
               unidad_medida: item.unidad_medida,
@@ -566,9 +572,11 @@ useEffect(() => {
     
     const nuevoItem = {
       id_producto: producto.id_producto,
+      es_producto_libre: false,
       codigo_producto: producto.codigo,
       producto: producto.nombre,
       unidad_medida: producto.unidad_medida,
+      codigo_bien: '',
       cantidad: 1,
       precio_base: precioVenta,
       precio_venta: precioVenta,
@@ -576,10 +584,37 @@ useEffect(() => {
       stock_actual: producto.stock_actual,
       peso_unitario: parseFloat(producto.peso_unitario || 0)
     };
-    
+
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
     setBusquedaProducto('');
+  };
+
+  // Ítem de MUESTRA de texto libre: no está en el catálogo, no descuenta stock; se emite solo por
+  // su descripción/unidad (NIU por defecto) y un código de bien opcional (GTIN).
+  const handleAgregarItemLibre = () => {
+    setDetalle([...detalle, {
+      id_producto: null,
+      es_producto_libre: true,
+      codigo_producto: '',
+      producto: '',
+      descripcion_libre: '',
+      unidad_medida: 'NIU',
+      unidad_medida_libre: 'NIU',
+      codigo_bien: '',
+      cantidad: 1,
+      precio_base: 0,
+      precio_venta: 0,
+      descuento_porcentaje: 0,
+      stock_actual: null,
+      peso_unitario: 0
+    }]);
+  };
+
+  const handleItemCampoChange = (index, campo, valor) => {
+    const nd = [...detalle];
+    nd[index][campo] = valor;
+    setDetalle(nd);
   };
 
   const handlePrecioBaseChange = (index, valor) => {
@@ -725,14 +760,21 @@ useEffect(() => {
   };
 
   const validarFormulario = () => {
+    const esMuestra = Number(formCabecera.es_muestra) === 1;
     if (!clienteSeleccionado) return 'Debe seleccionar un cliente';
-    if (detalle.length === 0) return 'Debe agregar al menos un producto';
-    const sinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
-    if (sinPrecio) return 'Todos los productos deben tener un precio de venta válido';
+    if (detalle.length === 0) return esMuestra ? 'Debe agregar al menos un ítem de muestra' : 'Debe agregar al menos un producto';
+    if (esMuestra) {
+      // Muestra: sin precio (sin valor comercial). Solo se exige descripción en los ítems libres.
+      const sinDesc = detalle.some(item => item.es_producto_libre && !String(item.producto || '').trim());
+      if (sinDesc) return 'Cada ítem libre de muestra debe tener una descripción';
+    } else {
+      const sinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
+      if (sinPrecio) return 'Todos los productos deben tener un precio de venta válido';
+    }
     if (tieneOC && (!formCabecera.orden_compra_cliente || (!archivos.orden_compra?.length && !archivosPrevios.orden_compra_url?.length))) {
       return 'Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.';
     }
-    if (estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
+    if (!esMuestra && estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
       const disponible = formCabecera.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
       if (totales.total > disponible) {
         return `Límite de crédito excedido. Disponible: ${formatearMoneda(disponible)}. Total de Orden: ${formatearMoneda(totales.total)}`;
@@ -761,11 +803,16 @@ useEffect(() => {
 
       formData.append('estado_verificacion_oc', pendingVerifOC.current || 'Sin verificar');
 
+      const esMuestraSubmit = Number(formCabecera.es_muestra) === 1;
       formData.append('detalle', JSON.stringify(detalle.map((item, index) => ({
-        id_producto: item.id_producto,
+        id_producto: item.es_producto_libre ? null : item.id_producto,
+        es_producto_libre: item.es_producto_libre ? 1 : 0,
+        descripcion_libre: item.es_producto_libre ? (String(item.producto || item.descripcion_libre || '').trim()) : null,
+        unidad_medida_libre: item.es_producto_libre ? (item.unidad_medida || 'NIU') : null,
+        codigo_bien: item.codigo_bien ? String(item.codigo_bien).trim() : null,
         cantidad: parseFloat(item.cantidad),
-        precio_base: parseFloat(item.precio_base),
-        precio_unitario: parseFloat(item.precio_venta),
+        precio_base: esMuestraSubmit ? 0 : parseFloat(item.precio_base),
+        precio_unitario: esMuestraSubmit ? 0 : parseFloat(item.precio_venta),
         porcentaje_comision: 0,
         descuento_porcentaje: 0,
         orden: index + 1
@@ -874,7 +921,12 @@ useEffect(() => {
 
   if (loading && clientes.length === 0) return <Loading message="Cargando..." />;
 
-  const tituloFormulario = modoEdicion ? 'Editar Orden de Venta' : 'Nueva Orden de Venta';
+  const esMuestra = Number(formCabecera.es_muestra) === 1;
+  const tituloFormulario = modoEdicion
+    ? (esMuestra ? 'Editar Orden de Muestra' : 'Editar Orden de Venta')
+    : (esMuestra ? 'Nueva Orden de Muestra' : 'Nueva Orden de Venta');
+  // Columnas visibles de la tabla de ítems (para el colSpan del estado vacío).
+  const colCountItems = 4 + (modoEdicion ? 1 : 0) + (esMuestra ? 1 : (3 + (esAdmin ? 1 : 0)));
 
   return (
     <div className="p-6">
@@ -897,7 +949,37 @@ useEffect(() => {
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2 space-y-6">
-            
+
+            <div className={`card border-l-4 ${esMuestra ? 'border-amber-500 shadow-md' : 'border-gray-300 opacity-90'}`}>
+              <div className="card-body flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${esMuestra ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-gray-200 text-gray-500'}`}>
+                    <Package size={22} />
+                  </div>
+                  <div>
+                    <h2 className={`card-title m-0 ${esMuestra ? 'text-amber-900' : 'text-gray-600'}`}>Orden de Muestra</h2>
+                    <p className="text-[11px] text-muted m-0">Sin valor comercial · no se factura · solo Guía de Remisión (correlativo MUE-YYYY-XXXX)</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer group" title={modoEdicion ? 'No se puede cambiar el tipo de una orden existente' : ''}>
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={esMuestra}
+                    disabled={modoEdicion}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setFormCabecera(prev => ({ ...prev, es_muestra: on ? 1 : 0, es_exportacion: on ? 0 : prev.es_exportacion }));
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 peer-disabled:opacity-50"></div>
+                  <span className={`ml-3 text-sm font-bold ${esMuestra ? 'text-amber-800' : 'text-gray-700'}`}>
+                    {esMuestra ? 'MUESTRA' : 'VENTA'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
             <div className="card">
               <div className="card-header bg-gradient-to-r from-blue-50 to-white">
                 <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
@@ -1114,10 +1196,17 @@ useEffect(() => {
 
             <div className="card">
               <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
-                <h2 className="card-title"><Calculator size={20} /> Productos</h2>
-                <button type="button" className="btn btn-sm btn-primary" onClick={() => setModalProductoOpen(true)}>
-                  <Plus size={16} /> Agregar
-                </button>
+                <h2 className="card-title"><Calculator size={20} /> {esMuestra ? 'Ítems de Muestra' : 'Productos'}</h2>
+                <div className="flex gap-2">
+                  <button type="button" className="btn btn-sm btn-primary" onClick={() => setModalProductoOpen(true)}>
+                    <Plus size={16} /> {esMuestra ? 'Del catálogo' : 'Agregar'}
+                  </button>
+                  {esMuestra && (
+                    <button type="button" className="btn btn-sm btn-outline border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleAgregarItemLibre}>
+                      <Plus size={16} /> Ítem libre
+                    </button>
+                  )}
+                </div>
               </div>
               {modoEdicion && detalle.length > 1 && (
                 <div className={`product-reorder-help mx-4 mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'is-active' : ''}`}>
@@ -1132,19 +1221,20 @@ useEffect(() => {
                   <thead>
   <tr>
     {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
-    <th>Producto</th>
+    <th>{esMuestra ? 'Ítem / Descripción' : 'Producto'}</th>
+    {esMuestra && <th className="w-40">Cód. Bien (GTIN)</th>}
     <th className="text-right w-24">Cant.</th>
     <th className="text-right w-24">Peso</th>
-    <th className="text-right w-28">P. Base</th>
-    <th className="text-right w-28">P. Venta</th>
-    {esAdmin && <th className="text-center w-20">Margen %</th>}
-    <th className="text-right w-28">Subtotal</th>
+    {!esMuestra && <th className="text-right w-28">P. Base</th>}
+    {!esMuestra && <th className="text-right w-28">P. Venta</th>}
+    {!esMuestra && esAdmin && <th className="text-center w-20">Margen %</th>}
+    {!esMuestra && <th className="text-right w-28">Subtotal</th>}
     <th className="w-10"></th>
   </tr>
 </thead>
                   <tbody>
                     {detalle.length === 0 ? (
-                      <tr><td colSpan={(esAdmin ? 8 : 7) + (modoEdicion ? 1 : 0)} className="text-center py-8 text-muted">No hay productos agregados</td></tr>
+                      <tr><td colSpan={colCountItems} className="text-center py-8 text-muted">{esMuestra ? 'No hay ítems de muestra agregados' : 'No hay productos agregados'}</td></tr>
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -1176,11 +1266,46 @@ useEffect(() => {
                               </td>
                             )}
                             <td>
-                              <div className="font-medium">{item.producto}</div>
-                              <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>
+                              {item.es_producto_libre ? (
+                                <div className="space-y-1">
+                                  <input
+                                    type="text"
+                                    className="form-input p-1 h-8"
+                                    placeholder="Descripción del bien (ej. test muestra)"
+                                    value={item.producto}
+                                    onChange={(e) => handleItemCampoChange(index, 'producto', e.target.value)}
+                                  />
+                                  <input
+                                    type="text"
+                                    className="form-input p-1 h-7 w-24 text-xs"
+                                    placeholder="Unid. (NIU)"
+                                    value={item.unidad_medida}
+                                    onChange={(e) => handleItemCampoChange(index, 'unidad_medida', e.target.value.toUpperCase())}
+                                    maxLength={5}
+                                    title="Código de unidad SUNAT (NIU por defecto)"
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="font-medium">{item.producto}</div>
+                                  <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>
+                                </>
+                              )}
                             </td>
+                            {esMuestra && (
+                              <td>
+                                <input
+                                  type="text"
+                                  className="form-input p-1 h-8 font-mono text-xs"
+                                  placeholder="Opcional (13 díg.)"
+                                  value={item.codigo_bien || ''}
+                                  onChange={(e) => handleItemCampoChange(index, 'codigo_bien', e.target.value.replace(/[^0-9]/g, ''))}
+                                  maxLength={14}
+                                />
+                              </td>
+                            )}
                             <td>
-                              <input 
+                              <input
   type="text"
   inputMode="decimal"
   className="form-input text-right p-1 h-8"
@@ -1204,6 +1329,7 @@ useEffect(() => {
     );
   })()}
 </td>
+                            {!esMuestra && (
                             <td>
                               <input
   type="text"
@@ -1214,8 +1340,10 @@ useEffect(() => {
   style={{ cursor: 'default' }}
 />
                             </td>
+                            )}
+                            {!esMuestra && (
                             <td>
-                              <input 
+                              <input
   type="text"
   inputMode="decimal"
   className="form-input text-right p-1 h-8 bg-blue-50"
@@ -1227,7 +1355,8 @@ useEffect(() => {
   placeholder="0.000"
 />
                             </td>
-                            {esAdmin && (
+                            )}
+                            {!esMuestra && esAdmin && (
                             <td>
                               <input
   type="text"
@@ -1239,7 +1368,7 @@ useEffect(() => {
 />
                             </td>
                             )}
-                            <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
+                            {!esMuestra && <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>}
                             <td>
                               <button type="button" className="text-danger hover:bg-red-50 p-1 rounded" onClick={() => handleEliminarItem(index)}>
                                 <Trash2 size={16} />
@@ -1674,7 +1803,9 @@ useEffect(() => {
                   <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                 </div>
 
-                {/* Factura de exportación (SUNAT 0200, IGV 0%). Fuerza el impuesto a 0 y bloquea el tipo. */}
+                {/* Factura de exportación (SUNAT 0200, IGV 0%). Fuerza el impuesto a 0 y bloquea el tipo.
+                    No aplica a órdenes de muestra (sin valor comercial). */}
+                {!esMuestra && (
                 <label className="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1683,6 +1814,7 @@ useEffect(() => {
                   />
                   <span>Factura de exportación <span className="text-muted">(IGV 0%)</span></span>
                 </label>
+                )}
                 <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2 text-primary">
                   <span>TOTAL:</span>
                   <span>{formatearMoneda(totales.total)}</span>

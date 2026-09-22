@@ -62,6 +62,7 @@ function NuevaGuiaRemision() {
     fecha_traslado: new Date().toISOString().split('T')[0],
     tipo_traslado: 'Privado',
     motivo_traslado: 'Venta',
+    motivo_descripcion: 'MUESTRAS', // "Especifique" cuando el motivo es Otros (cat.20 = 13)
     modalidad_transporte: 'Transporte Privado',
     direccion_partida: '',
     ubigeo_partida: '',
@@ -182,6 +183,7 @@ function NuevaGuiaRemision() {
           return {
             id_detalle: item.id_detalle,
             id_producto: item.id_producto,
+            es_producto_libre: item.es_producto_libre ? true : false,
             codigo_producto: item.codigo_producto,
             producto: item.producto,
             unidad_medida: item.unidad_medida,
@@ -208,6 +210,7 @@ function NuevaGuiaRemision() {
         const detalleInicial = productosConDisponibilidad.map((p, i) => ({
           id_detalle_orden: p.id_detalle,
           id_producto: p.id_producto,
+          es_producto_libre: p.es_producto_libre,
           codigo_producto: p.codigo_producto,
           producto: p.producto,
           unidad_medida: p.unidad_medida,
@@ -255,7 +258,9 @@ function NuevaGuiaRemision() {
           // Comercio exterior: si la OV está marcada como exportación (checkbox
           // "Factura de exportación"), la guía nace con motivo Exportación (cat.20 = 09).
           // El backend igual lo fuerza desde ordenes_venta.es_exportacion (fuente única).
-          motivo_traslado: Number(ordenData.es_exportacion) === 1 ? 'Exportación' : prev.motivo_traslado,
+          motivo_traslado: Number(ordenData.es_exportacion) === 1
+            ? 'Exportación'
+            : (Number(ordenData.es_muestra) === 1 ? 'Otros' : prev.motivo_traslado),
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || ubicacionOV?.distrito || '',
           // Ubigeo: si la OV no lo trae, se intenta derivar de la cola de la dirección de entrega
@@ -285,9 +290,11 @@ function NuevaGuiaRemision() {
     const validaciones = {};
     
     detalle.forEach(item => {
+      // Ítem de muestra de texto libre: no tiene producto/stock que validar (siempre válido).
+      if (item.es_producto_libre) return;
       const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
       if (!producto) return;
-      
+
       const cantidadSolicitada = parseFloat(item.cantidad || 0);
       const errores = [];
       const warnings = [];
@@ -590,6 +597,8 @@ function NuevaGuiaRemision() {
         fecha_traslado: formData.fecha_traslado,
         tipo_traslado: formData.tipo_traslado,
         motivo_traslado: formData.motivo_traslado,
+        // "Especifique" del motivo Otros (cat.20 = 13) → HandlingInstructions/representación (ej. MUESTRAS).
+        motivo_descripcion: formData.motivo_traslado === 'Otros' ? formData.motivo_descripcion : undefined,
         modalidad_transporte: formData.modalidad_transporte,
         direccion_llegada: formData.direccion_llegada,
         ubigeo_llegada: formData.ubigeo_llegada,
@@ -764,6 +773,7 @@ function NuevaGuiaRemision() {
                   <option value="Venta">Venta</option>
                   <option value="Traslado entre Almacenes">Traslado entre Almacenes</option>
                   <option value="Devolución">Devolución</option>
+                  <option value="Otros">Otros (Muestras)</option>
                   {Number(orden?.es_exportacion) === 1 && (
                     <option value="Exportación">Exportación</option>
                   )}
@@ -772,6 +782,20 @@ function NuevaGuiaRemision() {
                   <p className="text-xs text-muted mt-1">
                     Operación de comercio exterior (la OV está marcada como exportación): motivo fijado en Exportación (código 09).
                   </p>
+                )}
+                {formData.motivo_traslado === 'Otros' && (
+                  <div className="mt-2">
+                    <label className="form-label text-xs">Especifique el motivo (código 13) *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formData.motivo_descripcion}
+                      onChange={(e) => setFormData({ ...formData, motivo_descripcion: e.target.value })}
+                      placeholder="MUESTRAS"
+                      maxLength={100}
+                    />
+                    <p className="text-xs text-muted mt-1">Motivo SUNAT "Otros (no especificados en los anteriores)". Este texto describe el traslado (por defecto MUESTRAS).</p>
+                  </div>
                 )}
               </div>
               
@@ -1191,17 +1215,18 @@ function NuevaGuiaRemision() {
                     </thead>
                     <tbody>
                       {detalle.map((item, index) => {
-                        const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
+                        const esLibre = item.es_producto_libre;
+                        const producto = esLibre ? null : productosDisponibles.find(p => p.id_producto === item.id_producto);
                         const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
-                        const validacion = validacionProductos[item.id_producto] || { valido: true, errores: [], warnings: [] };
+                        const validacion = (esLibre ? null : validacionProductos[item.id_producto]) || { valido: true, errores: [], warnings: [] };
                         const hayError = validacion.errores && validacion.errores.length > 0;
                         const hayWarning = validacion.warnings && validacion.warnings.length > 0;
-                        
+
                         return (
                           <tr key={index} className={hayError ? 'bg-red-50' : hayWarning ? 'bg-yellow-50' : ''}>
-                            <td className="font-mono text-sm">{item.codigo_producto}</td>
+                            <td className="font-mono text-sm">{esLibre ? <span className="badge badge-warning text-[10px]">LIBRE</span> : item.codigo_producto}</td>
                             <td>
-                              <div className="font-medium">{item.producto}</div>
+                              <div className="font-medium">{item.producto || <span className="text-muted italic">Sin descripción</span>}</div>
                               {hayError && validacion.errores.map((err, i) => (
                                 <div key={i} className="text-xs text-danger mt-1 flex items-center gap-1">
                                   <AlertCircle size={12} />
@@ -1216,22 +1241,32 @@ function NuevaGuiaRemision() {
                               ))}
                             </td>
                             <td className="text-right">
-                              <span className={`font-medium ${
-                                parseFloat(item.cantidad) > parseFloat(producto?.stock_actual || 0) 
-                                  ? 'text-danger' 
-                                  : 'text-success'
-                              }`}>
-                                {parseFloat(producto?.stock_actual || 0).toFixed(4)}
-                              </span>
+                              {esLibre ? (
+                                <span className="text-muted">—</span>
+                              ) : (
+                                <span className={`font-medium ${
+                                  parseFloat(item.cantidad) > parseFloat(producto?.stock_actual || 0)
+                                    ? 'text-danger'
+                                    : 'text-success'
+                                }`}>
+                                  {parseFloat(producto?.stock_actual || 0).toFixed(4)}
+                                </span>
+                              )}
                             </td>
                             <td className="text-right">
-                              <span className="font-bold text-primary">
-                                {parseFloat(producto?.cantidad_disponible || 0).toFixed(4)}
-                              </span>
-                              {parseFloat(producto?.cantidad_en_guias || 0) > 0 && (
-                                <div className="text-[10px] text-muted">
-                                  de {parseFloat(producto?.cantidad_total || 0).toFixed(2)} · {parseFloat(producto?.cantidad_en_guias || 0).toFixed(2)} ya en guías
-                                </div>
+                              {esLibre ? (
+                                <span className="text-muted">—</span>
+                              ) : (
+                                <>
+                                  <span className="font-bold text-primary">
+                                    {parseFloat(producto?.cantidad_disponible || 0).toFixed(4)}
+                                  </span>
+                                  {parseFloat(producto?.cantidad_en_guias || 0) > 0 && (
+                                    <div className="text-[10px] text-muted">
+                                      de {parseFloat(producto?.cantidad_total || 0).toFixed(2)} · {parseFloat(producto?.cantidad_en_guias || 0).toFixed(2)} ya en guías
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </td>
                             <td>
@@ -1241,7 +1276,7 @@ function NuevaGuiaRemision() {
                                 value={item.cantidad}
                                 onChange={(e) => handleCantidadChange(index, e.target.value)}
                                 min="0"
-                                max={Math.min(producto?.cantidad_disponible || 0, producto?.stock_actual || 0)}
+                                max={esLibre ? undefined : Math.min(producto?.cantidad_disponible || 0, producto?.stock_actual || 0)}
                                 step="0.001"
                                 required
                               />

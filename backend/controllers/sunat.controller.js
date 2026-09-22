@@ -4,13 +4,14 @@ import { sunatConfig } from '../config/sunat.js';
 import { pool, withTransaction } from '../config/database.js';
 import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
 import { construirInvoiceXML, calcularComprobante, afectacionLinea } from '../services/sunat/ubl.service.js';
+import { validarComprobantePrevio, validarGuiaPrevia } from '../services/sunat/validacion-previa.service.js';
 import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.service.js';
 import { prepararCatalogoDisminucion, prepararDetalleDisminucion } from '../services/sunat/nota-disminucion.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
 import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
 import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
-import { emitirGuiaGre, cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
+import { emitirGuiaGre, cerrarTicketGre, validarGuiaRemisionPrevia } from '../services/sunat/gre-emision.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
 import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from '../services/sunat/util.service.js';import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
@@ -251,6 +252,18 @@ export async function emitirComprobante(req, res, next) {
           WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
             AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL`, [id_orden_venta]);
 
+      // ── Validación previa (preflight): detecta rechazos/observaciones SUNAT ANTES de numerar.
+      // Si hay errores se retorna un centinela de BLOQUEO: la transacción termina sin reservar el
+      // correlativo (obtenerCorrelativo aún no corrió) → NO se pierde numeración. Las observaciones
+      // (4000+) no bloquean; se devuelven para avisar.
+      const calcPrevio = calcularComprobante({ ov, detalle });
+      const validacion = validarComprobantePrevio({
+        tipo, ov, cliente, empresa, calc: calcPrevio,
+        ordenCompra: req.body.orden_compra_cliente !== undefined ? req.body.orden_compra_cliente : ov.orden_compra_cliente,
+        observaciones: req.body.observaciones !== undefined ? req.body.observaciones : ov.observaciones
+      });
+      if (!validacion.ok) return { __bloqueo: validacion };
+
       const numero = await obtenerCorrelativo(conn, tipo, serie);
       const fecha = {
         emision, hora,
@@ -354,6 +367,16 @@ export async function emitirComprobante(req, res, next) {
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales,
         guiaIds: guias.map((g) => g.id_guia), guiasManualNuevas };
     });
+
+    // Bloqueo por validación previa: no se reservó correlativo ni se insertó nada. Se responde con la
+    // lista de errores/observaciones para que el panel los muestre y el usuario corrija antes de emitir.
+    if (prep.__bloqueo) {
+      return res.status(422).json({
+        ok: false, estado: 'BLOQUEADO', bloqueo: true, serie,
+        error: 'La emisión se detuvo por validación previa; no se consumió correlativo. Corrija los errores y reintente.',
+        errores: prep.__bloqueo.errores, observaciones: prep.__bloqueo.observaciones
+      });
+    }
 
     // ── Fuera de transacción: envío a SUNAT + subida de archivos ──
     const { idFactura, numero, nombre, xmlFirmado, totales, guiaIds, guiasManualNuevas } = prep;
@@ -515,6 +538,13 @@ export async function previewComprobante(req, res, next) {
       }
     }
 
+    // Validación previa estructurada (mismas reglas que bloquean la emisión). El panel las muestra
+    // ANTES de emitir: errores en rojo (bloquean el botón Emitir) y observaciones en amarillo (avisan).
+    const validacion = validarComprobantePrevio({
+      tipo: '01', ov, cliente, empresa, calc,
+      ordenCompra: ov.orden_compra_cliente, observaciones: obsRaw
+    });
+
     res.json({
       ok: true,
       mode: sunatConfig.mode,
@@ -553,7 +583,11 @@ export async function previewComprobante(req, res, next) {
       guiasSistema: guiasSistema.map((g) => ({ tipo_documento: '09', serie: String(g.serie), numero: String(g.numero) })),
       // Última fecha ya emitida en la serie: el panel no deja retro-fechar por debajo de ella (regla cronológica).
       ultimaFechaEmitida: await ultimaFechaEmitidaSerie(pool, 'FE01'),
-      avisos
+      avisos,
+      // Validación previa estructurada: bloqueaEmision=true si hay al menos un error.
+      bloqueaEmision: !validacion.ok,
+      errores: validacion.errores,
+      observaciones: validacion.observaciones
     });
   } catch (e) { next(e); }
 }
@@ -666,11 +700,20 @@ export async function previewNota(req, res, next) {
     const sinUnidad = calc.lineas.filter((l) => !l.unidad).map((l) => l.codigo);
     if (sinUnidad.length) avisos.push(`Productos sin codigo_unidad_sunat: ${sinUnidad.join(', ')}.`);
 
+    // Validación previa estructurada (mismas reglas que bloquean la emisión de la nota). Se omite en
+    // la vista de "solo catálogo" (aún no hay líneas propuestas), donde SIN_LINEAS sería un falso positivo.
+    const validacion = (esDisminucion && req.body.solo_catalogo)
+      ? { ok: true, errores: [], observaciones: [] }
+      : validarComprobantePrevio({ tipo, ov, cliente, empresa, calc });
+
     res.json({
       ok: true,
       mode: sunatConfig.mode,
       tipo,
       serie: SERIES_NOTA[tipo],
+      bloqueaEmision: !validacion.ok,
+      errores: validacion.errores,
+      observaciones: validacion.observaciones,
       tipoLabel: tipo === '08' ? 'NOTA DE DÉBITO ELECTRÓNICA' : 'NOTA DE CRÉDITO ELECTRÓNICA',
       docAfectado: { numero: ref.numero_factura, tipoLabel: 'Factura Electrónica' },
       empresa: {
@@ -782,6 +825,14 @@ export async function emitirNota(req, res, next) {
         }
       }
 
+      // ── Validación previa (preflight): mismas reglas de comprobante, ANTES de numerar. Un error
+      // retorna centinela de BLOQUEO → sin correlativo consumido (obtenerCorrelativo no corre).
+      // El sustento de la nota viaja en cbc:Description (cap 250, ya aplicado), NO en cbc:Note; por eso
+      // no se pasa como `observaciones` (evita un falso positivo del límite de 200 de cbc:Note).
+      const calcPrevioNota = calcularComprobante({ ov, detalle });
+      const validacionNota = validarComprobantePrevio({ tipo, ov, cliente, empresa, calc: calcPrevioNota });
+      if (!validacionNota.ok) return { __bloqueo: validacionNota };
+
       const numero = await obtenerCorrelativo(conn, tipo, serie);
       const fecha = { emision, hora };
       const docAfectado = { comprobante: ref.numero_factura, tipo: '01' };
@@ -836,6 +887,14 @@ export async function emitirNota(req, res, next) {
 
       return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales, idOrdenVenta: ref.id_orden_venta };
     });
+
+    if (prep.__bloqueo) {
+      return res.status(422).json({
+        ok: false, estado: 'BLOQUEADO', bloqueo: true, serie,
+        error: 'La emisión de la nota se detuvo por validación previa; no se consumió correlativo. Corrija y reintente.',
+        errores: prep.__bloqueo.errores, observaciones: prep.__bloqueo.observaciones
+      });
+    }
 
     // ── Envío a SUNAT + CDR (mismo flujo que la factura) ──
     const { idNota, numero, nombre, xmlFirmado, totales, idOrdenVenta } = prep;
@@ -1226,6 +1285,24 @@ export async function emitirGuiaRemision(req, res, next) {
     const observacion = b.observaciones !== undefined ? String(b.observaciones) : undefined;
     const r = await emitirGuiaGre(idGuia, req.user?.id_empleado || null, observacion);
     res.status(r.httpStatus).json(r.body);
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/guias/:id/validar
+// Validación previa (read-only) de una GRE: errores que bloquearían la emisión + observaciones.
+// No numera ni envía; el wizard la usa para avisar ANTES de emitir. La emisión real revalida igual.
+export async function validarGuia(req, res, next) {
+  try {
+    const idGuia = Number(req.params.id);
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+    const validacion = await validarGuiaRemisionPrevia(idGuia);
+    res.json({
+      ok: true,
+      mode: sunatConfig.mode,
+      bloqueaEmision: !validacion.ok,
+      errores: validacion.errores,
+      observaciones: validacion.observaciones
+    });
   } catch (e) { next(e); }
 }
 

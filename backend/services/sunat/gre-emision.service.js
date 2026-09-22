@@ -12,6 +12,7 @@ import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima } from './fecha.service.js';
 import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from './util.service.js';
+import { validarGuiaPrevia } from './validacion-previa.service.js';
 import AppError from '../../utils/AppError.js';
 
 // Compatibilidad con reemplazos iniciados por versiones anteriores. Aceptar una GRE nueva no
@@ -616,4 +617,118 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     ok: null, estado: 'ENVIADO', idGuia, serie, numero, comprobante: `${serie}-${numero}`, ticket,
     mensaje: 'GRE en proceso (codRespuesta 98). Reconsultar con GET /guias/:id/estado.', tokenOk, tokenError
   } };
+}
+
+/**
+ * VALIDACIÓN PREVIA (read-only) de una GRE Remitente (09), para mostrar errores/observaciones en el
+ * wizard ANTES de emitir. Espeja el armado de datos de emitirGuiaGre() (partida/llegada, destinatario,
+ * transporte, detalle, comex) SIN escribir nada ni reservar correlativo. La validación autoritativa
+ * sigue corriendo en la emisión real (que también bloquea antes de numerar); esto es solo el preview.
+ * @returns {Promise<{ ok, errores, observaciones, total }>}
+ */
+export async function validarGuiaRemisionPrevia(idGuia) {
+  if (!idGuia) throw new AppError('id de guía inválido', 400);
+  const [[g]] = await pool.query('SELECT * FROM guias_remision WHERE id_guia = ?', [idGuia]);
+  if (!g) throw new AppError('Guía no existe', 404);
+  const esCompra = g.tipo_origen === 'Compra';
+  const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+
+  let ov = null;
+  if (!esCompra) {
+    const [[ovRow]] = await pool.query(
+      `SELECT transporte_registrar, transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
+              transporte_dni2, transporte_conductor2, transporte_licencia2, transporte_placa2
+         FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
+    ov = ovRow || null;
+  }
+
+  // Partida/llegada resueltas EN MEMORIA igual que la emisión (venta: partida = empresa; compra: llegada = empresa).
+  const gView = { ...g };
+  if (esCompra) {
+    gView.direccion_llegada = String(empresa?.direccion || '').trim();
+    gView.ubigeo_llegada = String(empresa?.ubigeo || '').trim();
+  } else {
+    gView.direccion_partida = String(empresa?.direccion || '').trim();
+    gView.ubigeo_partida = String(empresa?.ubigeo || '').trim();
+  }
+
+  const esComex = Number(g.es_comercio_exterior) === 1;
+
+  // Destinatario.
+  let destinatario = null;
+  if (esCompra) {
+    destinatario = { ruc: empresa?.ruc, razon_social: empresa?.razon_social, tipo_documento: 'RUC' };
+  } else if (esComex) {
+    destinatario = { ruc: g.destinatario_ruc, razon_social: g.destinatario_razon, tipo_documento: 'RUC' };
+  } else {
+    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
+    destinatario = cliente || null;
+  }
+
+  // Transporte (mismas ramas que emitirGuiaGre, sin escribir).
+  const esTercero = !!g.id_transportista;
+  let carrier = null, conductores = [], vehiculos = [], registrar = true;
+  if (esTercero) {
+    const [[t]] = await pool.query(
+      'SELECT ruc, razon_social, numero_mtc FROM transportistas WHERE id_transportista = ?', [g.id_transportista]);
+    carrier = t ? { ruc: t.ruc, razon: t.razon_social, mtc: t.numero_mtc || null } : { ruc: null, razon: null };
+    registrar = ov?.transporte_registrar !== 0;
+    if (registrar) {
+      if (ov?.transporte_dni) conductores.push({ dni: ov.transporte_dni, nombre: ov.transporte_conductor, licencia: ov.transporte_licencia });
+      if (ov?.transporte_dni2) conductores.push({ dni: ov.transporte_dni2, nombre: ov.transporte_conductor2, licencia: ov.transporte_licencia2 });
+      vehiculos = [{ placa: normalizarPlaca(ov?.transporte_placa) }];
+      const placa2 = normalizarPlaca(ov?.transporte_placa2);
+      if (placa2) vehiculos.push({ placa: placa2 });
+    }
+  } else if (g.transporte_modo === 'particular' || g.transporte_placa) {
+    conductores = [{ dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia }];
+    vehiculos = [{ placa: normalizarPlaca(g.transporte_placa) }];
+  } else {
+    const [[cRow]] = g.id_conductor
+      ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
+      : [[null]];
+    const [[vRow]] = g.id_vehiculo
+      ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
+      : [[null]];
+    conductores = cRow ? [{ dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir }] : [];
+    vehiculos = vRow ? [{ placa: normalizarPlaca(vRow.placa) }] : [];
+    if (g.id_conductor2) {
+      const [[c2]] = await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]);
+      if (c2) conductores.push({ dni: c2.dni, nombre: c2.nombre_completo, licencia: c2.licencia_conducir });
+    }
+    if (g.id_vehiculo2) {
+      const [[v2]] = await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]);
+      if (v2) vehiculos.push({ placa: normalizarPlaca(v2.placa) });
+    }
+  }
+  const declararVC = !esTercero || registrar;
+
+  // Detalle normalizado (misma resolución de unidad/código que la emisión).
+  const [detalle] = await pool.query(
+    `SELECT d.id_producto, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento,
+            d.unidad_medida AS unidad_documento_sunat, d.codigo_bien,
+            p.codigo, p.nombre, p.codigo_unidad_sunat
+       FROM detalle_guia_remision d LEFT JOIN productos p ON p.id_producto = d.id_producto
+      WHERE d.id_guia = ? ORDER BY d.id_detalle`, [idGuia]);
+  const detalleEmision = esCompra
+    ? detalle.map((d) => ({ ...d,
+        codigo: d.codigo_documento || d.codigo,
+        nombre: d.descripcion_documento || d.nombre,
+        codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat }))
+    : detalle.map((d) => ({ ...d,
+        codigo: d.codigo || null,
+        nombre: d.nombre || d.descripcion_documento,
+        codigo_unidad_sunat: d.id_producto == null ? (d.unidad_documento_sunat || 'NIU') : d.codigo_unidad_sunat }));
+
+  let docsComex = [];
+  if (esComex) {
+    const [docs] = await pool.query(
+      'SELECT tipo_cod, tipo_desc, serie, numero FROM guias_remision_doc_relacionado WHERE id_guia = ?', [idGuia]);
+    docsComex = docs;
+  }
+
+  return validarGuiaPrevia({
+    empresa, guia: gView, destinatario, detalle: detalleEmision,
+    esComex, declararVC, conductores, vehiculos, carrier, docsComex, mode: sunatConfig.mode
+  });
 }

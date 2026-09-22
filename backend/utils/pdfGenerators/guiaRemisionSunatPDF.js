@@ -25,7 +25,7 @@ const MOTIVOS_TRASLADO = {
   '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
   '08': 'IMPORTACIÓN',
   '09': 'EXPORTACIÓN',
-  '13': 'OTROS',
+  '13': 'Otros (no especificados en los anteriores)',
   '14': 'VENTA SUJETA A CONFIRMACIÓN DEL COMPRADOR',
   '18': 'TRASLADO EMISOR ITINERANTE CP'
 };
@@ -301,7 +301,11 @@ export async function generarGuiaRemisionSunatPDF({
         ],
         [
           ['Motivo de traslado:', MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO', { labelWidth: 104 }],
-          null
+          // Motivo "Otros" (cat.20 = 13): se imprime la descripción libre (ej. MUESTRAS), igual que la
+          // representación del portal ("Descripción de motivo de traslado 'otros'").
+          (String(g.motivo_traslado_cod) === '13' && g.motivo_descripcion)
+            ? ['Descripción de motivo:', String(g.motivo_descripcion), { labelWidth: 120 }]
+            : null
         ]
       ];
       const partida = limpio(g.direccion_partida);

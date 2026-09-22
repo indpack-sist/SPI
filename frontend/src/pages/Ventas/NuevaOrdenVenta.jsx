@@ -1222,7 +1222,7 @@ useEffect(() => {
   <tr>
     {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
     <th>{esMuestra ? 'Ítem / Descripción' : 'Producto'}</th>
-    {esMuestra && <th className="w-40">Cód. Bien (GTIN)</th>}
+    {esMuestra && <th className="w-40">Cód. Bien</th>}
     <th className="text-right w-24">Cant.</th>
     <th className="text-right w-24">Peso</th>
     {!esMuestra && <th className="text-right w-28">P. Base</th>}

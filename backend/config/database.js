@@ -11,10 +11,18 @@ export const pool = mysql.createPool({
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0,
+  // Antes era 0 (cola ilimitada): si las 10 conexiones quedaban ocupadas o muertas,
+  // cada query nueva se encolaba PARA SIEMPRE y el request quedaba colgado (síntoma:
+  // el front atascado en "Verificando sesión..."). Con un límite, satura y falla rápido.
+  queueLimit: 20,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   connectTimeout: 60000,
+  // Railway cierra conexiones MySQL ociosas por su cuenta; el pool las seguía creyendo
+  // vivas y una query sobre ese socket muerto colgaba indefinidamente. Reciclamos las
+  // conexiones ociosas antes de que el servidor las mate.
+  maxIdle: 5,
+  idleTimeout: 60000,
   timezone: '-05:00'
 });
 

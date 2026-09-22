@@ -2,8 +2,14 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-export const api = axios.create({ 
+export const api = axios.create({
   baseURL: API_URL,
+  // Sin timeout, si el backend acepta la conexión pero no responde (p. ej. el pool
+  // de MySQL se cuelga esperando una conexión rancia), la promesa nunca se resuelve
+  // y la app se queda para siempre en "Verificando sesión...". Con timeout, ese caso
+  // se convierte en un error de red que el flujo de auth sí puede manejar (conserva
+  // la sesión cacheada). 30 s da margen para un cold start del backend.
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }

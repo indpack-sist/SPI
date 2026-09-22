@@ -698,6 +698,12 @@ export async function createOrdenVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
     }
 
+    // Los ítems de texto libre (sin producto de catálogo) son EXCLUSIVOS de las órdenes de muestra.
+    // En cualquier otra orden todo ítem debe apuntar a un producto real del inventario.
+    if (!esMuestra && detalle.some((it) => it.es_producto_libre || !it.id_producto)) {
+      return res.status(400).json({ success: false, error: 'Los ítems de texto libre solo se permiten en órdenes de muestra.' });
+    }
+
     if (!id_registrado_por) {
       return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     }
@@ -1245,25 +1251,38 @@ export async function updateOrdenVenta(req, res) {
     }];
 
     const detalleOrdenValues = detalle.map((item, index) => {
+      const esLibre = item.es_producto_libre ? 1 : 0;
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
-      const infoDespacho = mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 };
+      // Los ítems libres (muestra) no se pueden cruzar por id_producto (es NULL); su despacho se
+      // arrastra por la guía, no aquí, así que parten de 0 al reinsertar.
+      const infoDespacho = (!esLibre && item.id_producto != null)
+        ? (mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 })
+        : { cantidad_despachada: 0, cantidad_reservada: 0 };
+      const codigoBien = item.codigo_bien ? String(item.codigo_bien).trim() : null;
       return [
-        id, item.id_producto, cantidad, precioVenta, precioBase,
+        id,
+        esLibre ? null : item.id_producto,
+        esLibre,
+        esLibre ? (item.descripcion_libre || item.producto || null) : null,
+        esLibre ? (item.unidad_medida_libre || item.unidad_medida || 'NIU') : null,
+        cantidad, precioVenta, precioBase,
         pctComision, montoComision, 0, stockReservado ? 1 : 0,
-        infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada, index + 1
+        infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada, index + 1,
+        codigoBien
       ];
     });
 
     queriesNuevoDetalle.push({
       sql: `INSERT INTO detalle_orden_venta (
-        id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
+        id_orden_venta, id_producto, es_producto_libre, descripcion_libre, unidad_medida_libre,
+        cantidad, precio_unitario, precio_base,
         porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
-        cantidad_despachada, cantidad_reservada, orden
-      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+        cantidad_despachada, cantidad_reservada, orden, codigo_bien
+      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
       params: detalleOrdenValues.flat()
     });
 
@@ -2393,13 +2412,14 @@ export async function descargarPDFDespacho(req, res) {
     const incluirValores = req.query.valores === '1' || req.query.valores === 'true';
 
     const ordenResult = await executeQuery(`
-      SELECT 
+      SELECT
         ov.numero_orden,
         ov.orden_compra_cliente,
         ov.direccion_entrega,
         ov.estado,
         ov.moneda,
         ov.id_cliente,
+        ov.es_muestra,
         ov.tipo_comprobante,
         ov.tipo_impuesto,
         ov.porcentaje_impuesto,
@@ -2485,6 +2505,33 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
+    // Opción B (SOLO muestra): los ítems de texto libre NO están en la salida (no mueven stock), pero
+    // SÍ se transportan. Se anexan al PDF de despacho desde el detalle de la guía vinculada
+    // (salidas.id_guia_remision) para que el documento físico refleje todo lo que va en el envío.
+    // No afectan el stock ni los totales de inventario. Exclusivo de muestra: en ventas no existen ítems libres.
+    let detallesPDF = detalleResult.data;
+    if (Number(orden.es_muestra) === 1 && salida.id_guia_remision) {
+      const libresResult = await executeQuery(`
+        SELECT dgr.cantidad, dgr.unidad_medida, dgr.descripcion, dgr.codigo_bien, dgr.peso_unitario_kg
+          FROM detalle_guia_remision dgr
+         WHERE dgr.id_guia = ? AND dgr.id_producto IS NULL
+         ORDER BY dgr.id_detalle
+      `, [salida.id_guia_remision]);
+      if (libresResult.success && libresResult.data.length > 0) {
+        const libresPDF = libresResult.data.map((d) => ({
+          codigo_producto: d.codigo_bien || '',
+          producto: d.descripcion || 'Ítem de muestra',
+          unidad_medida: d.unidad_medida || 'NIU',
+          cantidad: d.cantidad,
+          precio_unitario: 0,
+          costo_unitario: 0,
+          peso_unitario: parseFloat(d.peso_unitario_kg || 0),
+          es_producto_libre: 1
+        }));
+        detallesPDF = [...detalleResult.data, ...libresPDF];
+      }
+    }
+
     const datosPDF = {
       id_salida: salida.id_salida,
       fecha_movimiento: salida.fecha_movimiento,
@@ -2509,7 +2556,7 @@ export async function descargarPDFDespacho(req, res) {
       transporte_privado_conductor: orden.transporte_conductor,
       transporte_privado_dni: orden.transporte_dni,
       transporte_licencia: orden.transporte_licencia,
-      detalles: detalleResult.data,
+      detalles: detallesPDF,
       incluir_valores: incluirValores,
       tipo_impuesto: orden.tipo_impuesto,
       porcentaje_impuesto: orden.porcentaje_impuesto

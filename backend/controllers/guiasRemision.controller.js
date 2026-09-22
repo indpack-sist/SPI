@@ -1117,6 +1117,7 @@ export async function despacharGuiaRemision(req, res) {
           tipo_movimiento,
           id_cliente,
           id_orden_venta,
+          id_guia_remision,
           total_costo,
           total_precio,
           moneda,
@@ -1124,12 +1125,13 @@ export async function despacharGuiaRemision(req, res) {
           observaciones,
           estado,
           fecha_movimiento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         id_tipo_inventario,
         'Venta',
         guia.id_cliente,
         guia.id_orden_venta,
+        id,
         totalCosto,
         totalPrecio,
         'PEN',

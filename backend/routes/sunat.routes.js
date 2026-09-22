@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { verificarToken, verificarPermiso } from '../middleware/auth.js';
 import * as c from '../controllers/sunat.controller.js';
+import * as traza from '../controllers/trazabilidad-see.controller.js';
 
 const router = Router();
 
@@ -68,5 +69,9 @@ router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion', 'fa
 router.post('/jobs/tick', c.jobTick);
 // Monitor SUNAT (solo lectura) para el panel de Reportes.
 router.get('/monitor', verificarToken, verificarPermiso('facturacion'), c.monitorSunat);
+
+// Trazabilidad SEE (solo lectura): listados detallados de comprobantes y guías para Administración.
+router.get('/trazabilidad/comprobantes', verificarToken, verificarPermiso('facturacion'), traza.listarComprobantes);
+router.get('/trazabilidad/guias', verificarToken, verificarPermiso('facturacion'), traza.listarGuias);
 
 export default router;

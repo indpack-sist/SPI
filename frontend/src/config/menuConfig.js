@@ -6,7 +6,8 @@ import {
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
   TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
   ShieldAlert, PackageSearch, // <--- Módulo Calidad
-  Radar // <--- Módulo Prospección
+  Radar, // <--- Módulo Prospección
+  ReceiptText // <--- Facturación Electrónica (SEE)
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -66,8 +67,6 @@ export const menuConfig = [
           { path: '/ventas/reportes', label: 'Reporte de Ventas', modulo: 'reportes' },
           { path: '/ventas/reporte-despachos', label: 'Despachos por Prod', modulo: 'reportes' },
           { path: '/ventas/reporte-deudas', label: 'Cuentas x Cobrar', modulo: 'reportes' },
-          // Monitor SUNAT (Fase 15): soporte de la emisión electrónica. Solo roles con permiso 'facturacion'.
-          { path: '/reportes/monitor-sunat', label: 'Monitor SUNAT', modulo: 'facturacion' },
         ]
       },
     ]
@@ -76,6 +75,22 @@ export const menuConfig = [
     title: 'Compras',
     items: [
       { path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras', color: '#D35400', rolesExcluidos: ['calidad'] }
+    ]
+  },
+  {
+    // Solo la ven roles con permiso 'facturacion' (Administrador / Administrativo).
+    title: 'Facturación Electrónica',
+    items: [
+      {
+        label: 'Facturación Electrónica',
+        icon: ReceiptText,
+        modulo: 'facturacion',
+        color: '#6366F1',
+        subItems: [
+          { path: '/facturacion/trazabilidad', label: 'Trazabilidad SEE', modulo: 'facturacion' },
+          { path: '/reportes/monitor-sunat', label: 'Monitor SUNAT', modulo: 'facturacion' },
+        ]
+      }
     ]
   },
   {

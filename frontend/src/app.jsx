@@ -64,6 +64,7 @@ const ReportesSIRE = lazy(() => import('./pages/Reportes/ReportesSIRE'));
 const ReporteProductoDespachos = lazy(() => import('./pages/Reportes/ReporteProductoDespachos'));
 const ReporteDeudasClientes = lazy(() => import('./pages/Reportes/ReporteDeudasClientes'));
 const MonitorSunat = lazy(() => import('./pages/Reportes/MonitorSunat'));
+const TrazabilidadSee = lazy(() => import('./pages/Facturacion/TrazabilidadSee'));
 
 function App() {
   return (
@@ -554,6 +555,17 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulo="facturacion">
                             <MonitorSunat />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+
+                      {/* Facturación Electrónica → Trazabilidad SEE: historial detallado de
+                          comprobantes y guías (Administrador / Administrativo). */}
+                      <Route
+                        path="/facturacion/trazabilidad"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="facturacion">
+                            <TrazabilidadSee />
                           </ProtectedRouteWithPermiso>
                         }
                       />

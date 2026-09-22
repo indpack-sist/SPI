@@ -187,8 +187,14 @@ function NuevaCotizacion() {
       clientesAPI.getById(cliente.id_cliente).then(res => {
           if (res.data.success) {
               const data = res.data.data;
+              setClienteSeleccionado(data);
               setDireccionesCliente(data.direcciones || []);
-              setFormCabecera(prev => ({ ...prev, lugar_entrega: data.direccion_despacho || '' }));
+              const condicion = data.condicion_pago || 'Contado';
+              const diasCredito = parseInt(data.dias_credito || 0);
+              const plazoPago = (condicion === 'Credito' && data.usar_limite_credito && diasCredito > 0)
+                ? `Credito ${diasCredito} Dias`
+                : 'Contado';
+              setFormCabecera(prev => ({ ...prev, lugar_entrega: data.direccion_despacho || '', plazo_pago: plazoPago }));
           }
       });
       clientesAPI.getEstadoCredito(cliente.id_cliente).then(res => {

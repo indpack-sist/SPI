@@ -57,20 +57,6 @@
   animation: bp-halo 12s ease-in-out infinite;
 }
 
-/* Barrido de luz lento, como una lámpara pasando sobre la mesa de dibujo */
-.launcher-atmosphere::after {
-  content: '';
-  position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: 0;
-  width: 42%;
-  background: linear-gradient(90deg, transparent, var(--launcher-glow), transparent);
-  transform: translateX(-130%) skewX(-12deg);
-  animation: bp-sweep 17s linear infinite;
-  will-change: transform;
-}
-
 /* Grano / textura de película (acabado mate, mata el "plano digital") */
 .launcher-grain {
   position: fixed;
@@ -88,17 +74,9 @@
   50%      { opacity: 1;    transform: scale(1.05); }
 }
 
-@keyframes bp-sweep {
-  0%   { transform: translateX(-130%) skewX(-12deg); opacity: 0; }
-  12%  { opacity: 1; }
-  88%  { opacity: 1; }
-  100% { transform: translateX(360%) skewX(-12deg); opacity: 0; }
-}
-
 /* Respeta a quien desactiva animaciones */
 @media (prefers-reduced-motion: reduce) {
   .launcher-atmosphere::before { animation: none; opacity: 0.8; }
-  .launcher-atmosphere::after  { animation: none; opacity: 0; }
 }
 
 /* Línea de acento superior */

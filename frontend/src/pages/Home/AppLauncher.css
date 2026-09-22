@@ -119,13 +119,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
+  padding: 0 10px;
+  overflow: hidden;               /* recorta el margen transparente del PNG al escalar */
   flex-shrink: 0;
   box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 20px rgba(232, 184, 75, 0.28);
 }
 
+/* El PNG trae bastante margen transparente; lo escalamos para que el arte
+   (ícono + wordmark) ocupe más, sin agrandar el contenedor. */
 .launcher-logo-box img {
-  height: 100%;
+  height: 132%;
   width: auto;
   object-fit: contain;
   display: block;

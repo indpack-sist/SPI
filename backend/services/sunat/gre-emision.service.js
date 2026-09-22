@@ -91,7 +91,8 @@ function construirSnapshotPdfGre({
     guia: {
       serie_sunat: serie, numero_sunat: numero,
       fecha_emision: fechaEmisionFmt, fecha_traslado: isoAFmt(fechaTraslado),
-      motivo_traslado_cod: g.motivo_traslado_cod, peso_bruto_kg: g.peso_bruto_kg,
+      motivo_traslado_cod: g.motivo_traslado_cod, motivo_descripcion: g.motivo_descripcion,
+      peso_bruto_kg: g.peso_bruto_kg,
       ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
       ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
       observaciones: observacion, es_comercio_exterior: esComex ? 1 : 0,
@@ -366,11 +367,12 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
               d.codigo_documento, d.descripcion AS descripcion_documento,
               d.unidad_medida AS unidad_documento_sunat, d.codigo_bien,
               p.codigo, p.nombre, p.codigo_unidad_sunat
-         FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
+         FROM detalle_guia_remision d LEFT JOIN productos p ON p.id_producto = d.id_producto
         WHERE d.id_guia = ? ORDER BY d.id_detalle`, [idGuia]);
     if (!detalle.length) throw new AppError('La guía no tiene detalle', 422);
     // Ventas conserva su comportamiento integrado (catálogo de productos). En compras se emiten
-    // los datos documentales copiados desde la factura/XML del proveedor.
+    // los datos documentales copiados desde la factura/XML del proveedor. Los ítems de MUESTRA de
+    // texto libre (id_producto NULL) toman nombre/unidad de la propia línea de la guía (NIU por defecto).
     const detalleEmision = esCompra
       ? detalle.map((d) => ({
           ...d,
@@ -378,7 +380,15 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
           nombre: d.descripcion_documento || d.nombre,
           codigo_unidad_sunat: d.unidad_documento_sunat || d.codigo_unidad_sunat,
         }))
-      : detalle;
+      : detalle.map((d) => {
+          const esLibre = d.id_producto == null;
+          return {
+            ...d,
+            codigo: d.codigo || null,
+            nombre: d.nombre || d.descripcion_documento,
+            codigo_unidad_sunat: esLibre ? (d.unidad_documento_sunat || 'NIU') : d.codigo_unidad_sunat,
+          };
+        });
         for (const d of detalleEmision) {
       if (!d.codigo_unidad_sunat) throw new AppError(`Producto ${d.codigo} sin codigo_unidad_sunat`, 422);
       if (!codigoBienValido(d.codigo_bien)) {

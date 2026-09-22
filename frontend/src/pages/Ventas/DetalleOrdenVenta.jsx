@@ -1679,6 +1679,7 @@ function DetalleOrdenVenta() {
 
   const puedeDespachar = () => {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') return false;
+    // La orden de muestra también pasa por verificación administrativa antes de despachar/emitir GRE.
     if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
     const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
     return pendientes;
@@ -1785,7 +1786,10 @@ function DetalleOrdenVenta() {
   const IconoVerificacion = estadoVerifConfig.icono;
 
   const sinComprobanteAsignado = !orden.numero_comprobante;
-  
+  // Orden de muestra: sin valor comercial → no se factura. Se oculta toda la UI de comprobante /
+  // facturación (solo GRE). Ver createOrdenVenta (tipo_comprobante NULL, es_muestra = 1).
+  const esMuestra = Number(orden.es_muestra) === 1;
+
   const columns = [
     {
       header: 'Código',
@@ -2200,7 +2204,7 @@ function DetalleOrdenVenta() {
                 Emitida el {formatearFecha(orden.fecha_emision)}
               </p>
               
-              {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+              {!esMuestra && sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 px-3 py-2 rounded-lg">
                   <AlertTriangle size={16} className="text-amber-600" />
                   <span className="text-sm font-semibold text-amber-700">Sin comprobante asignado</span>
@@ -2443,7 +2447,7 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      {!soloLectura && sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && (
+      {!esMuestra && !soloLectura && sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div className="flex-1">
@@ -2855,6 +2859,7 @@ function DetalleOrdenVenta() {
                     </div>
                 )}
 
+                {!esMuestra && (
                 <div className="pb-2 mb-2 border-b border-gray-100">
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -2908,6 +2913,7 @@ function DetalleOrdenVenta() {
 )}
                     </div>
                 </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -2954,6 +2960,7 @@ function DetalleOrdenVenta() {
                     <p>{orden.forma_pago || orden.plazo_pago || '-'}</p>
                 </div>
 
+                {!esMuestra && (
                 <div className="pt-3 mt-2 border-t border-gray-100">
                     <p className="text-xs font-bold uppercase text-muted mb-2 flex items-center gap-1">
                         <BadgeCheck size={14} /> Estado Facturación SUNAT
@@ -3103,6 +3110,7 @@ function DetalleOrdenVenta() {
                         </div>
                     )}
                 </div>
+                )}
             </div>
         </div>
         )}

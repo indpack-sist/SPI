@@ -1250,43 +1250,17 @@ setFormCabecera(prev => ({
               />
             </div>
 
-            <div className="form-group mt-2">
-              <label
-                className={`flex items-center gap-3 cursor-pointer w-fit select-none px-4 py-3 rounded-lg border-2 transition-all ${
-                  esMuestra
-                    ? 'border-amber-400 bg-amber-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                } ${cotizacionConvertida ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="relative flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={esMuestra}
-                    onChange={(e) => {
-                      setEsMuestra(e.target.checked);
-                      if (e.target.checked) setDetalle([]);
-                    }}
-                    
-                  />
-                  <div
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      esMuestra ? 'bg-amber-500 border-amber-500' : 'border-gray-300 bg-white'
-                    }`}
-                  >
-                    {esMuestra && <Check size={12} className="text-white" />}
-                  </div>
+            {/* Las muestras ya NO se registran como cotización: ahora son "Orden de Muestra" (genera
+                guía de remisión y salida de stock). El bloque de muestra solo se mantiene visible al
+                abrir cotizaciones de muestra históricas (esMuestra viene marcado desde la BD). */}
+            {esMuestra && (
+              <div className="form-group mt-2">
+                <div className="px-4 py-3 rounded-lg border-2 border-amber-300 bg-amber-50 text-sm text-amber-800">
+                  <span className="font-semibold">Cotización de Muestra (histórica).</span>{' '}
+                  Las nuevas muestras se crean desde <span className="font-semibold">Órdenes de Venta → Orden de Muestra</span>.
                 </div>
-                <div className="flex flex-col">
-                  <span className={`font-semibold text-sm ${esMuestra ? 'text-amber-800' : 'text-gray-700'}`}>
-                    Cotizacion de Muestra
-                  </span>
-                  <span className="text-xs text-muted">
-                    Numeracion MUE-YYYY-XXXX. Permite ingresar productos sin codigo de inventario.
-                  </span>
-                </div>
-              </label>
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

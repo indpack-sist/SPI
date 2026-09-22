@@ -377,15 +377,15 @@ export async function getOrdenVentaById(req, res) {
             ELSE 0.00
         END AS margen_visual_porcentaje,
         p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida,
+        COALESCE(p.nombre, dov.descripcion_libre) AS producto,
+        COALESCE(p.unidad_medida, dov.unidad_medida_libre) AS unidad_medida,
         p.requiere_receta,
         p.stock_actual AS stock_disponible,
         p.peso_unitario,
         ti.nombre AS tipo_inventario_nombre,
         (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto AND estado != 'Cancelada') AS tiene_op
       FROM detalle_orden_venta dov
-      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dov.id_orden_venta = ?
       ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle), dov.id_detalle
@@ -663,7 +663,8 @@ export async function createOrdenVenta(req, res) {
       id_comercial,
       detalle,
       estado_verificacion_oc,
-      es_exportacion
+      es_exportacion,
+      es_muestra
     } = req.body;
 
     if (typeof detalle === 'string') {
@@ -673,6 +674,10 @@ export async function createOrdenVenta(req, res) {
         return res.status(400).json({ success: false, error: 'Formato de detalle inválido' });
       }
     }
+
+    // Orden de muestra: sin valor comercial (precio/total 0), no se factura, correlativo MUE-YYYY-XXXX
+    // y admite ítems de texto libre (sin producto de catálogo) mezclados con productos reales.
+    const esMuestra = Number(es_muestra) === 1;
 
     const id_registrado_por = req.user?.id_empleado || null;
     const nombre_registrador = req.user?.nombre_completo || 'Desconocido';
@@ -787,12 +792,21 @@ export async function createOrdenVenta(req, res) {
     }
     subtotal = Math.round(subtotal * 100) / 100;
     impuesto = Math.round(impuesto * 100) / 100;
+    if (esMuestra) { subtotal = 0; impuesto = 0; }
     const total = Math.round((subtotal + impuesto) * 100) / 100;
-    const ultimaOrdenPromise = executeQuery(`
-      SELECT numero_orden FROM ordenes_venta ORDER BY id_orden_venta DESC LIMIT 1
-    `);
 
-    if (plazo_pago !== 'Contado') {
+    // Correlativo por prefijo: OV-… para ventas, MUE-… para muestras (continúa la secuencia
+    // histórica leyendo el máximo entre ordenes_venta y cotizaciones). Filtrar por prefijo evita
+    // que una fila MUE contamine el correlativo OV (y viceversa) al interlevarse en la tabla.
+    const anioOrden = getFechaPeru().getFullYear();
+    const ultimaOrdenPromise = esMuestra
+      ? Promise.all([
+          executeQuery(`SELECT numero_orden AS n FROM ordenes_venta WHERE numero_orden LIKE 'MUE-${anioOrden}-%' ORDER BY id_orden_venta DESC LIMIT 1`),
+          executeQuery(`SELECT numero_cotizacion AS n FROM cotizaciones WHERE numero_cotizacion LIKE 'MUE-${anioOrden}-%' ORDER BY id_cotizacion DESC LIMIT 1`)
+        ])
+      : executeQuery(`SELECT numero_orden FROM ordenes_venta WHERE numero_orden LIKE 'OV-%' ORDER BY id_orden_venta DESC LIMIT 1`);
+
+    if (!esMuestra && plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
         `SELECT
           cl.usar_limite_credito,
@@ -829,13 +843,24 @@ export async function createOrdenVenta(req, res) {
 
     const ultimaResult = await ultimaOrdenPromise;
 
-    let numeroSecuencia = 1;
-    if (ultimaResult.success && ultimaResult.data.length > 0) {
-      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
-      if (match) numeroSecuencia = parseInt(match[1]) + 1;
+    let numeroOrden;
+    if (esMuestra) {
+      let maxSeq = 0;
+      for (const r of ultimaResult) {
+        if (r.success && r.data.length > 0) {
+          const m = String(r.data[0].n).match(/(\d+)$/);
+          if (m) maxSeq = Math.max(maxSeq, parseInt(m[1]));
+        }
+      }
+      numeroOrden = `MUE-${anioOrden}-${String(maxSeq + 1).padStart(4, '0')}`;
+    } else {
+      let numeroSecuencia = 1;
+      if (ultimaResult.success && ultimaResult.data.length > 0) {
+        const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
+        if (match) numeroSecuencia = parseInt(match[1]) + 1;
+      }
+      numeroOrden = `OV-${anioOrden}-${String(numeroSecuencia).padStart(4, '0')}`;
     }
-
-    const numeroOrden = `OV-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {
@@ -845,10 +870,19 @@ export async function createOrdenVenta(req, res) {
     }
 
     const detalleValues = detalle.map((item, index) => {
+      const esLibre = item.es_producto_libre ? 1 : 0;
       const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      const precioBase = parseFloat(item.precio_base || 0);
-      return [item.id_producto, cantidad, precioVenta, precioBase, 0, 0, index + 1];
+      // Muestra = sin valor comercial: precio 0. Ítem libre: sin producto de catálogo (id_producto NULL).
+      const precioVenta = esMuestra ? 0 : parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const precioBase = esMuestra ? 0 : parseFloat(item.precio_base || 0);
+      const codigoBien = item.codigo_bien ? String(item.codigo_bien).trim() : null;
+      return [
+        esLibre ? null : item.id_producto,
+        esLibre,
+        esLibre ? (item.descripcion_libre || item.nombre_producto_libre || null) : null,
+        esLibre ? (item.unidad_medida_libre || 'NIU') : null,
+        cantidad, precioVenta, precioBase, 0, 0, index + 1, codigoBien
+      ];
     });
 
     const connection = await pool.getConnection();
@@ -865,8 +899,8 @@ export async function createOrdenVenta(req, res) {
           transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
           contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
           subtotal, igv, total, estado, estado_verificacion, stock_reservado,
-          estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion
-        ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?)
+          estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion, es_muestra
+        ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?, ?)
       `, [
         numeroOrden, id_cliente, id_cotizacion || null,
         fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
@@ -879,13 +913,14 @@ export async function createOrdenVenta(req, res) {
         estado_verificacion_oc || 'Sin verificar',
         estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
         estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null,
-        esExport ? 1 : 0
+        esExport ? 1 : 0,
+        esMuestra ? 1 : 0
       ]);
       idOrden = result.insertId;
       await connection.query(
         `INSERT INTO detalle_orden_venta (
-          id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porcentaje, stock_reservado, orden
+          id_orden_venta, id_producto, es_producto_libre, descripcion_libre, unidad_medida_libre,
+          cantidad, precio_unitario, precio_base, descuento_porcentaje, stock_reservado, orden, codigo_bien
         ) VALUES ?`,
         [detalleValues.map(values => [idOrden, ...values])]
       );
@@ -912,14 +947,17 @@ export async function createOrdenVenta(req, res) {
       data: {
         id_orden_venta: idOrden,
         numero_orden: numeroOrden,
-        tipo_comprobante: 'Factura',
+        tipo_comprobante: esMuestra ? null : 'Factura',
         numero_comprobante: null,
         orden_compra_url: ordenCompraUrl,
         comprobante_url: comprobanteUrl,
         estado_verificacion: 'Pendiente',
-        stock_reservado: 0
+        stock_reservado: 0,
+        es_muestra: esMuestra ? 1 : 0
       },
-      message: 'Orden de venta creada exitosamente. Pendiente de verificación administrativa.'
+      message: esMuestra
+        ? 'Orden de muestra creada exitosamente.'
+        : 'Orden de venta creada exitosamente. Pendiente de verificación administrativa.'
     });
 
   } catch (error) {
@@ -2285,18 +2323,18 @@ export async function descargarPDFOrdenVenta(req, res) {
     const orden = ordenResult.data[0];
 
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dov.id_detalle,
         dov.id_producto,
         dov.cantidad,
         dov.precio_unitario,
         dov.descuento_porcentaje,
-        p.codigo AS codigo_producto, 
-        p.nombre AS producto, 
-        p.unidad_medida,
+        p.codigo AS codigo_producto,
+        COALESCE(p.nombre, dov.descripcion_libre) AS producto,
+        COALESCE(p.unidad_medida, dov.unidad_medida_libre) AS unidad_medida,
         p.peso_unitario
       FROM detalle_orden_venta dov
-      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
       ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
@@ -3662,23 +3700,23 @@ export async function descargarPDFGuiaInterna(req, res) {
     }
 
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dov.id_detalle,
         dov.id_producto,
         dov.cantidad,
         dov.precio_unitario,
         dov.descuento_porcentaje,
-        p.codigo AS codigo_producto, 
-        p.nombre AS producto, 
-        p.unidad_medida
+        p.codigo AS codigo_producto,
+        COALESCE(p.nombre, dov.descripcion_libre) AS producto,
+        COALESCE(p.unidad_medida, dov.unidad_medida_libre) AS unidad_medida
       FROM detalle_orden_venta dov
-      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
       ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
 
     if (!detalleResult.success) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false, 
         error: 'Error al obtener detalle de la orden' 
       });
@@ -3844,14 +3882,14 @@ export async function getDatosVerificacionOrden(req, res) {
 
     // 2. DETALLE DE LA ORDEN
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         dov.*,
         p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida,
+        COALESCE(p.nombre, dov.descripcion_libre) AS producto,
+        COALESCE(p.unidad_medida, dov.unidad_medida_libre) AS unidad_medida,
         p.stock_actual
       FROM detalle_orden_venta dov
-      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
       ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle) ASC, dov.id_detalle ASC
     `, [id]);
@@ -4069,7 +4107,10 @@ export async function aprobarOrdenVerificacion(req, res) {
     }
 
     await notificarOrdenAprobada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, getIO(req));
-    await notificarComercialDefinirComprobante(id, orden.numero_orden, orden.id_comercial, getIO(req));
+    // Las órdenes de muestra no se facturan: no se pide definir comprobante.
+    if (Number(orden.es_muestra) !== 1) {
+      await notificarComercialDefinirComprobante(id, orden.numero_orden, orden.id_comercial, getIO(req));
+    }
 
     if (orden.tipo_comprobante === 'Factura') {
       await notificarPendienteMarcarSunat(id, orden.numero_orden, 'Aprobada', getIO(req));

@@ -317,6 +317,15 @@
   opacity: 1;
 }
 
+/* Icono por imagen (p. ej. logo SUNAT en Facturación Electrónica). Encaja en el contenedor
+   de 18px conservando su proporción; el PNG no tiene fondo, así que respeta claro/oscuro. */
+.sidebar-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+}
+
 /* Link especial — Menú Principal */
 .sidebar-link-apps {
   background-color: var(--carbon-light);

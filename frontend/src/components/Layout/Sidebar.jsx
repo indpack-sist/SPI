@@ -104,7 +104,9 @@ function Sidebar({ onToggle }) {
                           className={`sidebar-link sidebar-dropdown-toggle ${isOpen ? 'open' : ''}`}
                         >
                           <div className="sidebar-icon-container">
-                            <Icon size={17} />
+                            {item.iconImg
+                              ? <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                              : <Icon size={17} />}
                           </div>
                           <span>{item.label}</span>
                           <ChevronDown size={13} className={`sidebar-chevron ${isOpen ? 'rotate' : ''}`} />
@@ -133,7 +135,9 @@ function Sidebar({ onToggle }) {
                         className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
                       >
                         <div className="sidebar-icon-container">
-                          <Icon size={17} />
+                          {item.iconImg
+                            ? <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            : <Icon size={17} />}
                         </div>
                         <span>{item.label}</span>
                       </Link>

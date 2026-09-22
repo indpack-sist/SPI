@@ -60,7 +60,9 @@ const AppLauncher = () => {
                 </span>
 
                 <div className="launcher-icon-wrapper">
-                  <Icon size={28} strokeWidth={1.5} />
+                  {app.iconImg
+                    ? <img src={app.iconImg} alt="" className="launcher-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    : <Icon size={28} strokeWidth={1.5} />}
                 </div>
 
                 <span className="launcher-label">{app.label}</span>

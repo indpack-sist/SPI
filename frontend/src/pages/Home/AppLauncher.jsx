@@ -30,6 +30,10 @@ const cardVariants = {
   show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } },
 };
 
+// Columnas que ocupa un bloque según su nº de módulos: pocos → bloque pequeño,
+// muchos → se reparte en una malla ~cuadrada (nada de tiles estirados).
+const columnasBloque = (n) => (n <= 3 ? n : Math.ceil(Math.sqrt(n)));
+
 const AppLauncher = () => {
   const { rol, tienePermiso } = usePermisos();
 
@@ -92,7 +96,11 @@ const AppLauncher = () => {
                     <span className="launcher-block-count">{section.items.length}</span>
                   </div>
 
-                  <m.div className="launcher-block-grid" variants={gridVariants}>
+                  <m.div
+                    className="launcher-block-grid"
+                    variants={gridVariants}
+                    style={{ '--cols': columnasBloque(section.items.length) }}
+                  >
                     {section.items.map((app) => {
                       const Icon = app.icon;
                       numeroAtomico += 1;

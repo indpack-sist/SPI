@@ -59,8 +59,9 @@ export function clasificarObjetivo(rec) {
   if (!rec || !rec.razon_social) return null;
   if (!/^(20|15|17)/.test(rec.ruc)) return null;
   if (!/ACTIVO/i.test(rec.estado || '')) return null;
+  // Enfoque del módulo: SOLO comercio/exportación de fruta y verdura.
   const det = detectarSector(rec.razon_social);
-  return det ? { sector: det.sector } : null;
+  return det && det.sector === 'Agroexportación' ? { sector: det.sector } : null;
 }
 
 // -------- Obtención del archivo TXT (descarga/descompresión) --------

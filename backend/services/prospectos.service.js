@@ -20,6 +20,29 @@ export function getFechaPeru() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+// Normaliza el nombre para clasificar: sin acentos y en MAYÚSCULAS. Así "CÍTRICOS"
+// matchea "CITRIC" y "AGROQUÍMICOS" matchea "AGROQUIMIC" sin duplicar patrones.
+const DIACRITICOS_SECTOR = /[̀-ͯ]/g;
+function normalizarNombreSector(nombre) {
+  return String(nombre || '').normalize('NFD').replace(DIACRITICOS_SECTOR, '').toUpperCase();
+}
+
+// Lista negra: agroindustria de INSUMOS (plaguicidas, fertilizantes, veterinaria,
+// viveros/semillas) y rubros ajenos que se cuelan por el prefijo "AGRO". Si el
+// nombre contiene cualquiera de estos, NO es comprador de empaque de fruta/verdura.
+// Substring a propósito (sin \b): "AGROABONOS" debe matchear "ABONO".
+const INSUMOS_AGRICOLAS = /AGROQUIMIC|CROPSCIENCE|INSECTICID|PLAGUICID|PESTICID|FUNGICID|HERBICID|ACARICID|NEMATICID|FERTILIZ|ABONO|FUMIGA|VETERINARI|PECUARI|SEMILLA|VIVERO|PLANTIN|AGROINSUMO|FOLIAR|RIEGO|PERFORACION|ASESOR|ABARROTE|CARNE|JARDIN|MASCOTA/;
+
+// Señal POSITIVA de comercio/exportación de fruta y verdura. Dos grupos:
+//  - prefijos (matchean por inicio: FRUT→FRUTAS, CITRIC→CITRICOS)
+//  - palabras exactas cortas (\b…\b para no colar TRABAJO por "AJO", etc.)
+const AGRO_FRUTA_VERDURA = /\b(FRUT|HORTALIZ|PALT|ARANDAN|BLUEBERR|ESPARRAG|ASPARAG|CITRIC|MANDARIN|NARANJA|BANAN|PAPRIKA|PIMIENT|ALCACHOFA|ARTICHOKE|GRANAD|JENGIBRE|GINGER|QUINUA|CACAO|PRODUCE|AGROEXPORT|AGRICOLA|FRESH|FRUIT)|\b(UVA|UVAS|AJO|AJOS|KION|MANGO|MANGOS|PINA|CEBOLLA)\b/;
+
+/** ¿El nombre corresponde a agroindustria de INSUMOS o rubro ajeno (no compra empaque)? */
+export function esInsumoAgricola(nombre) {
+  return INSUMOS_AGRICOLAS.test(normalizarNombreSector(nombre));
+}
+
 // Sectores que compran empaque terminado. Cada patrón aporta un
 // "sector legible" y un bono de encaje al score. Se detecta por
 // palabras clave en la razón social / nombre comercial mientras no
@@ -29,7 +52,7 @@ export function getFechaPeru() {
 // patrón aporta un "sector legible" y un bono de encaje al score. El orden
 // importa: gana la primera coincidencia, así que van primero los de mayor fit.
 const SECTORES_OBJETIVO = [
-  { patron: /\b(AGRO|AGRIC|AGROEXPORT|FRUT|HORTALIZ|ESPARRAG|PALTA|ARANDAN|UVA|CITRIC)/i, sector: 'Agroexportación', bono: 16 },
+  { patron: AGRO_FRUTA_VERDURA, sector: 'Agroexportación', bono: 16 },
   { patron: /\b(LOGISTIC|ALMACEN|OPERADOR LOG|CENTRO DE DISTRIBU|WAREHOUSE|FULFILL)/i, sector: 'Logística / Almacenes', bono: 15 },
   { patron: /\b(ECOMMERCE|E-COMMERCE|TIENDA ONLINE|MARKETPLACE|COURIER|PAQUETER|DELIVERY|MENSAJER)/i, sector: 'E-commerce / Courier', bono: 14 },
   { patron: /\b(MUDANZA|EMBALAD|RELOCAT|EMBALAJE)/i, sector: 'Mudanzas / Embalaje', bono: 13 },
@@ -82,6 +105,35 @@ export function sectorPorCiiu(ciiu) {
   return null;
 }
 
+// CIIU (Rev.4) que SÍ son comercio/cultivo de fruta y verdura fresca (compran
+// empaque). Se comparan por prefijo del código: 011/012 = cultivo de plantas
+// (hortalizas y frutas), 0163 = actividades post-cosecha (empaque de fruta),
+// 4630 = venta al por mayor de alimentos y bebidas. Ajustable si se quiere
+// acotar más (p.ej. excluir cereales 0111).
+const CIIU_FRUTA_VERDURA = ['011', '012', '0163', '4630'];
+
+/**
+ * Clasifica un prospecto por su CIIU REAL de SUNAT (autoritativo, mucho más
+ * fiable que el nombre).
+ * @param {Array<{codigo?:string,descripcion?:string}>|string} ciiu
+ * @returns {{objetivo:true} | {objetivo:false, motivo:string} | null}
+ */
+export function clasificarCiiuFrutaVerdura(ciiu) {
+  if (!ciiu) return null;
+  const lista = Array.isArray(ciiu) ? ciiu : [ciiu];
+  const items = lista
+    .map((it) => ({ codigo: String(it?.codigo ?? it ?? '').replace(/\D/g, ''), descripcion: it?.descripcion || null }))
+    .filter((it) => it.codigo.length >= 3);
+  if (!items.length) return null; // sin CIIU verificable
+
+  for (const it of items) {
+    if (CIIU_FRUTA_VERDURA.some((p) => it.codigo.startsWith(p))) return { objetivo: true };
+  }
+  const primero = items[0];
+  const desc = primero.descripcion || `CIIU ${primero.codigo}`;
+  return { objetivo: false, motivo: `Actividad no es comercio de fruta/verdura (${desc})` };
+}
+
 // Anti-sectores: empresas de SERVICIOS que NO compran empaque industrial, pero
 // cuyo nombre puede contener una palabra de sector objetivo (ej. "ecommerce" en
 // una agencia de diseño web). Si el nombre calza con esto, no se asigna sector
@@ -114,24 +166,25 @@ export function normalizarDocumento(valor) {
 }
 
 /**
- * Detecta el sector objetivo a partir del nombre de la empresa.
- * Devuelve { sector, bono } o null si no calza con ninguno.
- */
-/**
  * ¿El nombre corresponde a una empresa de SERVICIOS (agencia digital,
  * consultora, estudio, notaría…) que no compra empaque industrial? Se usa para
  * descartarlas en el descubrimiento automático antes de gastar cuota de Places.
  */
 export function esEmpresaServicios(nombre) {
-  return ANTISECTORES.test(nombre || '');
+  return ANTISECTORES.test(normalizarNombreSector(nombre));
 }
 
+/**
+ * Detecta el sector objetivo a partir del nombre de la empresa.
+ * Devuelve { sector, bono } o null si no calza con ninguno.
+ */
 export function detectarSector(nombre) {
   if (!nombre) return null;
-  // Empresa de servicios (agencia digital, consultora, estudio…): sin encaje.
-  if (ANTISECTORES.test(nombre)) return null;
+  const n = normalizarNombreSector(nombre);
+  // Empresa de servicios (ANTISECTORES) o insumo agrícola/rubro ajeno: sin encaje.
+  if (ANTISECTORES.test(n) || INSUMOS_AGRICOLAS.test(n)) return null;
   for (const s of SECTORES_OBJETIVO) {
-    if (s.patron.test(nombre)) {
+    if (s.patron.test(n)) {
       return { sector: s.sector, bono: s.bono };
     }
   }

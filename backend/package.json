@@ -46,6 +46,7 @@
     "pdfkit": "^0.13.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
+    "svg-to-pdfkit": "^0.1.8",
     "xlsx": "^0.18.5",
     "xml-crypto": "^6.1.2",
     "xmldom": "^0.6.0"

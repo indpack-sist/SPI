@@ -20,6 +20,7 @@ const has = (f) => args.includes(f);
 const val = (k, d) => { const a = args.find((x) => x.startsWith(`${k}=`)); return a ? a.split('=')[1] : d; };
 const DRY = has('--dry-run');
 const VERIFICAR_CIIU = has('--verificar-ciiu');
+const SKIP_PADRON = has('--no-padron'); // salta el DELETE de padron_empresas (irreversible)
 const LIMIT = Math.max(1, parseInt(val('--limit', '500'), 10) || 500);
 
 function esObjetivoPorNombre(razon) {
@@ -51,6 +52,11 @@ async function fase1Nombre() {
   console.log(`  prospectos Agroexportación a excluir por nombre: ${excluir} / ${pr.data.length}`);
 
   // padron_empresas: SOLO Agroexportación; borra los que ya no son fruta/verdura.
+  // El DELETE es irreversible (caché re-importable); --no-padron lo salta.
+  if (SKIP_PADRON) {
+    console.log('  padron_empresas: OMITIDO (--no-padron)');
+    return;
+  }
   const pe = await executeQuery("SELECT ruc, razon_social FROM padron_empresas WHERE sector = 'Agroexportación'");
   if (pe.success) {
     let borrar = 0;

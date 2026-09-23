@@ -4,10 +4,11 @@ import { detectarSector, esInsumoAgricola, clasificarCiiuFrutaVerdura } from '..
 import { consultarPorRuc } from '../services/padron-ruc.service.js';
 
 // ============================================================
-// Reclasifica y limpia lo ya cargado con el criterio "solo fruta/verdura".
-//   Fase 1 (nombre): excluye prospectos que ya no son objetivo por nombre;
-//                    borra filas no-objetivo de padron_empresas (caché).
-//   Fase 2 (--verificar-ciiu): trae el CIIU real y excluye/rehabilita.
+// Depura SOLO el bucket de Agroexportación (separar fruta/verdura de la
+// agroindustria de insumos). Los demás sectores NO se tocan.
+//   Fase 1 (nombre): en sector='Agroexportación', excluye prospectos que ya no
+//                    son fruta/verdura; borra esas filas de padron_empresas.
+//   Fase 2 (--verificar-ciiu): trae el CIIU real y excluye/rehabilita (solo agro).
 // Flags:
 //   --verificar-ciiu   activa la Fase 2 (consultas a ruc.pe, lento)
 //   --limit=N          máximo de RUCs a consultar en la Fase 2 (default 500)
@@ -27,10 +28,11 @@ function esObjetivoPorNombre(razon) {
 }
 
 async function fase1Nombre() {
-  console.log('== Fase 1: reclasificación por nombre ==');
-  // Prospectos NO manuales del pool agro que ya no son objetivo → excluido = 1.
+  console.log('== Fase 1: reclasificación por nombre (SOLO bucket Agroexportación) ==');
+  // SOLO Agroexportación: los que ya no son fruta/verdura (ahora insumo/otro) →
+  // excluido = 1. Los demás sectores NO se tocan.
   const pr = await executeQuery(
-    "SELECT id_prospecto, razon_social FROM prospectos WHERE excluido = 0 AND (origen IS NULL OR origen <> 'manual')"
+    "SELECT id_prospecto, razon_social FROM prospectos WHERE excluido = 0 AND sector = 'Agroexportación' AND (origen IS NULL OR origen <> 'manual')"
   );
   if (!pr.success) throw new Error(pr.error);
   let excluir = 0;
@@ -40,10 +42,10 @@ async function fase1Nombre() {
       if (!DRY) await executeQuery('UPDATE prospectos SET excluido = 1 WHERE id_prospecto = ?', [p.id_prospecto]);
     }
   }
-  console.log(`  prospectos a excluir por nombre: ${excluir} / ${pr.data.length}`);
+  console.log(`  prospectos Agroexportación a excluir por nombre: ${excluir} / ${pr.data.length}`);
 
-  // padron_empresas: borra las filas que ya no son objetivo por nombre.
-  const pe = await executeQuery('SELECT ruc, razon_social FROM padron_empresas');
+  // padron_empresas: SOLO Agroexportación; borra los que ya no son fruta/verdura.
+  const pe = await executeQuery("SELECT ruc, razon_social FROM padron_empresas WHERE sector = 'Agroexportación'");
   if (pe.success) {
     let borrar = 0;
     for (const e of pe.data) {
@@ -52,18 +54,19 @@ async function fase1Nombre() {
         if (!DRY) await executeQuery('DELETE FROM padron_empresas WHERE ruc = ?', [e.ruc]);
       }
     }
-    console.log(`  padron_empresas a borrar por nombre: ${borrar} / ${pe.data.length}`);
+    console.log(`  padron_empresas Agroexportación a borrar por nombre: ${borrar} / ${pe.data.length}`);
   }
 }
 
 async function fase2Ciiu() {
   console.log(`== Fase 2: verificación CIIU (limit ${LIMIT}) ==`);
-  // Candidatos: prospectos con RUC, sin CIIU aún, del padrón/sunat. Incluye
-  // excluidos (para poder REHABILITAR los de nombre neutro que sí son fruta/verdura).
+  // Candidatos: SOLO bucket Agroexportación, con RUC, sin CIIU aún, del padrón/sunat.
+  // Incluye excluidos (para REHABILITAR los de nombre neutro que sí son fruta/verdura).
   const cand = await executeQuery(
     `SELECT id_prospecto, documento, excluido FROM prospectos
       WHERE documento IS NOT NULL AND documento <> ''
         AND (ciiu IS NULL OR ciiu = '')
+        AND sector = 'Agroexportación'
         AND (origen IN ('padron','sunat'))
       ORDER BY excluido ASC, id_prospecto ASC
       LIMIT ${LIMIT}`

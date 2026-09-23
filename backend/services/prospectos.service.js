@@ -181,12 +181,16 @@ export function esEmpresaServicios(nombre) {
 export function detectarSector(nombre) {
   if (!nombre) return null;
   const n = normalizarNombreSector(nombre);
-  // Empresa de servicios (ANTISECTORES) o insumo agrícola/rubro ajeno: sin encaje.
-  if (ANTISECTORES.test(n) || INSUMOS_AGRICOLAS.test(n)) return null;
+  // Empresa de servicios (agencia digital, consultora, estudio…): sin encaje.
+  if (ANTISECTORES.test(n)) return null;
   for (const s of SECTORES_OBJETIVO) {
-    if (s.patron.test(n)) {
-      return { sector: s.sector, bono: s.bono };
-    }
+    if (!s.patron.test(n)) continue;
+    // Agroexportación = SOLO comercio de fruta/verdura. La agroindustria de
+    // insumos (insecticidas, fertilizantes, veterinaria) NO va en este bucket:
+    // se salta y puede caer en otro sector afín más abajo (p.ej. Química). Los
+    // demás sectores no se ven afectados por la lista negra.
+    if (s.sector === 'Agroexportación' && INSUMOS_AGRICOLAS.test(n)) continue;
+    return { sector: s.sector, bono: s.bono };
   }
   return null;
 }

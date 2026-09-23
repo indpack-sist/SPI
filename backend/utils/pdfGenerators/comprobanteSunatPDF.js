@@ -472,7 +472,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         // Título fino de la sección, sobre el área de cuentas.
         const accX = divX + 16;
         const accAreaW = cardX + cardW - accX - 14;
-        doc.fillColor(GRIS_TXT).font('Helvetica-Bold').fontSize(6.5)
+        doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(7)
            .text('CUENTAS PARA DEPÓSITO / TRANSFERENCIA', accX, cardY + 9, { width: accAreaW, characterSpacing: 0.4 });
 
         // Dos columnas de cuenta.
@@ -493,9 +493,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           // Número de cuenta (dato principal, destacado).
           doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(cuenta, cx, cy, { width: colW2 });
           cy += 14;
-          // CCI (interbancario), etiqueta gris + valor.
-          doc.fillColor(GRIS_TXT).font('Helvetica-Bold').fontSize(6.5).text('CCI ', cx, cy + 0.5, { continued: true })
-             .fillColor('#374151').font('Helvetica').fontSize(7.5).text(cci);
+          // CCI (interbancario), etiqueta gris + valor. Ambos segmentos en negrita y mismo tamaño
+          // (con `continued` un tamaño distinto los desalinea de la línea base).
+          doc.fontSize(7.5).font('Helvetica-Bold').fillColor(GRIS_TXT).text('CCI ', cx, cy, { continued: true })
+             .fillColor('#111827').text(cci);
         };
         celdaCuenta(accX, 'DÓLARES', 'US$', '194-2116093-1-86', '002-194-002116093186-97');
         celdaCuenta(accX + colW2 + gap, 'SOLES', 'S/', '194-2134322-0-07', '002-194-002134322007-91');

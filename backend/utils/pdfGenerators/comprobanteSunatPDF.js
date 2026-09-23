@@ -3,6 +3,7 @@
 // el valor resumen (hash/digestValue) y la leyenda legal. Para notas imprime el documento
 // afectado y el motivo. NO consulta BD: recibe todo ya resuelto por el controller.
 import PDFDocument from 'pdfkit';
+import SVGtoPDF from 'svg-to-pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,17 @@ function logoBuffer() {
   if (_logo !== undefined) return _logo;
   try { _logo = fs.readFileSync(LOGO_PATH); } catch { _logo = null; }
   return _logo;
+}
+
+// Logo del banco (BCP) para el bloque de cuentas de pago en la factura. SVG vectorial (frontend/
+// public/bcp.svg) renderizado con svg-to-pdfkit para que quede nítido a cualquier escala. Se cachea
+// como string; si falta, el bloque cae a un rótulo de texto "BCP".
+const BCP_SVG_PATH = path.join(__dirname, '../../../frontend/public/bcp.svg');
+let _bcpSvg; // undefined = sin intentar; null = no disponible; string = cargado
+function bcpSvg() {
+  if (_bcpSvg !== undefined) return _bcpSvg;
+  try { _bcpSvg = fs.readFileSync(BCP_SVG_PATH, 'utf8'); } catch { _bcpSvg = null; }
+  return _bcpSvg;
 }
 
 // Nombre legible del comprobante por código de tipo (catálogo 01).
@@ -418,44 +430,78 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         }
       }
 
-      // ── Cuentas bancarias para el pago (tabla 1x2: BCP Dólares | BCP Soles) ──
-      // Datos fijos del emisor. Se dibuja como dos celdas de ancho igual con encabezado propio,
-      // separadas por una línea vertical, para una lectura clara al momento de pagar.
-      // Solo aplica a FACTURAS (01); no se imprime en notas de crédito (07) ni débito (08).
+      // ── Medios de pago: cuentas BCP (solo FACTURAS 01) ──────────────────────────
+      // Tarjeta con el logo BCP a la izquierda y dos cuentas (Dólares | Soles) a la derecha,
+      // cada una con su moneda destacada, número de cuenta y CCI. No aplica a notas 07/08.
       if (c.codigo_tipo_sunat === '01') {
-        const bloqueH = 62;
-        // Si no cabe encima del pie (QR + leyenda ≈ desde y=700), salta de página.
-        if (y + bloqueH + 10 > 690) { doc.addPage(); y = 40; }
-        y += 4;
-        const bx = 33, bw = 529, bhHead = 15, bhBody = bloqueH - bhHead;
-        const colW = bw / 2;
-        const bxMid = bx + colW;
-        // Marco y encabezado
-        doc.roundedRect(bx, y, bw, bloqueH, 3).stroke('#000');
-        doc.rect(bx, y, bw, bhHead).fill('#1e88e5');
-        doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold')
-           .text('CUENTAS BANCARIAS PARA EL PAGO', bx, y + 4, { width: bw, align: 'center' });
-        // Línea divisoria vertical (solo en el cuerpo)
-        doc.moveTo(bxMid, y + bhHead).lineTo(bxMid, y + bloqueH).stroke('#000');
+        // Paleta de marca BCP.
+        const BCP_AZUL = '#002A8F';
+        const BCP_NARANJA = '#EF7D00';
+        const GRIS_BORDE = '#D8DEE9';
+        const GRIS_TXT = '#6B7280';
 
-        const celda = (cx, titulo, cuenta, cci) => {
-          const pad = 8;
-          const cw = colW - pad * 2;
-          let cy = y + bhHead + 6;
-          doc.fillColor('#0d47a1').font('Helvetica-Bold').fontSize(8)
-             .text(titulo, cx + pad, cy, { width: cw });
-          cy += 12;
-          doc.fillColor('#000').font('Helvetica-Bold').fontSize(7.5)
-             .text('Cuenta: ', cx + pad, cy, { continued: true })
-             .font('Helvetica').text(cuenta);
-          cy += 11;
-          doc.font('Helvetica-Bold').text('CCI: ', cx + pad, cy, { continued: true })
-             .font('Helvetica').text(cci);
+        const cardX = 33, cardW = 529, cardH = 74;
+        // Si no cabe encima del pie (QR + leyenda ≈ desde y=700), salta de página.
+        if (y + cardH + 10 > 690) { doc.addPage(); y = 40; }
+        y += 6;
+        const cardY = y;
+
+        // Tarjeta base: fondo blanco, borde suave, esquinas redondeadas + franja lateral naranja.
+        doc.roundedRect(cardX, cardY, cardW, cardH, 6).fillAndStroke('#FFFFFF', GRIS_BORDE);
+        doc.save();
+        doc.roundedRect(cardX, cardY, cardW, cardH, 6).clip();
+        doc.rect(cardX, cardY, 4, cardH).fill(BCP_NARANJA);
+        doc.restore();
+
+        // Panel del logo (izquierda) con divisor vertical.
+        const logoPanelW = 132;
+        const logoAreaX = cardX + 12;
+        const svg = bcpSvg();
+        if (svg) {
+          const logoW = 104;
+          const logoH = logoW * (119.2 / 454.5); // ≈ 27.3 (aspecto del viewBox del SVG)
+          try {
+            SVGtoPDF(doc, svg, logoAreaX, cardY + (cardH - logoH) / 2, { width: logoW, height: logoH });
+          } catch { doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(22).text('BCP', logoAreaX, cardY + 26); }
+        } else {
+          doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(22).text('BCP', logoAreaX, cardY + 26);
+        }
+        const divX = cardX + logoPanelW;
+        doc.moveTo(divX, cardY + 12).lineTo(divX, cardY + cardH - 12).lineWidth(0.6).stroke(GRIS_BORDE);
+
+        // Título fino de la sección, sobre el área de cuentas.
+        const accX = divX + 16;
+        const accAreaW = cardX + cardW - accX - 14;
+        doc.fillColor(GRIS_TXT).font('Helvetica-Bold').fontSize(6.5)
+           .text('CUENTAS PARA DEPÓSITO / TRANSFERENCIA', accX, cardY + 9, { width: accAreaW, characterSpacing: 0.4 });
+
+        // Dos columnas de cuenta.
+        const gap = 18;
+        const colW2 = (accAreaW - gap) / 2;
+        const celdaCuenta = (cx, moneda, simb, cuenta, cci) => {
+          let cy = cardY + 22;
+          // Badge de moneda (píldora azul con el símbolo en naranja).
+          const badgeTxt = `${moneda}`;
+          doc.font('Helvetica-Bold').fontSize(7);
+          const bTxtW = doc.widthOfString(badgeTxt);
+          const bSimbW = doc.widthOfString(`${simb} `);
+          const badgeW = bTxtW + bSimbW + 14;
+          doc.roundedRect(cx, cy, badgeW, 13, 6.5).fill(BCP_AZUL);
+          doc.fillColor(BCP_NARANJA).font('Helvetica-Bold').fontSize(7).text(`${simb} `, cx + 7, cy + 3.5, { continued: true })
+             .fillColor('#FFFFFF').text(badgeTxt);
+          cy += 19;
+          // Número de cuenta (dato principal, destacado).
+          doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(cuenta, cx, cy, { width: colW2 });
+          cy += 14;
+          // CCI (interbancario), etiqueta gris + valor.
+          doc.fillColor(GRIS_TXT).font('Helvetica-Bold').fontSize(6.5).text('CCI ', cx, cy + 0.5, { continued: true })
+             .fillColor('#374151').font('Helvetica').fontSize(7.5).text(cci);
         };
-        celda(bx, 'CUENTA BCP DÓLARES (USD)', '194-2116093-1-86', '002-194-002116093186-97');
-        celda(bxMid, 'CUENTA BCP SOLES (S/)', '194-2134322-0-07', '002-194-002134322007-91');
-        doc.fillColor('#000');
-        y += bloqueH + 6;
+        celdaCuenta(accX, 'DÓLARES', 'US$', '194-2116093-1-86', '002-194-002116093186-97');
+        celdaCuenta(accX + colW2 + gap, 'SOLES', 'S/', '194-2134322-0-07', '002-194-002134322007-91');
+
+        doc.fillColor('#000').lineWidth(1);
+        y = cardY + cardH + 6;
       }
 
       // ── Pie legal: QR + leyenda ──

@@ -29,10 +29,16 @@ function esObjetivoPorNombre(razon) {
 
 async function fase1Nombre() {
   console.log('== Fase 1: reclasificación por nombre (SOLO bucket Agroexportación) ==');
-  // SOLO Agroexportación: los que ya no son fruta/verdura (ahora insumo/otro) →
-  // excluido = 1. Los demás sectores NO se tocan.
+  // SOLO Agroexportación y SOLO leads 'Nuevo' que NO son cliente: los que ya no
+  // son fruta/verdura → excluido = 1. NUNCA se toca un cliente ni un lead ya
+  // gestionado (Convertido/Contactado/En_gestion) ni otros sectores.
   const pr = await executeQuery(
-    "SELECT id_prospecto, razon_social FROM prospectos WHERE excluido = 0 AND sector = 'Agroexportación' AND (origen IS NULL OR origen <> 'manual')"
+    `SELECT id_prospecto, razon_social FROM prospectos
+      WHERE excluido = 0 AND sector = 'Agroexportación'
+        AND estado_workflow = 'Nuevo'
+        AND (flag_duplicado IS NULL OR flag_duplicado <> 'Ya_cliente')
+        AND id_cliente_match IS NULL
+        AND (origen IS NULL OR origen <> 'manual')`
   );
   if (!pr.success) throw new Error(pr.error);
   let excluir = 0;
@@ -62,11 +68,15 @@ async function fase2Ciiu() {
   console.log(`== Fase 2: verificación CIIU (limit ${LIMIT}) ==`);
   // Candidatos: SOLO bucket Agroexportación, con RUC, sin CIIU aún, del padrón/sunat.
   // Incluye excluidos (para REHABILITAR los de nombre neutro que sí son fruta/verdura).
+  // NUNCA clientes ni leads gestionados: solo estado 'Nuevo' sin id_cliente_match.
   const cand = await executeQuery(
     `SELECT id_prospecto, documento, excluido FROM prospectos
       WHERE documento IS NOT NULL AND documento <> ''
         AND (ciiu IS NULL OR ciiu = '')
         AND sector = 'Agroexportación'
+        AND estado_workflow = 'Nuevo'
+        AND (flag_duplicado IS NULL OR flag_duplicado <> 'Ya_cliente')
+        AND id_cliente_match IS NULL
         AND (origen IN ('padron','sunat'))
       ORDER BY excluido ASC, id_prospecto ASC
       LIMIT ${LIMIT}`

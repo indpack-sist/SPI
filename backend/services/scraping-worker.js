@@ -225,11 +225,13 @@ async function procesarWebScrape(job, params) {
   // re-descubrir (que es una corrección manual). Si la actividad real no es
   // fruta/verdura, se excluye y NO se gasta el scraping de web.
   if (!params.redescubrir && params.accion === 'enriquecer') {
-    const prg = await executeQuery('SELECT origen, documento, sector FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const prg = await executeQuery('SELECT origen, documento, sector, estado_workflow, flag_duplicado, id_cliente_match FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const pr0 = prg.data?.[0];
     // Solo se valida por CIIU el bucket de Agroexportación (separar fruta/verdura
-    // de la agroindustria de insumos). Los demás sectores no se tocan.
-    if (pr0 && pr0.origen === 'padron' && pr0.documento && pr0.sector === 'Agroexportación') {
+    // de la agroindustria de insumos). Los demás sectores no se tocan. Y NUNCA se
+    // toca un cliente ni un lead ya gestionado: solo 'Nuevo' que no es cliente.
+    const esClienteOGestionado = pr0 && (pr0.estado_workflow !== 'Nuevo' || pr0.flag_duplicado === 'Ya_cliente' || pr0.id_cliente_match);
+    if (pr0 && pr0.origen === 'padron' && pr0.documento && pr0.sector === 'Agroexportación' && !esClienteOGestionado) {
       const gate = await aplicarCompuertaCiiu(idProspecto, pr0.documento);
       if (gate.excluido) {
         emit('prospectos:cambio', { accion: 'excluir', id_prospecto: Number(idProspecto), ts: Date.now() });

@@ -3,7 +3,6 @@
 // el valor resumen (hash/digestValue) y la leyenda legal. Para notas imprime el documento
 // afectado y el motivo. NO consulta BD: recibe todo ya resuelto por el controller.
 import PDFDocument from 'pdfkit';
-import SVGtoPDF from 'svg-to-pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -19,15 +18,16 @@ function logoBuffer() {
   return _logo;
 }
 
-// Logo del banco (BCP) para el bloque de cuentas de pago en la factura. SVG vectorial (frontend/
-// public/bcp.svg) renderizado con svg-to-pdfkit para que quede nítido a cualquier escala. Se cachea
-// como string; si falta, el bloque cae a un rótulo de texto "BCP".
-const BCP_SVG_PATH = path.join(__dirname, '../../../frontend/public/bcp.svg');
-let _bcpSvg; // undefined = sin intentar; null = no disponible; string = cargado
-function bcpSvg() {
-  if (_bcpSvg !== undefined) return _bcpSvg;
-  try { _bcpSvg = fs.readFileSync(BCP_SVG_PATH, 'utf8'); } catch { _bcpSvg = null; }
-  return _bcpSvg;
+// Logo del banco (BCP) para el bloque de cuentas de pago en la factura. PNG con fondo transparente
+// (frontend/public/bcp.png, 700x241, rasterizado del SVG oficial) para posicionamiento determinista
+// vía doc.image. Se cachea en memoria; si falta, el bloque cae a un rótulo de texto "BCP".
+const BCP_LOGO_PATH = path.join(__dirname, '../../../frontend/public/bcp.png');
+const BCP_LOGO_RATIO = 241 / 700; // alto/ancho del PNG
+let _bcpLogo; // undefined = sin intentar; null = no disponible; Buffer = cargado
+function bcpLogo() {
+  if (_bcpLogo !== undefined) return _bcpLogo;
+  try { _bcpLogo = fs.readFileSync(BCP_LOGO_PATH); } catch { _bcpLogo = null; }
+  return _bcpLogo;
 }
 
 // Nombre legible del comprobante por código de tipo (catálogo 01).
@@ -455,13 +455,13 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
         // Panel del logo (izquierda) con divisor vertical.
         const logoPanelW = 132;
-        const logoAreaX = cardX + 12;
-        const svg = bcpSvg();
-        if (svg) {
+        const logoAreaX = cardX + 14;
+        const logo = bcpLogo();
+        if (logo) {
           const logoW = 104;
-          const logoH = logoW * (119.2 / 454.5); // ≈ 27.3 (aspecto del viewBox del SVG)
+          const logoH = logoW * BCP_LOGO_RATIO; // ≈ 35.8 (mantiene la proporción del PNG)
           try {
-            SVGtoPDF(doc, svg, logoAreaX, cardY + (cardH - logoH) / 2, { width: logoW, height: logoH });
+            doc.image(logo, logoAreaX, cardY + (cardH - logoH) / 2, { width: logoW, height: logoH });
           } catch { doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(22).text('BCP', logoAreaX, cardY + 26); }
         } else {
           doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(22).text('BCP', logoAreaX, cardY + 26);

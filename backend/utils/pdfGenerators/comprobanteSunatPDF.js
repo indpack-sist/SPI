@@ -495,7 +495,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           cy += 14;
           // CCI (interbancario), etiqueta gris + valor. Ambos segmentos en negrita y mismo tamaño
           // (con `continued` un tamaño distinto los desalinea de la línea base).
-          doc.fontSize(7.5).font('Helvetica-Bold').fillColor(GRIS_TXT).text('CCI ', cx, cy, { continued: true })
+          doc.fontSize(7.5).font('Helvetica-Bold').fillColor(GRIS_TXT).text('CCI: ', cx, cy, { continued: true })
              .fillColor('#111827').text(cci);
         };
         celdaCuenta(accX, 'DÓLARES', 'US$', '194-2116093-1-86', '002-194-002116093186-97');

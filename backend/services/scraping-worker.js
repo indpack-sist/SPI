@@ -224,7 +224,11 @@ async function procesarWebScrape(job, params) {
   // Compuerta CIIU: solo para prospectos del padrón (origen 'padron') y no en
   // re-descubrir (que es una corrección manual). Si la actividad real no es
   // fruta/verdura, se excluye y NO se gasta el scraping de web.
-  if (!params.redescubrir && params.accion === 'enriquecer') {
+  // Compuerta CIIU APAGADA por defecto: hoy las fuentes de CIIU (ruc.pe/datosperu)
+  // están bloqueadas/caídas y cada consulta cuesta ~15s de timeout, lo que ahogaría
+  // el enriquecimiento en Render Free. Se activa con PROSPECTOS_CIIU_GATE=1 cuando
+  // exista una fuente de CIIU fiable. Mientras tanto, el filtro por nombre manda.
+  if (process.env.PROSPECTOS_CIIU_GATE === '1' && !params.redescubrir && params.accion === 'enriquecer') {
     const prg = await executeQuery('SELECT origen, documento, sector, estado_workflow, flag_duplicado, id_cliente_match FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const pr0 = prg.data?.[0];
     // Solo se valida por CIIU el bucket de Agroexportación (separar fruta/verdura

@@ -33,10 +33,13 @@ function normalizarNombreSector(nombre) {
 // Substring a propósito (sin \b): "AGROABONOS" debe matchear "ABONO".
 const INSUMOS_AGRICOLAS = /AGROQUIMIC|CROPSCIENCE|INSECTICID|PLAGUICID|PESTICID|FUNGICID|HERBICID|ACARICID|NEMATICID|FERTILIZ|ABONO|FUMIGA|VETERINARI|PECUARI|SEMILLA|VIVERO|PLANTIN|AGROINSUMO|FOLIAR|RIEGO|PERFORACION|ASESOR|ABARROTE|CARNE|JARDIN|MASCOTA/;
 
-// Señal POSITIVA de comercio/exportación de fruta y verdura. Dos grupos:
-//  - prefijos (matchean por inicio: FRUT→FRUTAS, CITRIC→CITRICOS)
-//  - palabras exactas cortas (\b…\b para no colar TRABAJO por "AJO", etc.)
-const AGRO_FRUTA_VERDURA = /\b(FRUT|HORTALIZ|PALT|ARANDAN|BLUEBERR|BERR|ESPARRAG|ASPARAG|CITRIC|MANDARIN|NARANJA|BANAN|PAPRIKA|PIMIENT|ALCACHOFA|ARTICHOKE|GRANAD|JENGIBRE|GINGER|QUINUA|CACAO|PRODUCE|AGROEXPORT|AGRICOLA|FRESH|FRUIT)|\b(UVA|UVAS|AJO|AJOS|KION|MANGO|MANGOS|PINA|CEBOLLA)\b/;
+// Patrón del sector Agroexportación. Incluye el prefijo AGRO/AGRIC (agrícola,
+// agroexportadora, agroindustrial, y también nombres neutros tipo "AGRO X") y
+// términos de fruta/verdura. La agroindustria de INSUMOS (insecticidas,
+// fertilizantes, veterinaria) y rubros ajenos claros se descartan aparte con
+// INSUMOS_AGRICOLAS dentro de detectarSector: el bucket agro = todo lo agro
+// MENOS la lista negra.
+const AGRO_SECTOR = /\b(AGRO|AGRIC|FRUT|HORTALIZ|PALT|ARANDAN|BLUEBERR|BERR|ESPARRAG|ASPARAG|CITRIC|MANDARIN|NARANJA|BANAN|PAPRIKA|PIMIENT|ALCACHOFA|ARTICHOKE|GRANAD|JENGIBRE|GINGER|QUINUA|CACAO|PRODUCE|AGROEXPORT|AGRICOLA|FRESH|FRUIT)|\b(UVA|UVAS|AJO|AJOS|KION|MANGO|MANGOS|PINA|CEBOLLA)\b/;
 
 /** ¿El nombre corresponde a agroindustria de INSUMOS o rubro ajeno (no compra empaque)? */
 export function esInsumoAgricola(nombre) {
@@ -52,7 +55,7 @@ export function esInsumoAgricola(nombre) {
 // patrón aporta un "sector legible" y un bono de encaje al score. El orden
 // importa: gana la primera coincidencia, así que van primero los de mayor fit.
 const SECTORES_OBJETIVO = [
-  { patron: AGRO_FRUTA_VERDURA, sector: 'Agroexportación', bono: 16 },
+  { patron: AGRO_SECTOR, sector: 'Agroexportación', bono: 16 },
   { patron: /\b(LOGISTIC|ALMACEN|OPERADOR LOG|CENTRO DE DISTRIBU|WAREHOUSE|FULFILL)/i, sector: 'Logística / Almacenes', bono: 15 },
   { patron: /\b(ECOMMERCE|E-COMMERCE|TIENDA ONLINE|MARKETPLACE|COURIER|PAQUETER|DELIVERY|MENSAJER)/i, sector: 'E-commerce / Courier', bono: 14 },
   { patron: /\b(MUDANZA|EMBALAD|RELOCAT|EMBALAJE)/i, sector: 'Mudanzas / Embalaje', bono: 13 },

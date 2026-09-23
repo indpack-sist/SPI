@@ -6,10 +6,12 @@ import {
   normalizarEmail,
   normalizarDocumento,
   getFechaPeru,
+  clasificarCiiuFrutaVerdura,
 } from './prospectos.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
 import { buscarRucPorNombre } from './ruc-lookup.service.js';
 import { descubrirWeb } from './descubrir-web.service.js';
+import { consultarPorRuc } from './padron-ruc.service.js';
 import { scrapeSocial } from './scraper-social.service.js';
 
 // ============================================================
@@ -178,10 +180,61 @@ async function procesarJob(job) {
   }
 }
 
+// ---- Compuerta CIIU: valida un prospecto del padrón contra su ACTIVIDAD REAL ----
+// Trae el CIIU de SUNAT (ruc.pe) y decide si es comercio de fruta/verdura. Si no
+// lo es, marca excluido=1 con motivo (registrado en prospecto_fuentes). Si la
+// fuente no responde, no excluye (queda "sin verificar"). Best-effort.
+// @returns {Promise<{excluido:boolean, motivo?:string, verificado:boolean}>}
+async function aplicarCompuertaCiiu(idProspecto, documento) {
+  const doc = normalizarDocumento(documento);
+  if (!/^\d{11}$/.test(doc)) return { excluido: false, verificado: false };
+
+  let val = null;
+  try { val = await consultarPorRuc(doc); } catch { /* fuente caída */ }
+  if (!val?.valido || !val.datos) return { excluido: false, verificado: false };
+
+  const ciiu = val.datos.ciiu || [];
+  // Guarda el primer código CIIU si el prospecto no lo tenía.
+  if (ciiu[0]?.codigo) {
+    await executeQuery(
+      'UPDATE prospectos SET ciiu = COALESCE(NULLIF(ciiu, ""), ?) WHERE id_prospecto = ?',
+      [ciiu[0].codigo, idProspecto]
+    );
+  }
+
+  const clasif = clasificarCiiuFrutaVerdura(ciiu);
+  if (!clasif) return { excluido: false, verificado: false }; // sin CIIU utilizable
+
+  if (clasif.objetivo === false) {
+    await executeQuery('UPDATE prospectos SET excluido = 1 WHERE id_prospecto = ?', [idProspecto]);
+    await executeQuery(
+      'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw, fecha_scraping) VALUES (?, "ciiu", ?, ?, ?)',
+      [idProspecto, val.datos.fuentes?.[0]?.url || null, JSON.stringify({ excluido_por_ciiu: true, motivo: clasif.motivo, ciiu }), getFechaPeru()]
+    );
+    return { excluido: true, motivo: clasif.motivo, verificado: true };
+  }
+  return { excluido: false, verificado: true };
+}
+
 // ---- Enriquecimiento por scraping de web corporativa (job manual) ----
 async function procesarWebScrape(job, params) {
   const idProspecto = params.id_prospecto;
   if (!idProspecto) return fallar(job.id_job, 'Falta id_prospecto');
+
+  // Compuerta CIIU: solo para prospectos del padrón (origen 'padron') y no en
+  // re-descubrir (que es una corrección manual). Si la actividad real no es
+  // fruta/verdura, se excluye y NO se gasta el scraping de web.
+  if (!params.redescubrir && params.accion === 'enriquecer') {
+    const prg = await executeQuery('SELECT origen, documento FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const pr0 = prg.data?.[0];
+    if (pr0 && pr0.origen === 'padron' && pr0.documento) {
+      const gate = await aplicarCompuertaCiiu(idProspecto, pr0.documento);
+      if (gate.excluido) {
+        emit('prospectos:cambio', { accion: 'excluir', id_prospecto: Number(idProspecto), ts: Date.now() });
+        return completar(job.id_job, { id_prospecto: idProspecto, excluido_por_ciiu: true, motivo: gate.motivo });
+      }
+    }
+  }
 
   // Re-descubrir: purga TODO lo recolectado automáticamente (web, teléfonos,
   // correos y redes), CONSERVA lo ingresado a mano, y olvida la web guardada

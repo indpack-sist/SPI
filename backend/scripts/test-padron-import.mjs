@@ -35,14 +35,18 @@ const pt = parsearLineaPadron(LOGISTICA_TAB);
 check('TAB ruc', pt?.ruc === '20512345678', `→ ${pt?.ruc}`);
 check('TAB razon_social', pt?.razon_social === 'ALFA PACK LOGISTICA SAC', `→ ${pt?.razon_social}`);
 check('TAB ubigeo', pt?.ubigeo === '150122', `→ ${pt?.ubigeo}`);
-check('TAB objetivo', clasificarObjetivo(pt)?.sector === 'Logística / Almacenes');
+check('TAB objetivo (logística ya NO es objetivo) → null', clasificarObjetivo(pt) === null);
 
-console.log('clasificarObjetivo:');
-check('logística → objetivo', clasificarObjetivo(parsearLineaPadron(LOGISTICA))?.sector === 'Logística / Almacenes');
+console.log('clasificarObjetivo (solo Agroexportación fruta/verdura):');
+check('logística → NO objetivo', clasificarObjetivo(parsearLineaPadron(LOGISTICA)) === null);
 check('agroexport → objetivo', clasificarObjetivo(parsearLineaPadron(AGROEXP))?.sector === 'Agroexportación');
 check('servicios (marketing) → descartado', clasificarObjetivo(parsearLineaPadron(SERVICIOS)) === null);
 check('persona natural (RUC 10) → descartado', clasificarObjetivo(parsearLineaPadron(PERSONA)) === null);
 check('estado BAJA → descartado', clasificarObjetivo(parsearLineaPadron(BAJA)) === null);
+
+// Insumo agrícola aunque el nombre empiece con AGRO → descartado.
+const INSUMO = '20611111111\tAGROABONOS ORGANICOS S.A.C.\tACTIVO\tHABIDO\t150131\tAV\tLOS ABONOS\t-\t-\t50\t-\t-\t-\t-\t-';
+check('insumo (abonos) → descartado', clasificarObjetivo(parsearLineaPadron(INSUMO)) === null);
 
 console.log('resolverUbigeo:');
 const u = resolverUbigeo('150122');

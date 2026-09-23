@@ -21,6 +21,7 @@ check('SOCIEDAD AGRÍCOLA → Agroexportación', detectarSector('SOCIEDAD AGRICO
 check('EXPORTADORA DE PALTA → Agroexportación', detectarSector('EXPORTADORA DE PALTA HASS SAC')?.sector === 'Agroexportación');
 check('ARÁNDANOS (con tilde) → Agroexportación', detectarSector('ARÁNDANOS DEL PERÚ SAC')?.sector === 'Agroexportación');
 check('CÍTRICOS (con tilde) → Agroexportación', detectarSector('CÍTRICOS PERUANOS SAC')?.sector === 'Agroexportación');
+check('AGRO BERRIES → Agroexportación', detectarSector('AGRO BERRIES S.A.C.')?.sector === 'Agroexportación');
 check('AGRO25INVERSIONES → sin sector', detectarSector('AGRO25INVERSIONES E.I.R.L.') === null);
 check('AGROABAMEN → sin sector', detectarSector('AGROABAMEN S.A.C') === null);
 check('AGRO VETERINARIA → sin sector', detectarSector('AGRO VETERINARIA CHALLCO S.A.C.') === null);

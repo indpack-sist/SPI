@@ -232,6 +232,10 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         camposIzquierda.push([String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc]);
       }
       if (c.orden_compra) camposIzquierda.push(['Orden de Compra', String(c.orden_compra).trim()]);
+      // Guía(s) de remisión que ampara(n) el traslado, como documento asociado, junto al resto de
+      // datos de cabecera. En exportación se listan con su formato propio debajo de los totales.
+      const guiasHeaderTxt = String(c.guias || '').trim();
+      if (!esExportacion && guiasHeaderTxt) camposIzquierda.push(['Guía(s) de Remisión', guiasHeaderTxt]);
 
       // Columna derecha: condiciones de pago / motivo / observación.
       const camposDerecha = [
@@ -397,13 +401,12 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += hCred + 6;
       }
 
-      // ── Guías de remisión que amparan el traslado — texto plano, SIN recuadro ──
-      // Fluye justo debajo de los totales. La OC y las observaciones (cbc:Note) ya se imprimen en la
-      // cabecera (campos "Orden de Compra" / "Observación", formato SUNAT), por eso no se repiten.
-      // Refleja los cac:DespatchDocumentReference declarados en el XML.
+      // ── Guías de remisión que amparan el traslado ──
+      // En exportación se listan con su formato propio (remitente/transportista) debajo de los totales.
+      // En factura nacional ya se imprimen como campo de cabecera ("Guía(s) de Remisión"), por eso
+      // aquí solo queda el caso de exportación. Refleja los cac:DespatchDocumentReference del XML.
       doc.fontSize(8).fillColor('#000');
       const guiasDetalle = Array.isArray(c.guias_detalle) ? c.guias_detalle : [];
-      const guiasTxt = String(c.guias || '').trim();
       if (esExportacion && guiasDetalle.length) {
         for (const guia of guiasDetalle) {
           const etiqueta = String(guia.tipo_documento) === '31'
@@ -413,10 +416,46 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
              .font('Helvetica').text(`${guia.serie} ${guia.numero}`);
           y = doc.y + 2;
         }
-      } else if (guiasTxt) {
-        doc.font('Helvetica-Bold').text('Guía(s) de remisión: ', 40, y, { continued: true, width: 515 })
-           .font('Helvetica').text(guiasTxt);
-        y = doc.y + 2;
+      }
+
+      // ── Cuentas bancarias para el pago (tabla 1x2: BCP Dólares | BCP Soles) ──
+      // Datos fijos del emisor. Se dibuja como dos celdas de ancho igual con encabezado propio,
+      // separadas por una línea vertical, para una lectura clara al momento de pagar.
+      // Solo aplica a FACTURAS (01); no se imprime en notas de crédito (07) ni débito (08).
+      if (c.codigo_tipo_sunat === '01') {
+        const bloqueH = 62;
+        // Si no cabe encima del pie (QR + leyenda ≈ desde y=700), salta de página.
+        if (y + bloqueH + 10 > 690) { doc.addPage(); y = 40; }
+        y += 4;
+        const bx = 33, bw = 529, bhHead = 15, bhBody = bloqueH - bhHead;
+        const colW = bw / 2;
+        const bxMid = bx + colW;
+        // Marco y encabezado
+        doc.roundedRect(bx, y, bw, bloqueH, 3).stroke('#000');
+        doc.rect(bx, y, bw, bhHead).fill('#1e88e5');
+        doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold')
+           .text('CUENTAS BANCARIAS PARA EL PAGO', bx, y + 4, { width: bw, align: 'center' });
+        // Línea divisoria vertical (solo en el cuerpo)
+        doc.moveTo(bxMid, y + bhHead).lineTo(bxMid, y + bloqueH).stroke('#000');
+
+        const celda = (cx, titulo, cuenta, cci) => {
+          const pad = 8;
+          const cw = colW - pad * 2;
+          let cy = y + bhHead + 6;
+          doc.fillColor('#0d47a1').font('Helvetica-Bold').fontSize(8)
+             .text(titulo, cx + pad, cy, { width: cw });
+          cy += 12;
+          doc.fillColor('#000').font('Helvetica-Bold').fontSize(7.5)
+             .text('Cuenta: ', cx + pad, cy, { continued: true })
+             .font('Helvetica').text(cuenta);
+          cy += 11;
+          doc.font('Helvetica-Bold').text('CCI: ', cx + pad, cy, { continued: true })
+             .font('Helvetica').text(cci);
+        };
+        celda(bx, 'CUENTA BCP DÓLARES (USD)', '194-2116093-1-86', '002-194-002116093186-97');
+        celda(bxMid, 'CUENTA BCP SOLES (S/)', '194-2134322-0-07', '002-194-002134322007-91');
+        doc.fillColor('#000');
+        y += bloqueH + 6;
       }
 
       // ── Pie legal: QR + leyenda ──

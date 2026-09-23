@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { executeQuery } from '../config/database.js';
-import { detectarSector, esInsumoAgricola, clasificarCiiuFrutaVerdura } from '../services/prospectos.service.js';
+import { esInsumoAgricola, clasificarCiiuFrutaVerdura } from '../services/prospectos.service.js';
 import { consultarPorRuc } from '../services/padron-ruc.service.js';
 
 // ============================================================
@@ -23,35 +23,35 @@ const VERIFICAR_CIIU = has('--verificar-ciiu');
 const SKIP_PADRON = has('--no-padron'); // salta el DELETE de padron_empresas (irreversible)
 const LIMIT = Math.max(1, parseInt(val('--limit', '500'), 10) || 500);
 
-function esObjetivoPorNombre(razon) {
-  if (esInsumoAgricola(razon)) return false;
-  return detectarSector(razon)?.sector === 'Agroexportación';
-}
-
 async function fase1Nombre() {
-  console.log('== Fase 1: reclasificación por nombre (SOLO bucket Agroexportación) ==');
-  // SOLO Agroexportación y SOLO leads 'Nuevo' que NO son cliente: los que ya no
-  // son fruta/verdura → excluido = 1. NUNCA se toca un cliente ni un lead ya
-  // gestionado (Convertido/Contactado/En_gestion) ni otros sectores.
+  console.log('== Fase 1: re-sincronizar bucket Agroexportación (excluir SOLO insumos) ==');
+  // Regla: dentro del bucket agro, EXCLUIR solo los que calzan la lista negra
+  // (insumos: insecticidas/fertilizantes/veterinaria + rubros ajenos claros);
+  // REHABILITAR (excluido=0) los neutros/fruta que se hubieran excluido antes.
+  // SOLO leads 'Nuevo' no-cliente, no-manual. Clientes/gestionados: intactos.
   const pr = await executeQuery(
-    `SELECT id_prospecto, razon_social FROM prospectos
-      WHERE excluido = 0 AND sector = 'Agroexportación'
+    `SELECT id_prospecto, razon_social, excluido FROM prospectos
+      WHERE sector = 'Agroexportación'
         AND estado_workflow = 'Nuevo'
         AND (flag_duplicado IS NULL OR flag_duplicado <> 'Ya_cliente')
         AND id_cliente_match IS NULL
         AND (origen IS NULL OR origen <> 'manual')`
   );
   if (!pr.success) throw new Error(pr.error);
-  let excluir = 0;
+  let excluir = 0, rehabilitar = 0;
   for (const p of pr.data) {
-    if (!esObjetivoPorNombre(p.razon_social)) {
+    const debeExcluir = esInsumoAgricola(p.razon_social);
+    if (debeExcluir && p.excluido === 0) {
       excluir++;
       if (!DRY) await executeQuery('UPDATE prospectos SET excluido = 1 WHERE id_prospecto = ?', [p.id_prospecto]);
+    } else if (!debeExcluir && p.excluido === 1) {
+      rehabilitar++;
+      if (!DRY) await executeQuery('UPDATE prospectos SET excluido = 0 WHERE id_prospecto = ?', [p.id_prospecto]);
     }
   }
-  console.log(`  prospectos Agroexportación a excluir por nombre: ${excluir} / ${pr.data.length}`);
+  console.log(`  insumos a excluir: ${excluir}; neutros/fruta a rehabilitar: ${rehabilitar} / ${pr.data.length}`);
 
-  // padron_empresas: SOLO Agroexportación; borra los que ya no son fruta/verdura.
+  // padron_empresas: SOLO Agroexportación; borra únicamente los INSUMOS por nombre.
   // El DELETE es irreversible (caché re-importable); --no-padron lo salta.
   if (SKIP_PADRON) {
     console.log('  padron_empresas: OMITIDO (--no-padron)');
@@ -61,12 +61,12 @@ async function fase1Nombre() {
   if (pe.success) {
     let borrar = 0;
     for (const e of pe.data) {
-      if (!esObjetivoPorNombre(e.razon_social)) {
+      if (esInsumoAgricola(e.razon_social)) {
         borrar++;
         if (!DRY) await executeQuery('DELETE FROM padron_empresas WHERE ruc = ?', [e.ruc]);
       }
     }
-    console.log(`  padron_empresas Agroexportación a borrar por nombre: ${borrar} / ${pe.data.length}`);
+    console.log(`  padron_empresas insumos a borrar: ${borrar} / ${pe.data.length}`);
   }
 }
 

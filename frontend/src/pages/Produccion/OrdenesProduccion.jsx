@@ -36,6 +36,10 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
+// Muestra cantidades de unidades/millares respetando decimales (ej: 12.5),
+// pero sin ".00" innecesario para enteros (ej: 12).
+const fmtUnid = (valor) => String(parseFloat(parseFloat(valor || 0).toFixed(2)));
+
 function OrdenesProduccion() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -380,10 +384,10 @@ function OrdenesProduccion() {
                 </span>
                 <div className="text-xs font-mono">
                   <span className={realUnd > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
-                    {Math.floor(realUnd)}
+                    {fmtUnid(realUnd)}
                   </span>
                   <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{Math.floor(metaUnd)}</span>
+                  <span className="text-gray-600 font-semibold">{fmtUnid(metaUnd)}</span>
                 </div>
               </div>
 

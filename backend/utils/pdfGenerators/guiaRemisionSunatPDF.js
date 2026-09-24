@@ -560,11 +560,11 @@ export async function generarGuiaRemisionSunatPDF({
 
       // Pie legal completo. Si no cabe dentro del área imprimible (≈813 en A4 con margen inferior),
       // pasa a una página limpia en lugar de superponerse al detalle o salirse de la hoja.
-      if (y + 93 > 813) newPage();
+      if (y + 83 > 813) newPage();
       const footerY = Math.max(y + 3, 700);
-      doc.roundedRect(X, footerY, W, 90, 6).fillAndStroke(COLOR.panel, COLOR.line);
+      doc.roundedRect(X, footerY, W, 80, 6).fillAndStroke(COLOR.panel, COLOR.line);
       if (qrBuffer) {
-        try { doc.image(qrBuffer, X + 15, footerY + 9, { width: 72, height: 72 }); } catch { /* QR opcional */ }
+        try { doc.image(qrBuffer, X + 15, footerY + 8, { width: 66, height: 66 }); } catch { /* QR opcional */ }
       }
       const legalX = X + 101;
       doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.ink)
@@ -592,7 +592,7 @@ export async function generarGuiaRemisionSunatPDF({
           ? `Reemplazada por la guía ${g.reemplazo_ref}`
           : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}`
             : (rechazado && g.motivo_estado ? `Motivo del rechazo: ${g.motivo_estado}` : ''));
-        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX, footerY + 74, { width: 401 });
+        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX, footerY + 68, { width: 401 });
       }
 
       doc.end();

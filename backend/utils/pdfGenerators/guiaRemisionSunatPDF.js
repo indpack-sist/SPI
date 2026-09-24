@@ -426,7 +426,7 @@ export async function generarGuiaRemisionSunatPDF({
               .fontSize(col.key === 'unidad' ? 5.3 : 6);
             return doc.heightOfString(values[col.key], { width: col.width - 6, lineGap: 1 });
           });
-          const rowH = Math.max(29, Math.ceil(Math.max(...cellHeights)) + 10);
+          const rowH = Math.max(22, Math.ceil(Math.max(...cellHeights)) + 8);
           if (y + rowH > CONTENT_BOTTOM) {
             sectionEnd(top, 0);
             newPage();
@@ -558,8 +558,9 @@ export async function generarGuiaRemisionSunatPDF({
         sectionEnd(top, 4, { borderless: true });
       }
 
-      // Pie legal completo. Si no cabe, pasa a una página limpia en lugar de superponerse al detalle.
-      if (y + 94 > 800) newPage();
+      // Pie legal completo. Si no cabe dentro del área imprimible (≈813 en A4 con margen inferior),
+      // pasa a una página limpia en lugar de superponerse al detalle o salirse de la hoja.
+      if (y + 93 > 813) newPage();
       const footerY = Math.max(y + 3, 700);
       doc.roundedRect(X, footerY, W, 90, 6).fillAndStroke(COLOR.panel, COLOR.line);
       if (qrBuffer) {

@@ -33,6 +33,12 @@ const MOTIVOS_COMEX = [
 ];
 const labelMotivo = (cod) => [...MOTIVOS_DOMESTICO, ...MOTIVOS_COMEX].find((m) => m.cod === cod)?.label || cod;
 
+// Epoch (ms) → fecha/hora en zona Lima. El backend devuelve created_ms vía UNIX_TIMESTAMP para
+// no arrastrar el desfase +5h de la sesión UTC de la BD (mismo patrón que el Monitor SUNAT).
+const fmtFechaLima = (ms) => ms == null ? '' : new Date(Number(ms)).toLocaleString('es-PE', {
+  timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+});
+
 // `soloLectura`: perfiles de venta (Comercial/Ventas) ven y descargan PDF/XML/CDR de la GRE
 // ya emitida. No emiten ni registran bajas.
 export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = false }) {
@@ -462,7 +468,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 <BadgeEstadoSunat estado={em.sunat_estado} />
                 {rechazo && <span className="badge badge-danger text-xs">Rechazada — sin validez</span>}
                 {ok && <span className="badge badge-success text-xs">Aceptada</span>}
-                {em.created_at && <span className="text-[11px] text-muted">{em.created_at}</span>}
+                {em.created_ms && <span className="text-[11px] text-muted">{fmtFechaLima(em.created_ms)}</span>}
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
                   {/* El PDF solo aplica si el intento guardó snapshot. Un registro reconstruido para
                       trazabilidad (p.ej. una emisión rechazada anterior a esta función) no lo tiene. */}

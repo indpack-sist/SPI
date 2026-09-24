@@ -35,6 +35,10 @@ const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
   return medidasLamina.some(m => Math.abs(m - anchoRollo) < 0.001);
 };
 
+// Muestra cantidades de unidades/millares respetando decimales (ej: 12.5),
+// pero sin ".00" innecesario para enteros (ej: 12).
+const fmtUnid = (valor) => String(parseFloat(parseFloat(valor || 0).toFixed(2)));
+
 function OrdenDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1503,7 +1507,7 @@ function OrdenDetalle() {
                 <div>
                     <p className="text-xs text-muted uppercase font-semibold">Meta {unidadProduccion}</p>
                     <p className="font-bold text-lg text-blue-600">
-                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
+                        {orden.cantidad_unidades ? fmtUnid(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
                     </p>
                 </div>
                 <div>
@@ -1517,7 +1521,7 @@ function OrdenDetalle() {
                 <div>
                     <p className="text-xs text-muted uppercase font-semibold">Real {unidadProduccion}</p>
                     <p className={`font-bold text-lg ${orden.cantidad_unidades_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
+                        {orden.cantidad_unidades_producida ? fmtUnid(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
                     </p>
                 </div>
                 <div>
@@ -1626,7 +1630,7 @@ function OrdenDetalle() {
                   <tr key={registro.id_registro}>
                     <td>{formatearFecha(registro.fecha_registro)}</td>
                     <td className="text-center font-bold text-blue-600">
-                        {registro.cantidad_unidades_registrada ? parseInt(registro.cantidad_unidades_registrada) : '-'}
+                        {registro.cantidad_unidades_registrada ? fmtUnid(registro.cantidad_unidades_registrada) : '-'}
                     </td>
                     <td className="text-right font-bold">
                       {parseFloat(registro.cantidad_registrada).toFixed(2)} Kg
@@ -1909,7 +1913,7 @@ function OrdenDetalle() {
                     <Hash className="icon" size={16} />
                     <input
                         type="number"
-                        step="1"
+                        step="0.01"
                         min="0"
                         className="form-input pl-8"
                         value={cantidadUnidadesParcial}
@@ -2212,7 +2216,7 @@ function OrdenDetalle() {
               <div className="text-sm text-green-800">
                 <p className="font-bold">Datos trasladados desde el registro parcial</p>
                 <p className="mt-1">Las cantidades, insumos y mermas ya están cargados. Revísalos antes de confirmar el cierre.</p>
-                <p className="mt-1 text-xs text-green-600">Ya producidas (parciales anteriores): <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
+                <p className="mt-1 text-xs text-green-600">Ya producidas (parciales anteriores): <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{fmtUnid(orden.cantidad_unidades_producida)} {unidadProduccion}</strong></p>
               </div>
             </div>
           ) : (
@@ -2220,7 +2224,7 @@ function OrdenDetalle() {
               <Info className="text-blue-500 shrink-0" size={20} />
               <div className="text-sm text-blue-700">
                 <p><strong>Cierre de Orden:</strong> Ingrese las cantidades <strong>ADICIONALES</strong> producidas en este cierre (no el total acumulado).</p>
-                <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
+                <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{fmtUnid(orden.cantidad_unidades_producida)} {unidadProduccion}</strong></p>
               </div>
             </div>
           )}
@@ -2232,7 +2236,7 @@ function OrdenDetalle() {
                     <Hash className="icon" size={16} />
                     <input
                       type="number"
-                      step="1"
+                      step="0.01"
                       min="0"
                       className="form-input"
                       value={cantidadUnidadesFinal}
@@ -2605,7 +2609,7 @@ function OrdenDetalle() {
                     </div>
                     <div className="form-group">
                         <label className="form-label">Cantidad Unidades</label>
-                        <input type="number" step="1" className="form-input" value={datosEdicion.cantidad_unidades} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_unidades: e.target.value})} />
+                        <input type="number" step="0.01" className="form-input" value={datosEdicion.cantidad_unidades} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_unidades: e.target.value})} />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Turno</label>

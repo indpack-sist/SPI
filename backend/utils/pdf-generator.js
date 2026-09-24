@@ -2318,7 +2318,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fillColor('black').text('PRODUCTO:', 25, yInfo + 5);
       doc.font('Helvetica').text(orden.producto, 70, yInfo + 5, { width: 300, ellipsis: true });
       
-      const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
+      const metaUnidades = orden.cantidad_unidades ? `${fmtCantidad(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
       doc.font('Helvetica-Bold').text(`META ${unidadProduccion}:`, 380, yInfo + 6);
       doc.font('Helvetica').text(metaUnidades, 430, yInfo + 6);
       doc.font('Helvetica-Bold').text('META KG:', 480, yInfo + 6);

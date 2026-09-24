@@ -521,8 +521,8 @@ function CrearOrden() {
                     <div className="relative">
                         <input
                             type="number"
-                            min="1"
-                            step="1"
+                            min="0"
+                            step="0.01"
                             className="form-input pl-9"
                             value={formData.cantidad_unidades}
                             onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}

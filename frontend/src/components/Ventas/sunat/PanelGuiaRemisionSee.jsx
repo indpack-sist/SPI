@@ -59,6 +59,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const [modalDespachar, setModalDespachar] = useState(false);
   const [fechaDespacho, setFechaDespacho] = useState('');
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
+  // Alta manual de factura relacionada (factura → guía) en el wizard de venta.
+  const [facturaManual, setFacturaManual] = useState({ serie: '', numero: '' });
   const hoyIsoLima = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());
@@ -187,13 +189,33 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       codigosBien: Object.fromEntries(
         (guia?.detalle || []).map((it) => [it.id_detalle, it.codigo_bien || ''])
       ),
+      // Facturas relacionadas (venta): si ya hay guardadas se usan; si no, se pre-marcan las
+      // facturas SEE aceptadas de la OV (auto-carga). El usuario puede quitar o agregar más.
+      facturasRel: (guia?.facturas_relacionadas?.length
+        ? guia.facturas_relacionadas.map((x) => ({ serie: x.serie, numero: String(x.numero), id_factura: x.id_factura || null, incluida: true }))
+        : (guia?.facturas_sugeridas || []).map((x) => ({ serie: x.serie, numero: String(x.numero), id_factura: x.id_factura, incluida: true }))),
     });
+    setFacturaManual({ serie: '', numero: '' });
     setWizStep(0);
     setAlerta(null);
     setModalEmitir(true);
   };
 
   const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
+  // Facturas relacionadas (venta): incluir/excluir, quitar y agregar manual.
+  const toggleFacturaRel = (i, incluida) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).map((x, j) => j === i ? { ...x, incluida } : x) }));
+  const quitarFacturaRel = (i) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).filter((_, j) => j !== i) }));
+  const agregarFacturaRel = () => {
+    const serie = facturaManual.serie.trim().toUpperCase();
+    const numero = facturaManual.numero.trim();
+    if (!serie || !numero) return;
+    setEmitForm((f) => {
+      const ya = (f.facturasRel || []).some((x) => x.serie === serie && String(x.numero) === numero);
+      if (ya) return f;
+      return { ...f, facturasRel: [...(f.facturasRel || []), { serie, numero, id_factura: null, incluida: true }] };
+    });
+    setFacturaManual({ serie: '', numero: '' });
+  };
   const setCodigoBien = (idDetalle, valor) => {
     const limpio = valor.replace(/\D/g, '').slice(0, 13);
     setEmitForm((f) => ({ ...f, codigosBien: { ...f.codigosBien, [idDetalle]: limpio } }));
@@ -255,6 +277,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         .filter(([, v]) => v)
         .map(([id_detalle, codigo_bien]) => ({ id_detalle: Number(id_detalle), codigo_bien })),
     };
+    // Facturas relacionadas (venta doméstica): lista autoritativa. En compra/comex no se envía
+    // (la referencia documental la maneja su propia rama en el backend).
+    if (!esCompra && !f.es_comercio_exterior) {
+      payload.docs_relacionados_venta = (f.facturasRel || [])
+        .filter((x) => x.incluida && x.serie && x.numero)
+        .map((x) => ({ tipo_cod: '01', serie: x.serie, numero: String(x.numero), id_factura: x.id_factura || null }));
+    }
     const r = await tras(() => sunatAPI.emitirGuia(guia.id_guia, payload), null);
     const d = r?.data;
     if (d) {
@@ -865,6 +894,34 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <div className="text-[10px] text-muted uppercase mb-1">Factura asociada</div>
                   <div className="font-mono font-semibold">{guia.oc_serie_documento}-{guia.oc_numero_documento}</div>
                   <div className="text-xs text-muted mt-1">Se declarará como documento relacionado, con el RUC del proveedor emisor.</div>
+                </div>
+              )}
+
+              {!esCompra && !f.es_comercio_exterior && (
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="text-[10px] text-muted uppercase mb-1">Documentos relacionados (Facturas)</div>
+                  <p className="text-[11px] text-muted mb-2">Si la venta ya se facturó, la factura se declara en la guía como documento relacionado. Se auto-cargan las facturas aceptadas de la orden; puedes quitarlas o agregar otra.</p>
+                  {(f.facturasRel || []).length === 0 && <div className="text-xs text-muted">Sin facturas. Agrega una si corresponde.</div>}
+                  {(f.facturasRel || []).map((x, i) => (
+                    <div key={`${x.serie}-${x.numero}-${i}`} className="flex items-center justify-between gap-2 py-1">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={x.incluida} onChange={(e) => toggleFacturaRel(i, e.target.checked)} />
+                        <span className="font-mono">Factura {x.serie}-{x.numero}</span>
+                      </label>
+                      <button type="button" className="btn btn-xs btn-outline" onClick={() => quitarFacturaRel(i)}>Quitar</button>
+                    </div>
+                  ))}
+                  <div className="flex items-end gap-2 mt-2">
+                    <div>
+                      <label className="block text-[10px] text-muted uppercase">Serie</label>
+                      <input className="form-input text-sm w-24" value={facturaManual.serie} onChange={(e) => setFacturaManual((m) => ({ ...m, serie: e.target.value }))} placeholder="FE01" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-muted uppercase">Número</label>
+                      <input className="form-input text-sm w-28" value={facturaManual.numero} onChange={(e) => setFacturaManual((m) => ({ ...m, numero: e.target.value.replace(/\D/g, '') }))} placeholder="44" />
+                    </div>
+                    <button type="button" className="btn btn-sm btn-outline" onClick={agregarFacturaRel}>Agregar factura</button>
+                  </div>
                 </div>
               )}
 

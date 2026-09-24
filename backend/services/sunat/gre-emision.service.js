@@ -51,7 +51,7 @@ async function finalizarReemplazoSiAplica(idGuiaCerrada, aceptado) {
 // generarPdfGuia pasa a generarGuiaRemisionSunatPDF. Así el PDF histórico (con marca de agua
 // RECHAZADO) se reimprime fielmente aunque la guía/OV cambien después. Ver docs/sql_gre_emisiones_historial.sql.
 function construirSnapshotPdfGre({
-  g, serie, numero, empresa, destinatario, proveedor, docRelacionado,
+  g, serie, numero, empresa, destinatario, proveedor, docRelacionado, docsRelacionadosVenta,
   carrier, registrar, conductores, vehiculos, indicadores, modalidad,
   fechaEntregaTransportista, comex, detalleEmision, fechaTraslado,
   emision, hora, observacion, esCompra, esComex,
@@ -111,6 +111,9 @@ function construirSnapshotPdfGre({
     comex: comexPdf,
     proveedor: proveedor ? { razon_social: proveedor.razon_social, ruc: proveedor.ruc } : null,
     docRelacionado: docRelacionado ? { tipo_desc: docRelacionado.tipo_desc, serie: docSerie || null, numero: docNumero || null } : null,
+    docsRelacionadosVenta: Array.isArray(docsRelacionadosVenta)
+      ? docsRelacionadosVenta.map((doc) => ({ tipo_desc: doc.tipo_desc, numero: doc.numero }))
+      : [],
   };
 }
 
@@ -246,7 +249,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
 
     // Destinatario de la GRE + (solo compra) proveedor y documento relacionado.
     const esComex = Number(g.es_comercio_exterior) === 1;
-    let destinatario, proveedor = null, docRelacionado = undefined;
+    let destinatario, proveedor = null, docRelacionado = undefined, docsRelacionadosVenta = [];
     if (esCompra) {
       // Compra: destinatario = la propia empresa; el vendedor va en SellerSupplierParty; la factura
       // del proveedor se referencia con IssuerParty. Espeja EG07-333.
@@ -283,6 +286,19 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
           throw new AppError('RUC del destinatario comex inválido (11 dígitos)', 422);
         }
         destinatario = { ruc: g.destinatario_ruc, razon_social: g.destinatario_razon, tipo_documento: 'RUC' };
+      }
+      // Documentos relacionados de VENTA (facturas declaradas): factura → guía. Solo venta
+      // doméstica (comex maneja sus DAM aparte). El emisor de la factura es la propia empresa.
+      if (!esComex) {
+        const [refs] = await conn.query(
+          `SELECT tipo_cod, tipo_desc, serie, numero
+             FROM guias_remision_factura_referencia WHERE id_guia = ? ORDER BY id`, [idGuia]);
+        docsRelacionadosVenta = refs.map((r) => ({
+          tipo: r.tipo_cod,
+          tipo_desc: r.tipo_desc,
+          numero: r.serie ? `${r.serie}-${r.numero}` : r.numero,
+          issuerRuc: empresa.ruc,
+        }));
       }
     }
 
@@ -481,7 +497,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       fecha: { emision, hora }, fechaTraslado, modalidad,
       transportista: carrier, registrarTransportista: registrar, fechaEntregaTransportista,
       conductores, vehiculos, indicadores,
-      observacion, comex, proveedor, docRelacionado
+      observacion, comex, proveedor, docRelacionado, docsRelacionadosVenta
     };
     const { xml } = construirDespatchAdviceXML(datos);
     const { xmlFirmado, digestValue } = firmarXml(xml);
@@ -535,7 +551,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     let emisionId = null;
     try {
       const snapshot = construirSnapshotPdfGre({
-        g, serie, numero, empresa, destinatario, proveedor, docRelacionado,
+        g, serie, numero, empresa, destinatario, proveedor, docRelacionado, docsRelacionadosVenta,
         carrier, registrar, conductores, vehiculos, indicadores, modalidad,
         fechaEntregaTransportista, comex, detalleEmision: detalleEmision, fechaTraslado,
         emision, hora, observacion, esCompra, esComex,

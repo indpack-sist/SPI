@@ -293,6 +293,29 @@ export async function getGuiaRemisionById(req, res) {
       guia.contenedores = [];
     }
 
+    // Venta doméstica: facturas relacionadas ya guardadas + facturas SEE ACEPTADAS de la OV
+    // (sugeridas para pre-marcar en el wizard). Comex/compra no aplican → arrays vacíos.
+    if (guia.tipo_origen !== 'Compra' && Number(guia.es_comercio_exterior) !== 1) {
+      const relacionadasResult = await executeQuery(
+        `SELECT tipo_cod, tipo_desc, serie, numero, id_factura
+           FROM guias_remision_factura_referencia WHERE id_guia = ? ORDER BY id`, [id]);
+      guia.facturas_relacionadas = relacionadasResult.success ? relacionadasResult.data : [];
+      let sugeridas = [];
+      if (guia.id_orden_venta) {
+        const sugeridasResult = await executeQuery(
+          `SELECT id_factura, numero_factura, serie, numero
+             FROM facturas_venta
+            WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
+              AND estado <> 'Anulada' AND sunat_estado = 'ACEPTADO'
+            ORDER BY id_factura`, [guia.id_orden_venta]);
+        sugeridas = sugeridasResult.success ? sugeridasResult.data : [];
+      }
+      guia.facturas_sugeridas = sugeridas;
+    } else {
+      guia.facturas_relacionadas = [];
+      guia.facturas_sugeridas = [];
+    }
+
     const guiaTransportistaResult = await executeQuery(`
       SELECT 
         id_guia_transportista,
@@ -1016,11 +1039,13 @@ export async function despacharGuiaRemision(req, res) {
     
     // Obtener información de la guía
     const guiaResult = await executeQuery(`
-      SELECT 
+      SELECT
         gr.*,
         ov.id_cliente,
         ov.numero_orden AS numero_orden_venta,
-        ov.estado AS estado_orden
+        ov.estado AS estado_orden,
+        ov.id_cotizacion,
+        ov.moneda AS moneda_orden
       FROM guias_remision gr
       INNER JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       WHERE gr.id_guia = ?
@@ -1057,9 +1082,11 @@ export async function despacharGuiaRemision(req, res) {
         p.stock_actual,
         p.codigo,
         COALESCE(p.nombre, dgr.descripcion) AS producto,
-        COALESCE(p.unidad_medida, dgr.unidad_medida) AS unidad_producto
+        COALESCE(p.unidad_medida, dgr.unidad_medida) AS unidad_producto,
+        dov.precio_unitario AS precio_orden
       FROM detalle_guia_remision dgr
       LEFT JOIN productos p ON dgr.id_producto = p.id_producto
+      LEFT JOIN detalle_orden_venta dov ON dgr.id_detalle_orden = dov.id_detalle
       WHERE dgr.id_guia = ?
       ORDER BY dgr.id_detalle
     `, [id]);
@@ -1099,10 +1126,11 @@ export async function despacharGuiaRemision(req, res) {
 
     for (const item of detalleReal) {
       const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+      const precioUnitario = parseFloat(item.precio_orden || 0);
       const cantidad = parseFloat(item.cantidad);
 
       totalCosto += cantidad * costoUnitario;
-      totalPrecio += cantidad * costoUnitario;
+      totalPrecio += cantidad * precioUnitario;
     }
 
     // Crear la salida de inventario solo si hay productos reales que descontar (una muestra con
@@ -1134,7 +1162,7 @@ export async function despacharGuiaRemision(req, res) {
         id,
         totalCosto,
         totalPrecio,
-        'PEN',
+        guia.moneda_orden || 'PEN',
         id_usuario,
         `Despacho Guía ${refGuia} - Orden ${guia.numero_orden_venta}`,
         'Activo',
@@ -1153,6 +1181,7 @@ export async function despacharGuiaRemision(req, res) {
       // Línea de salida + descuento de stock por cada producto real
       for (const item of detalleReal) {
         const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const precioUnitario = parseFloat(item.precio_orden || 0);
         const cantidad = parseFloat(item.cantidad);
 
         const detalleSalidaResult = await executeQuery(`
@@ -1163,7 +1192,7 @@ export async function despacharGuiaRemision(req, res) {
             costo_unitario,
             precio_unitario
           ) VALUES (?, ?, ?, ?, ?)
-        `, [id_salida, item.id_producto, cantidad, costoUnitario, costoUnitario]);
+        `, [id_salida, item.id_producto, cantidad, costoUnitario, precioUnitario]);
 
         if (!detalleSalidaResult.success) {
           return res.status(500).json({
@@ -1230,7 +1259,19 @@ export async function despacharGuiaRemision(req, res) {
       SET estado = ?, id_salida = ?
       WHERE id_orden_venta = ?
     `, [estadoOrdenDespacho, id_salida, guia.id_orden_venta]);
-    
+
+    // Reflejar el despacho en la cotización de origen, igual que "Registrar Despacho" desde la OV.
+    // Sin esto, la cotización quedaba estancada en su estado previo al despachar desde la guía.
+    if (guia.id_cotizacion) {
+      const estadoCotizacion = estadoOrdenDespacho === 'Despachada'
+        ? 'Despachado desde OV'
+        : 'Despachado parcial desde OV';
+      await executeQuery(
+        'UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?',
+        [estadoCotizacion, guia.id_cotizacion]
+      );
+    }
+
     res.json({
       success: true,
       message: `Guía despachada exitosamente. Salida ID: ${id_salida}`,

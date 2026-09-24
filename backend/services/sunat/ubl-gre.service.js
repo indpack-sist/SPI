@@ -275,6 +275,20 @@ export function construirDespatchAdviceXML(d) {
   </cac:SellerSupplierParty>`
     : '';
 
+  // Documentos relacionados de VENTA (facturas): factura → guía. Array. Misma forma que la de
+  // compra con cac:IssuerParty, pero el emisor de la factura es la propia empresa (issuerRuc lo
+  // pasa el caller = empresa.ruc). Calcado del molde real aceptado docs/muestra/…EG07-358.xml.
+  const docsVentaXml = (Array.isArray(d.docsRelacionadosVenta) ? d.docsRelacionadosVenta : [])
+    .filter((doc) => doc && doc.numero)
+    .map((doc) => `\n  <cac:AdditionalDocumentReference>
+    <cbc:ID>${cdata(doc.numero)}</cbc:ID>
+    <cbc:DocumentTypeCode listAgencyName="PE:SUNAT" listName="Documento relacionado al transporte" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo61">${cdata(doc.tipo || '01')}</cbc:DocumentTypeCode>
+    <cbc:DocumentType>${cdata(doc.tipo_desc || 'Factura')}</cbc:DocumentType>
+    <cac:IssuerParty>
+      <cac:PartyIdentification><cbc:ID schemeID="6" ${SCHEME_DOC}>${cdata(doc.issuerRuc)}</cbc:ID></cac:PartyIdentification>
+    </cac:IssuerParty>
+  </cac:AdditionalDocumentReference>`).join('');
+
   // Documentos relacionados comex (catálogo 61): DAM (cód. 50), DS, etc. Cada uno con su
   // DocumentType descriptivo. Calcado de EG07-273. GRE Remitente lleva serie → ID = serie-numero.
   const comexDocsXml = (comex?.docsRelacionados || []).map((doc) => {
@@ -332,7 +346,7 @@ export function construirDespatchAdviceXML(d) {
   <cbc:ID>${idComprobante}</cbc:ID>
   <cbc:IssueDate>${d.fecha.emision}</cbc:IssueDate>
   <cbc:IssueTime>${d.fecha.hora}</cbc:IssueTime>
-  <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>${notaXml}${docRelXml}${comexDocsXml}
+  <cbc:DespatchAdviceTypeCode listAgencyName="PE:SUNAT" listName="Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">09</cbc:DespatchAdviceTypeCode>${notaXml}${docRelXml}${docsVentaXml}${comexDocsXml}
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>

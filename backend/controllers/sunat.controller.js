@@ -1280,6 +1280,33 @@ export async function emitirGuiaRemision(req, res, next) {
       }
     }
 
+    // ── Documentos relacionados de VENTA (facturas): factura → guía ────────────────
+    // Lista AUTORITATIVA del wizard: si viene un array (aunque sea vacío), reemplaza lo guardado.
+    // Se valida el formato ANTES de numerar (un error tira 400 sin quemar correlativo). Solo
+    // facturas (tipo_cod forzado a '01'); dedup por (id_guia, tipo_cod, serie, numero) vía UNIQUE.
+    if (Array.isArray(b.docs_relacionados_venta)) {
+      const limpias = [];
+      const vistos = new Set();
+      for (const d of b.docs_relacionados_venta) {
+        const serie = String(d?.serie || '').trim().toUpperCase();
+        const numero = String(d?.numero || '').trim();
+        if (!serie || !numero) throw new AppError('Documento relacionado inválido: falta serie o número de la factura', 400);
+        if (!/^[A-Z0-9]{1,20}$/.test(serie)) throw new AppError(`Serie de factura inválida: "${serie}"`, 400);
+        if (!/^[0-9]{1,50}$/.test(numero)) throw new AppError(`Número de factura inválido: "${numero}"`, 400);
+        const clave = `01|${serie}|${numero}`;
+        if (vistos.has(clave)) continue;
+        vistos.add(clave);
+        limpias.push({ serie, numero, id_factura: d?.id_factura ? Number(d.id_factura) : null });
+      }
+      await pool.query('DELETE FROM guias_remision_factura_referencia WHERE id_guia = ?', [idGuia]);
+      if (limpias.length) {
+        await pool.query(
+          `INSERT IGNORE INTO guias_remision_factura_referencia
+             (id_guia, tipo_cod, tipo_desc, serie, numero, id_factura) VALUES ?`,
+          [limpias.map((x) => [idGuia, '01', 'Factura', x.serie, x.numero, x.id_factura])]);
+      }
+    }
+
     // Si el panel envía `observaciones` (editable, prellenado con la OC) se usa tal cual como
     // cbc:Note; si no viene (undefined), el core compone del texto de la guía + OC de la OV.
     const observacion = b.observaciones !== undefined ? String(b.observaciones) : undefined;

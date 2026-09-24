@@ -91,6 +91,7 @@ export async function generarGuiaRemisionSunatPDF({
   comex = null,
   proveedor = null,
   docRelacionado = null,
+  docsRelacionadosVenta = [],
   qrBuffer
 }) {
   return new Promise((resolve, reject) => {
@@ -335,6 +336,11 @@ export async function generarGuiaRemisionSunatPDF({
         const relatedNumber = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
         destinatarioBodyHeight += fullWidthHeight('Documento relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${relatedNumber}`, { labelWidth: 125 });
       }
+      const facturasVentaPdf = (Array.isArray(docsRelacionadosVenta) ? docsRelacionadosVenta : []).filter((f) => f?.numero);
+      const facturasVentaTexto = facturasVentaPdf.map((f) => `${f.tipo_desc || 'Factura'} N° ${f.numero}`).join(' · ');
+      if (facturasVentaPdf.length) {
+        destinatarioBodyHeight += fullWidthHeight('Documento relacionado:', facturasVentaTexto, { labelWidth: 125 });
+      }
       top = sectionStart('Datos del destinatario', '', sectionHeight(destinatarioBodyHeight));
       twoColumnRows(destinatarioRows);
       if (destinatario.direccion) fullWidthRow('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
@@ -344,6 +350,9 @@ export async function generarGuiaRemisionSunatPDF({
       if (docRelacionado?.numero) {
         const docNumero = docRelacionado.serie ? `${docRelacionado.serie}-${docRelacionado.numero}` : docRelacionado.numero;
         fullWidthRow('Documento relacionado:', `${docRelacionado.tipo_desc || 'Factura'} N° ${docNumero}`, { labelWidth: 125 });
+      }
+      if (facturasVentaPdf.length) {
+        fullWidthRow('Documento relacionado:', facturasVentaTexto, { labelWidth: 125 });
       }
       sectionEnd(top);
 

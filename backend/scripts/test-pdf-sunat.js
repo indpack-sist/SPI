@@ -145,6 +145,31 @@ async function main() {
     txtGre.includes('Teléfono: 01-312 7858') && txtGre.includes('E-mail: informes@indpackperu.com'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
+  // GRE de venta con factura(s) relacionada(s) → cuadro "Datos del destinatario"
+  const pdfGreFact = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 2, fecha_emision: '18/09/2026 10:59:00', fecha_traslado: '18/09/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 100,
+      ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VILLA EL SALVADOR',
+      ubigeo_llegada: '110108', direccion_llegada: 'FUNDO GENETICA - ICA',
+      sunat_estado: 'ACEPTADO', sunat_digest_value: digestPara('TE01-2'),
+    },
+    emisor, cliente: clienteRipley,
+    detalle: [{ codigo: 'RBT60G008', nombre: 'ROLLO BURBUPACK 1.50 x 100 MTS', cantidad: 100, codigo_unidad_sunat: 'NIU' }],
+    vehiculos: [{ placa: 'BKK901' }],
+    conductor: { nombre_completo: 'DIAZ ORIZANO MIRCO', dni: '80334861', licencia_conducir: 'M80334861' },
+    docsRelacionadosVenta: [
+      { tipo_desc: 'Factura', numero: 'FE01-44' },
+      { tipo_desc: 'Factura', numero: 'FE01-45' },
+    ],
+    qrBuffer: qrGre
+  });
+  check('GRE con factura relacionada genera PDF válido', esPdf(pdfGreFact), `${pdfGreFact.length} bytes`);
+  const txtGreFact = await textoDe(pdfGreFact);
+  check('GRE imprime la(s) factura(s) relacionada(s) en cabecera',
+    txtGreFact.includes('Documento relacionado') && txtGreFact.includes('FE01-44') && txtGreFact.includes('FE01-45'));
+  await fs.writeFile(path.join(outDir, 'test-TE01-2-factura.pdf'), pdfGreFact);
+
   // 4b) GRE Caso 1 (tercero público SIN registrar veh/cond) — solo transportista (espeja EG07-81).
   const pdfGreC1 = await generarGuiaRemisionSunatPDF({
     guia: {

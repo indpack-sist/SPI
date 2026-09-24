@@ -470,5 +470,34 @@ try {
   check('XML de referencia EG07-333 legible en docs/', false, e.message);
 }
 
+// ── Documentos relacionados de VENTA (factura → guía) — molde EG07-358 ────────
+// Cuando se factura ANTES de emitir la guía, la GRE de venta declara la(s) factura(s) con
+// cac:AdditionalDocumentReference + IssuerParty = RUC de la propia empresa (SPI es el emisor).
+console.log('\n=== VENTA: factura(s) relacionada(s) (AdditionalDocumentReference) ===\n');
+const datosConFactura = {
+  ...datos,
+  docsRelacionadosVenta: [
+    { tipo: '01', tipo_desc: 'Factura', numero: 'FE01-44', issuerRuc: RUC },
+    { tipo: '01', tipo_desc: 'Factura', numero: 'FE01-45', issuerRuc: RUC },
+  ],
+};
+const { xml: xmlFact } = construirDespatchAdviceXML(datosConFactura);
+check('VENTA: XML con facturas bien-formado', XMLValidator.validate(xmlFact) === true);
+const docFact = parser.parse(xmlFact).DespatchAdvice;
+const refsRaw = docFact.AdditionalDocumentReference;
+const refs = Array.isArray(refsRaw) ? refsRaw : (refsRaw ? [refsRaw] : []);
+check('VENTA: 2 AdditionalDocumentReference', refs.length === 2, `n=${refs.length}`);
+check('VENTA: ID = FE01-44', String(refs[0]?.ID) === 'FE01-44', `ID=${refs[0]?.ID}`);
+check('VENTA: DocumentTypeCode = 01 (cat.61)', String(refs[0]?.DocumentTypeCode?.['#text']) === '01');
+check('VENTA: DocumentType = Factura', String(refs[0]?.DocumentType) === 'Factura');
+check('VENTA: IssuerParty RUC = emisor (SPI)',
+  String(refs[0]?.IssuerParty?.PartyIdentification?.ID?.['#text']) === RUC);
+check('VENTA: 2ª factura ID = FE01-45', String(refs[1]?.ID) === 'FE01-45');
+check('VENTA: AdditionalDocumentReference antes de cac:Signature',
+  xmlFact.indexOf('AdditionalDocumentReference') > -1 &&
+  xmlFact.indexOf('AdditionalDocumentReference') < xmlFact.indexOf('<cac:Signature>'));
+check('VENTA: regresión — guía base (sin facturas) NO trae AdditionalDocumentReference',
+  da.AdditionalDocumentReference === undefined);
+
 console.log(`\n=== RESUMEN: ${pass} PASS · ${fail} FAIL ===\n`);
 if (fail > 0) process.exit(1);

@@ -883,18 +883,30 @@ function OrdenesVenta() {
           background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
         }
         .page-ordenes-venta button.pagination-btn {
-          background-color: var(--carbon-mid) !important; border: 2px solid var(--steel) !important; color: var(--mist) !important;
-          width: 48px !important; height: 48px !important; min-width: 48px !important; display: flex !important;
-          align-items: center !important; justify-content: center !important; border-radius: 8px !important;
-          font-weight: 800 !important; font-size: 1rem !important; cursor: pointer !important; transition: all 0.2s !important;
+          background-color: transparent !important; border: 1px solid transparent !important; color: var(--mist) !important;
+          width: 36px !important; height: 36px !important; min-width: 36px !important; display: flex !important;
+          align-items: center !important; justify-content: center !important; border-radius: 9px !important;
+          font-weight: 700 !important; font-size: 0.85rem !important; cursor: pointer !important;
+          transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
         }
         .page-ordenes-venta button.pagination-btn-active {
           background-color: var(--primary) !important; border-color: var(--primary) !important; color: #000 !important;
-          box-shadow: 0 0 20px rgba(232, 184, 75, 0.4) !important; transform: scale(1.1) !important; z-index: 20 !important;
+          font-weight: 800 !important; box-shadow: 0 2px 8px rgba(232, 184, 75, 0.35) !important;
         }
         .page-ordenes-venta button.pagination-btn:hover:not(.pagination-btn-active) {
-          border-color: var(--primary) !important; color: var(--primary) !important; background-color: var(--carbon-light) !important;
+          color: var(--primary) !important; background-color: rgba(232, 184, 75, 0.1) !important;
         }
+        .page-ordenes-venta button.pagination-nav {
+          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--mist) !important;
+          height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important;
+          gap: 0.4rem !important; padding: 0 0.9rem !important; border-radius: 9px !important; font-weight: 700 !important;
+          font-size: 0.65rem !important; letter-spacing: 0.08em !important; cursor: pointer !important;
+          transition: all 0.15s ease !important;
+        }
+        .page-ordenes-venta button.pagination-nav:hover:not(:disabled) {
+          border-color: var(--primary) !important; color: var(--primary) !important;
+        }
+        .page-ordenes-venta button.pagination-nav:disabled { opacity: 0.35 !important; cursor: not-allowed !important; }
         .page-ordenes-venta .table td { vertical-align: middle !important; }
         .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
         @media (min-width: 641px) { .page-ordenes-venta .table-container { overflow: hidden !important; } }
@@ -1083,21 +1095,39 @@ function OrdenesVenta() {
           </div>
 
           {pagination.total > itemsPerPage && (
-            <div className="mt-20 px-6 py-10 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] relative z-20">
-              <div className="flex items-center gap-3">
-                <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToPrevPage} disabled={currentPage === 1}><ChevronLeft size={20} /> ANTERIOR</button>
-                <div className="flex items-center gap-2 mx-2">
+            <div className="px-4 sm:px-6 py-4 bg-carbon-mid/60 border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
+              {/* Rango de registros */}
+              <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1">
+                <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
+                <span className="mx-1">–</span>
+                <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + currentItems.length}</span>
+                <span className="mx-1.5 text-steel">de</span>
+                <span className="text-mist font-bold">{pagination.total}</span>
+                <span className="ml-1.5 uppercase tracking-widest text-[0.6rem]">órdenes</span>
+              </div>
+
+              {/* Controles de página */}
+              <div className="flex items-center gap-1.5 order-1 lg:order-2">
+                <button className="pagination-nav" onClick={goToPrevPage} disabled={currentPage === 1}>
+                  <ChevronLeft size={16} /> <span className="hidden sm:inline">ANTERIOR</span>
+                </button>
+                <div className="flex items-center gap-1 mx-1">
                   {getPageNumbers().map((num, idx) => (
-                    num === '...' ? <span key={`ell-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel font-black">...</span> :
-                    <button key={`pg-${num}`} onClick={() => setCurrentPage(num)} className={`pagination-btn ${currentPage === num ? 'pagination-btn-active' : ''}`}>{num}</button>
+                    num === '...'
+                      ? <span key={`ell-${idx}`} className="w-8 h-9 flex items-center justify-center text-steel font-bold select-none">···</span>
+                      : <button key={`pg-${num}`} onClick={() => setCurrentPage(num)} className={`pagination-btn ${currentPage === num ? 'pagination-btn-active' : ''}`}>{num}</button>
                   ))}
                 </div>
-                <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToNextPage} disabled={currentPage === totalPages}>SIGUIENTE <ChevronRight size={20} /></button>
+                <button className="pagination-nav" onClick={goToNextPage} disabled={currentPage === totalPages}>
+                  <span className="hidden sm:inline">SIGUIENTE</span> <ChevronRight size={16} />
+                </button>
               </div>
-              <div className="flex items-center gap-4 px-6 py-2.5 bg-carbon border border-steel rounded-lg shadow-inner">
-                <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">Página</span>
-                <input type="number" min="1" max={totalPages} value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handlePageJump} onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }} className="w-16 h-10 text-center text-base font-black text-primary bg-carbon-mid border-2 border-steel rounded focus:border-primary outline-none transition-all" />
-                <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">de {totalPages}</span>
+
+              {/* Salto a página */}
+              <div className="flex items-center gap-2 order-3">
+                <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">Ir a</span>
+                <input type="number" min="1" max={totalPages} value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handlePageJump} onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }} className="w-14 h-9 text-center text-sm font-bold text-primary bg-carbon border border-steel rounded-lg focus:border-primary outline-none transition-all" />
+                <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">/ {totalPages}</span>
               </div>
             </div>
           )}

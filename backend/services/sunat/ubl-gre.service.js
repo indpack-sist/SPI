@@ -14,6 +14,17 @@ const MOTIVOS_TRASLADO = {
   '18': 'TRASLADO EMISOR ITINERANTE CP'
 };
 
+// Limpia IDs vehiculares SUNAT (TUCE / Certificado Habilitacion / N. autorizacion).
+// Estos campos suelen copiarse-pegarse desde la consulta de placa de SUNAT, lo que arrastra
+// espacios, espacios duros (U+00A0) o caracteres invisibles de ancho cero. SUNAT valida el
+// formato de forma estricta (reglas 3355 / 4064) y cualquier caracter extra provoca rechazo.
+// Nunca contienen espacios internos, asi que eliminamos todo whitespace/invisible.
+const limpiarIdVehicular = (s) => Array.from(String(s ?? '')).filter((ch) => {
+  const c = ch.codePointAt(0);
+  // fuera: controles/espacio (<=0x20), espacio duro (0xA0), anchos cero (0x200B-0x200D), BOM (0xFEFF)
+  return !(c <= 0x20 || c === 0xA0 || (c >= 0x200B && c <= 0x200D) || c === 0xFEFF);
+}).join('');
+
 // Divide "NOMBRE APELLIDO APELLIDO" en {first, family} para DriverPerson.
 function partirNombre(nombre) {
   const t = String(nombre || '').trim().split(/\s+/);
@@ -198,12 +209,20 @@ export function construirDespatchAdviceXML(d) {
   // Cada uno con TUCE/Certificado (RegistrationNationalityID) y autorización especial
   // (ShipmentDocumentReference schemeID="06"). Estructura calcada de docs/…-09-EG07-325.xml.
   const vehiculos = (declararVC && Array.isArray(d.vehiculos)) ? d.vehiculos.filter(v => v?.placa) : [];
-  const tuceXml = (v, ind) => v?.tuce
-    ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(v.tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
-    : '';
-  const autorizXml = (v, ind) => v?.autorizacion
-    ? `\n${ind}<cac:ShipmentDocumentReference><cbc:ID schemeID="06" schemeName="Entidad Autorizadora" schemeAgencyName="PE:SUNAT">${cdata(v.autorizacion)}</cbc:ID></cac:ShipmentDocumentReference>`
-    : '';
+  // Se saneia el ID (quita whitespace/invisibles copiados de la consulta de placa) ANTES de
+  // decidir si se emite: un valor que quede vacío tras limpiar no debe generar un nodo vacío.
+  const tuceXml = (v, ind) => {
+    const tuce = limpiarIdVehicular(v?.tuce);
+    return tuce
+      ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
+      : '';
+  };
+  const autorizXml = (v, ind) => {
+    const aut = limpiarIdVehicular(v?.autorizacion);
+    return aut
+      ? `\n${ind}<cac:ShipmentDocumentReference><cbc:ID schemeID="06" schemeName="Entidad Autorizadora" schemeAgencyName="PE:SUNAT">${cdata(aut)}</cbc:ID></cac:ShipmentDocumentReference>`
+      : '';
+  };
   const [vp, vs] = vehiculos;
   const attachedXml = vs
     ? `\n        <cac:AttachedTransportEquipment>

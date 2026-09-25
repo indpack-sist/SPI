@@ -153,6 +153,25 @@ check('Veh. secundario autorización',
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
 
+// Regresión rechazo 3355: TUCE/autorización copiados de la consulta de placa arrastran
+// espacios / espacios duros / anchos cero. Deben salir SANEADOS en RegistrationNationalityID
+// (antes se insertaban con cdata() sin trim → SUNAT rechazaba "no cumple con el formato").
+const datosSucio = {
+  ...datosTercero,
+  vehiculos: [
+    { placa: 'T7U937', tuce: ' 151716963 ', autorizacion: '15M25063308E' },
+    { placa: 'A9Q986', tuce: '151741259 ', autorizacion: '​15M25063309E ' } // caso real reportado
+  ]
+};
+const { xml: xmlSucio } = construirDespatchAdviceXML(datosSucio);
+const teqS = parser.parse(xmlSucio).DespatchAdvice?.Shipment?.TransportHandlingUnit?.TransportEquipment;
+check('TUCE principal saneado (sin espacios)',
+  String(teqS?.ApplicableTransportMeans?.RegistrationNationalityID) === '151716963');
+check('TUCE secundario saneado (sin espacio duro U+00A0)',
+  String(teqS?.AttachedTransportEquipment?.ApplicableTransportMeans?.RegistrationNationalityID) === '151741259');
+check('Autorización secundaria saneada (sin ancho cero ni espacio)',
+  String(teqS?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
+
 // Público + registrar veh/cond CON el flag que activa el servicio (esTercero && registrar): el XML
 // DEBE llevar SUNAT_Envio_IndicadorVehiculoConductoresTransp. Calcado de EG07-325/EG07-318 (domésticos
 // aceptados). Sin este indicador SUNAT rechaza con 3354 "no debe ingresar información de vehículo principal".

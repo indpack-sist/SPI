@@ -181,30 +181,30 @@ export async function generarGuiaRemisionSunatPDF({
         ensureSpace(requiredHeight);
         const top = y;
         if (options.whiteHeader) {
-          doc.rect(X, top, W, 17).fill(COLOR.panel);
+          doc.rect(X, top, W, 15).fill(COLOR.panel);
           if (!options.borderless) {
-            doc.moveTo(X, top + 17).lineTo(X + W, top + 17)
+            doc.moveTo(X, top + 15).lineTo(X + W, top + 15)
               .lineWidth(0.45).strokeColor(COLOR.line).stroke();
           }
         } else {
-          doc.roundedRect(X, top, W, 17, 4).fill(COLOR.header);
+          doc.roundedRect(X, top, W, 15, 4).fill(COLOR.header);
         }
         doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.ink)
-          .text(title.toUpperCase(), X + 9, top + 4.5, { width: 330 });
+          .text(title.toUpperCase(), X + 9, top + 3.7, { width: 330 });
         if (subtitle) {
           doc.font('Helvetica').fontSize(6.7).fillColor(COLOR.muted)
-            .text(subtitle, X + 330, top + 5, { width: W - 339, align: 'right' });
+            .text(subtitle, X + 330, top + 4.2, { width: W - 339, align: 'right' });
         }
-        y = top + 17;
+        y = top + 15;
         return top;
       };
 
-      const sectionEnd = (top, bottomPad = 4, options = {}) => {
+      const sectionEnd = (top, bottomPad = 3, options = {}) => {
         y += bottomPad;
         if (!options.borderless) {
           doc.roundedRect(X, top, W, y - top, 4).lineWidth(0.65).strokeColor(COLOR.line).stroke();
         }
-        y += 4;
+        y += 3;
         resetText();
       };
 
@@ -241,27 +241,27 @@ export async function generarGuiaRemisionSunatPDF({
 
       const twoColumnHeight = (rows) => {
         const colW = (W - 27) / 2;
-        return 5 + rows.reduce((total, [left, right]) => {
+        return 4 + rows.reduce((total, [left, right]) => {
           const leftHeight = left ? measureLabelValue(left[0], left[1], colW, left[2] || {}) : 10;
           const rightHeight = right ? measureLabelValue(right[0], right[1], colW, right[2] || {}) : 10;
-          return total + Math.max(leftHeight, rightHeight, 11) + 4;
+          return total + Math.max(leftHeight, rightHeight, 10) + 3;
         }, 0);
       };
 
       const fullWidthHeight = (label, value, options = {}) =>
-        5 + measureLabelValue(label, value, W - 18, options) + 3;
+        4 + measureLabelValue(label, value, W - 18, options) + 2;
 
-      const sectionHeight = (bodyHeight, bottomPad = 4) => 17 + bodyHeight + bottomPad + 4;
+      const sectionHeight = (bodyHeight, bottomPad = 3) => 15 + bodyHeight + bottomPad + 3;
 
       const twoColumnRows = (rows, options = {}) => {
         const leftX = X + 9;
         const colW = (W - 27) / 2;
         const rightX = leftX + colW + 9;
-        let cursor = y + 5;
+        let cursor = y + 4;
         rows.forEach(([left, right], index) => {
           const leftHeight = left ? labelValue(left[0], left[1], leftX, cursor, colW, left[2] || {}) : 10;
           const rightHeight = right ? labelValue(right[0], right[1], rightX, cursor, colW, right[2] || {}) : 10;
-          const rowH = Math.max(leftHeight, rightHeight, 11) + 4;
+          const rowH = Math.max(leftHeight, rightHeight, 10) + 3;
           if (options.separators !== false && index < rows.length - 1) {
             doc.moveTo(leftX, cursor + rowH - 3).lineTo(X + W - 9, cursor + rowH - 3)
               .lineWidth(0.35).strokeColor(COLOR.line).stroke();
@@ -272,9 +272,9 @@ export async function generarGuiaRemisionSunatPDF({
       };
 
       const fullWidthRow = (label, value, options = {}) => {
-        const rowY = y + 5;
+        const rowY = y + 4;
         const height = labelValue(label, value, X + 9, rowY, W - 18, options);
-        y = rowY + height + 3;
+        y = rowY + height + 2;
       };
 
       drawMainHeader();
@@ -283,14 +283,14 @@ export async function generarGuiaRemisionSunatPDF({
       if (g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR') {
         const motivoRechazo = limpio(g.motivo_estado, 'Guía rechazada por SUNAT.');
         doc.font('Helvetica').fontSize(7.3);
-        const hBand = doc.heightOfString(`Motivo: ${motivoRechazo}`, { width: W - 16 }) + 24;
-        ensureSpace(hBand + 6);
+        const hBand = doc.heightOfString(`Motivo: ${motivoRechazo}`, { width: W - 16 }) + 19;
+        ensureSpace(hBand + 4);
         doc.roundedRect(X, y, W, hBand, 3).fillAndStroke('#FDECEA', COLOR.danger);
         doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR.danger)
-          .text('GUÍA RECHAZADA POR SUNAT — SIN VALIDEZ', X + 8, y + 6, { width: W - 16 });
+          .text('GUÍA RECHAZADA POR SUNAT — SIN VALIDEZ', X + 8, y + 5, { width: W - 16 });
         doc.font('Helvetica').fontSize(7.3).fillColor(COLOR.danger)
-          .text(`Motivo: ${motivoRechazo}`, X + 8, y + 18, { width: W - 16 });
-        y += hBand + 6;
+          .text(`Motivo: ${motivoRechazo}`, X + 8, y + 16, { width: W - 16 });
+        y += hBand + 4;
         resetText();
       }
 
@@ -395,22 +395,22 @@ export async function generarGuiaRemisionSunatPDF({
         const tableHeader = () => {
           const topTable = y;
           let x = X;
-          doc.rect(X, topTable, W, 30).fill(COLOR.header);
+          doc.rect(X, topTable, W, 25).fill(COLOR.header);
           doc.moveTo(X, topTable).lineTo(X + W, topTable)
             .lineWidth(0.65).strokeColor(COLOR.ink).stroke();
           cols.forEach((col) => {
             doc.font('Helvetica-Bold').fontSize(5.2);
             const headerTextHeight = doc.heightOfString(col.label, { width: col.width - 6, lineGap: 0.5 });
             doc.font('Helvetica-Bold').fontSize(5.2).fillColor(COLOR.ink)
-              .text(col.label, x + 3, topTable + Math.max(3, (30 - headerTextHeight) / 2), {
+              .text(col.label, x + 3, topTable + Math.max(2.5, (25 - headerTextHeight) / 2), {
                 width: col.width - 6,
                 align: 'center',
                 lineGap: 0.5
               });
             x += col.width;
-            if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 30).lineWidth(0.25).strokeColor(COLOR.panel).stroke();
+            if (x < X + W) doc.moveTo(x, topTable).lineTo(x, topTable + 25).lineWidth(0.25).strokeColor(COLOR.panel).stroke();
           });
-          y += 30;
+          y += 25;
         };
 
         // Reserva título + cabecera + al menos una fila, para no dejar una cabecera huérfana.
@@ -435,7 +435,7 @@ export async function generarGuiaRemisionSunatPDF({
               .fontSize(col.key === 'unidad' ? 5.3 : 6);
             return doc.heightOfString(values[col.key], { width: col.width - 6, lineGap: 1 });
           });
-          const rowH = Math.max(22, Math.ceil(Math.max(...cellHeights)) + 8);
+          const rowH = Math.max(15, Math.ceil(Math.max(...cellHeights)) + 5);
           if (y + rowH > CONTENT_BOTTOM) {
             sectionEnd(top, 0);
             newPage();
@@ -476,7 +476,7 @@ export async function generarGuiaRemisionSunatPDF({
       ];
       top = sectionStart('Resumen de carga', '', sectionHeight(twoColumnHeight(cargaRows)), { whiteHeader: true, borderless: true });
       twoColumnRows(cargaRows);
-      sectionEnd(top, 4, { borderless: true });
+      sectionEnd(top, 3, { borderless: true });
 
       const esTercero = !!transportista?.ruc;
       const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
@@ -511,7 +511,7 @@ export async function generarGuiaRemisionSunatPDF({
       }
       if (fechaEntrega) fullWidthRow('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
       twoColumnRows(indicadorRows, { separators: false });
-      sectionEnd(top, 4, { borderless: true });
+      sectionEnd(top, 3, { borderless: true });
 
       const normalizedConductores = Array.isArray(conductores) && conductores.length
         ? conductores
@@ -537,7 +537,7 @@ export async function generarGuiaRemisionSunatPDF({
         const vehicleBodyHeight = vehicleRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
         top = sectionStart('Datos de los vehículos', '', sectionHeight(vehicleBodyHeight), { whiteHeader: true, borderless: true });
         vehicleRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
-        sectionEnd(top, 4, { borderless: true });
+        sectionEnd(top, 3, { borderless: true });
       }
 
       if (normalizedConductores.length || !esTercero) {
@@ -553,35 +553,35 @@ export async function generarGuiaRemisionSunatPDF({
         const driverBodyHeight = driverRows.reduce((sum, row) => sum + fullWidthHeight(row[0], row[1], row[2]), 0);
         top = sectionStart('Datos de los conductores', '', sectionHeight(driverBodyHeight), { whiteHeader: true, borderless: true });
         driverRows.forEach((row) => fullWidthRow(row[0], row[1], row[2]));
-        sectionEnd(top, 4, { borderless: true });
+        sectionEnd(top, 3, { borderless: true });
       }
 
     const observacion = limpioMultilinea(g.observaciones, '');
       if (observacion) {
         doc.font('Helvetica').fontSize(7.1);
         const obsHeight = doc.heightOfString(observacion, { width: W - 18, lineGap: 1.5 });
-        top = sectionStart('Observaciones', '', sectionHeight(8 + obsHeight + 2), { whiteHeader: true, borderless: true });
+        top = sectionStart('Observaciones', '', sectionHeight(5 + obsHeight + 1), { whiteHeader: true, borderless: true });
         doc.font('Helvetica').fontSize(7.1).fillColor(COLOR.ink)
-          .text(observacion, X + 9, y + 8, { width: W - 18, height: obsHeight, lineGap: 1.5 });
-        y += 8 + obsHeight + 2;
-        sectionEnd(top, 4, { borderless: true });
+          .text(observacion, X + 9, y + 5, { width: W - 18, height: obsHeight, lineGap: 1.5 });
+        y += 5 + obsHeight + 1;
+        sectionEnd(top, 2, { borderless: true });
       }
 
       // Pie legal completo. Si no cabe dentro del área imprimible (≈813 en A4 con margen inferior),
       // pasa a una página limpia en lugar de superponerse al detalle o salirse de la hoja.
-      if (y + 83 > 813) newPage();
+      if (y + 73 > 814) newPage();
       const footerY = Math.max(y + 3, 700);
-      doc.roundedRect(X, footerY, W, 80, 6).fillAndStroke(COLOR.panel, COLOR.line);
+      doc.roundedRect(X, footerY, W, 70, 6).fillAndStroke(COLOR.panel, COLOR.line);
       if (qrBuffer) {
-        try { doc.image(qrBuffer, X + 15, footerY + 8, { width: 66, height: 66 }); } catch { /* QR opcional */ }
+        try { doc.image(qrBuffer, X + 13, footerY + 6, { width: 58, height: 58 }); } catch { /* QR opcional */ }
       }
-      const legalX = X + 101;
+      const legalX = X + 91;
       doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.ink)
-        .text('REPRESENTACIÓN IMPRESA', legalX, footerY + 10, { width: 205 });
+        .text('REPRESENTACIÓN IMPRESA', legalX, footerY + 8, { width: 205 });
       doc.font('Helvetica').fontSize(6.7).fillColor(COLOR.ink)
-        .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 25, { width: 407, lineGap: 1.2 });
+        .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 22, { width: 417, lineGap: 1.2 });
       doc.font('Helvetica-Bold').fontSize(6.3).fillColor(COLOR.muted)
-        .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 58, { width: 407 });
+        .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 53, { width: 417 });
       // Marca de agua para guías invalidadas o rechazadas.
       const rechazado = g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR';
       const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
@@ -601,7 +601,7 @@ export async function generarGuiaRemisionSunatPDF({
           ? `Reemplazada por la guía ${g.reemplazo_ref}`
           : (g.sunat_estado === 'ANULADA' && g.motivo_anulacion ? `Motivo: ${g.motivo_anulacion}`
             : (rechazado && g.motivo_estado ? `Motivo del rechazo: ${g.motivo_estado}` : ''));
-        if (nota) doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.danger).text(nota, legalX, footerY + 68, { width: 401 });
+        if (nota) doc.font('Helvetica-Bold').fontSize(6.6).fillColor(COLOR.danger).text(nota, legalX + 232, footerY + 8, { width: 185, align: 'right' });
       }
 
       doc.end();

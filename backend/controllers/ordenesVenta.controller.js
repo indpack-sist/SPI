@@ -300,22 +300,36 @@ export async function getAllOrdenesVenta(req, res) {
       return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
     }
 
-    // Guías de remisión vigentes (no anuladas) de las órdenes de esta página. Se adjunta a
-    // cada orden un arreglo `guias` con lo mínimo para que el frontend decida qué correlativo
-    // mostrar: SUNAT (serie_sunat-numero_sunat, solo si ACEPTADO) para facturas, o numero_guia
-    // interno para notas de venta / sin comprobante. Ver columna "Logística" en OrdenesVenta.jsx.
+    // Guías relacionadas de las órdenes de esta página, para la columna "Logística" del
+    // listado. Hay dos fuentes según el tipo de comprobante (el frontend elige cuál usar):
+    //   - Facturas   → GRE electrónica en `guias_remision`; se muestra el correlativo SUNAT
+    //                  (serie_sunat-numero_sunat) solo si sunat_estado = 'ACEPTADO'.
+    //   - Notas de venta / Sin comprobante → guía interna del despacho (GI-YYYY-XXXX),
+    //                  embebida en `salidas.observaciones` (una por despacho).
     const idsPagina = (result.data || []).map(o => o.id_orden_venta).filter(Boolean);
     if (idsPagina.length > 0) {
-      const guiasResult = await executeQuery(
-        `SELECT id_orden_venta, numero_guia, serie_sunat, numero_sunat, sunat_estado
-           FROM guias_remision
-          WHERE id_orden_venta IN (${idsPagina.map(() => '?').join(',')})
-            AND estado <> 'Anulada'
-          ORDER BY id_guia`,
-        idsPagina
-      );
+      const placeholders = idsPagina.map(() => '?').join(',');
+      const [guiasResult, salidasResult] = await Promise.all([
+        executeQuery(
+          `SELECT id_orden_venta, numero_guia, serie_sunat, numero_sunat, sunat_estado
+             FROM guias_remision
+            WHERE id_orden_venta IN (${placeholders})
+              AND estado <> 'Anulada'
+            ORDER BY id_guia`,
+          idsPagina
+        ),
+        executeQuery(
+          `SELECT id_orden_venta, id_salida, observaciones
+             FROM salidas
+            WHERE id_orden_venta IN (${placeholders})
+              AND estado = 'Activo'
+            ORDER BY id_salida`,
+          idsPagina
+        )
+      ]);
+
+      const guiasPorOrden = new Map();
       if (guiasResult.success) {
-        const guiasPorOrden = new Map();
         for (const g of guiasResult.data) {
           if (!guiasPorOrden.has(g.id_orden_venta)) guiasPorOrden.set(g.id_orden_venta, []);
           guiasPorOrden.get(g.id_orden_venta).push({
@@ -325,9 +339,23 @@ export async function getAllOrdenesVenta(req, res) {
             sunat_estado: g.sunat_estado
           });
         }
-        for (const orden of result.data) {
-          orden.guias = guiasPorOrden.get(orden.id_orden_venta) || [];
+      }
+      const salidasPorOrden = new Map();
+      if (salidasResult.success) {
+        for (const s of salidasResult.data) {
+          if (!salidasPorOrden.has(s.id_orden_venta)) salidasPorOrden.set(s.id_orden_venta, []);
+          // El nº de guía interna (GI-YYYY-XXXX) se guarda dentro de la observación del
+          // despacho; se extrae con regex (null si al despacho aún no se le asignó guía).
+          const matchGI = String(s.observaciones || '').match(/GI-\d{4}-\d+/);
+          salidasPorOrden.get(s.id_orden_venta).push({
+            id_salida: s.id_salida,
+            guia_interna: matchGI ? matchGI[0] : null
+          });
         }
+      }
+      for (const orden of result.data) {
+        orden.guias = guiasPorOrden.get(orden.id_orden_venta) || [];
+        orden.salidas_guia = salidasPorOrden.get(orden.id_orden_venta) || [];
       }
     }
 

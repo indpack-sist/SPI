@@ -171,6 +171,12 @@ check('TUCE secundario saneado (sin espacio duro U+00A0)',
   String(teqS?.AttachedTransportEquipment?.ApplicableTransportMeans?.RegistrationNationalityID) === '151741259');
 check('Autorización secundaria saneada (sin ancho cero ni espacio)',
   String(teqS?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
+// RegistrationNationalityID debe ir en TEXTO PLANO como el molde del portal SUNAT: CDATA
+// provoca rechazo 3355 (SUNAT valida el formato del contenido crudo del nodo).
+check('TUCE en texto plano, SIN CDATA (clava molde EG07-273)',
+  xmlSucio.includes('<cbc:RegistrationNationalityID>151741259</cbc:RegistrationNationalityID>'));
+check('RegistrationNationalityID nunca envuelto en CDATA',
+  !/<cbc:RegistrationNationalityID><!\[CDATA\[/.test(xmlSucio));
 
 // Público + registrar veh/cond CON el flag que activa el servicio (esTercero && registrar): el XML
 // DEBE llevar SUNAT_Envio_IndicadorVehiculoConductoresTransp. Calcado de EG07-325/EG07-318 (domésticos

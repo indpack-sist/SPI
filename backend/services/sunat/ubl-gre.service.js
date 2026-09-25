@@ -25,6 +25,13 @@ const limpiarIdVehicular = (s) => Array.from(String(s ?? '')).filter((ch) => {
   return !(c <= 0x20 || c === 0xA0 || (c >= 0x200B && c <= 0x200D) || c === 0xFEFF);
 }).join('');
 
+// Escapa un valor para insertarlo como TEXTO PLANO en el XML (sin CDATA). Los IDs vehiculares
+// (TUCE / Certificado / autorizacion) DEBEN ir en texto plano: los moldes aceptados del portal
+// SUNAT no usan CDATA y SUNAT valida el formato del contenido crudo del nodo; envolverlo en
+// <![CDATA[...]]> rompe el regex de validacion (rechazo 3355). Ver limpiarIdVehicular arriba.
+const escXml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 // Divide "NOMBRE APELLIDO APELLIDO" en {first, family} para DriverPerson.
 function partirNombre(nombre) {
   const t = String(nombre || '').trim().split(/\s+/);
@@ -62,17 +69,19 @@ function driversXml(conductores) {
 /** N vehículos → cac:TransportHandlingUnit/TransportEquipment con Nº MTC. En cac:Shipment (tras Delivery). */
 function vehiclesXml(vehiculos, mtcDefault) {
   return vehiculos.map((v) => {
-    const mtc = v.certificado_habilitacion || mtcDefault;
+    const mtc = limpiarIdVehicular(v.certificado_habilitacion || mtcDefault);
+    const placa = limpiarIdVehicular(v.placa);
     // ⚠️ VERIFICAR CONTRA XSD: elemento exacto del Nº de registro MTC dentro de ApplicableTransportMeans.
+    // Texto plano (escXml), NO CDATA — igual que la GRE Remitente (evita rechazo 3355).
     const mtcXml = mtc
       ? `
         <cac:ApplicableTransportMeans>
-          <cbc:RegistrationNationalityID>${mtc}</cbc:RegistrationNationalityID>
+          <cbc:RegistrationNationalityID>${escXml(mtc)}</cbc:RegistrationNationalityID>
         </cac:ApplicableTransportMeans>`
       : '';
     return `    <cac:TransportHandlingUnit>
       <cac:TransportEquipment>
-        <cbc:ID>${v.placa}</cbc:ID>${mtcXml}
+        <cbc:ID>${escXml(placa)}</cbc:ID>${mtcXml}
       </cac:TransportEquipment>
     </cac:TransportHandlingUnit>`;
   }).join('\n');
@@ -211,16 +220,18 @@ export function construirDespatchAdviceXML(d) {
   const vehiculos = (declararVC && Array.isArray(d.vehiculos)) ? d.vehiculos.filter(v => v?.placa) : [];
   // Se saneia el ID (quita whitespace/invisibles copiados de la consulta de placa) ANTES de
   // decidir si se emite: un valor que quede vacío tras limpiar no debe generar un nodo vacío.
+  // TEXTO PLANO (escXml), NO cdata(): los moldes aceptados del portal SUNAT emiten estos IDs sin
+  // CDATA y SUNAT valida el formato del contenido crudo → CDATA provoca rechazo 3355.
   const tuceXml = (v, ind) => {
     const tuce = limpiarIdVehicular(v?.tuce);
     return tuce
-      ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${cdata(tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
+      ? `\n${ind}<cac:ApplicableTransportMeans><cbc:RegistrationNationalityID>${escXml(tuce)}</cbc:RegistrationNationalityID></cac:ApplicableTransportMeans>`
       : '';
   };
   const autorizXml = (v, ind) => {
     const aut = limpiarIdVehicular(v?.autorizacion);
     return aut
-      ? `\n${ind}<cac:ShipmentDocumentReference><cbc:ID schemeID="06" schemeName="Entidad Autorizadora" schemeAgencyName="PE:SUNAT">${cdata(aut)}</cbc:ID></cac:ShipmentDocumentReference>`
+      ? `\n${ind}<cac:ShipmentDocumentReference><cbc:ID schemeID="06" schemeName="Entidad Autorizadora" schemeAgencyName="PE:SUNAT">${escXml(aut)}</cbc:ID></cac:ShipmentDocumentReference>`
       : '';
   };
   const [vp, vs] = vehiculos;

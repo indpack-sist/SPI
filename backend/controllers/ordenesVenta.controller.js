@@ -300,6 +300,37 @@ export async function getAllOrdenesVenta(req, res) {
       return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
     }
 
+    // Guías de remisión vigentes (no anuladas) de las órdenes de esta página. Se adjunta a
+    // cada orden un arreglo `guias` con lo mínimo para que el frontend decida qué correlativo
+    // mostrar: SUNAT (serie_sunat-numero_sunat, solo si ACEPTADO) para facturas, o numero_guia
+    // interno para notas de venta / sin comprobante. Ver columna "Logística" en OrdenesVenta.jsx.
+    const idsPagina = (result.data || []).map(o => o.id_orden_venta).filter(Boolean);
+    if (idsPagina.length > 0) {
+      const guiasResult = await executeQuery(
+        `SELECT id_orden_venta, numero_guia, serie_sunat, numero_sunat, sunat_estado
+           FROM guias_remision
+          WHERE id_orden_venta IN (${idsPagina.map(() => '?').join(',')})
+            AND estado <> 'Anulada'
+          ORDER BY id_guia`,
+        idsPagina
+      );
+      if (guiasResult.success) {
+        const guiasPorOrden = new Map();
+        for (const g of guiasResult.data) {
+          if (!guiasPorOrden.has(g.id_orden_venta)) guiasPorOrden.set(g.id_orden_venta, []);
+          guiasPorOrden.get(g.id_orden_venta).push({
+            numero_guia: g.numero_guia,
+            serie_sunat: g.serie_sunat,
+            numero_sunat: g.numero_sunat,
+            sunat_estado: g.sunat_estado
+          });
+        }
+        for (const orden of result.data) {
+          orden.guias = guiasPorOrden.get(orden.id_orden_venta) || [];
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: result.data,

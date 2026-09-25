@@ -799,35 +799,35 @@ function OrdenesVenta() {
       render: (value, row) => {
         const config = getEstadoConfig(value);
         const esFactura = String(row.tipo_comprobante || '').toLowerCase().includes('factura');
-        // Correlativos de guía a mostrar: SUNAT (solo si ACEPTADO) para facturas, o el
-        // número de guía interno para notas de venta / sin comprobante. Rechazadas y
-        // pendientes no aportan línea (quedan invisibles). Ver diseño en Logística.
-        const correlativos = (row.guias || [])
-          .map((g) => {
-            if (esFactura) {
-              return String(g.sunat_estado || '').toUpperCase() === 'ACEPTADO' && g.serie_sunat && g.numero_sunat
-                ? `${g.serie_sunat}-${g.numero_sunat}`
-                : null;
-            }
-            return g.numero_guia || null;
-          })
-          .filter(Boolean);
+        // Correlativos de guía según el tipo de comprobante:
+        //   - Factura → correlativo SUNAT (serie-numero) de sus GRE, solo si ACEPTADO.
+        //               Las rechazadas/pendientes no aportan línea (quedan invisibles).
+        //   - Nota de Venta / Sin comprobante → guía interna del despacho (GI-YYYY-XXXX).
+        const correlativos = esFactura
+          ? (row.guias || [])
+              .map((g) => (
+                String(g.sunat_estado || '').toUpperCase() === 'ACEPTADO' && g.serie_sunat && g.numero_sunat
+                  ? `${g.serie_sunat}-${g.numero_sunat}`
+                  : null
+              ))
+              .filter(Boolean)
+          : (row.salidas_guia || [])
+              .map((s) => s.guia_interna || null)
+              .filter(Boolean);
 
         return (
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-col items-center justify-center gap-1.5 h-full">
             <span className={`badge ${config.clase} text-[10px]`}>{config.texto}</span>
-            <div className="flex flex-col items-center gap-0.5">
-              {correlativos.length > 0 ? (
-                correlativos.map((c, i) => (
+            {correlativos.length > 0 && (
+              <div className="flex flex-col items-center gap-0.5">
+                {correlativos.map((c, i) => (
                   <span key={i} className="flex items-center gap-1 font-mono text-[9px] text-mist" title="Guía de remisión">
                     <Truck size={10} className="text-wire" />
                     {c}
                   </span>
-                ))
-              ) : (
-                <span className="text-[9px] text-wire">-</span>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       }
@@ -895,6 +895,7 @@ function OrdenesVenta() {
         .page-ordenes-venta button.pagination-btn:hover:not(.pagination-btn-active) {
           border-color: var(--primary) !important; color: var(--primary) !important; background-color: var(--carbon-light) !important;
         }
+        .page-ordenes-venta .table td { vertical-align: middle !important; }
         .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
         @media (min-width: 641px) { .page-ordenes-venta .table-container { overflow: hidden !important; } }
         .page-ordenes-venta .stat-card { min-height: 85px !important; padding: 1rem !important; border-radius: 8px !important; }

@@ -160,7 +160,7 @@ const datosSucio = {
   ...datosTercero,
   vehiculos: [
     { placa: 'T7U937', tuce: ' 151716963 ', autorizacion: '15M25063308E' },
-    { placa: 'A9Q986', tuce: '151741259 ', autorizacion: '​15M25063309E ' } // caso real reportado
+    { placa: 'A9Q986 ', tuce: '151741259 ', autorizacion: '​15M25063309E ' } // caso real reportado
   ]
 };
 const { xml: xmlSucio } = construirDespatchAdviceXML(datosSucio);
@@ -171,12 +171,11 @@ check('TUCE secundario saneado (sin espacio duro U+00A0)',
   String(teqS?.AttachedTransportEquipment?.ApplicableTransportMeans?.RegistrationNationalityID) === '151741259');
 check('Autorización secundaria saneada (sin ancho cero ni espacio)',
   String(teqS?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
-// RegistrationNationalityID debe ir en TEXTO PLANO como el molde del portal SUNAT: CDATA
-// provoca rechazo 3355 (SUNAT valida el formato del contenido crudo del nodo).
-check('TUCE en texto plano, SIN CDATA (clava molde EG07-273)',
-  xmlSucio.includes('<cbc:RegistrationNationalityID>151741259</cbc:RegistrationNationalityID>'));
-check('RegistrationNationalityID nunca envuelto en CDATA',
-  !/<cbc:RegistrationNationalityID><!\[CDATA\[/.test(xmlSucio));
+// El valor parseado sale limpio con CDATA (SUNAT acepta CDATA: verificado con GRE real, el
+// certificado 15M…E del vehículo principal fue aceptado dentro de CDATA). El 3355 depende del
+// FORMATO del valor, no de la serialización.
+check('placa secundaria saneada (sin espacio final)',
+  String(teqS?.AttachedTransportEquipment?.ID) === 'A9Q986');
 
 // Público + registrar veh/cond CON el flag que activa el servicio (esTercero && registrar): el XML
 // DEBE llevar SUNAT_Envio_IndicadorVehiculoConductoresTransp. Calcado de EG07-325/EG07-318 (domésticos

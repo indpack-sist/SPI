@@ -51,7 +51,10 @@ async function descargarImagen(url) {
 export async function generarOrdenVentaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ 
+      // Una OV de muestra (es_muestra = 1, sin comprobante) no tiene valor comercial:
+      // se imprime como GUÍA DE MUESTRA, sin precios ni totales. Ver createOrdenVenta.
+      const esMuestra = Number(orden.es_muestra) === 1;
+      const doc = new PDFDocument({
         size: 'A4',
         margins: { top: 30, bottom: 30, left: 30, right: 30 },
         bufferPages: true
@@ -100,8 +103,8 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text('R.U.C. 20550932297', xBox, yText, { width: wBox, align: 'center' });
       yText += 20;
       
-      doc.fontSize(14).fillColor('#000000');
-      doc.text('ORDEN DE VENTA', xBox, yText, { width: wBox, align: 'center' });
+      doc.fontSize(esMuestra ? 12 : 14).fillColor('#000000');
+      doc.text(esMuestra ? 'GUÍA DE MUESTRA' : 'ORDEN DE VENTA', xBox, yText, { width: wBox, align: 'center' });
       yText += 20;
       
       doc.fontSize(12).fillColor('#000000');
@@ -205,8 +208,10 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text('UND', 295, yTable + 6, { width: 25, align: 'center' });
       doc.text('CANT.', 320, yTable + 6, { width: 45, align: 'center' });
       doc.text('PESO', 365, yTable + 6, { width: 45, align: 'center' });
-      doc.text('P.UNIT', 415, yTable + 6, { width: 50, align: 'right' });
-      doc.text('TOTAL', 470, yTable + 6, { width: 90, align: 'right' });
+      if (!esMuestra) {
+        doc.text('P.UNIT', 415, yTable + 6, { width: 50, align: 'right' });
+        doc.text('TOTAL', 470, yTable + 6, { width: 90, align: 'right' });
+      }
 
       yTable += 20;
 
@@ -239,8 +244,10 @@ export async function generarOrdenVentaPDF(orden) {
           doc.text(String(item.unidad_medida || 'UND'), 295, yTable, { width: 25, align: 'center' });
           doc.text(fmtNum(cantidad), 320, yTable, { width: 45, align: 'center' });
           doc.text(pesoTotal > 0 ? fmtPeso(pesoTotal) : '-', 365, yTable, { width: 45, align: 'center' });
-          doc.text(fmtPrecio(precioFinal), 415, yTable, { width: 50, align: 'right' });
-          doc.text(fmtNum(totalLinea), 470, yTable, { width: 90, align: 'right' });
+          if (!esMuestra) {
+            doc.text(fmtPrecio(precioFinal), 415, yTable, { width: 50, align: 'right' });
+            doc.text(fmtNum(totalLinea), 470, yTable, { width: 90, align: 'right' });
+          }
 
           yTable += 14;
         });
@@ -287,29 +294,39 @@ export async function generarOrdenVentaPDF(orden) {
         yTotales += 15;
       }
 
-      doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
-      
-      doc.text('SUB TOTAL:', xTotales, yTotales);
-      doc.font('Helvetica').text(`${simbolo} ${subtotal}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
-      yTotales += 15;
+      if (!esMuestra) {
+        doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
 
-      doc.fillColor('#000000').font('Helvetica-Bold').text(etiquetaImp + ':', xTotales, yTotales);
-      doc.font('Helvetica').text(`${simbolo} ${igv}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
-      yTotales += 15;
+        doc.text('SUB TOTAL:', xTotales, yTotales);
+        doc.font('Helvetica').text(`${simbolo} ${subtotal}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+        yTotales += 15;
 
-      doc.fillColor('#000000');
-      doc.moveTo(xTotales, yTotales).lineTo(565, yTotales).stroke();
-      yTotales += 5;
+        doc.fillColor('#000000').font('Helvetica-Bold').text(etiquetaImp + ':', xTotales, yTotales);
+        doc.font('Helvetica').text(`${simbolo} ${igv}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+        yTotales += 15;
 
-      doc.fillColor('#000000').fontSize(9).font('Helvetica-Bold').text('TOTAL A PAGAR:', xTotales, yTotales);
-      doc.text(`${simbolo} ${total}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+        doc.fillColor('#000000');
+        doc.moveTo(xTotales, yTotales).lineTo(565, yTotales).stroke();
+        yTotales += 5;
+
+        doc.fillColor('#000000').fontSize(9).font('Helvetica-Bold').text('TOTAL A PAGAR:', xTotales, yTotales);
+        doc.text(`${simbolo} ${total}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+      }
 
       doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold').text('OBSERVACIONES:', 30, yFooter);
       doc.font('Helvetica').text(orden.observaciones || 'Sin observaciones.', 30, yFooter + 10, { width: 330 });
 
-      const letras = numeroALetras(totalNumero, orden.moneda);
-      doc.fillColor('#000000').font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
-      doc.font('Helvetica').text(letras, 55, yFooter + 50, { width: 300 });
+      if (esMuestra) {
+        // Sin valor comercial: no hay importe en letras; banner en su lugar.
+        const yBanner = Math.max(yTotales, yFooter + 45);
+        doc.fillColor('#b45309').fontSize(14).font('Helvetica-Bold');
+        doc.text('MUESTRA SIN VALOR COMERCIAL', 30, yBanner, { align: 'center', width: 535 });
+        doc.fillColor('#000000');
+      } else {
+        const letras = numeroALetras(totalNumero, orden.moneda);
+        doc.fillColor('#000000').font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
+        doc.font('Helvetica').text(letras, 55, yFooter + 50, { width: 300 });
+      }
 
       doc.end();
       

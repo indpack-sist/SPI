@@ -2314,23 +2314,36 @@ function DetalleOrdenVenta() {
             </button>
           )}
 
-          <button
-            className="btn btn-outline"
-            onClick={() => handleDescargarPDF('orden')}
-            disabled={procesando}
-            title="Descargar Orden Interna"
-          >
-            <FileText size={20} /> PDF Orden
-          </button>
+          {esMuestra ? (
+            <button
+              className="btn btn-outline"
+              onClick={() => handleDescargarPDF('orden')}
+              disabled={procesando}
+              title="Descargar Guía de Muestra (sin valor comercial)"
+            >
+              <FileText size={20} /> PDF Guía de Muestra
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn btn-outline"
+                onClick={() => handleDescargarPDF('orden')}
+                disabled={procesando}
+                title="Descargar Orden Interna"
+              >
+                <FileText size={20} /> PDF Orden
+              </button>
 
-          <button
-            className="btn btn-outline"
-            onClick={() => handleDescargarPDF('pedido')}
-            disabled={procesando}
-            title="Descargar Pedido (formato comercial)"
-          >
-            <FileText size={20} /> PDF Pedido
-          </button>
+              <button
+                className="btn btn-outline"
+                onClick={() => handleDescargarPDF('pedido')}
+                disabled={procesando}
+                title="Descargar Pedido (formato comercial)"
+              >
+                <FileText size={20} /> PDF Pedido
+              </button>
+            </>
+          )}
 
           {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
   <button 

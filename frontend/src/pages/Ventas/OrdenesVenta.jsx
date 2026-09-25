@@ -794,11 +794,42 @@ function OrdenesVenta() {
     {
       header: 'Logística',
       accessor: 'estado',
-      width: '120px',
+      width: '170px',
       align: 'center',
-      render: (value) => {
+      render: (value, row) => {
         const config = getEstadoConfig(value);
-        return <span className={`badge ${config.clase} text-[10px]`}>{config.texto}</span>;
+        const esFactura = String(row.tipo_comprobante || '').toLowerCase().includes('factura');
+        // Correlativos de guía a mostrar: SUNAT (solo si ACEPTADO) para facturas, o el
+        // número de guía interno para notas de venta / sin comprobante. Rechazadas y
+        // pendientes no aportan línea (quedan invisibles). Ver diseño en Logística.
+        const correlativos = (row.guias || [])
+          .map((g) => {
+            if (esFactura) {
+              return String(g.sunat_estado || '').toUpperCase() === 'ACEPTADO' && g.serie_sunat && g.numero_sunat
+                ? `${g.serie_sunat}-${g.numero_sunat}`
+                : null;
+            }
+            return g.numero_guia || null;
+          })
+          .filter(Boolean);
+
+        return (
+          <div className="flex flex-col items-center gap-1.5">
+            <span className={`badge ${config.clase} text-[10px]`}>{config.texto}</span>
+            <div className="flex flex-col items-center gap-0.5">
+              {correlativos.length > 0 ? (
+                correlativos.map((c, i) => (
+                  <span key={i} className="flex items-center gap-1 font-mono text-[9px] text-mist" title="Guía de remisión">
+                    <Truck size={10} className="text-wire" />
+                    {c}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[9px] text-wire">-</span>
+              )}
+            </div>
+          </div>
+        );
       }
     },
     {

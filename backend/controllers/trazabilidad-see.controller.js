@@ -46,13 +46,19 @@ function construirResumen(filas) {
 // ANULADA), desde, hasta (YYYY-MM-DD sobre fecha_emision), q (texto libre).
 export async function listarComprobantes(req, res) {
   try {
-    const { tipo = 'all', estado = 'all', desde, hasta, q } = req.query;
+    const { tipo = 'all', estado = 'all', desde, hasta, q, solo_sistema } = req.query;
     const where = [`fv.estado <> 'Eliminada'`];
     const params = [];
 
     if (tipo === 'FACTURA') where.push(`(fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01')`);
     else if (tipo === 'NOTA_CREDITO') where.push(`fv.codigo_tipo_sunat = '07'`);
     else if (tipo === 'NOTA_DEBITO') where.push(`fv.codigo_tipo_sunat = '08'`);
+
+    // solo_sistema=1 → únicamente comprobantes emitidos electrónicamente desde el sistema
+    // (excluye las facturas manuales/legacy cargadas antes de la integración SEE).
+    if (String(solo_sistema) === '1') {
+      where.push(`NOT (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL)`);
+    }
 
     if (estado && estado !== 'all') {
       if (estado === 'ANULADA') where.push(`(fv.estado = 'Anulada' OR ${NC_ANULACION})`);

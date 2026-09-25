@@ -290,3 +290,84 @@
   .tz-header { flex-direction: column; gap: .75rem; }
   .tz-drawer-card { grid-template-columns: 1fr; }
 }
+
+/* ===================== Pestaña: descarga masiva ===================== */
+.tz-descarga { display: flex; flex-direction: column; gap: 1rem; }
+
+/* --- Paso 1: tarjeta de consulta --- */
+.tz-dm-consulta {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem;
+  padding: 1.1rem 1.25rem; border-radius: 12px;
+  background: var(--bg-primary); border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+.tz-dm-consulta-lead p { margin: .35rem 0 0; font-size: .84rem; color: var(--text-secondary); line-height: 1.5; max-width: 44ch; }
+.tz-dm-consulta-form { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+
+/* --- Paso 2: barra de acción (selección + descarga) --- */
+.tz-dm-actionbar {
+  position: sticky; top: .5rem; z-index: 3;
+  display: flex; align-items: center; gap: .8rem;
+  padding: .7rem 1rem; border-radius: 11px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  transition: border-color .18s, background .18s, box-shadow .18s;
+}
+.tz-dm-actionbar.has-sel {
+  border-color: color-mix(in srgb, #22c55e 55%, var(--border));
+  background: color-mix(in srgb, #22c55e 8%, var(--bg-primary));
+}
+.tz-dm-count { flex: 1; font-size: .85rem; color: var(--text-secondary); }
+.tz-dm-count b { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.tz-dm-clear {
+  background: none; border: none; cursor: pointer; font-size: .8rem; font-weight: 600;
+  color: var(--text-secondary); padding: .3rem .5rem; border-radius: 7px; transition: color .14s, background .14s;
+}
+.tz-dm-clear:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+
+/* Botón de descarga: acento verde sólido (lenguaje de "bajar archivos"). */
+.tz-btn-download { background: #16a34a; color: #fff; }
+.tz-btn-download:hover:not(:disabled) { background: #15803d; }
+.tz-btn-download:disabled { opacity: .45; cursor: default; }
+
+/* --- Nota de descarga en curso --- */
+.tz-descarga-nota {
+  display: flex; align-items: center; gap: .55rem;
+  font-size: .8rem; padding: .6rem .85rem; border-radius: 9px;
+  background: color-mix(in srgb, #f59e0b 12%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, #f59e0b 32%, var(--border)); color: var(--text-primary);
+}
+
+/* --- Tabla de descarga: checkbox, selección y reveal escalonado --- */
+.tz-col-check { width: 42px; text-align: center !important; }
+.tz-col-check input {
+  width: 16px; height: 16px; accent-color: #16a34a; cursor: pointer; vertical-align: middle;
+  transition: transform .12s;
+}
+.tz-col-check input:hover { transform: scale(1.12); }
+
+.tz-dm-row { cursor: pointer; transition: background .14s; border-bottom: 1px solid var(--border); }
+.tz-dm-row td { padding: .7rem 1rem; vertical-align: middle; color: var(--text-primary); }
+.tz-dm-row:hover { background: var(--bg-secondary); }
+.tz-dm-row.sel { background: color-mix(in srgb, #22c55e 9%, var(--bg-primary)); }
+.tz-dm-row.sel:hover { background: color-mix(in srgb, #22c55e 13%, var(--bg-primary)); }
+/* Filo verde a la izquierda de la fila seleccionada. */
+.tz-dm-row.sel td:first-child { box-shadow: inset 3px 0 0 #16a34a; }
+
+/* Aparición suave y escalonada al cargar resultados. */
+.tz-dm-row { animation: tz-dm-in .34s ease backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+@keyframes tz-dm-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .tz-dm-row { animation: none; }
+  .dm-widget, .dmm-modal, .dmm-scrim { animation: none !important; }
+}
+
+.tz-anulado-si {
+  display: inline-block; font-size: .74rem; font-weight: 600; padding: .12rem .5rem; border-radius: 999px;
+  color: #a855f7; background: color-mix(in srgb, #a855f7 14%, transparent);
+  border: 1px solid color-mix(in srgb, #a855f7 32%, transparent);
+}
+
+@media (max-width: 720px) {
+  .tz-dm-consulta { flex-direction: column; align-items: stretch; }
+  .tz-dm-actionbar { flex-wrap: wrap; }
+}

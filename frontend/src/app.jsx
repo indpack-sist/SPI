@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PermisosProvider } from './context/PermisosContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { DescargaMasivaProvider } from './context/DescargaMasivaContext';
+import WidgetDescargaMasiva from './components/Descargas/WidgetDescargaMasiva';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/ProtectedRouteWithPermiso';
 import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable';
@@ -72,6 +74,8 @@ function App() {
       <ThemeProvider>
       <AuthProvider>
         <PermisosProvider>
+          <DescargaMasivaProvider>
+          <WidgetDescargaMasiva />
           <Routes>
             <Route path="/login" element={<Login />} />
 
@@ -579,6 +583,7 @@ function App() {
               }
             />
           </Routes>
+          </DescargaMasivaProvider>
         </PermisosProvider>
       </AuthProvider>
       </ThemeProvider>

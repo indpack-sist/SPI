@@ -1,0 +1,69 @@
+/* Widget flotante de progreso de descarga masiva.
+   Usa los tokens de tema del proyecto (--bg-*, --text-*, --border) para claro/oscuro.
+   Acento verde = lenguaje de "descarga" (coherente con selección y checkboxes). */
+
+.dm-widget {
+  position: fixed; right: 20px; bottom: 20px; z-index: 4000;
+  width: 340px; padding: 15px 16px 16px;
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .1);
+  animation: dm-slide-in .32s cubic-bezier(.2, .8, .25, 1);
+  overflow: hidden;
+}
+/* Filo de color superior según estado (verde activo/ok, ámbar cancelado). */
+.dm-widget::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: #16a34a;
+}
+.dm-widget.is-cancel::before { background: #f59e0b; }
+
+@keyframes dm-slide-in {
+  from { opacity: 0; transform: translateY(16px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dm-widget-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.dm-widget-head strong { flex: 1; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+.dm-widget-x {
+  display: inline-flex; padding: 4px; border-radius: 7px;
+  background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
+  transition: background .14s, color .14s;
+}
+.dm-widget-x:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+
+/* Barra de progreso: color sólido, ancho animado suave. */
+.dm-bar { position: relative; height: 9px; border-radius: 6px; background: var(--bg-tertiary); overflow: hidden; }
+.dm-bar span {
+  display: block; height: 100%; border-radius: 6px; background: #16a34a;
+  transition: width .4s cubic-bezier(.3, .8, .3, 1);
+}
+
+.dm-widget-info { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 12px; }
+.dm-widget-info > span:first-child { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.dm-widget-actual {
+  font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Resumen final. */
+.dm-resumen { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.dm-resumen li { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--text-primary); }
+.dm-resumen li svg { flex-shrink: 0; }
+.dm-resumen small { width: 100%; color: var(--text-secondary); padding-left: 20px; font-variant-numeric: tabular-nums; }
+.dm-ok-icon { color: #22c55e; animation: dm-pop .4s cubic-bezier(.2, 1.4, .4, 1) both; }
+.dm-fail { color: #ef4444; }
+.dm-warn { color: #f59e0b; }
+@keyframes dm-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.dm-spin { animation: dm-spin 1s linear infinite; color: #22c55e; }
+@keyframes dm-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 520px) {
+  .dm-widget { left: 12px; right: 12px; width: auto; }
+}

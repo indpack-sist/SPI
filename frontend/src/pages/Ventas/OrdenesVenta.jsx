@@ -1097,13 +1097,13 @@ function OrdenesVenta() {
           {pagination.total > itemsPerPage && (
             <div className="px-4 sm:px-6 py-4 bg-carbon-mid/60 border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
               {/* Rango de registros */}
-              <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1">
+              <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1 flex items-center gap-1.5">
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
-                <span className="mx-1">–</span>
+                <span className="text-steel">–</span>
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + currentItems.length}</span>
-                <span className="mx-1.5 text-steel">de</span>
+                <span className="text-steel">de</span>
                 <span className="text-mist font-bold">{pagination.total}</span>
-                <span className="ml-1.5 uppercase tracking-widest text-[0.6rem]">órdenes</span>
+                <span className="uppercase tracking-widest text-[0.6rem]">órdenes</span>
               </div>
 
               {/* Controles de página */}

@@ -1,6 +1,6 @@
 import { executeQuery, executeTransaction, withTransaction } from '../config/database.js';
 import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
-import { componerObservacion, extraerUrl, codigoBienValido } from '../services/sunat/util.service.js';
+import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 
 // Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
@@ -11,13 +11,10 @@ function getFechaPeru() {
 }
 
 // Arma la dirección completa de la empresa a partir de los campos de empresa_config:
-// "AV. ... URBANIZACION DEPARTAMENTO - PROVINCIA - DISTRITO"
-function armarDireccionCompleta(cfg) {
-  const valorReal = (v) => v && String(v).trim() && String(v).trim() !== '-';
-  const partes = [cfg.direccion, cfg.urbanizacion].filter(valorReal).join(' ');
-  const ubicacion = [cfg.departamento, cfg.provincia, cfg.distrito].filter(valorReal).join(' - ');
-  return [partes, ubicacion].filter(Boolean).join(' ');
-}
+// "AV. ... URBANIZACION DEPARTAMENTO - PROVINCIA - DISTRITO".
+// Fuente única en services/sunat/util.service.js, compartida con la emisión de GRE para que
+// el alta y la re-sincronización de origen/llegada guarden EXACTAMENTE el mismo texto.
+const armarDireccionCompleta = armarDireccionEmpresa;
 
 // Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
 // (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring

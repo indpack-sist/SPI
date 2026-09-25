@@ -91,3 +91,18 @@ export function componerObservacion(observaciones, ordenCompra) {
 
 // Alias histórico usado por la GRE; misma composición.
 export const componerObservacionGuia = componerObservacion;
+
+/**
+ * Arma la dirección fiscal completa de la empresa a partir de los campos de empresa_config:
+ * "<direccion> <urbanizacion> <departamento> - <provincia> - <distrito>"
+ * (p. ej. "AV. EL SOL MZ. LL-1 LOTE. 4 B COO. LAS VERTIENTES ... LIMA - LIMA - VILLA EL SALVADOR").
+ * Fuente única compartida por el alta de la guía (controller) y la re-sincronización de origen/llegada
+ * en la emisión (gre-emision.service), para que ambos guarden EXACTAMENTE el mismo texto y no diverjan.
+ * Si no hay más campos que `direccion`, cae a ese valor.
+ */
+export function armarDireccionEmpresa(cfg = {}) {
+  const valorReal = (v) => v && String(v).trim() && String(v).trim() !== '-';
+  const partes = [cfg.direccion, cfg.urbanizacion].filter(valorReal).join(' ');
+  const ubicacion = [cfg.departamento, cfg.provincia, cfg.distrito].filter(valorReal).join(' - ');
+  return [partes, ubicacion].filter(Boolean).join(' ').trim();
+}

@@ -11,7 +11,7 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima } from './fecha.service.js';
-import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from './util.service.js';
+import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, armarDireccionEmpresa } from './util.service.js';
 import { validarGuiaPrevia } from './validacion-previa.service.js';
 import AppError from '../../utils/AppError.js';
 
@@ -214,7 +214,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     // SPI recoge los bienes del proveedor y los lleva a su propio establecimiento. Se sincroniza
     // justo antes de construir y firmar el XML, por lo que ningún cliente puede sobrescribirlo.
     if (esCompra) {
-      g.direccion_llegada = String(empresa.direccion || '').trim();
+      g.direccion_llegada = armarDireccionEmpresa(empresa) || String(empresa.direccion || '').trim();
       g.punto_llegada = g.direccion_llegada;
       g.ubigeo_llegada = String(empresa.ubigeo || '').trim();
       await conn.query(
@@ -229,7 +229,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     // transacción, después de validar que la guía es emitible, para corregir también borradores
     // antiguos sin alterar documentos que ya fueron aceptados por SUNAT.
     if (!esCompra) {
-      g.direccion_partida = String(empresa.direccion || '').trim();
+      g.direccion_partida = armarDireccionEmpresa(empresa) || String(empresa.direccion || '').trim();
       g.punto_partida = g.direccion_partida;
       g.ubigeo_partida = String(empresa.ubigeo || '').trim();
       await conn.query(
@@ -661,10 +661,10 @@ export async function validarGuiaRemisionPrevia(idGuia) {
   // Partida/llegada resueltas EN MEMORIA igual que la emisión (venta: partida = empresa; compra: llegada = empresa).
   const gView = { ...g };
   if (esCompra) {
-    gView.direccion_llegada = String(empresa?.direccion || '').trim();
+    gView.direccion_llegada = armarDireccionEmpresa(empresa) || String(empresa?.direccion || '').trim();
     gView.ubigeo_llegada = String(empresa?.ubigeo || '').trim();
   } else {
-    gView.direccion_partida = String(empresa?.direccion || '').trim();
+    gView.direccion_partida = armarDireccionEmpresa(empresa) || String(empresa?.direccion || '').trim();
     gView.ubigeo_partida = String(empresa?.ubigeo || '').trim();
   }
 

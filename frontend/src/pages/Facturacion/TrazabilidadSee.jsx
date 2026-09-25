@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight, CalendarDays, ChevronDown, ChevronRight, Download, FileCheck2,
   FileText, Filter, Layers, Link2, Loader2, Package, RefreshCw, RotateCcw, Search,
-  ShieldCheck, Truck, X, XCircle
+  ShieldCheck, Truck, X, XCircle, DownloadCloud
 } from 'lucide-react';
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../config/api';
+import { useDescargaMasiva, soportaDescargaCarpetas } from '../../context/DescargaMasivaContext';
+import ModalDescargaMasiva from '../../components/Descargas/ModalDescargaMasiva';
 import './TrazabilidadSee.css';
 
 /* --------------------------------------------------------------------------
@@ -205,6 +207,7 @@ function OrdenDrawer({ idOrden, onClose }) {
 const TABS = [
   { id: 'comprobantes', label: 'Comprobantes', icon: FileText },
   { id: 'guias', label: 'Guías de Remisión', icon: Truck },
+  { id: 'descarga', label: 'Descarga masiva', icon: DownloadCloud },
 ];
 const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE'];
 
@@ -302,6 +305,7 @@ export default function TrazabilidadSee() {
         })}
       </div>
 
+      {tab !== 'descarga' && (<>
       <section className="tz-toolbar">
         <div className="tz-search">
           <Search size={15} />
@@ -370,8 +374,15 @@ export default function TrazabilidadSee() {
             <span>{hayFiltros ? 'Ajusta los filtros para ver más documentos.' : 'Aún no hay documentos emitidos.'}</span></div>
         ) : tab === 'comprobantes'
           ? <TablaComprobantes data={visibles} expandido={expandido} setExpandido={setExpandido} onOrden={setDrawerOrden} onDescargar={descargar} />
-          : <TablaGuias data={visibles} expandido={expandido} setExpandido={setExpandido} onOrden={setDrawerOrden} onDescargar={descargar} />}
+          : tab === 'guias'
+          ? <TablaGuias data={visibles} expandido={expandido} setExpandido={setExpandido} onOrden={setDrawerOrden} onDescargar={descargar} />
+          : null}
       </section>
+      </>)}
+
+      {tab === 'descarga' && (
+        <PanelDescargaMasiva onDescargarUno={descargar} />
+      )}
 
       {drawerOrden && <OrdenDrawer idOrden={drawerOrden} onClose={() => setDrawerOrden(null)} />}
     </main>
@@ -550,6 +561,164 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
         })}
       </tbody>
     </table>
+  );
+}
+
+/* ------------------------- Pestaña: descarga masiva ----------------------- */
+function PanelDescargaMasiva({ onDescargarUno }) {
+  const { estado: estadoDescarga, iniciarDescarga } = useDescargaMasiva();
+  const [rango, setRango] = useState({ desde: '', hasta: '' });
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [consultado, setConsultado] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
+  const [modal, setModal] = useState(false);
+  const [aviso, setAviso] = useState(null);
+
+  const consultar = useCallback(async () => {
+    if (!rango.desde || !rango.hasta) { setError('Elige la fecha de inicio y de fin.'); return; }
+    setLoading(true); setError(null); setSel(new Set());
+    try {
+      const res = await sunatAPI.trazabilidadComprobantes({ desde: rango.desde, hasta: rango.hasta, solo_sistema: 1 });
+      setRows(res.data?.data || []);
+      setConsultado(true);
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message || 'No se pudo consultar.');
+      setRows([]);
+    } finally { setLoading(false); }
+  }, [rango.desde, rango.hasta]);
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const todos = rows.length > 0 && sel.size === rows.length;
+  const toggleTodos = () => setSel(todos ? new Set() : new Set(rows.map((r) => r.id_factura)));
+
+  const abrirModal = () => {
+    if (!soportaDescargaCarpetas()) { setAviso('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.'); return; }
+    if (!sel.size) { setAviso('Selecciona al menos un comprobante.'); return; }
+    setAviso(null); setModal(true);
+  };
+
+  const confirmar = async (opciones) => {
+    setModal(false);
+    const elegidos = rows.filter((r) => sel.has(r.id_factura))
+      .map((r) => ({ id_factura: r.id_factura, documento: r.documento, xml_url: r.xml_url, cdr_url: r.cdr_url }));
+    try {
+      await iniciarDescarga(elegidos, opciones, rango);
+    } catch (e) {
+      setAviso(e?.message || 'No se pudo iniciar la descarga.');
+    }
+  };
+
+  const hayResultados = consultado && !loading && !error && rows.length > 0;
+
+  return (
+    <div className="tz-descarga">
+      {/* Paso 1 — consulta por rango de fechas */}
+      <div className="tz-dm-consulta">
+        <div className="tz-dm-consulta-lead">
+          <span className="tz-eyebrow"><CalendarDays size={13} /> Rango de emisión</span>
+          <p>Elige inicio y fin para listar tus comprobantes emitidos electrónicamente.</p>
+        </div>
+        <div className="tz-dm-consulta-form">
+          <label className="tz-field tz-field-date">
+            <CalendarDays size={13} />
+            <input type="date" value={rango.desde} onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))} title="Fecha de inicio" />
+          </label>
+          <span className="tz-date-sep">→</span>
+          <label className="tz-field tz-field-date">
+            <input type="date" value={rango.hasta} onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))} title="Fecha de fin" />
+          </label>
+          <button className="tz-btn tz-btn-primary" onClick={consultar} disabled={loading}>
+            {loading ? <Loader2 className="tz-spin" size={15} /> : <Search size={15} />} Consultar
+          </button>
+        </div>
+      </div>
+
+      {aviso && <div className="tz-toast" onClick={() => setAviso(null)}><XCircle size={15} /> {aviso}</div>}
+      {estadoDescarga.activa && (
+        <div className="tz-descarga-nota">
+          <Loader2 className="tz-spin" size={14} />
+          Descarga en curso — puedes seguir usando el sistema; no cierres ni recargues esta pestaña.
+        </div>
+      )}
+
+      {/* Paso 2 — barra de acción: selección + descarga */}
+      {hayResultados && (
+        <div className={`tz-dm-actionbar ${sel.size ? 'has-sel' : ''}`}>
+          <div className="tz-dm-count">
+            {sel.size > 0
+              ? <><b>{sel.size}</b> de {rows.length} seleccionado(s)</>
+              : <>{rows.length} comprobante(s) — marca los que quieras descargar</>}
+          </div>
+          {sel.size > 0 && (
+            <button className="tz-dm-clear" onClick={() => setSel(new Set())}>Limpiar selección</button>
+          )}
+          <button className="tz-btn tz-btn-download" onClick={abrirModal} disabled={!sel.size || estadoDescarga.activa}>
+            <DownloadCloud size={15} /> Descargar{sel.size > 0 ? ` (${sel.size})` : ''}
+          </button>
+        </div>
+      )}
+
+      {/* Paso 3 — estados / tabla */}
+      {error ? (
+        <div className="tz-state"><XCircle size={26} /><strong>No se pudo consultar</strong><span>{error}</span></div>
+      ) : loading ? (
+        <div className="tz-state"><Loader2 className="tz-spin" size={26} /><strong>Consultando…</strong></div>
+      ) : !consultado ? (
+        <div className="tz-state"><CalendarDays size={26} /><strong>Elige un rango de fechas</strong><span>Selecciona inicio y fin, luego pulsa Consultar para ver tus comprobantes.</span></div>
+      ) : !rows.length ? (
+        <div className="tz-state"><FileCheck2 size={26} /><strong>Sin comprobantes</strong><span>No hay comprobantes emitidos por el sistema en ese rango.</span></div>
+      ) : (
+        <div className="tz-table-wrap">
+          <table className="tz-table tz-table-descarga">
+            <thead>
+              <tr>
+                <th className="tz-col-check">
+                  <input type="checkbox" checked={todos} ref={(el) => { if (el) el.indeterminate = sel.size > 0 && !todos; }}
+                    onChange={toggleTodos} title="Seleccionar todo" aria-label="Seleccionar todo" />
+                </th>
+                <th>Fecha emisión</th>
+                <th>Nº comprobante</th>
+                <th>Receptor</th>
+                <th className="tz-num">Importe</th>
+                <th>Fecha rechazo</th>
+                <th>Anulado</th>
+                <th className="tz-col-acc">Archivos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.id_factura} className={`tz-dm-row ${sel.has(r.id_factura) ? 'sel' : ''}`}
+                  style={{ '--i': Math.min(i, 24) }} onClick={() => toggle(r.id_factura)}>
+                  <td className="tz-col-check">
+                    <input type="checkbox" checked={sel.has(r.id_factura)} onChange={() => toggle(r.id_factura)}
+                      onClick={(e) => e.stopPropagation()} aria-label={`Seleccionar ${r.documento}`} />
+                  </td>
+                  <td className="tz-nowrap">{fmtDia(r.fecha_emision)}</td>
+                  <td><div className="tz-doc"><TipoTag clase={r.clase} /><b>{r.documento}</b></div></td>
+                  <td><div className="tz-cli"><b>{r.cliente || '—'}</b><small>{r.ruc_cliente || ''}</small></div></td>
+                  <td className="tz-num tz-nowrap">{fmtMoneda(r.total, r.moneda)}</td>
+                  <td className="tz-nowrap">{r.estado_final === 'RECHAZADO' && r.sunat_fecha_envio ? fmtDia(r.sunat_fecha_envio) : <span className="tz-muted">—</span>}</td>
+                  <td>{r.estado_final === 'ANULADA' ? <span className="tz-anulado-si">Sí</span> : <span className="tz-muted">No</span>}</td>
+                  <td className="tz-col-acc" onClick={(e) => e.stopPropagation()}>
+                    <div className="tz-acc">
+                      <IconBtn icon={FileText} label="Ver CP (PDF)" onClick={() => onDescargarUno(() => sunatAPI.verPdfComprobante(r.id_factura), 'el PDF')} />
+                      <IconBtn icon={Download} label="XML" disabled={!r.xml_url}
+                        onClick={() => onDescargarUno(() => sunatAPI.descargarArchivoUrl(r.xml_url, `${r.documento}.xml`), 'el XML')} />
+                      <IconBtn icon={FileCheck2} label="CDR" disabled={!r.cdr_url}
+                        onClick={() => onDescargarUno(() => sunatAPI.descargarArchivoUrl(r.cdr_url, `R-${r.documento}.zip`), 'el CDR')} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ModalDescargaMasiva abierto={modal} cantidad={sel.size} onCerrar={() => setModal(false)} onConfirmar={confirmar} />
+    </div>
   );
 }
 

@@ -1358,6 +1358,28 @@ export const sunatAPI = {
   // Descarga directa (blob) del XML firmado / CDR desde su URL pública, con nombre SUNAT.
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
+  // Descarga masiva: obtiene el blob del PDF (representación impresa) sin dispararlo al navegador.
+  obtenerBlobPdfComprobante: async (id) => {
+    const response = await fetch(`${API_URL}/sunat/comprobantes/${id}/pdf`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      let msg = 'No se pudo generar el PDF';
+      try { msg = (await response.json())?.error || msg; } catch { /* no-JSON */ }
+      throw new Error(msg);
+    }
+    return response.blob();
+  },
+  // Descarga masiva: obtiene el blob de un archivo público (XML firmado / CDR .zip en Cloudinary).
+  obtenerBlobDesdeUrl: async (url) => {
+    if (!url) throw new Error('Sin archivo');
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('No se pudo descargar el archivo');
+    return response.blob();
+  },
+
   // Guías de remisión (GRE Remitente 09). La baja se completa primero en SUNAT SOL y luego se
   // confirma aquí para sincronizar el estado y conservar su auditoría en SPI.
   // payload del wizard de emisión: { observaciones, direccion_llegada, ubigeo_llegada, ciudad_llegada,

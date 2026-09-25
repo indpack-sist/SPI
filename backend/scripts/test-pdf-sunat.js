@@ -258,6 +258,43 @@ async function main() {
     txtStress.indexOf('STRESS-045') >= 0 && txtStress.indexOf('OBSERVACIONES') > txtStress.indexOf('STRESS-045'));
   await fs.writeFile(path.join(outDir, 'test-TE01-stress.pdf'), pdfGreStress);
 
+  // 4d-bis) Caso pesado en una sola hoja (espeja TE01-9 reportado): 6 ítems + público con
+  //   transportista/fecha/indicadores + 2 vehículos + 1 conductor + observaciones + banda RECHAZADO.
+  //   Es el contenido máximo realista de una GRE doméstica; debe caber en 1 página A4.
+  const pdfGreDenso = await generarGuiaRemisionSunatPDF({
+    guia: {
+      serie_sunat: 'TE01', numero_sunat: 9, fecha_emision: '25/09/2026 12:39:00', fecha_traslado: '25/09/2026',
+      motivo_traslado_cod: '01', peso_bruto_kg: 1630,
+      ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZA. LL-1 LOTE. 4 B COO. LAS VERTIENTES LIMA - LIMA - VILLA EL SALVADOR',
+      ubigeo_llegada: '110205', direccion_llegada: 'CAR. PANAMERICANA SUR KM. 214 C.P. FUNDO POZUELO NORTE (NUEVA CARRETERA PANAMERICANA SUR KM.204) ICA - CHINCHA - EL CARMEN',
+      sunat_estado: 'RECHAZADO', motivo_estado: '3325 - El numero de placa del vehiculo no cumple con el formato establecido.',
+      observaciones: 'OC: 00000552'
+    },
+    emisor,
+    cliente: { razon_social: 'BERRYCO S.A.C.', ruc: '20606396628', direccion: 'JUAN PEZET NRO. 543 DPTO. 401, LIMA - SAN ISIDRO' },
+    detalle: [
+      { codigo_bien: 'EPV200G006', nombre: 'ESQUINERO PLASTICO VERDE 1.00 MTS', cantidad: 1000, codigo_unidad_sunat: 'NIU' },
+      { codigo_bien: 'EPV200G024', nombre: 'ESQUINERO PLASTICO VERDE 2.00 MTS', cantidad: 1400, codigo_unidad_sunat: 'NIU' },
+      { codigo_bien: 'GGP050M001', nombre: 'GRAPAS GALVANIZADAS 5/8 PIÑA (ESP 0.50) x 1000 UND', cantidad: 20, codigo_unidad_sunat: 'BG' },
+      { codigo_bien: 'ZPN110E009', nombre: 'ZUNCHO PP NEGRO 5/8 X 800 MTS', cantidad: 35, codigo_unidad_sunat: 'NIU' },
+      { codigo_bien: 'EPV200G014', nombre: 'ESQUINERO PLASTICO VERDE 1.40 MTS', cantidad: 1000, codigo_unidad_sunat: 'NIU' },
+      { codigo_bien: 'EPV200G051', nombre: 'ESQUINERO PLASTICO VERDE 1.20 MTS', cantidad: 1000, codigo_unidad_sunat: 'NIU' }
+    ],
+    transportista: { razon: 'TRANSPORTES BERISSO SRL', ruc: '20126239255', mtc: '151092CNG' },
+    registrar: true, modalidad: '01', fechaEntrega: '2026-09-25',
+    vehiculos: [{ placa: 'BUX704', tuce: '15M23021365E' }, { placa: 'A9Q986', tuce: '151741259' }],
+    conductores: [{ nombre_completo: 'MADUEÑO CARRASCO JOSE LUIS', dni: '09970398', licencia_conducir: 'A09970398' }],
+    qrBuffer: qrGre
+  });
+  check('GRE densa (6 ítems + público + 2 veh + conductor + rechazo) cabe en una sola página A4',
+    paginasDe(pdfGreDenso) === 1, `${paginasDe(pdfGreDenso)} pág`);
+  const txtDenso = await textoDe(pdfGreDenso);
+  check('GRE densa conserva todas las secciones + último ítem + conductor + observaciones',
+    txtDenso.includes('EPV200G051') && txtDenso.includes('MADUEÑO CARRASCO') &&
+    txtDenso.includes('TRANSPORTES BERISSO') && txtDenso.includes('OC: 00000552') &&
+    txtDenso.includes('REPRESENTACIÓN IMPRESA') && txtDenso.includes('BUX704') && txtDenso.includes('A9Q986'));
+  await fs.writeFile(path.join(outDir, 'test-TE01-9-denso.pdf'), pdfGreDenso);
+
   // 4e) GRE de EXPORTACIÓN (comex) — espeja el molde real aceptado EG07-273 (INDPACK→VILLAS OQUENDO,
   //     DAM 118-2026-40-70727). Valida las secciones comex, el destinatario del catálogo (no el
   //     cliente de la OV) y que NO se imprime la tabla de ítems (traslado total de la DAM).

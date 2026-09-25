@@ -44,8 +44,13 @@ export default function WidgetDescargaMasiva() {
           <ul className="dm-resumen">
             <li><Download size={13} /> {ok} comprobante(s) descargado(s)</li>
             {fallidos.length > 0 && (
-              <li className="dm-fail"><XCircle size={13} /> {fallidos.length} con error
-                <small>{fallidos.slice(0, 5).map((f) => f.documento).join(', ')}{fallidos.length > 5 ? '…' : ''}</small>
+              <li className="dm-fail"><XCircle size={13} /> {fallidos.length} archivo(s) con error
+                <small>
+                  {fallidos.slice(0, 4).map((f, k) => (
+                    <span key={k} className="dm-fail-item">{f.documento} · {f.archivo}: {f.error}</span>
+                  ))}
+                  {fallidos.length > 4 && <span className="dm-fail-item">…y {fallidos.length - 4} más</span>}
+                </small>
               </li>
             )}
             {omitidos.length > 0 && (

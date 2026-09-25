@@ -1359,8 +1359,9 @@ export const sunatAPI = {
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
   // Descarga masiva: obtiene el blob del PDF (representación impresa) sin dispararlo al navegador.
+  // noupload=1 → el backend NO re-sube el PDF a Cloudinary en cada llamada (aligera el lote/Render).
   obtenerBlobPdfComprobante: async (id) => {
-    const response = await fetch(`${API_URL}/sunat/comprobantes/${id}/pdf`, {
+    const response = await fetch(`${API_URL}/sunat/comprobantes/${id}/pdf?noupload=1`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       cache: 'no-store',

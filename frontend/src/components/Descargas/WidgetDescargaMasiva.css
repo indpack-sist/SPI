@@ -52,6 +52,7 @@
 .dm-resumen li { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--text-primary); }
 .dm-resumen li svg { flex-shrink: 0; }
 .dm-resumen small { width: 100%; color: var(--text-secondary); padding-left: 20px; font-variant-numeric: tabular-nums; }
+.dm-fail-item { display: block; line-height: 1.4; word-break: break-word; }
 .dm-ok-icon { color: #22c55e; animation: dm-pop .4s cubic-bezier(.2, 1.4, .4, 1) both; }
 .dm-fail { color: #ef4444; }
 .dm-warn { color: #f59e0b; }

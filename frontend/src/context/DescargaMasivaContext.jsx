@@ -63,30 +63,46 @@ export function DescargaMasivaProvider({ children }) {
       const doc = sanear(c.documento || `comprobante-${c.id_factura}`);
       setEstado((e) => ({ ...e, actual: doc, hechos: i }));
 
+      // Crear la subcarpeta del comprobante. Si esto falla, no hay dónde escribir → todo el comprobante falla.
+      let sub;
       try {
-        const sub = await padre.getDirectoryHandle(doc, { create: true });
-        let algo = false;
-
-        if (opciones.pdf) {
-          const blob = await sunatAPI.obtenerBlobPdfComprobante(c.id_factura);
-          await escribir(sub, `${doc}.pdf`, blob);
-          algo = true;
-        }
-        if (opciones.xml) {
-          if (c.xml_url) { await escribir(sub, `${doc}.xml`, await sunatAPI.obtenerBlobDesdeUrl(c.xml_url)); algo = true; }
-          else omitidos.push({ documento: doc, archivo: 'XML' });
-        }
-        if (opciones.cdr) {
-          if (c.cdr_url) { await escribir(sub, `R-${doc}.zip`, await sunatAPI.obtenerBlobDesdeUrl(c.cdr_url)); algo = true; }
-          else omitidos.push({ documento: doc, archivo: 'CDR' });
-        }
-
-        if (algo) ok += 1;
-        // Respiro entre comprobantes: alivia la CPU del Render Free si se piden PDFs.
-        await new Promise((r) => setTimeout(r, 150));
+        sub = await padre.getDirectoryHandle(doc, { create: true });
       } catch (err) {
-        fallidos.push({ documento: doc, error: err?.message || 'error' });
+        console.error(`[descarga] carpeta ${doc}:`, err);
+        fallidos.push({ documento: doc, archivo: 'carpeta', error: err?.message || 'no se pudo crear la carpeta' });
+        continue;
       }
+
+      // Cada archivo se maneja por separado: un PDF que falla NO impide bajar el XML/CDR.
+      const tareas = [];
+      if (opciones.pdf) tareas.push({ tipo: 'PDF', nombre: `${doc}.pdf`, get: () => sunatAPI.obtenerBlobPdfComprobante(c.id_factura) });
+      if (opciones.xml) {
+        if (c.xml_url) tareas.push({ tipo: 'XML', nombre: `${doc}.xml`, get: () => sunatAPI.obtenerBlobDesdeUrl(c.xml_url) });
+        else omitidos.push({ documento: doc, archivo: 'XML' });
+      }
+      if (opciones.cdr) {
+        if (c.cdr_url) tareas.push({ tipo: 'CDR', nombre: `R-${doc}.zip`, get: () => sunatAPI.obtenerBlobDesdeUrl(c.cdr_url) });
+        else omitidos.push({ documento: doc, archivo: 'CDR' });
+      }
+
+      let okArchivos = 0;
+      let falloArchivos = 0;
+      for (const t of tareas) {
+        if (cancelarRef.current) break;
+        try {
+          const blob = await conReintento(t.get);   // reintenta ante fallos transitorios
+          await escribir(sub, t.nombre, blob);
+          okArchivos += 1;
+        } catch (err) {
+          falloArchivos += 1;
+          console.error(`[descarga] ${doc} ${t.tipo}:`, err);
+          fallidos.push({ documento: doc, archivo: t.tipo, error: err?.message || 'error' });
+        }
+      }
+
+      if (okArchivos > 0 && falloArchivos === 0) ok += 1;
+      // Respiro entre comprobantes: alivia la CPU del Render Free si se piden PDFs.
+      await new Promise((r) => setTimeout(r, 150));
     }
 
     setEstado((e) => ({
@@ -107,6 +123,16 @@ export function DescargaMasivaProvider({ children }) {
       {children}
     </DescargaMasivaContext.Provider>
   );
+}
+
+// Ejecuta una promesa con reintentos ante fallos transitorios (red, 5xx puntual bajo carga).
+async function conReintento(fn, intentos = 2, esperaMs = 500) {
+  let ultimo;
+  for (let k = 0; k < intentos; k++) {
+    try { return await fn(); }
+    catch (e) { ultimo = e; if (k < intentos - 1) await new Promise((r) => setTimeout(r, esperaMs)); }
+  }
+  throw ultimo;
 }
 
 // Escribe un blob como archivo dentro de un directorio (File System Access API).

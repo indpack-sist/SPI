@@ -1569,8 +1569,10 @@ export async function generarPdfComprobante(req, res, next) {
     });
 
     // Subida best-effort a Cloudinary (no crítica). SUNAT_PDF_SKIP_UPLOAD=1 la desactiva
-    // (modo solo-lectura para validar el endpoint sin escribir en producción).
-    if (process.env.SUNAT_PDF_SKIP_UPLOAD !== '1') {
+    // (modo solo-lectura para validar el endpoint sin escribir en producción). También se omite
+    // con ?noupload=1: la descarga masiva pide N PDFs seguidos y no debe re-subir cada uno a
+    // Cloudinary (lento y pesado para el plan Free; el PDF ya viaja al cliente igual).
+    if (process.env.SUNAT_PDF_SKIP_UPLOAD !== '1' && req.query.noupload !== '1') {
       try {
         const url = await subirRaw(pdf, `sunat/pdf/${f.sunat_nombre_xml || `${f.serie}-${f.numero}`}.pdf`);
         await pool.query('UPDATE facturas_venta SET url_pdf = ? WHERE id_factura = ?', [url, idFactura]);

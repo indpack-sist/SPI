@@ -440,6 +440,7 @@ export async function generarPDFSalida(datos) {
       leftH += Math.max(15, hCliente + 5);
       if (datos.direccion_despacho) leftH += Math.max(15, hDireccion + 5);
       if (rucTexto) leftH += 15;
+      if (datos.comercial) leftH += 15;
 
       const xLabelRight = 310;
       const xValueRight = 375;
@@ -488,6 +489,14 @@ export async function generarPDFSalida(datos) {
       if (rucTexto) {
           doc.font('Helvetica-Bold');
           doc.text(`RUC: ${rucTexto}`, 120, cursorY);
+          cursorY += 15;
+      }
+
+      if (datos.comercial) {
+          doc.font('Helvetica-Bold');
+          doc.text('Comercial:', 40, cursorY);
+          doc.font('Helvetica');
+          doc.text(String(datos.comercial), 120, cursorY, { width: 180 });
       }
 
       let rightY = 213;

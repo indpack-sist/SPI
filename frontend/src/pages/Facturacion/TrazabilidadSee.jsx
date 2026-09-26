@@ -502,15 +502,21 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
       </thead>
       <tbody>
         {data.map((r) => {
-          const abierto = expandido === r.id_guia;
+          // Un intento reemitido (es_emision) comparte id_guia con su cabecera; se le da una clave
+          // propia para no colisionar al expandir ni en la key de React.
+          const rowId = r.es_emision ? `e${r.id_emision}` : `g${r.id_guia}`;
+          const abierto = expandido === rowId;
           const traslado = MOTIVOS_TRASLADO[r.motivo_traslado_cod] || (r.motivo_traslado_cod ? `Cód. ${r.motivo_traslado_cod}` : '—');
           const respuesta = r.estado_final === 'ANULADA' ? (r.motivo_anulacion || 'Dejada sin efecto')
             : (r.sunat_response_desc || '—');
           return (
-            <Fragment key={r.id_guia}>
-              <tr className={`tz-row ${abierto ? 'open' : ''}`} onClick={() => setExpandido(abierto ? null : r.id_guia)}>
+            <Fragment key={rowId}>
+              <tr className={`tz-row ${abierto ? 'open' : ''}`} onClick={() => setExpandido(abierto ? null : rowId)}>
                 <td className="tz-col-exp">{abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
-                <td><div className="tz-doc"><TipoTag clase="GUIA" /><b>{r.documento}</b></div></td>
+                <td>
+                  <div className="tz-doc"><TipoTag clase="GUIA" /><b>{r.documento}</b></div>
+                  {r.es_emision && <span className="tz-tag-manual">intento reemitido</span>}
+                </td>
                 <td className="tz-nowrap">{fmtDia(r.fecha_emision)}</td>
                 <td><div className="tz-cli"><b>{r.cliente || '—'}</b><small>{r.ruc_cliente || ''}</small></div></td>
                 <td>
@@ -526,11 +532,20 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
                 <td className="tz-motivo"><span className="tz-motivo-desc">{respuesta}</span></td>
                 <td className="tz-col-acc" onClick={(e) => e.stopPropagation()}>
                   <div className="tz-acc">
-                    <IconBtn icon={FileText} label="PDF" onClick={() => onDescargar(() => sunatAPI.verPdfGuia(r.id_guia), 'el PDF')} />
+                    {/* Un intento reemitido descarga desde su propio snapshot/URL archivada; la
+                        cabecera descarga por id de guía (su estado final). */}
+                    <IconBtn icon={FileText} label="PDF" disabled={r.es_emision && !r.tiene_snapshot}
+                      onClick={() => onDescargar(
+                        () => r.es_emision ? sunatAPI.verPdfGuiaEmision(r.id_guia, r.id_emision) : sunatAPI.verPdfGuia(r.id_guia),
+                        'el PDF')} />
                     <IconBtn icon={Download} label="XML" disabled={!r.xml_url}
-                      onClick={() => onDescargar(() => sunatAPI.descargarXmlGuia(r.id_guia), 'el XML')} />
+                      onClick={() => onDescargar(
+                        () => r.es_emision ? sunatAPI.descargarArchivoUrl(r.xml_url, `${r.documento}.xml`) : sunatAPI.descargarXmlGuia(r.id_guia),
+                        'el XML')} />
                     <IconBtn icon={FileCheck2} label="CDR" disabled={!r.cdr_url}
-                      onClick={() => onDescargar(() => sunatAPI.descargarCdrGuia(r.id_guia), 'el CDR')} />
+                      onClick={() => onDescargar(
+                        () => r.es_emision ? sunatAPI.descargarArchivoUrl(r.cdr_url, `R-${r.documento}.zip`) : sunatAPI.descargarCdrGuia(r.id_guia),
+                        'el CDR')} />
                   </div>
                 </td>
               </tr>

@@ -68,6 +68,17 @@ const n2Miles = (v) => Number(v || 0).toLocaleString('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 });
+// Valor unitario: respeta la precisión real capturada en la OV (hasta 6 dec, igual que el XML
+// vía u6 en ubl.service.js), con mínimo 2 decimales y sin ceros de relleno sobrantes. Antes se
+// truncaba a 2 (solo visual: el cálculo de línea/IGV/totales siempre usó el precio completo).
+const nUnit = (v) => {
+  const r = Math.round((Number(v || 0) + Number.EPSILON) * 1e6) / 1e6;
+  return r.toFixed(6).replace(/(\.\d{2}\d*?)0+$/, '$1');
+};
+const nUnitMiles = (v) => {
+  const r = Math.round((Number(v || 0) + Number.EPSILON) * 1e6) / 1e6;
+  return r.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+};
 
 // Mide el ancho real de un texto con una fuente/tamaño dados, sin alterar
 // el estado de fuente actual del documento (para calcular dónde debe
@@ -340,14 +351,14 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           doc.text(undTxt, 88, y + 3, { width: 62, align: 'center' });
           doc.text(String(it.codigo || '-'), 154, y + 3, { width: 66, align: 'center' });
           doc.text(desc, 224, y + 3, { width: 190, lineGap: 1 });
-          doc.text(monto2(valorUnit), 418, y + 3, { width: 76, align: 'right' });
+          doc.text(nUnitMiles(valorUnit), 418, y + 3, { width: 76, align: 'right' });
           doc.text('0.00', 500, y + 3, { width: 56, align: 'right' });
         } else {
           doc.text(cant.toFixed(2), 37, y + 3, { width: 48, align: 'center' });
           doc.text(undTxt, 88, y + 3, { width: 70, align: 'center' });
           doc.text(String(it.codigo || '-'), 162, y + 3, { width: 65, align: 'center' });
           doc.text(desc, 231, y + 3, { width: 225, lineGap: 1 });
-          doc.text(`${simbolo} ${n2(valorUnit)}`, 460, y + 3, { width: 96, align: 'right' });
+          doc.text(`${simbolo} ${nUnit(valorUnit)}`, 460, y + 3, { width: 96, align: 'right' });
         }
         y += hFila;
       }

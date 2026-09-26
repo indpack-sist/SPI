@@ -2494,12 +2494,14 @@ export async function descargarPDFDespacho(req, res) {
         f.placa AS vehiculo_placa,
         f.marca_modelo AS vehiculo_modelo,
         e_cond.nombre_completo AS conductor_nombre,
-        e_cond.dni AS conductor_dni
+        e_cond.dni AS conductor_dni,
+        e_com.nombre_completo AS comercial
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
-      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo 
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
       LEFT JOIN empleados e_cond ON ov.id_conductor = e_cond.id_empleado
+      LEFT JOIN empleados e_com ON ov.id_comercial = e_com.id_empleado
       WHERE ov.id_orden_venta = ?
     `, [id]);
 
@@ -2599,6 +2601,7 @@ export async function descargarPDFDespacho(req, res) {
       observaciones: salida.observaciones,
       tipo_inventario: 'Venta',
       numero_orden: orden.numero_orden,
+      comercial: orden.comercial,
       oc_cliente: orden.orden_compra_cliente,
       numero_cotizacion: orden.numero_cotizacion,
       moneda: orden.moneda,

@@ -67,6 +67,10 @@ function DetalleOrdenVenta() {
   // Detalle completo de las GRE vigentes de la orden (para las cards SEE embebidas). Con entregas
   // parciales pueden coexistir varias guías por OV, cada una por una parte del pedido.
   const [guiasDetalleSee, setGuiasDetalleSee] = useState([]);
+  // Historial de intentos (emisiones) por guía, para las que caen en el "Historial de Guías"
+  // compacto (anuladas/rechazadas): así los intentos RECHAZADOS que se sobrescribieron al reemitir
+  // siguen visibles aunque la baja ya esté confirmada y la guía ya no tenga card SEE. { [id_guia]: [] }
+  const [emisionesHistorial, setEmisionesHistorial] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -474,16 +478,30 @@ function DetalleOrdenVenta() {
       // ascendente, así las cards se leen en el orden en que se despachó el pedido.
       const paraDetalle = [...vigentes, ...anuladasPorSincronizar]
         .sort((a, b) => (Number(a.id_guia) || 0) - (Number(b.id_guia) || 0));
-      if (paraDetalle.length > 0) {
+      // Guías del "Historial de Guías" compacto (anuladas/rechazadas/reemplazadas). Su detalle
+      // completo (getById → incluye `emisiones`) trae los intentos RECHAZADOS que se sobrescribieron
+      // al reemitir, para poder mostrarlos aunque la baja ya esté confirmada.
+      const paraHistorial = guiasData.filter(g =>
+        g.estado === 'Anulada' || ['ANULADA', 'REEMPLAZADA', 'RECHAZADO'].includes(g.sunat_estado)
+      );
+      // Detalle una sola vez por guía (unión de las que tendrán card SEE + las del historial).
+      const idsDetalle = [...new Set([...paraDetalle, ...paraHistorial].map(g => g.id_guia))];
+      const detallePorId = new Map();
+      if (idsDetalle.length > 0) {
         const detalles = await Promise.all(
-          paraDetalle.map(g => guiasRemisionAPI.getById(g.id_guia)
+          idsDetalle.map(idg => guiasRemisionAPI.getById(idg)
             .then(r => (r?.data?.success ? r.data.data : null))
             .catch(() => null))
         );
-        setGuiasDetalleSee(detalles.filter(Boolean));
-      } else {
-        setGuiasDetalleSee([]);
+        detalles.filter(Boolean).forEach(d => detallePorId.set(d.id_guia, d));
       }
+      setGuiasDetalleSee(paraDetalle.map(g => detallePorId.get(g.id_guia)).filter(Boolean));
+      const emisionesMap = {};
+      paraHistorial.forEach(g => {
+        const d = detallePorId.get(g.id_guia);
+        if (d?.emisiones?.length) emisionesMap[g.id_guia] = d.emisiones;
+      });
+      setEmisionesHistorial(emisionesMap);
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
         const todas = fData.facturas || [];
@@ -1716,6 +1734,26 @@ function DetalleOrdenVenta() {
       else await sunatAPI.descargarCdrGuia(guia.id_guia);
     } catch (e) {
       setError(e?.message || 'No se pudo descargar el archivo de la GRE.');
+    } finally { setProcesando(false); }
+  };
+
+  // PDF de un intento archivado (reimprime desde su snapshot inmutable, con marca de estado/motivo).
+  const descargarPdfEmisionHistorial = async (guia, idEmision) => {
+    try {
+      setProcesando(true); setError(null);
+      await sunatAPI.verPdfGuiaEmision(guia.id_guia, idEmision);
+    } catch (e) {
+      setError(e?.message || 'No se pudo descargar el PDF del intento.');
+    } finally { setProcesando(false); }
+  };
+
+  // XML/CDR de un intento archivado, directo desde su URL almacenada.
+  const descargarUrlEmisionHistorial = async (url, nombre) => {
+    try {
+      setProcesando(true); setError(null);
+      await sunatAPI.descargarArchivoUrl(url, nombre);
+    } catch (e) {
+      setError(e?.message || 'No se pudo descargar el archivo del intento.');
     } finally { setProcesando(false); }
   };
 
@@ -3218,6 +3256,43 @@ function DetalleOrdenVenta() {
                   </div>
                   {g.baja_sunat_evidencia_url && (
                     <a href={g.baja_sunat_evidencia_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs underline text-red-700">Ver evidencia de la baja ↗</a>
+                  )}
+                  {/* Historial de intentos SUNAT de esta guía: incluye los RECHAZADOS que se
+                      sobrescribieron al reemitir con el siguiente correlativo. */}
+                  {(emisionesHistorial[g.id_guia] || []).length > 0 && (
+                    <div className="mt-2 border-t border-red-200 pt-2 space-y-1.5">
+                      <div className="text-[10px] font-semibold uppercase text-red-700/70">Historial de emisiones SUNAT</div>
+                      {emisionesHistorial[g.id_guia].map((em) => {
+                        const rechazo = em.sunat_estado === 'RECHAZADO' || em.sunat_estado === 'ERROR';
+                        const ok = em.sunat_estado === 'ACEPTADO';
+                        const numEm = em.serie_sunat && em.numero_sunat ? `${em.serie_sunat}-${em.numero_sunat}` : '—';
+                        return (
+                          <div key={em.id_emision} className={`rounded border p-1.5 text-xs ${rechazo ? 'border-red-200 bg-red-50' : ok ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-bold">{numEm}</span>
+                              <span className={`badge text-xs ${rechazo ? 'badge-danger' : ok ? 'badge-success' : 'badge-secondary'}`}>{em.sunat_estado}</span>
+                              {rechazo && <span className="text-red-700/80">Rechazada — sin validez</span>}
+                              <div className="ml-auto flex flex-wrap gap-1">
+                                {em.tiene_snapshot && (
+                                  <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarPdfEmisionHistorial(g, em.id_emision)}>
+                                    <FileText size={11} className="mr-1" /> PDF
+                                  </button>
+                                )}
+                                {em.xml_url && (
+                                  <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarUrlEmisionHistorial(em.xml_url, `${numEm}.xml`)}>XML</button>
+                                )}
+                                {em.cdr_url && (
+                                  <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarUrlEmisionHistorial(em.cdr_url, `R-${numEm}.zip`)}>CDR</button>
+                                )}
+                              </div>
+                            </div>
+                            {rechazo && (em.sunat_response_desc || em.sunat_response_code) && (
+                              <p className="mt-1 text-red-800"><strong>Motivo{em.sunat_response_code ? ` (${em.sunat_response_code})` : ''}:</strong> {em.sunat_response_desc || 'Sin detalle.'}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );

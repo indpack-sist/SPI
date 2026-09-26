@@ -164,7 +164,65 @@ export async function listarGuias(req, res) {
       return row;
     });
 
-    res.json({ success: true, data, resumen: construirResumen(data) });
+    // Intentos RECHAZADOS/ERROR que fueron SOBRESCRITOS al reemitir: al pasar al siguiente
+    // correlativo la cabecera de `guias_remision` se pisa con el nuevo número, así que ese rechazo
+    // solo queda archivado en `guias_remision_emisiones` y jamás vuelve a ser una fila de cabecera.
+    // Sin esto, un rechazo desaparece de la trazabilidad al reemitir/aceptar/dar de baja la guía.
+    // Se muestran como filas propias (una por intento), excluyendo el correlativo que sí quedó en la
+    // cabecera (ese ya se lista arriba con su estado final). Best-effort: si la tabla de historial no
+    // existe (instalación sin el DDL nuevo) la trazabilidad no se rompe.
+    const incluirEmisiones = !estado || estado === 'all' || estado === 'RECHAZADO' || estado === 'ERROR';
+    let emisiones = [];
+    if (incluirEmisiones) {
+      const ewhere = [
+        `e.sunat_estado IN ('RECHAZADO','ERROR')`,
+        `NOT (e.serie_sunat <=> gr.serie_sunat AND e.numero_sunat <=> gr.numero_sunat)`,
+      ];
+      const eparams = [];
+      if (estado === 'RECHAZADO' || estado === 'ERROR') { ewhere.push(`e.sunat_estado = ?`); eparams.push(estado); }
+      if (desde) { ewhere.push(`DATE(gr.fecha_emision) >= ?`); eparams.push(desde); }
+      if (hasta) { ewhere.push(`DATE(gr.fecha_emision) <= ?`); eparams.push(hasta); }
+      if (q && q.trim()) {
+        const like = `%${q.trim()}%`;
+        ewhere.push(`(gr.numero_guia LIKE ? OR CONCAT(e.serie_sunat,'-',e.numero_sunat) LIKE ? OR cl.razon_social LIKE ? OR cl.ruc LIKE ? OR ov.numero_orden LIKE ?)`);
+        eparams.push(like, like, like, like, like);
+      }
+      try {
+        const [erows] = await pool.query(`
+          SELECT
+            e.id_emision, e.id_guia, e.serie_sunat, e.numero_sunat, e.sunat_estado,
+            e.sunat_response_code, e.sunat_response_desc, e.xml_url, e.cdr_url,
+            (e.snapshot_json IS NOT NULL) AS tiene_snapshot,
+            gr.numero_guia, gr.fecha_emision, gr.motivo_traslado_cod,
+            gr.peso_bruto_kg, gr.direccion_llegada, gr.baja_sunat_confirmada,
+            ov.numero_orden, ov.id_orden_venta,
+            cl.razon_social AS cliente, cl.ruc AS ruc_cliente,
+            (SELECT COUNT(*) FROM detalle_guia_remision WHERE id_guia = gr.id_guia) AS total_items
+          FROM guias_remision_emisiones e
+          JOIN guias_remision gr ON gr.id_guia = e.id_guia
+          LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = gr.id_orden_venta
+          LEFT JOIN clientes cl       ON cl.id_cliente = gr.id_cliente
+          WHERE ${ewhere.join(' AND ')}
+          ORDER BY gr.fecha_emision DESC, e.id_emision DESC
+          LIMIT 1000`, eparams);
+        emisiones = erows.map((r) => ({
+          ...r,
+          clase: 'GUIA',
+          es_emision: true,
+          documento: (r.serie_sunat && r.numero_sunat) ? `${r.serie_sunat}-${r.numero_sunat}` : r.numero_guia,
+          estado_final: String(r.sunat_estado || 'RECHAZADO').toUpperCase(),
+          xml_url: extraerUrl(r.xml_url),
+          cdr_url: extraerUrl(r.cdr_url),
+        }));
+      } catch (e) {
+        console.warn('[trazabilidad] historial de emisiones GRE no disponible:', e.message);
+      }
+    }
+
+    const todo = [...data, ...emisiones]
+      .sort((a, b) => new Date(b.fecha_emision).getTime() - new Date(a.fecha_emision).getTime());
+
+    res.json({ success: true, data: todo, resumen: construirResumen(todo) });
   } catch (error) {
     console.error('Error en trazabilidad de guías:', error);
     res.status(500).json({ success: false, error: error.message });

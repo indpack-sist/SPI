@@ -26,21 +26,14 @@ export const PermisosProvider = ({ children }) => {
         return;
       }
 
-      console.log('🔍 Usuario de AuthContext:', user);
-      console.log('🔍 Rol del usuario:', user?.rol);
-
       if (user?.rol) {
         setRol(user.rol);
       }
 
       const response = await api.get('/auth/permisos');
       const data = response.data;
-      
-      console.log('📦 Respuesta de permisos:', data);
-      
+
       if (data.success) {
-        console.log('✅ Permisos cargados:', data.data.permisos);
-        console.log('✅ Rol desde backend:', data.data.rol);
         setPermisos(data.data.permisos);
         setRol(data.data.rol);
       }
@@ -55,19 +48,15 @@ export const PermisosProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      console.log('👤 Usuario cambió, cargando permisos...');
       cargarPermisos();
     }
   }, [user]);
 
   const tienePermiso = (modulo) => {
     if (!permisos) {
-      console.log(`⚠️ Sin permisos cargados para verificar: ${modulo}`);
       return false;
     }
-    const tiene = permisos[modulo] === true;
-    console.log(`🔐 Verificando permiso [${modulo}]: ${tiene ? '✅' : '❌'}`);
-    return tiene;
+    return permisos[modulo] === true;
   };
 
   const puedeAcceder = (modulos) => {

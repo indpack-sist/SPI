@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
@@ -73,6 +74,17 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3000;
 
+// Cabeceras de seguridad. La API solo devuelve JSON/archivos (el HTML del
+// frontend lo sirve Vercel, donde va la CSP real), así que aquí se desactiva la
+// CSP de helmet y se deja el resto: oculta X-Powered-By, fuerza HSTS, nosniff,
+// Referrer-Policy, etc. crossOriginResourcePolicy en 'cross-origin' es
+// imprescindible para que el frontend (otro dominio) siga cargando las imágenes
+// servidas por /api/archivos y /api/prospectos-media vía <img>.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 app.use(compression());
 app.use(cors({
   origin: allowedOrigins,

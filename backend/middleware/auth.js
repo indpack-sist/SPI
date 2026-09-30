@@ -626,9 +626,7 @@ export const verificarPermiso = (...modulos) => {
       if (!modulos.some((m) => permisos.api[m])) {
         return res.status(403).json({
           success: false,
-          error: 'No tienes permiso para acceder a este módulo',
-          modulo: modulos.join(' | '),
-          rol: rol
+          error: 'No tienes permiso para acceder a este módulo'
         });
       }
       next();

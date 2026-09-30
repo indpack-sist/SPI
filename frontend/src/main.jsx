@@ -1,6 +1,19 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './app.jsx'
+
+// Fuentes auto-hospedadas (Fontsource) — reemplazan el @import a Google Fonts.
+// Vite las empaqueta en /assets con hash (mismo origen → CSP 'self', sin depender del CDN de Google).
+import '@fontsource/barlow/latin-300.css'
+import '@fontsource/barlow/latin-400.css'
+import '@fontsource/barlow/latin-500.css'
+import '@fontsource/barlow/latin-600.css'
+import '@fontsource/barlow-condensed/latin-300.css'
+import '@fontsource/barlow-condensed/latin-400.css'
+import '@fontsource/barlow-condensed/latin-600.css'
+import '@fontsource/barlow-condensed/latin-700.css'
+import '@fontsource/barlow-condensed/latin-800.css'
+
 import './index.css'
 import ResponsiveTables from './components/UI/ResponsiveTables.jsx'
 

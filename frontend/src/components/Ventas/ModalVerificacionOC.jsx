@@ -3,17 +3,38 @@ import { CheckCircle, FileText, ChevronLeft, ChevronRight, ShieldCheck, SkipForw
 import Modal from '../UI/Modal';
 import { archivosAPI } from '../../config/api';
 
-function resolverUrl(url) {
-  if (!url) return '';
-  if (typeof url !== 'string') return URL.createObjectURL(url);
-  if (url.startsWith('http')) return archivosAPI.getProxyUrl(url);
-  return url;
+// Extrae la cadena de URL de un archivo persistido ({ url / ruta / path / secure_url / src }).
+function extraerUrl(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  return obj.url || obj.ruta || obj.path || obj.secure_url || obj.src || '';
 }
 
-function detectarTipo(url) {
-  if (typeof url !== 'string') return url?.type === 'application/pdf' ? 'pdf' : 'img';
-  const ext = url.split('?')[0].split('.').pop().toLowerCase();
-  return ext === 'pdf' ? 'pdf' : 'img';
+function resolverUrl(archivo) {
+  if (!archivo) return '';
+  // Archivo local recién seleccionado (File/Blob) → vista previa en memoria.
+  if (archivo instanceof Blob) return URL.createObjectURL(archivo);
+  // Archivo persistido como objeto: usar su campo de URL.
+  if (typeof archivo === 'object') {
+    const u = extraerUrl(archivo);
+    return u ? resolverUrl(u) : '';
+  }
+  // Cadena: ruta o URL.
+  if (typeof archivo === 'string') {
+    if (archivo.startsWith('http')) return archivosAPI.getProxyUrl(archivo);
+    return archivo;
+  }
+  return '';
+}
+
+function detectarTipo(archivo) {
+  if (!archivo) return 'img';
+  if (archivo instanceof Blob) return archivo.type === 'application/pdf' ? 'pdf' : 'img';
+  if (typeof archivo === 'object') return detectarTipo(extraerUrl(archivo));
+  if (typeof archivo === 'string') {
+    const ext = archivo.split('?')[0].split('.').pop().toLowerCase();
+    return ext === 'pdf' ? 'pdf' : 'img';
+  }
+  return 'img';
 }
 
 export default function ModalVerificacionOC({

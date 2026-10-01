@@ -74,7 +74,15 @@ router.get('/pdf-proxy', async (req, res) => {
     // 'inline' hace que el navegador lo muestre en lugar de descargarlo
     res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    
+
+    // El frontend (otro dominio) incrusta este PDF en un <iframe>. Helmet pone
+    // X-Frame-Options: SAMEORIGIN de forma global, que bloquea el iframe
+    // cross-origin ("ha rechazado la conexión"). Este endpoint solo entrega un
+    // binario (PDF/imagen) tras validar el token, sin UI interactiva, así que
+    // permitir el framing no implica riesgo de clickjacking.
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors *');
+
     // 7. Enviar el archivo al cliente
     response.body.pipe(res);
 

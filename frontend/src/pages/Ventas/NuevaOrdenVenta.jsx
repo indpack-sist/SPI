@@ -818,11 +818,23 @@ useEffect(() => {
         orden: index + 1
       }))));
 
-      if (archivosPrevios.orden_compra_url === null) {
+      // Archivos previos conservados: el usuario pudo eliminar alguno de forma
+      // individual. Enviamos la lista restante (JSON) para que el backend la
+      // persista tal cual; si quedó vacía (o null) pedimos limpiar todo. Antes
+      // solo se mandaba 'limpiar_oc' cuando se borraban TODOS, así que borrar
+      // 1 de 2 archivos no se guardaba.
+      const ocRestantes = getArrayFromUrls(archivosPrevios.orden_compra_url);
+      if (archivosPrevios.orden_compra_url === null || ocRestantes.length === 0) {
         formData.append('limpiar_oc', 'true');
+      } else {
+        formData.append('orden_compra_url', JSON.stringify(ocRestantes));
       }
-      if (archivosPrevios.comprobante_url === null) {
+
+      const comprobantesRestantes = getArrayFromUrls(archivosPrevios.comprobante_url);
+      if (archivosPrevios.comprobante_url === null || comprobantesRestantes.length === 0) {
         formData.append('limpiar_comprobante', 'true');
+      } else {
+        formData.append('comprobante_url', JSON.stringify(comprobantesRestantes));
       }
 
       if (tieneOC && archivos.orden_compra) {

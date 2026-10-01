@@ -1137,8 +1137,11 @@ export async function updateOrdenVenta(req, res) {
         Promise.all((req.files.orden_compra || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra'))),
         Promise.all((req.files.comprobante || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/comprobantes')))
       ]);
-      if (ordenesCompra.length > 0) nuevaOrdenCompraUrl = appendUrls(ordenActual.orden_compra_url, ordenesCompra.map(resultado => resultado.secure_url));
-      if (comprobantes.length > 0) nuevoComprobanteUrl = appendUrls(ordenActual.comprobante_url, comprobantes.map(resultado => resultado.secure_url));
+      // Se concatena sobre la lista ya recalculada (nueva*Url), no sobre la
+      // original en BD, para que una eliminación + alta en la misma edición
+      // compongan bien (si se usara ordenActual se perdería el borrado).
+      if (ordenesCompra.length > 0) nuevaOrdenCompraUrl = appendUrls(nuevaOrdenCompraUrl, ordenesCompra.map(resultado => resultado.secure_url));
+      if (comprobantes.length > 0) nuevoComprobanteUrl = appendUrls(nuevoComprobanteUrl, comprobantes.map(resultado => resultado.secure_url));
     }
 
     if (!id_cliente || !detalle || detalle.length === 0) {

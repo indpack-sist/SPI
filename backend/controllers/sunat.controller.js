@@ -1553,9 +1553,12 @@ export async function generarPdfComprobante(req, res, next) {
         tipo_venta: ['07', '08'].includes(String(f.codigo_tipo_sunat)) ? null : f.tipo_venta,
         dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
         // "Observaciones" del PDF = lo enviado a SUNAT (cbc:Note) persistido en la factura. Para filas
-        // viejas (sin persistir) se compone del texto de la OV + OC. La OC ya viaja DENTRO de este
-        // texto, así que no se imprime aparte (paridad exacta con lo que muestra SUNAT).
-        observaciones: (f.observaciones != null && f.observaciones !== '')
+        // viejas (sin persistir, observaciones NULL) se compone del texto de la OV + OC. La OC ya viaja
+        // DENTRO de este texto, así que no se imprime aparte (paridad exacta con lo que muestra SUNAT).
+        // Un string vacío ('') es un valor AUTORITATIVO: el usuario vació las observaciones en el panel
+        // al emitir (el cbc:Note viajó vacío); NO se debe reconstruir desde la OV o reaparecería en el
+        // PDF un texto que el usuario quitó a propósito. Solo NULL (nunca persistido) cae al fallback.
+        observaciones: (f.observaciones != null)
           ? f.observaciones
           : componerObservacion(f.ov_observaciones, f.orden_compra_cliente),
         // OC = campo PROPIO del PDF (ya no embebida en las observaciones). Se rotula en la cabecera.

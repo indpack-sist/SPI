@@ -297,7 +297,10 @@ export default function Prospectos() {
   useEffect(() => {
     refreshJobs();
     const hayActivos = jobs.some((j) => j.estado === 'pendiente' || j.estado === 'procesando');
-    const cada = hayActivos || jobsOpen ? 4000 : 12000;
+    // El socket (scraping:update) es el canal en vivo; este poll es respaldo. Intervalos
+    // relajados (antes 4s/12s) para bajar las consultas a la BD de Railway cuando la pestaña
+    // queda abierta, sin perder reactividad porque el socket empuja cada transición de job.
+    const cada = hayActivos || jobsOpen ? 8000 : 30000;
     const t = setInterval(refreshJobs, cada);
     return () => clearInterval(t);
   }, [refreshJobs, jobsOpen, jobs.length]);
@@ -316,7 +319,9 @@ export default function Prospectos() {
   useEffect(() => {
     cargarLotes();
     const hay = lotesActivos.length > 0;
-    const t = setInterval(cargarLotes, hay ? 2500 : 9000);
+    // Respaldo del socket (que mueve la barra en vivo). Relajado (antes 2.5s/9s) para no
+    // martillear la BD de Railway mientras la pestaña está abierta.
+    const t = setInterval(cargarLotes, hay ? 5000 : 20000);
     return () => clearInterval(t);
   }, [cargarLotes, lotesActivos.length]);
 

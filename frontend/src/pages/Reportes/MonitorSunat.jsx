@@ -117,7 +117,7 @@ export default function MonitorSunat() {
     let debounce;
     const refrescar = () => { clearTimeout(debounce); debounce = setTimeout(() => cargarRef.current?.({ silent: true }), 500); };
     socket.on('connect', () => setEnVivo(true)); socket.on('disconnect', () => setEnVivo(false)); socket.on('sunat:cambio', refrescar);
-    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') cargarRef.current?.({ silent: true }); }, 15000);
+    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') cargarRef.current?.({ silent: true }); }, 60000);
     const onVisible = () => { if (document.visibilityState === 'visible') cargarRef.current?.({ silent: true }); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearTimeout(debounce); clearInterval(intervalo); document.removeEventListener('visibilitychange', onVisible); socket.off('sunat:cambio', refrescar); socket.disconnect(); };

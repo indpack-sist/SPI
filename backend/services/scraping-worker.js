@@ -32,7 +32,10 @@ let intervalo = null;
 // los buscadores ni perder precisión. La toma de jobs ya es atómica
 // (tomarSiguienteJob reclama con UPDATE optimista), así que varios obreros
 // compiten por la cola sin pisarse. Ajustable por entorno.
-const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 8);
+// Default 2 (antes 8): en hosting con CPU compartida (Render/Railway) 8 obreros
+// en paralelo ahogaban la CPU y multiplicaban las consultas concurrentes a MySQL.
+// 2 procesa los lotes algo más lento pero baja el consumo; subir por entorno si hace falta.
+const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 2);
 
 // Tras cuántos intentos un job que se cuelga deja de reintentarse y se cierra como
 // error (evita que un job "veneno" reviva para siempre y clave la barra de progreso).
@@ -48,7 +51,12 @@ let ultimoStaleCheck = 0; // epoch ms del último barrido de huérfanos en calie
 export function startWorker(io) {
   socketIo = io;
   if (intervalo) clearInterval(intervalo);
-  intervalo = setInterval(tick, 5000);
+  // Poll de RESPALDO cada 30s (antes 5s). No afecta la reactividad: notificarJob()
+  // despierta al worker al instante en cada encolado y cada obrero drena TODA la cola
+  // en una pasada. Este intervalo solo cubre casos borde (job huérfano / re-encolado),
+  // así que 30s en vez de 5s recorta ~83% de las consultas ociosas a scraping_jobs
+  // (y deja que el pool MySQL entre en reposo cuando no hay nadie usando el sistema).
+  intervalo = setInterval(tick, 30000);
   // Recupera jobs que quedaron en 'procesando' de una corrida anterior (deploy /
   // reinicio a mitad de proceso). Son huérfanos: el worker que los tomó ya no
   // existe. Se rescatan ANTES de la primera pasada para que se re-procesen y no

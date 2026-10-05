@@ -1,10 +1,11 @@
 import express from 'express';
 import { login, verificarToken, cambiarPassword } from '../controllers/auth.controller.js';
 import { verificarToken as verificarTokenMiddleware, obtenerPermisos } from '../middleware/auth.js';
+import { limitadorLogin } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
-router.post('/login', login);
+router.post('/login', limitadorLogin, login);
 
 router.get('/verificar', verificarToken);
 

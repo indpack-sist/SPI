@@ -1108,10 +1108,10 @@ export async function registrarParcial(req, res) {
     let costoTotalParcial = 0;
 
     if (insumos_consumidos.length > 0) {
-      const ids = insumos_consumidos.map(i => i.id_insumo).join(',');
+      const ids = insumos_consumidos.map(i => Number(i.id_insumo)).filter(Number.isInteger);
       let mapaCostos = {};
-      if(ids){
-          const costos = await executeQuery(`SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${ids})`);
+      if(ids.length){
+          const costos = await executeQuery(`SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${ids.join(',')})`);
           costos.data.forEach(p => mapaCostos[p.id_producto] = parseFloat(p.costo_unitario_promedio || 0));
       }
 
@@ -1221,8 +1221,10 @@ export async function registrarParcial(req, res) {
         }
 
         if(hayMermasValidas && mermasValidas.length > 0) {
-             const idsMermas = mermasValidas.map(m => m.id).join(',');
-             const costosMermas = await executeQuery(`SELECT id_producto, costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto IN (${idsMermas})`);
+             const idsMermas = mermasValidas.map(m => Number(m.id)).filter(Number.isInteger);
+             const costosMermas = idsMermas.length
+                 ? await executeQuery(`SELECT id_producto, costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto IN (${idsMermas.join(',')})`)
+                 : { success: true, data: [] };
              
              let mapaCostosMermas = {};
              let tipoInventarioMerma = 3; 
@@ -1608,10 +1610,10 @@ export async function finalizarProduccion(req, res) {
     });
 
     if (insumos_reales.length > 0) {
-        const ids = insumos_reales.map(i => i.id_insumo).join(',');
+        const ids = insumos_reales.map(i => Number(i.id_insumo)).filter(Number.isInteger);
         let mapaCostos = {};
-        if(ids){
-            const costos = await executeQuery(`SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${ids})`);
+        if(ids.length){
+            const costos = await executeQuery(`SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${ids.join(',')})`);
             costos.data.forEach(p => mapaCostos[p.id_producto] = parseFloat(p.costo_unitario_promedio || 0));
         }
 
@@ -1740,8 +1742,10 @@ export async function finalizarProduccion(req, res) {
         }
 
         if(hayMermasValidas && mermasValidas.length > 0) {
-             const idsMermas = mermasValidas.map(m => m.id).join(',');
-             const costosMermas = await executeQuery(`SELECT id_producto, costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto IN (${idsMermas})`);
+             const idsMermas = mermasValidas.map(m => Number(m.id)).filter(Number.isInteger);
+             const costosMermas = idsMermas.length
+                 ? await executeQuery(`SELECT id_producto, costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto IN (${idsMermas.join(',')})`)
+                 : { success: true, data: [] };
              
              let mapaCostosMermas = {};
              let tipoInventarioMerma = 3; 

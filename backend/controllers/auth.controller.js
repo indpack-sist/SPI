@@ -36,9 +36,6 @@ export const login = async (req, res) => {
       });
     }
 
-    // Migración lazy: si la contraseña guardada seguía en texto plano y el
-    // login fue correcto, la re-hasheamos ahora. Un fallo aquí no debe
-    // impedir el acceso, así que solo se loguea.
     if (!esHash(empleado.password)) {
       try {
         const hash = await hashPassword(password);

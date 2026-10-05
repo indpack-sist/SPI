@@ -7,6 +7,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { testConnection } from './config/database.js';
 import { verificarToken, verificarPermiso } from './middleware/auth.js';
+import { limitadorGlobal } from './middleware/rateLimit.js';
 import { startWorker } from './services/scraping-worker.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -58,6 +59,7 @@ const allowedOrigins = [
 ];
 
 const app = express();
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -99,6 +101,8 @@ app.options('*', cors());
 // Una factura UBL firmada puede superar fácilmente el límite predeterminado de 100 KB.
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.use('/api', limitadorGlobal);
 
 app.use((req, res, next) => {
   const startedAt = Date.now();
@@ -263,20 +267,16 @@ app.use((err, req, res, next) => {
   if (err.code === 'ER_NO_SUCH_TABLE') {
     return res.status(500).json({
       success: false,
-      error: 'Error de base de datos: Tabla no encontrada',
-      detalles: err.message,
-      sql: err.sql,
-      tabla_buscada: err.message.match(/Table '.*?\.(\w+)'/)?.[1] || 'desconocida'
+      error: 'Error de base de datos'
     });
   }
 
   res.status(err.statusCode || 500).json({
     success: false,
-    error: err.message || 'Error interno del servidor',
-    code: err.code,
-    sqlState: err.sqlState,
-    sql: err.sql,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    error: 'Error interno del servidor',
+    ...(process.env.NODE_ENV === 'development'
+      ? { detalle: err.message, code: err.code, sqlState: err.sqlState, sql: err.sql, stack: err.stack }
+      : {})
   });
 });
 

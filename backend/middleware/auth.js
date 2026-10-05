@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../config/security.js';
 
 const PERMISOS_POR_ROL = {
   'Administrador': {
@@ -578,7 +579,7 @@ export const verificarToken = (req, res, next) => {
       });
     }
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'indpack-secret-key-2025');
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {

@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { testConnection } from './config/database.js';
-import { verificarToken, verificarPermiso } from './middleware/auth.js';
+import { verificarToken, verificarTokenMedia, verificarPermiso } from './middleware/auth.js';
 import { limitadorGlobal } from './middleware/rateLimit.js';
 import { startWorker } from './services/scraping-worker.js';
 
@@ -173,13 +173,8 @@ app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), emplead
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
-// Medios de prospección (imágenes): token por query para <img>, como /api/archivos.
-app.use('/api/prospectos-media', (req, res, next) => {
-  if (!req.headers.authorization && req.query.token) {
-    req.headers.authorization = `Bearer ${req.query.token}`;
-  }
-  next();
-}, verificarToken, verificarPermiso('prospectos'), prospectosMediaRoutes);
+// Medios de prospección (imágenes): token acotado por query para <img>, como /api/archivos.
+app.use('/api/prospectos-media', verificarTokenMedia, verificarPermiso('prospectos'), prospectosMediaRoutes);
 app.use('/api/prospectos', verificarToken, verificarPermiso('prospectos'), prospectosRoutes);
 app.use('/api/solicitudes-credito', verificarToken, verificarPermiso('solicitudesCredito'), solicitudesCreditoRoutes);
 
@@ -212,12 +207,7 @@ app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas
 
 app.use('/api/notificaciones', verificarToken, notificacionesRoutes);
 app.use('/api/sunat', sunatRoutes);
-app.use('/api/archivos', (req, res, next) => {
-    if (!req.headers.authorization && req.query.token) {
-        req.headers.authorization = `Bearer ${req.query.token}`;
-    }
-    next();
-}, verificarToken, archivosRoutes);
+app.use('/api/archivos', verificarTokenMedia, archivosRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -227,11 +217,23 @@ app.use((req, res) => {
   });
 });
 
+const CAMPOS_SENSIBLES = /pass|clave|contrase|token|secret|authorization/i;
+
+const sanitizarParaLog = (valor, profundidad = 0) => {
+  if (profundidad > 4 || valor === null || typeof valor !== 'object') return valor;
+  if (Array.isArray(valor)) return valor.map((v) => sanitizarParaLog(v, profundidad + 1));
+  const salida = {};
+  for (const [clave, v] of Object.entries(valor)) {
+    salida[clave] = CAMPOS_SENSIBLES.test(clave) ? '[REDACTED]' : sanitizarParaLog(v, profundidad + 1);
+  }
+  return salida;
+};
+
 app.use((err, req, res, next) => {
   console.error('='.repeat(80));
   console.error('ERROR CAPTURADO EN SERVIDOR');
   console.error('Ruta:', req.method, req.path);
-  console.error('Body:', JSON.stringify(req.body, null, 2));
+  console.error('Body:', JSON.stringify(sanitizarParaLog(req.body), null, 2));
   console.error('='.repeat(80));
   console.error('Mensaje:', err.message);
   console.error('Código:', err.code);

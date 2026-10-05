@@ -80,6 +80,7 @@ export function AuthProvider({ children }) {
 
   const limpiarSesion = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('tokenMedia');
     localStorage.removeItem('user');
     setUser(null);
   };
@@ -95,7 +96,7 @@ export function AuthProvider({ children }) {
         throw new Error('Respuesta del servidor no válida');
       }
       
-      const { token, usuario } = data.data;
+      const { token, tokenMedia, usuario } = data.data;
       
       console.log('📦 Respuesta completa del backend:', data.data);
       console.log('👤 Usuario del backend:', usuario);
@@ -110,7 +111,8 @@ export function AuthProvider({ children }) {
       }
       
       localStorage.setItem('token', token);
-      
+      if (tokenMedia) localStorage.setItem('tokenMedia', tokenMedia);
+
       const userData = {
         id: usuario.id_empleado,
         nombre: usuario.nombre_completo,

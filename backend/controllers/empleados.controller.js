@@ -1,6 +1,7 @@
 import { executeQuery, withTransaction } from '../config/database.js';
 import { validarDNI } from '../services/api-validation.service.js';
 import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
+import { hashPassword } from '../utils/password.js';
 
 const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
 
@@ -228,15 +229,16 @@ export async function createEmpleado(req, res) {
       }
     }
     
+    const passwordHash = await hashPassword(password);
     const result = await executeQuery(
       'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
-        dni || null, 
-        nombre_completo, 
-        email, 
-        password,
-        cargo || rol, 
-        rol, 
+        dni || null,
+        nombre_completo,
+        email,
+        passwordHash,
+        cargo || rol,
+        rol,
         estado || 'Activo'
       ]
     );
@@ -317,7 +319,7 @@ export async function updateEmpleado(req, res) {
         });
       }
       updateQuery += ', password = ?';
-      updateParams.push(password);
+      updateParams.push(await hashPassword(password));
     }
 
     updateQuery += ' WHERE id_empleado = ?';
@@ -447,6 +449,8 @@ export async function reemplazarEmpleado(req, res) {
       }
     }
 
+    const passwordHash = await hashPassword(password);
+
     const nuevoId = await withTransaction(async (conn) => {
       // 1) Liberar el email y desactivar al saliente. Se renombra el correo para
       //    esquivar el UNIQUE KEY; el login ya filtra por estado='Activo'.
@@ -461,7 +465,7 @@ export async function reemplazarEmpleado(req, res) {
       // 2) Crear la fila del empleado entrante.
       const [ins] = await conn.execute(
         'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, "Activo")',
-        [dni || null, nombre_completo, nuevoEmail, password, cargo || rol, rol]
+        [dni || null, nombre_completo, nuevoEmail, passwordHash, cargo || rol, rol]
       );
       const idNuevo = ins.insertId;
 

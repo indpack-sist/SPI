@@ -1,5 +1,6 @@
 import { executeQuery } from '../config/database.js';
 import jwt from 'jsonwebtoken';
+import { verificarPassword, hashPassword, esHash } from '../utils/password.js';
 
 export const login = async (req, res) => {
   try {
@@ -26,11 +27,27 @@ export const login = async (req, res) => {
 
     const empleado = result.data[0];
 
-    if (password !== empleado.password) {
+    const passwordOk = await verificarPassword(password, empleado.password);
+    if (!passwordOk) {
       return res.status(401).json({
         success: false,
         error: 'La contraseña es incorrecta. Por favor, verifícala e intenta nuevamente.'
       });
+    }
+
+    // Migración lazy: si la contraseña guardada seguía en texto plano y el
+    // login fue correcto, la re-hasheamos ahora. Un fallo aquí no debe
+    // impedir el acceso, así que solo se loguea.
+    if (!esHash(empleado.password)) {
+      try {
+        const hash = await hashPassword(password);
+        await executeQuery(
+          'UPDATE empleados SET password = ? WHERE id_empleado = ?',
+          [hash, empleado.id_empleado]
+        );
+      } catch (rehashError) {
+        console.error('⚠️ No se pudo re-hashear la contraseña (acceso permitido):', rehashError);
+      }
     }
 
     if (!empleado.rol) {
@@ -167,16 +184,18 @@ export const cambiarPassword = async (req, res) => {
     }
 
     const empleado = result.data[0];
-    if (password_actual !== empleado.password) {
+    const actualOk = await verificarPassword(password_actual, empleado.password);
+    if (!actualOk) {
       return res.status(401).json({
         success: false,
         error: 'Contraseña actual incorrecta'
       });
     }
 
+    const hashNuevo = await hashPassword(password_nuevo);
     await executeQuery(
       'UPDATE empleados SET password = ? WHERE id_empleado = ?',
-      [password_nuevo, id_empleado]
+      [hashNuevo, id_empleado]
     );
 
     res.json({

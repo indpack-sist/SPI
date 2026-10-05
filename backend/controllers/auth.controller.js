@@ -1,6 +1,7 @@
 import { executeQuery } from '../config/database.js';
 import jwt from 'jsonwebtoken';
 import { verificarPassword, hashPassword, esHash } from '../utils/password.js';
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/security.js';
 
 export const login = async (req, res) => {
   try {
@@ -65,8 +66,8 @@ export const login = async (req, res) => {
         rol: empleado.rol,
         nombre_completo: empleado.nombre_completo
       },
-      process.env.JWT_SECRET || 'indpack-secret-key-2025',
-      { expiresIn: '24h' }
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     const usuarioRespuesta = {
@@ -110,10 +111,7 @@ export const verificarToken = async (req, res) => {
     // 1) Verificación del token (errores de token => 401 genuino, cierra sesión)
     let decoded;
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET || 'indpack-secret-key-2025'
-      );
+      decoded = jwt.verify(token, JWT_SECRET);
     } catch (tokenError) {
       const expirado = tokenError.name === 'TokenExpiredError';
       return res.status(401).json({

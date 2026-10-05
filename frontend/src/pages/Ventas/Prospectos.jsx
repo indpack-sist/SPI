@@ -98,7 +98,7 @@ function construirPaginas(actual, total) {
 const imgSrc = (p) => {
   if (p.logo_url) return p.logo_url;
   if (p.foto_referencia) {
-    const token = localStorage.getItem('token') || '';
+    const token = localStorage.getItem('tokenMedia') || localStorage.getItem('token') || '';
     return `${API_URL}/prospectos-media/foto?ref=${encodeURIComponent(p.foto_referencia)}&token=${token}`;
   }
   return null;

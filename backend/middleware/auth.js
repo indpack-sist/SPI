@@ -1,5 +1,17 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config/security.js';
+import { executeQuery } from '../config/database.js';
+
+const empleadoSigueActivo = async (idEmpleado) => {
+  if (!idEmpleado) return false;
+  const resultado = await executeQuery(
+    'SELECT estado FROM empleados WHERE id_empleado = ?',
+    [idEmpleado]
+  );
+  if (!resultado.success) return null;
+  if (resultado.data.length === 0) return false;
+  return resultado.data[0].estado === 'Activo';
+};
 
 const PERMISOS_POR_ROL = {
   'Administrador': {
@@ -568,7 +580,7 @@ const PERMISOS_POR_ROL = {
   }
 };
 
-export const verificarToken = (req, res, next) => {
+export const verificarToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -580,6 +592,20 @@ export const verificarToken = (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.scope === 'media') {
+      return res.status(401).json({
+        success: false,
+        error: 'Token inválido',
+        code: 'TOKEN_INVALID'
+      });
+    }
+    if ((await empleadoSigueActivo(decoded.id_empleado)) === false) {
+      return res.status(401).json({
+        success: false,
+        error: 'Su cuenta fue desactivada. Vuelva a iniciar sesión.',
+        code: 'ACCOUNT_DISABLED'
+      });
+    }
     req.user = decoded;
     next();
   } catch (error) {
@@ -600,6 +626,38 @@ export const verificarToken = (req, res, next) => {
     return res.status(500).json({
       success: false,
       error: 'Error al verificar token'
+    });
+  }
+};
+
+export const verificarTokenMedia = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const raw = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : req.query.token;
+    if (!raw) {
+      return res.status(401).json({
+        success: false,
+        error: 'No se proporcionó token de autenticación',
+        code: 'TOKEN_MISSING'
+      });
+    }
+    const decoded = jwt.verify(raw, JWT_SECRET);
+    if ((await empleadoSigueActivo(decoded.id_empleado)) === false) {
+      return res.status(401).json({
+        success: false,
+        error: 'Su cuenta fue desactivada. Vuelva a iniciar sesión.',
+        code: 'ACCOUNT_DISABLED'
+      });
+    }
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: 'Token inválido',
+      code: 'TOKEN_INVALID'
     });
   }
 };

@@ -67,6 +67,16 @@ export const login = async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
+    const tokenMedia = jwt.sign(
+      {
+        id_empleado: empleado.id_empleado,
+        rol: empleado.rol,
+        scope: 'media'
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
     const usuarioRespuesta = {
       id_empleado: empleado.id_empleado,
       nombre_completo: empleado.nombre_completo,
@@ -81,6 +91,7 @@ export const login = async (req, res) => {
       success: true,
       data: {
         token,
+        tokenMedia,
         usuario: usuarioRespuesta
       }
     });

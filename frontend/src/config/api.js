@@ -1232,13 +1232,13 @@ export const reportesAPI = {
 };
 export const archivosAPI = {
   getProxyUrl: (urlCloudinary) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('tokenMedia') || localStorage.getItem('token');
     // Aseguramos que apunte a /archivos/pdf-proxy que es lo que definimos en server.js
     const baseUrl = `${API_URL}/archivos/pdf-proxy`;
 
     const params = new URLSearchParams({
       url: urlCloudinary,
-      token: token || '' // Enviamos el token para que el middleware verificarToken no nos bloquee
+      token: token || '' // Token acotado (scope media) para que verificarTokenMedia no nos bloquee
     });
 
     return `${baseUrl}?${params.toString()}`;

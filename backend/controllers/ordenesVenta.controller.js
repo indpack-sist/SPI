@@ -2736,7 +2736,17 @@ export async function registrarPagoOrden(req, res) {
     }
     
     const numeroPago = `${orden.numero_orden}-P${String(numeroSecuencia).padStart(2, '0')}`;
-    
+
+    let archivosUrl = null;
+    if (req.files && req.files.comprobantes && req.files.comprobantes.length > 0) {
+      const urls = [];
+      for (const file of req.files.comprobantes) {
+        const resultado = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes_pago');
+        urls.push(resultado.secure_url);
+      }
+      archivosUrl = JSON.stringify(urls);
+    }
+
     const queries = [
       {
         sql: `INSERT INTO pagos_ordenes_venta (
@@ -2749,9 +2759,10 @@ export async function registrarPagoOrden(req, res) {
           banco,
           id_cuenta_destino,
           observaciones,
+          archivos_url,
           id_registrado_por,
           fecha_registro
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 HOUR))`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 HOUR))`,
         params: [
           id,
           numeroPago,
@@ -2762,6 +2773,7 @@ export async function registrarPagoOrden(req, res) {
           banco || null,
           id_cuenta_destino || null,
           observaciones || null,
+          archivosUrl,
           id_registrado_por
         ]
       }
@@ -3026,18 +3038,83 @@ export async function anularPagoOrden(req, res) {
   }
 }
 
+export async function actualizarComprobantesPago(req, res) {
+  try {
+    const { id, idPago } = req.params;
+
+    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length > 0 && ordenCheck.data[0].estado === 'Cancelada') {
+      return res.status(400).json({ success: false, error: 'No se pueden adjuntar comprobantes en una orden Cancelada' });
+    }
+
+    const pagoResult = await executeQuery(
+      'SELECT archivos_url FROM pagos_ordenes_venta WHERE id_pago_orden = ? AND id_orden_venta = ?',
+      [idPago, id]
+    );
+
+    if (!pagoResult.success || pagoResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Pago no encontrado' });
+    }
+
+    if (!req.files || !req.files.comprobantes || req.files.comprobantes.length === 0) {
+      return res.status(400).json({ success: false, error: 'Debe adjuntar al menos un archivo' });
+    }
+
+    let urls = [];
+    if (pagoResult.data[0].archivos_url) {
+      try {
+        const previas = JSON.parse(pagoResult.data[0].archivos_url);
+        if (Array.isArray(previas)) urls = previas;
+      } catch {
+        urls = [];
+      }
+    }
+
+    for (const file of req.files.comprobantes) {
+      const resultado = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes_pago');
+      urls.push(resultado.secure_url);
+    }
+
+    const updateResult = await executeQuery(
+      'UPDATE pagos_ordenes_venta SET archivos_url = ? WHERE id_pago_orden = ? AND id_orden_venta = ?',
+      [JSON.stringify(urls), idPago, id]
+    );
+
+    if (!updateResult.success) {
+      return res.status(500).json({ success: false, error: updateResult.error });
+    }
+
+    const nuevo = await executeQuery(`
+      SELECT
+        p.*,
+        e.nombre_completo AS registrado_por,
+        cp.nombre as nombre_cuenta,
+        cp.tipo as tipo_cuenta
+      FROM pagos_ordenes_venta p
+      LEFT JOIN empleados e ON p.id_registrado_por = e.id_empleado
+      LEFT JOIN cuentas_pago cp ON p.id_cuenta_destino = cp.id_cuenta
+      WHERE p.id_pago_orden = ?
+    `, [idPago]);
+
+    res.json({ success: true, data: nuevo.data[0] });
+  } catch (error) {
+    console.error('Error en actualizarComprobantesPago:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function getResumenPagosOrden(req, res) {
   try {
     const { id } = req.params;
-    
+
     const ordenResult = await executeQuery(`
-      SELECT 
+      SELECT
         numero_orden,
         total,
         monto_pagado,
         estado_pago,
         moneda
-      FROM ordenes_venta 
+      FROM ordenes_venta
       WHERE id_orden_venta = ?
     `, [id]);
     

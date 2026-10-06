@@ -158,8 +158,12 @@ function DetalleOrdenVenta() {
     metodo_pago: 'Transferencia',
     numero_operacion: '',
     banco: '',
-    observaciones: ''
+    observaciones: '',
+    archivos: []
   });
+
+  const [modalComprobantePago, setModalComprobantePago] = useState({ open: false, pago: null, archivos: [] });
+  const [subiendoComprobantePago, setSubiendoComprobantePago] = useState(false);
 
   const [despachoForm, setDespachoForm] = useState({
     detalles: [],
@@ -1029,11 +1033,18 @@ function DetalleOrdenVenta() {
       setError(null);
       setProcesando(true);
       
-      const response = await ordenesVentaAPI.registrarPago(id, {
-        ...pagoForm,
-        monto_pagado: monto
-      });
-      
+      const fd = new FormData();
+      fd.append('id_cuenta_destino', pagoForm.id_cuenta_destino);
+      fd.append('fecha_pago', pagoForm.fecha_pago);
+      fd.append('monto_pagado', monto);
+      fd.append('metodo_pago', pagoForm.metodo_pago);
+      fd.append('numero_operacion', pagoForm.numero_operacion || '');
+      fd.append('banco', pagoForm.banco || '');
+      fd.append('observaciones', pagoForm.observaciones || '');
+      pagoForm.archivos.forEach(f => fd.append('comprobantes', f));
+
+      const response = await ordenesVentaAPI.registrarPago(id, fd);
+
       if (response.data.success) {
         setSuccess(`Pago registrado: ${response.data.data.numero_pago}`);
         setModalPagoOpen(false);
@@ -1044,7 +1055,8 @@ function DetalleOrdenVenta() {
           metodo_pago: 'Transferencia',
           numero_operacion: '',
           banco: '',
-          observaciones: ''
+          observaciones: '',
+          archivos: []
         });
         await cargarDatos();
       }
@@ -1076,6 +1088,40 @@ function DetalleOrdenVenta() {
       setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
       setProcesando(false);
+    }
+  };
+
+  const handleSubirComprobantePago = async () => {
+    if (!modalComprobantePago.pago || modalComprobantePago.archivos.length === 0) {
+      setError('Seleccione al menos un archivo');
+      return;
+    }
+    try {
+      setError(null);
+      setSubiendoComprobantePago(true);
+      const fd = new FormData();
+      modalComprobantePago.archivos.forEach(f => fd.append('comprobantes', f));
+      const response = await ordenesVentaAPI.actualizarComprobantesPago(id, modalComprobantePago.pago.id_pago_orden, fd);
+      if (response.data.success) {
+        setSuccess('Comprobante adjuntado correctamente');
+        setModalComprobantePago({ open: false, pago: null, archivos: [] });
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al adjuntar comprobante');
+    } finally {
+      setSubiendoComprobantePago(false);
+    }
+  };
+
+  const parsearArchivosPago = (archivosUrl) => {
+    if (!archivosUrl) return [];
+    try {
+      const arr = JSON.parse(archivosUrl);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
     }
   };
 
@@ -2150,6 +2196,36 @@ function DetalleOrdenVenta() {
           </span>
         </div>
       )
+    },
+    {
+      header: 'Comprobante',
+      accessor: 'archivos_url',
+      width: '160px',
+      render: (value, row) => {
+        const urls = parsearArchivosPago(value);
+        return (
+          <div className="flex items-center gap-1 flex-wrap">
+            {urls.map((url, i) => (
+              <button
+                key={i}
+                className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                onClick={() => abrirVisor(url, `${row.numero_pago} - Comprobante ${i + 1}`)}
+                title="Ver comprobante"
+              >
+                <Eye size={11} /> {i + 1}
+              </button>
+            ))}
+            <button
+              className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+              onClick={() => setModalComprobantePago({ open: true, pago: row, archivos: [] })}
+              title="Adjuntar comprobante"
+              disabled={orden.estado === 'Cancelada'}
+            >
+              <Plus size={11} /> {urls.length === 0 ? 'Adjuntar' : ''}
+            </button>
+          </div>
+        );
+      }
     },
     {
       header: 'Acciones',
@@ -4221,6 +4297,49 @@ function DetalleOrdenVenta() {
               ></textarea>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Comprobante de Pago</label>
+              <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
+                ${pagoForm.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={e => setPagoForm(f => ({ ...f, archivos: [...f.archivos, ...Array.from(e.target.files)] }))}
+                />
+                {pagoForm.archivos.length > 0
+                  ? <><CheckCircle size={14} /> {pagoForm.archivos.length} archivo(s) seleccionado(s)</>
+                  : <><Plus size={14} /> Adjuntar imagen o PDF (opcional)</>
+                }
+              </label>
+              {pagoForm.archivos.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap pt-2">
+                  {pagoForm.archivos.map((file, i) => (
+                    <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
+                      <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                        onClick={() => abrirVisor(file, file.name)}
+                        title="Vista previa"
+                      >
+                        <Eye size={11} /> Ver
+                      </button>
+                      <button
+                        type="button"
+                        className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                        onClick={() => setPagoForm(f => ({ ...f, archivos: f.archivos.filter((_, j) => j !== i) }))}
+                        title="Quitar archivo"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 justify-end">
               <button type="button" className="btn btn-outline" onClick={() => setModalPagoOpen(false)}>
                 Cancelar
@@ -4233,7 +4352,70 @@ function DetalleOrdenVenta() {
         </form>
       </Modal>
 
-      <Modal 
+      <Modal
+        isOpen={modalComprobantePago.open}
+        onClose={() => setModalComprobantePago({ open: false, pago: null, archivos: [] })}
+        title={`Adjuntar Comprobante${modalComprobantePago.pago ? ` – ${modalComprobantePago.pago.numero_pago}` : ''}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
+            ${modalComprobantePago.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,image/*"
+              className="hidden"
+              onChange={e => setModalComprobantePago(m => ({ ...m, archivos: [...m.archivos, ...Array.from(e.target.files)] }))}
+            />
+            {modalComprobantePago.archivos.length > 0
+              ? <><CheckCircle size={14} /> {modalComprobantePago.archivos.length} archivo(s) seleccionado(s)</>
+              : <><Plus size={14} /> Adjuntar imagen o PDF</>
+            }
+          </label>
+          {modalComprobantePago.archivos.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {modalComprobantePago.archivos.map((file, i) => (
+                <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
+                  <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                    onClick={() => abrirVisor(file, file.name)}
+                    title="Vista previa"
+                  >
+                    <Eye size={11} /> Ver
+                  </button>
+                  <button
+                    type="button"
+                    className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                    onClick={() => setModalComprobantePago(m => ({ ...m, archivos: m.archivos.filter((_, j) => j !== i) }))}
+                    title="Quitar archivo"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn btn-outline" onClick={() => setModalComprobantePago({ open: false, pago: null, archivos: [] })}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={handleSubirComprobantePago}
+              disabled={subiendoComprobantePago || modalComprobantePago.archivos.length === 0}
+            >
+              {subiendoComprobantePago ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
+              {subiendoComprobantePago ? 'Subiendo...' : 'Adjuntar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={modalCrearOP} 
         onClose={() => {
           setModalCrearOP(false);

@@ -893,11 +893,18 @@ export const ordenesVentaAPI = {
   actualizarTransporte: (id, data) => 
     api.put(`/ordenes-venta/${id}/transporte`, data),
 
-  registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
-  
+  registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
-  
+
   anularPago: (id, idPago) => api.delete(`/ordenes-venta/${id}/pagos/${idPago}`),
+
+  actualizarComprobantesPago: (id, idPago, formData) =>
+    api.put(`/ordenes-venta/${id}/pagos/${idPago}/comprobantes`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
   
   getResumenPagos: (id) => api.get(`/ordenes-venta/${id}/pagos/resumen`),
 

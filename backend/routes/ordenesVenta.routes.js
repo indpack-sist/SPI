@@ -24,6 +24,7 @@ import {
   registrarPagoOrden,
   getPagosOrden,
   anularPagoOrden,
+  actualizarComprobantesPago,
   getResumenPagosOrden,
   registrarDespacho,
   getSalidasOrden,
@@ -64,6 +65,10 @@ const uploadArchivos = uploadMiddleware.fields([
 
 const uploadDocumento = uploadMiddleware.fields([
   { name: 'documentos_adicionales', maxCount: 10 }
+]);
+
+const uploadComprobantesPago = uploadMiddleware.fields([
+  { name: 'comprobantes', maxCount: 10 }
 ]);
 
 router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
@@ -113,7 +118,8 @@ router.delete('/:id/salidas/:idSalida', verificarToken, verificarOrdenAprobada, 
 
 router.get('/:id/pagos/resumen', verificarToken, getResumenPagosOrden);
 router.get('/:id/pagos', verificarToken, getPagosOrden);
-router.post('/:id/pagos', verificarToken, verificarOrdenAprobada, registrarPagoOrden);
+router.post('/:id/pagos', verificarToken, verificarOrdenAprobada, uploadComprobantesPago, registrarPagoOrden);
+router.put('/:id/pagos/:idPago/comprobantes', verificarToken, verificarOrdenAprobada, uploadComprobantesPago, actualizarComprobantesPago);
 router.delete('/:id/pagos/:idPago', verificarToken, verificarOrdenAprobada, anularPagoOrden);
 
 router.post('/parse-sunat', verificarToken, uploadMiddleware.single('pdf'), parsearFacturaSunat);

@@ -1,7 +1,3 @@
-// utils/pdfGenerators/comprobanteSunatPDF.js  —  Representación impresa (RS 193-2020). FASE 13.
-// Cubre FACTURA (01), NOTA DE CRÉDITO (07) y NOTA DE DÉBITO (08). Incluye el QR (cadena pipe),
-// el valor resumen (hash/digestValue) y la leyenda legal. Para notas imprime el documento
-// afectado y el motivo. NO consulta BD: recibe todo ya resuelto por el controller.
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -9,36 +5,29 @@ import { fileURLToPath } from 'url';
 import { numeroALetras } from '../numeroALetras.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Logo de la empresa (frontend/images/indpack.png). Se cachea en memoria; si falta, se omite.
 const LOGO_PATH = path.join(__dirname, '../../../frontend/images/indpack.png');
-let _logo; // undefined = sin intentar; null = no disponible; Buffer = cargado
+let _logo;
 function logoBuffer() {
   if (_logo !== undefined) return _logo;
   try { _logo = fs.readFileSync(LOGO_PATH); } catch { _logo = null; }
   return _logo;
 }
 
-// Logo del banco (BCP) para el bloque de cuentas de pago en la factura. PNG con fondo transparente
-// (frontend/public/bcp.png, 700x241, rasterizado del SVG oficial) para posicionamiento determinista
-// vía doc.image. Se cachea en memoria; si falta, el bloque cae a un rótulo de texto "BCP".
 const BCP_LOGO_PATH = path.join(__dirname, '../../../frontend/public/bcp.png');
-const BCP_LOGO_RATIO = 241 / 700; // alto/ancho del PNG
-let _bcpLogo; // undefined = sin intentar; null = no disponible; Buffer = cargado
+const BCP_LOGO_RATIO = 241 / 700;
+let _bcpLogo;
 function bcpLogo() {
   if (_bcpLogo !== undefined) return _bcpLogo;
   try { _bcpLogo = fs.readFileSync(BCP_LOGO_PATH); } catch { _bcpLogo = null; }
   return _bcpLogo;
 }
 
-// Nombre legible del comprobante por código de tipo (catálogo 01).
 export const NOMBRE_TIPO = {
   '01': 'FACTURA ELECTRÓNICA',
   '07': 'NOTA DE CRÉDITO ELECTRÓNICA',
   '08': 'NOTA DE DÉBITO ELECTRÓNICA'
 };
 
-// Rótulo de la operación por afectación IGV (catálogo 07): así el total de la base se muestra
-// como Gravada / Exonerada / Inafecta / Exportación, sin incongruencias con el importe (0 si no grava).
 const OPERACION_LABEL = {
   '10': 'OP. GRAVADA',
   '20': 'OP. EXONERADA',
@@ -46,16 +35,12 @@ const OPERACION_LABEL = {
   '40': 'OP. EXPORTACIÓN'
 };
 
-// Nombre del comprobante en minúsculas para la leyenda legal estilo SUNAT
-// ("…representación impresa de la nota de crédito electrónica, generada en el Sistema de SUNAT…").
 const LEYENDA_TIPO = {
   '01': 'factura electrónica',
   '07': 'nota de crédito electrónica',
   '08': 'nota de débito electrónica'
 };
 
-// Descripción del código de unidad (catálogo 03) para imprimir "UNIDAD", "MILLAR"… como el PDF de
-// SUNAT, en lugar del código (NIU, MIL…). Fallback: el propio código si no está mapeado.
 const UNIDAD_NOMBRE = {
   NIU: 'UNIDAD', ZZ: 'SERVICIO', MIL: 'MILLAR', KGM: 'KILOGRAMO', GRM: 'GRAMO', TNE: 'TONELADA',
   MTR: 'METRO', CMT: 'CENTÍMETRO', MTK: 'METRO CUADRADO', MTQ: 'METRO CÚBICO', LTR: 'LITRO',
@@ -68,9 +53,6 @@ const n2Miles = (v) => Number(v || 0).toLocaleString('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 });
-// Valor unitario: respeta la precisión real capturada en la OV (hasta 6 dec, igual que el XML
-// vía u6 en ubl.service.js), con mínimo 2 decimales y sin ceros de relleno sobrantes. Antes se
-// truncaba a 2 (solo visual: el cálculo de línea/IGV/totales siempre usó el precio completo).
 const nUnit = (v) => {
   const r = Math.round((Number(v || 0) + Number.EPSILON) * 1e6) / 1e6;
   return r.toFixed(6).replace(/(\.\d{2}\d*?)0+$/, '$1');
@@ -80,9 +62,6 @@ const nUnitMiles = (v) => {
   return r.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 };
 
-// Mide el ancho real de un texto con una fuente/tamaño dados, sin alterar
-// el estado de fuente actual del documento (para calcular dónde debe
-// empezar el valor de cada campo, según el ancho real de su etiqueta).
 function medirAnchoTexto(doc, texto, font, fontSize) {
   const prevFont = doc._font ? doc._font.name : 'Helvetica';
   const prevSize = doc._fontSize || 12;
@@ -92,19 +71,6 @@ function medirAnchoTexto(doc, texto, font, fontSize) {
   return ancho;
 }
 
-/**
- * @param {object} p
- * @param {object} p.comprobante  { codigo_tipo_sunat, serie, numero, fecha_emision, moneda,
- *                                   subtotal, igv, total, afectacion?: '10'|'20'|'30'|'40',
- *                                   guias?: 'TE01-5, TE01-6' (guías de remisión que ampara),
- *                                   sunat_digest_value, sunat_estado,
- *                                   docAfectado?: { comprobante, motivo } }
- * @param {object} p.emisor       empresa_config { razon_social, ruc, direccion, urbanizacion, telefono, email }
- * @param {object} p.cliente      { razon_social, ruc, tipo_documento, direccion }
- * @param {Array}  p.detalle      [{ codigo, nombre, cantidad, precio_unitario, unidad, descuento_porcentaje }]
- * @param {Buffer} p.qrBuffer     PNG del QR (cadena pipe sunat_qr_data)
- * @returns {Promise<Buffer>}
- */
 export async function generarComprobanteSunatPDF({ comprobante: c, emisor, cliente, detalle, qrBuffer }) {
   return new Promise((resolve, reject) => {
     try {
@@ -116,19 +82,14 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       const simbolo = String(c.moneda) === 'USD' ? '$' : 'S/';
       const tipoNombre = NOMBRE_TIPO[c.codigo_tipo_sunat] || 'COMPROBANTE ELECTRÓNICO';
-      // Anulado = dado de baja (RA) O reversado por una Nota de Crédito de anulación (estado interno
-      // 'Anulada' aunque su sunat_estado siga 'ACEPTADO'). Ambos casos llevan marca de agua ANULADO.
       const anulado = c.sunat_estado === 'BAJA' || c.estado === 'Anulada';
       const anuladoPorNota = c.estado === 'Anulada' && c.sunat_estado !== 'BAJA';
       const rechazado = c.sunat_estado === 'RECHAZADO';
       const esExportacion = String(c.afectacion || '') === '40';
-      // El formato impreso del portal para USD usa separador de miles (p. ej. 6,542.33).
-      // Se conserva el formato histórico del PDF nacional para no cambiar comprobantes existentes.
       const monto2 = esExportacion ? n2Miles : n2;
 
-      // ── Cabecera: logo + emisor (izq) + recuadro RUC/tipo/serie-numero (der) ──
       const logo = logoBuffer();
-      if (logo) { try { doc.image(logo, 36, 36, { fit: [150, 46] }); } catch { /* noop */ } }
+      if (logo) { try { doc.image(logo, 36, 36, { fit: [150, 46] }); } catch {} }
       doc.fontSize(12).fillColor('#000').font('Helvetica-Bold').text(emisor.razon_social || 'INDPACK S.A.C.', 36, 86, { width: 330 });
       doc.fontSize(8).font('Helvetica').fillColor('#333');
       const dirEmisor = [emisor.direccion, emisor.urbanizacion].filter(Boolean).join(' - ');
@@ -138,8 +99,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       doc.roundedRect(380, 40, 182, 78, 5).stroke('#000');
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(`R.U.C. ${emisor.ruc}`, 385, 48, { align: 'center', width: 172 });
-      // El tipo se dibuja línea por línea (p. ej. "NOTA DE CRÉDITO" / "ELECTRÓNICA")
-      // para repartir el espacio vertical de forma pareja en vez de dejar que se ajuste solo.
       const lineasTipo = tipoNombre.endsWith(' ELECTRÓNICA')
         ? [tipoNombre.slice(0, -' ELECTRÓNICA'.length), 'ELECTRÓNICA']
         : [tipoNombre];
@@ -150,30 +109,16 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       }
       doc.fontSize(12).text(`${c.serie}-${c.numero}`, 385, yTipo + 3, { align: 'center', width: 172 });
 
-      // ── Datos del comprobante: DOS COLUMNAS DE ANCHO IGUAL ──
-      // Cada campo se dibuja "Etiqueta: valor" en línea; si el valor es extenso hace wrap,
-      // pero el ancho de wrap queda limitado al ancho de SU columna (nunca invade la vecina).
-      // Esto reemplaza el layout anterior de una sola columna con labelW fijo (96pt), que es
-      // lo que causaba que "Establecimiento del Emisor" (más ancho que 96pt) se montara sobre
-      // el valor de "Tipo de Moneda".
       let y = 140;
       const boxTop = y;
       const boxPad = 8;
 
       const gapColumnas = 20;
-      const anchoUtil = 529 - boxPad * 2;              // 513
-      const colWidth = (anchoUtil - gapColumnas) / 2;  // ~246.5
-      const colXIzq = 33 + boxPad;                     // 41
-      const colXDer = colXIzq + colWidth + gapColumnas; // ~307.5
+      const anchoUtil = 529 - boxPad * 2;
+      const colWidth = (anchoUtil - gapColumnas) / 2;
+      const colXIzq = 33 + boxPad;
+      const colXDer = colXIzq + colWidth + gapColumnas;
 
-      /**
-       * Dibuja (o mide) un campo "Etiqueta: Valor" en línea, dentro de los límites de una
-       * columna. El valor arranca justo después de la etiqueta (según su ancho real) y su
-       * wrap está acotado a (colX + colWidth), por lo que jamás se extiende hacia la otra
-       * columna. Si `valor` es null, dibuja solo la etiqueta en negrita (línea de encabezado,
-       * usada para "Documento que modifica:").
-       * @returns {number} altura ocupada por la fila.
-       */
       const campoSunat = (colX, yPos, label, valor, dibujar = true, multilinea = false) => {
         if (valor === null) {
           if (dibujar) {
@@ -181,9 +126,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           }
           return 12;
         }
-        // Por defecto se aplanan los saltos de línea (los campos de una sola línea no deben partirse).
-        // Para campos multilínea (p. ej. la observación libre: OC + acompañantes) se preservan los
-        // saltos que escribió el usuario y solo se colapsan las líneas en blanco consecutivas.
         const v = valor == null || valor === ''
           ? '-'
           : (multilinea
@@ -197,10 +139,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
         if (dibujar) {
           doc.fontSize(8).fillColor('#000');
-          // Sin `width` acá: la etiqueta fluye libre en una sola línea (lineBreak:false es
-          // solo un respaldo). Restringirla a su propio ancho medido es lo que provocaba que
-          // etiquetas compuestas ("Tipo de Moneda:", "Fecha de Vencimiento:") se partieran en
-          // dos líneas por mínimas diferencias de redondeo entre medición y render.
           doc.font('Helvetica-Bold').text(`${label}: `, colX, yPos, { lineBreak: false });
           doc.font('Helvetica').text(v, valX, yPos, { width: valWidth });
         }
@@ -214,32 +152,18 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         : 'CONTADO';
       const monedaTxt = String(c.moneda) === 'USD' ? 'DÓLAR AMERICANO' : 'SOLES';
 
-      // "Observación" = motivo de la nota (sin el prefijo "NN - ", en mayúsculas como SUNAT) o, en
-      // factura/ND, las observaciones libres (cbc:Note). La razón social del cliente va en "Señor(es)".
       const motivoTxt = c.docAfectado?.motivo
         ? String(c.docAfectado.motivo).replace(/^\s*\d+\s*-\s*/, '').toUpperCase()
         : null;
-      // Sustento libre de la nota (lo que escribió el usuario y viajó a SUNAT). Se rotula aparte del
-      // motivo del catálogo, igual que el preliminar de SUNAT ("Motivo o Sustento" + etiqueta del código).
       const sustentoTxt = c.docAfectado?.sustento
         ? String(c.docAfectado.sustento).replace(/[\r\n]+/g, ' ').trim()
         : null;
-      // La observación libre (cbc:Note) conserva sus saltos de línea para imprimirse tal cual la
-      // escribió el usuario (p. ej. "OC:...", "ACOMPAÑANTE:..."). El motivo del catálogo (notas) es
-      // de una sola línea y por eso no se marca como multilínea más abajo.
       const obsHeader = motivoTxt || String(c.observaciones || '').trim();
-      // La OC ya se imprime como campo propio ("Orden de Compra"). Si la observación libre solo la
-      // repite (dato heredado de cuando la OC viajaba embebida en cbc:Note, p. ej. "OC: <número>"),
-      // no se vuelve a mostrar como "Observación" para no duplicarla.
       const normOC = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      // Se compara sin el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede venir
-      // escrita con ese prefijo dentro del propio campo (p. ej. "OC - 4600144796"), y sin quitarlo
-      // también de la OC la comparación nunca casaba y la observación se duplicaba.
       const stripOC = (s) => normOC(s).replace(/^(OC|ORDENDECOMPRA)+/, '');
       const ocNorm = normOC(c.orden_compra);
       const obsRepiteOC = !!ocNorm && !motivoTxt && stripOC(obsHeader) === stripOC(c.orden_compra);
 
-      // Columna izquierda: identidad del comprobante / cliente / emisor.
       const camposIzquierda = [['Fecha de Emisión', c.fecha_emision]];
       if (c.docAfectado) {
         camposIzquierda.push(['Documento que modifica:', null]);
@@ -247,30 +171,22 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       }
       camposIzquierda.push(['Señor(es)', cliente.razon_social]);
       if (esExportacion) {
-        // En el portal SUNAT se eligió "Sí" a "Indique el Establecimiento del Emisor donde
-        // entregue el bien o preste el servicio". El XML lo declara en SellerSupplierParty;
-        // el rótulo impreso refleja esa selección y no atribuye la dirección al cliente.
         camposIzquierda.push(['Establecimiento del Emisor', cliente.direccion_despacho || c.direccion_entrega]);
       } else {
         camposIzquierda.push([String(cliente.tipo_documento || '').toUpperCase() === 'RUC' ? 'RUC' : 'Documento', cliente.ruc]);
       }
       if (c.orden_compra) camposIzquierda.push(['Orden de Compra', String(c.orden_compra).trim()]);
-      // Guía(s) de remisión que ampara(n) el traslado, como documento asociado, junto al resto de
-      // datos de cabecera. En exportación se listan con su formato propio debajo de los totales.
       const guiasHeaderTxt = String(c.guias || '').trim();
       if (!esExportacion && guiasHeaderTxt) camposIzquierda.push(['Guía(s) de Remisión', guiasHeaderTxt]);
 
-      // Columna derecha: condiciones de pago / motivo / observación.
       const camposDerecha = [
         ['Tipo de Moneda', monedaTxt],
         ['Forma de Pago', formaPago],
       ];
       if (esCredito) camposDerecha.push(['Fecha de Vencimiento', c.fecha_vencimiento]);
       if (sustentoTxt) camposDerecha.push(['Motivo o Sustento', sustentoTxt]);
-      // Solo la observación libre (no el motivo del catálogo) se imprime multilínea.
       if (obsHeader && !obsRepiteOC) camposDerecha.push(['Observación', obsHeader, !motivoTxt]);
 
-      // Medir alturas (sin dibujar) para calcular el alto total del recuadro antes de trazarlo.
       const alturaColumna = (campos, colX) =>
         campos.reduce((acc, [label, valor, multilinea]) => acc + campoSunat(colX, 0, label, valor, false, multilinea), 0);
 
@@ -280,13 +196,11 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000');
 
-      // Renderizado columna izquierda
       let yIzq = boxTop + boxPad;
       for (const [label, valor, multilinea] of camposIzquierda) {
         yIzq += campoSunat(colXIzq, yIzq, label, valor, true, multilinea);
       }
 
-      // Renderizado columna derecha
       let yDer = boxTop + boxPad;
       for (const [label, valor, multilinea] of camposDerecha) {
         yDer += campoSunat(colXDer, yDer, label, valor, true, multilinea);
@@ -294,7 +208,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       y = boxTop + boxH + 8;
 
-      // ── Banda de estado (rojo): RECHAZADO o ANULADO + su motivo, para dejar constancia impresa ──
       if (rechazado || anulado) {
         const titulo = rechazado
           ? 'COMPROBANTE RECHAZADO POR SUNAT — SIN VALIDEZ'
@@ -313,11 +226,9 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.fillColor('#000');
       }
 
-      // ── Tabla de ítems (formato SUNAT: Cantidad | Unidad de Medida | Descripción | Valor Unitario) ──
       doc.rect(33, y, 529, 18).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
       if (esExportacion) {
-        // Columnas del PDF de exportación emitido en SUNAT (E001-1997).
         doc.text('CANTIDAD', 37, y + 5, { width: 48, align: 'center' });
         doc.text('UNIDAD', 88, y + 5, { width: 62, align: 'center' });
         doc.text('CÓDIGO', 154, y + 5, { width: 66, align: 'center' });
@@ -337,8 +248,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       for (const it of detalle) {
         const desc = it.descripcion || it.nombre || it.codigo || '-';
         const cant = Number(it.cantidad || 0);
-        // "Valor Unitario" = precio_unitario SIN IGV, tal cual. `descuento_porcentaje` es el MARGEN
-        // (markup), NO un descuento — no debe restarse (ver calcularComprobante en ubl.service.js).
         const valorUnit = Number(it.precio_unitario || 0);
         const und = it.unidad || it.codigo_unidad_sunat || 'NIU';
         const undTxt = UNIDAD_NOMBRE[und] || und;
@@ -365,13 +274,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.moveTo(33, y).lineTo(562, y).stroke('#CCCCCC');
       y += 8;
 
-      // El bloque de totales SUNAT ocupa ~150px; si no cabe en la página actual, salta a la siguiente
-      // para no encimarse con el pie ni cortarse.
       if (y + 170 > 720) { doc.addPage(); y = 40; }
 
-      // ── Totales (desglose completo, formato SUNAT) ──
-      // La mayoría de conceptos no aplican en el modelo actual (van en 0.00): se imprimen igual
-      // para replicar el formato oficial. Los importes autoritativos son subtotal/igv/total.
       const filaTotal = (label, valor, bold) => {
         doc.roundedRect(360, y, 118, 13, 2).fill('#CCCCCC');
         doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#000').text(label, 364, y + 3.5, { width: 112 });
@@ -386,8 +290,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('Descuentos', 0);
       filaTotal('Valor Venta', c.subtotal);
       filaTotal('ISC', 0);
-      // El formato de referencia de exportación no muestra la fila IGV en cero.
-      // La afectación 40 y el TaxTotal=0 siguen viajando intactos en el XML.
       if (!esExportacion) filaTotal('IGV', c.igv);
       if (esExportacion) filaTotal('ICBPER', 0);
       filaTotal('Otros Cargos', 0);
@@ -395,9 +297,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('Monto de Redondeo', 0);
       filaTotal('Importe Total', c.total, true);
 
-      // ── Columna izquierda: tipo de operación (afectación) + SON en letras ──
-      // El tipo de operación (Gravada/Exonerada/Inafecta/Exportación) se rotula aparte para que la
-      // afectación quede impresa sin ambigüedad, aunque el bloque de totales use rótulos genéricos.
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
       doc.text(`Tipo de operación: ${OPERACION_LABEL[afect] || 'OP. GRAVADA'}`, 40, yTotalesInicio, { width: 300 });
       doc.font('Helvetica');
@@ -405,7 +304,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       y += 6;
 
-      // ── Información del crédito (cuotas) — solo ventas a crédito, formato SUNAT ──
       if (esCredito) {
         const hCred = 60;
         doc.roundedRect(33, y, 529, hCred, 3).stroke('#000');
@@ -414,7 +312,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         doc.font('Helvetica').text(`${simbolo} ${monto2(c.total)}`, 200, y + 20);
         doc.font('Helvetica-Bold').text('Total de cuotas:', 320, y + 20);
         doc.font('Helvetica').text('1', 400, y + 20);
-        // Encabezado de la tabla de cuotas (MVP: 1 cuota única).
         doc.font('Helvetica-Bold').text('N° Cuota', 40, y + 36);
         doc.text('Fec. Venc.', 120, y + 36);
         doc.text('Monto', 220, y + 36, { width: 80, align: 'right' });
@@ -424,10 +321,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y += hCred + 6;
       }
 
-      // ── Guías de remisión que amparan el traslado ──
-      // En exportación se listan con su formato propio (remitente/transportista) debajo de los totales.
-      // En factura nacional ya se imprimen como campo de cabecera ("Guía(s) de Remisión"), por eso
-      // aquí solo queda el caso de exportación. Refleja los cac:DespatchDocumentReference del XML.
       doc.fontSize(8).fillColor('#000');
       const guiasDetalle = Array.isArray(c.guias_detalle) ? c.guias_detalle : [];
       if (esExportacion && guiasDetalle.length) {
@@ -441,36 +334,29 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         }
       }
 
-      // ── Medios de pago: cuentas BCP (solo FACTURAS 01) ──────────────────────────
-      // Tarjeta con el logo BCP a la izquierda y dos cuentas (Dólares | Soles) a la derecha,
-      // cada una con su moneda destacada, número de cuenta y CCI. No aplica a notas 07/08.
       if (c.codigo_tipo_sunat === '01') {
-        // Paleta de marca BCP.
         const BCP_AZUL = '#002A8F';
         const BCP_NARANJA = '#EF7D00';
         const GRIS_BORDE = '#D8DEE9';
         const GRIS_TXT = '#6B7280';
 
         const cardX = 33, cardW = 529, cardH = 74;
-        // Si no cabe encima del pie (QR + leyenda ≈ desde y=700), salta de página.
         if (y + cardH + 10 > 690) { doc.addPage(); y = 40; }
         y += 6;
         const cardY = y;
 
-        // Tarjeta base: fondo blanco, borde suave, esquinas redondeadas + franja lateral naranja.
         doc.roundedRect(cardX, cardY, cardW, cardH, 6).fillAndStroke('#FFFFFF', GRIS_BORDE);
         doc.save();
         doc.roundedRect(cardX, cardY, cardW, cardH, 6).clip();
         doc.rect(cardX, cardY, 4, cardH).fill(BCP_NARANJA);
         doc.restore();
 
-        // Panel del logo (izquierda) con divisor vertical.
         const logoPanelW = 132;
         const logoAreaX = cardX + 14;
         const logo = bcpLogo();
         if (logo) {
           const logoW = 104;
-          const logoH = logoW * BCP_LOGO_RATIO; // ≈ 35.8 (mantiene la proporción del PNG)
+          const logoH = logoW * BCP_LOGO_RATIO;
           try {
             doc.image(logo, logoAreaX, cardY + (cardH - logoH) / 2, { width: logoW, height: logoH });
           } catch { doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(22).text('BCP', logoAreaX, cardY + 26); }
@@ -480,18 +366,15 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         const divX = cardX + logoPanelW;
         doc.moveTo(divX, cardY + 12).lineTo(divX, cardY + cardH - 12).lineWidth(0.6).stroke(GRIS_BORDE);
 
-        // Título fino de la sección, sobre el área de cuentas.
         const accX = divX + 16;
         const accAreaW = cardX + cardW - accX - 14;
         doc.fillColor(BCP_AZUL).font('Helvetica-Bold').fontSize(7)
            .text('CUENTAS PARA DEPÓSITO / TRANSFERENCIA', accX, cardY + 9, { width: accAreaW, characterSpacing: 0.4 });
 
-        // Dos columnas de cuenta.
         const gap = 18;
         const colW2 = (accAreaW - gap) / 2;
         const celdaCuenta = (cx, moneda, simb, cuenta, cci) => {
           let cy = cardY + 22;
-          // Badge de moneda (píldora azul con el símbolo en naranja).
           const badgeTxt = `${moneda}`;
           doc.font('Helvetica-Bold').fontSize(7);
           const bTxtW = doc.widthOfString(badgeTxt);
@@ -501,11 +384,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
           doc.fillColor(BCP_NARANJA).font('Helvetica-Bold').fontSize(7).text(`${simb} `, cx + 7, cy + 3.5, { continued: true })
              .fillColor('#FFFFFF').text(badgeTxt);
           cy += 19;
-          // Número de cuenta (dato principal, destacado).
           doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(cuenta, cx, cy, { width: colW2 });
           cy += 14;
-          // CCI (interbancario), etiqueta gris + valor. Ambos segmentos en negrita y mismo tamaño
-          // (con `continued` un tamaño distinto los desalinea de la línea base).
           doc.fontSize(7.5).font('Helvetica-Bold').fillColor(GRIS_TXT).text('CCI: ', cx, cy, { continued: true })
              .fillColor('#111827').text(cci);
         };
@@ -516,13 +396,8 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
         y = cardY + cardH + 6;
       }
 
-      // ── Pie legal: QR + leyenda ──
-      // El "Valor resumen (hash/digestValue)" NO se imprime: las facturas reales no lo muestran
-      // (el digest sigue en el XML firmado y en el CDR; solo se omite de la representación impresa).
       const yPie = Math.max(y, 700);
-      // El QR (validez SUNAT) solo tiene sentido si el comprobante existe en SUNAT: se omite en los
-      // RECHAZADOS (nunca se registraron). En ACEPTADO/BAJA sí se imprime.
-      if (qrBuffer && !rechazado) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch { /* noop */ } }
+      if (qrBuffer && !rechazado) { try { doc.image(qrBuffer, 40, yPie, { width: 90, height: 90 }); } catch {} }
       doc.fontSize(7).font('Helvetica').fillColor('#000');
       const leyendaTipo = LEYENDA_TIPO[c.codigo_tipo_sunat] || 'comprobante electrónico';
       if (rechazado) {
@@ -534,8 +409,6 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       const marcaAgua = rechazado ? 'RECHAZADO' : (anulado ? 'ANULADO' : null);
       if (marcaAgua) {
-        // fontSize reducido + lineBreak:false para que la palabra completa entre en UNA sola línea
-        // (a 72px "RECHAZADO" desbordaba el ancho y la "O" caía debajo). Caja centrada en la página.
         doc.save().rotate(-30, { origin: [297, 400] })
           .fontSize(56).fillColor('#D32F2F').opacity(0.22)
           .text(marcaAgua, 80, 385, { width: 435, align: 'center', lineBreak: false })

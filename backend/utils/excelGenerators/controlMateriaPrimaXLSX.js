@@ -14,7 +14,6 @@ const formatearFecha = (fecha) => {
   return `${d}/${m}/${y}`;
 };
 
-// Borde fino negro en las 4 caras
 const BORDE_FINO = {
   top: { style: 'thin', color: { argb: 'FF000000' } },
   left: { style: 'thin', color: { argb: 'FF000000' } },
@@ -22,7 +21,6 @@ const BORDE_FINO = {
   right: { style: 'thin', color: { argb: 'FF000000' } }
 };
 
-// Definición de columnas del detalle
 const COLUMNAS = [
   { key: 'fecha',      header: 'F. EMISIÓN',  min: 12, max: 14, wrap: false, align: 'center' },
   { key: 'material',   header: 'MATERIAL',    min: 20, max: 45, wrap: true,  align: 'left' },
@@ -34,14 +32,12 @@ const COLUMNAS = [
   { key: 'unidad',     header: 'UNIDAD',      min: 10, max: 14, wrap: false, align: 'center' }
 ];
 
-// Calcula ancho de columna según el contenido (sin recortes), acotado por min/max
 function calcularAncho(valores, header, min, max) {
   let maxLen = header.length;
   for (const v of valores) {
     const len = String(v ?? '').length;
     if (len > maxLen) maxLen = len;
   }
-  // +2 de holgura. Si el max se alcanza, el texto hará wrap (columnas con wrap).
   return Math.min(Math.max(min, maxLen + 2), max);
 }
 
@@ -52,9 +48,8 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
 
   const rangoTexto = `${formatearFecha(filtros.fecha_inicio)} - ${formatearFecha(filtros.fecha_fin)}`;
   const totalCols = COLUMNAS.length;
-  const lastColLetter = String.fromCharCode(64 + totalCols); // 8 -> 'H'
+  const lastColLetter = String.fromCharCode(64 + totalCols);
 
-  // Normalizar filas
   const filas = movimientos.map(m => {
     const esCompra = String(m.tipo_entrada || '').toLowerCase() === 'compra';
     return {
@@ -69,7 +64,6 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     };
   });
 
-  // ============ HOJA ÚNICA ============
   const ws = wb.addWorksheet('Control Materia Prima', {
     views: [{ state: 'frozen', ySplit: 6 }],
     pageSetup: {
@@ -79,13 +73,11 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     }
   });
 
-  // Anchos por columna (según contenido)
   ws.columns = COLUMNAS.map(c => ({
     key: c.key,
     width: calcularAncho(filas.map(f => c.key === 'cantidad' ? f.cantidad.toFixed(2) : f[c.key]), c.header, c.min, c.max)
   }));
 
-  // --- Encabezado del reporte ---
   ws.mergeCells(`A1:${lastColLetter}1`);
   ws.getCell('A1').value = `${EMPRESA.razon_social}   -   R.U.C. ${EMPRESA.ruc}`;
   ws.getCell('A1').font = { bold: true, size: 12 };
@@ -108,9 +100,6 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
   ws.getCell('A4').font = { size: 10 };
   ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  // Fila 5 vacía (separador)
-
-  // --- Cabecera de tabla (fila 6) ---
   const headerRowIdx = 6;
   const headerRow = ws.getRow(headerRowIdx);
   COLUMNAS.forEach((c, i) => {
@@ -123,7 +112,6 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
   });
   headerRow.height = 18;
 
-  // --- Filas de datos ---
   let rowIdx = headerRowIdx + 1;
   filas.forEach((f) => {
     const row = ws.getRow(rowIdx);
@@ -154,7 +142,6 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     rowIdx++;
   }
 
-  // ============ RESUMEN POR MATERIAL (debajo, misma hoja) ============
   const totalesPorMaterial = {};
   filas.forEach(f => {
     const key = `${f.material}|${f.unidad}`;
@@ -168,9 +155,8 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     .sort((a, b) => a.material.localeCompare(b.material));
 
   if (resumen.length > 0) {
-    rowIdx += 1; // fila vacía separadora
+    rowIdx += 1;
 
-    // Título del resumen (ocupa las columnas A..C)
     ws.mergeCells(`A${rowIdx}:C${rowIdx}`);
     const tituloCell = ws.getCell(`A${rowIdx}`);
     tituloCell.value = 'RESUMEN POR MATERIAL';
@@ -179,7 +165,6 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     ws.getRow(rowIdx).height = 20;
     rowIdx++;
 
-    // Cabecera del resumen (columnas 1..3: Material, Total, Unidad)
     const cabResumen = ['MATERIAL', 'TOTAL INGRESADO', 'UNIDAD'];
     const alineaciones = ['left', 'right', 'center'];
     const rowCab = ws.getRow(rowIdx);

@@ -1,8 +1,5 @@
-// services/sunat/ubl-gre.service.js  —  DespatchAdvice (GRE Remitente 09 y Transportista 31).
-// FASE 10: Remitente (09). Transportista (31) en FASE 11.
 import { cdata, trunc } from './ubl.service.js';
 
-// Catálogo 20 (motivo de traslado) — descripción para HandlingInstructions.
 const MOTIVOS_TRASLADO = {
   '01': 'VENTA',
   '02': 'COMPRA',
@@ -14,30 +11,17 @@ const MOTIVOS_TRASLADO = {
   '18': 'TRASLADO EMISOR ITINERANTE CP'
 };
 
-// Limpia IDs vehiculares SUNAT (TUCE / Certificado Habilitacion / N. autorizacion).
-// Estos campos suelen copiarse-pegarse desde la consulta de placa de SUNAT, lo que arrastra
-// espacios, espacios duros (U+00A0) o caracteres invisibles de ancho cero. SUNAT valida el
-// formato de forma estricta (reglas 3355 / 4064) y cualquier caracter extra provoca rechazo.
-// Nunca contienen espacios internos, asi que eliminamos todo whitespace/invisible.
 const limpiarIdVehicular = (s) => Array.from(String(s ?? '')).filter((ch) => {
   const c = ch.codePointAt(0);
-  // fuera: controles/espacio (<=0x20), espacio duro (0xA0), anchos cero (0x200B-0x200D), BOM (0xFEFF)
   return !(c <= 0x20 || c === 0xA0 || (c >= 0x200B && c <= 0x200D) || c === 0xFEFF);
 }).join('');
 
-// Divide "NOMBRE APELLIDO APELLIDO" en {first, family} para DriverPerson.
 function partirNombre(nombre) {
   const t = String(nombre || '').trim().split(/\s+/);
   if (t.length <= 1) return { first: t[0] || '-', family: t[0] || '-' };
   return { first: t[0], family: t.slice(1).join(' ') };
 }
 
-// ── FASE 11 (tipo 31): sub-bloques de transporte ────────────────────────────
-// En GRE Transportista el emisor ES el transportista (INDPACK) y SIEMPRE declara
-// sus vehículos y conductores. Estos helpers arman las listas N (multi-conductor /
-// multi-placa que exige el punto de control XSD) y se componen dentro de Shipment.
-
-/** cac:CarrierParty del transportista (INDPACK). Se ubica dentro de cac:ShipmentStage. */
 function carrierPartyXml(transportista) {
   return `      <cac:CarrierParty>
         <cac:PartyIdentification><cbc:ID schemeID="6">${transportista.ruc}</cbc:ID></cac:PartyIdentification>
@@ -45,7 +29,6 @@ function carrierPartyXml(transportista) {
       </cac:CarrierParty>`;
 }
 
-/** N conductores → cac:DriverPerson (el primero Principal, el resto Secundario). En cac:ShipmentStage. */
 function driversXml(conductores) {
   return conductores.map((c, i) => {
     const n = partirNombre(c.nombre_completo);
@@ -59,12 +42,10 @@ function driversXml(conductores) {
   }).join('\n');
 }
 
-/** N vehículos → cac:TransportHandlingUnit/TransportEquipment con Nº MTC. En cac:Shipment (tras Delivery). */
 function vehiclesXml(vehiculos, mtcDefault) {
   return vehiculos.map((v) => {
     const mtc = limpiarIdVehicular(v.certificado_habilitacion || mtcDefault);
     const placa = limpiarIdVehicular(v.placa);
-    // ⚠️ VERIFICAR CONTRA XSD: elemento exacto del Nº de registro MTC dentro de ApplicableTransportMeans.
     const mtcXml = mtc
       ? `
         <cac:ApplicableTransportMeans>
@@ -79,43 +60,8 @@ function vehiclesXml(vehiculos, mtcDefault) {
   }).join('\n');
 }
 
-// Atributos de esquema del documento de identidad (catálogo 06), tal como los emite el
-// proveedor de referencia en la GRE aceptada por SUNAT.
 const SCHEME_DOC = 'schemeName="Documento de Identidad" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"';
 
-/**
- * Construye el XML DespatchAdvice (GRE Remitente 09).
- *
- * Modalidad de traslado (catálogo 18): se emite como 02 (privado) tanto para vehículo propio
- * como para traslado con transportista tercero. En ambos casos se declaran conductor + vehículo;
- * cuando hay tercero se añade además el bloque CarrierParty (RUC + razón social + Nº MTC en
- * cbc:CompanyID). Estructura calcada del XML real aceptado por SUNAT (docs/…-09-EG07-309.xml).
- *
- * @param {object} d
- * @param {'09'} d.tipo
- * @param {string} d.serie
- * @param {number} d.numero
- * @param {object} d.empresa       empresa_config (remitente)
- * @param {object} d.cliente       destinatario (razon_social, ruc, tipo_documento)
- * @param {object} d.guia          guias_remision (motivo_traslado_cod, peso_bruto_kg, direccion_*, ubigeo_*)
- * @param {Array}  d.detalle       [{cantidad, codigo_unidad_sunat, nombre, codigo}]
- * @param {object} d.fecha         {emision, hora}
- * @param {string} d.fechaTraslado 'YYYY-MM-DD'
- * @param {'01'|'02'} d.modalidad   modalidad de traslado (catálogo 18): 01 público (tercero), 02 privado (propio)
- * @param {object|null} d.transportista {ruc, razon, mtc}  (tercero → CarrierParty; mtc = MTC empresa → CompanyID)
- * @param {boolean} [d.registrarTransportista=true] solo tercero: true (Caso 2/3) declara veh/cond + SpecialInstructions; false (Caso 1) solo CarrierParty
- * @param {string} [d.fechaEntregaTransportista] 'YYYY-MM-DD' → cac:LoadingTransportEvent (solo tercero)
- * @param {Array} [d.conductores]        [{dni, nombre, licencia}] hasta 2 (Principal + Secundario). Alternativa: d.conductor (single, legacy)
- * @param {object|null} [d.conductor]    {dni, nombre, licencia} (legacy; se envuelve en conductores[0])
- * @param {Array} d.vehiculos           [{placa, tuce, autorizacion}] hasta 2 (principal + secundario→AttachedTransportEquipment); tuce→RegistrationNationalityID, autorizacion→ShipmentDocumentReference
- * @param {object} [d.indicadores]       {transbordo, m1l, retornoVacio} booleans → cac:SpecialInstructions opcionales
- * @param {string} [d.observacion] observación libre + OC → cbc:Note
- * @param {object|null} d.docRelacionado {tipo, numero} (factura relacionada). En COMPRA además
- *        {tipo_desc, issuerRuc} → forma completa cat.61 + IssuerParty (RUC del proveedor emisor).
- * @param {object|null} [d.proveedor]  {ruc, razon_social}  GRE de COMPRA → cac:SellerSupplierParty;
- *        además hace que el establecimiento de partida (DespatchAddress listID) sea el del proveedor.
- * @returns {{ xml: string }}
- */
 export function construirDespatchAdviceXML(d) {
   if (d.tipo !== '09') {
     const err = new Error(`GRE tipo ${d.tipo} no soportado en Fase 10 (Transportista 31 = Fase 11)`);
@@ -124,8 +70,6 @@ export function construirDespatchAdviceXML(d) {
   const emp = d.empresa;
   const cli = d.cliente;
   const g = d.guia;
-  // Datos de comercio exterior (exportación). null en guías domésticas → todo el bloque comex se apaga.
-  // { trasladoTotalDam, docsRelacionados:[{tipo_cod,tipo_desc,serie,numero}], contenedores:[{numero_contenedor,numero_precinto}], damNumero }
   const comex = d.comex || null;
   const modalidad = d.modalidad || '02';
   const idComprobante = `${d.serie}-${d.numero}`;
@@ -133,8 +77,6 @@ export function construirDespatchAdviceXML(d) {
   const motivoDesc = MOTIVOS_TRASLADO[motivoCod] || String(g.motivo_traslado || 'TRASLADO').toUpperCase();
   const cliScheme = String(cli.tipo_documento || '').toUpperCase() === 'RUC' ? '6' : '1';
 
-  // ── Bloque del transportista (solo traslado por tercero) → cac:CarrierParty ──────────────
-  // El Nº de registro MTC de la empresa transportista va en cac:PartyLegalEntity/cbc:CompanyID.
   const carrierXml = d.transportista?.ruc
     ? `
       <cac:CarrierParty>
@@ -146,18 +88,10 @@ export function construirDespatchAdviceXML(d) {
       </cac:CarrierParty>`
     : '';
 
-  // ── ¿Se declaran vehículos y conductores? ────────────────────────────────────────────────
-  //   · No tercero (flota/particular): SIEMPRE se declaran (es la esencia del traslado privado).
-  //   · Tercero (público 01): depende del interruptor "registrar vehículos y conductores del
-  //     transportista". registrar=true (Caso 2/3) → se declaran + indicador SpecialInstructions.
-  //     registrar=false (Caso 1) → SOLO CarrierParty; el transportista emite su propia GRE 31.
   const esTercero = !!d.transportista?.ruc;
   const registrar = esTercero ? (d.registrarTransportista !== false) : true;
   const declararVC = !esTercero || registrar;
 
-  // ── Conductores → cac:DriverPerson (Principal + Secundario) dentro de ShipmentStage ───────
-  // Acepta d.conductores [] (1-2) o el legacy d.conductor (single). El proveedor de referencia
-  // repite el nombre completo en FirstName y FamilyName; se replica. Solo si se declaran (Caso 2/3).
   const conductores = Array.isArray(d.conductores)
     ? d.conductores.filter((c) => c?.dni)
     : (d.conductor?.dni ? [d.conductor] : []);
@@ -174,9 +108,6 @@ export function construirDespatchAdviceXML(d) {
   };
   const driverXml = declararVC ? conductores.map(driverPersonXml).join('') : '';
 
-  // ── Indicadores → cac:SpecialInstructions (cada indicador es su propio nodo) ──────────────
-  // Strings CONFIRMADOS contra el estándar oficial "UBL 2.1 Guía de Remisión Remitente"
-  // (Anexo de la R.S. 123-2022/SUNAT). El de "registrar" además está probado por XML aceptado.
   const IND = {
     trasladoTotalDam: 'SUNAT_Envio_IndicadorTrasladoTotalDAMoDS',
     registrarTransp: 'SUNAT_Envio_IndicadorVehiculoConductoresTransp',
@@ -186,35 +117,19 @@ export function construirDespatchAdviceXML(d) {
   };
   const ind = d.indicadores || {};
   const indicadores = [];
-  // Comex/exportación: el indicador de traslado total de la DAM/DS va PRIMERO (calcado de EG07-273).
   if (comex?.trasladoTotalDam) indicadores.push(IND.trasladoTotalDam);
-  // SUNAT_Envio_IndicadorVehiculoConductoresTransp: el builder lo emite según el flag explícito
-  // ind.registrarTransp (no lo auto-deduce). El servicio de emisión lo activa SIEMPRE que es público
-  // (tercero) + registrar veh/cond, tanto en guías domésticas como en export. Es OBLIGATORIO cuando el
-  // remitente declara el vehículo/conductor del transportista en modalidad pública: sin él SUNAT
-  // rechaza con 3354. Confirmado contra XML reales aceptados EG07-325/EG07-318 (doméstico) y EG07-273 (export).
   if (ind.registrarTransp) indicadores.push(IND.registrarTransp);
   if (ind.transbordo) indicadores.push(IND.transbordo);
   if (ind.m1l) indicadores.push(IND.m1l);
   if (ind.retornoVacio) indicadores.push(IND.retornoVacio);
   const specialXml = indicadores.map((s) => `\n    <cbc:SpecialInstructions>${s}</cbc:SpecialInstructions>`).join('');
 
-  // ── Fecha de entrega de bienes al transportista → cac:LoadingTransportEvent (solo tercero) ─
   const loadingXml = (esTercero && d.fechaEntregaTransportista)
     ? `
       <cac:LoadingTransportEvent><cbc:OccurrenceDate>${d.fechaEntregaTransportista}</cbc:OccurrenceDate></cac:LoadingTransportEvent>`
     : '';
 
-  // ── Vehículos → cac:TransportHandlingUnit/TransportEquipment (tras cac:Delivery) ─────────
-  // Hasta 2 vehículos: principal (TransportEquipment) + secundario (AttachedTransportEquipment).
-  // Cada uno con TUCE/Certificado (RegistrationNationalityID) y autorización especial
-  // (ShipmentDocumentReference schemeID="06"). Estructura calcada de docs/…-09-EG07-325.xml.
   const vehiculos = (declararVC && Array.isArray(d.vehiculos)) ? d.vehiculos.filter(v => v?.placa) : [];
-  // Se saneia el ID (quita whitespace/invisibles copiados de la consulta de placa) ANTES de
-  // decidir si se emite: un valor que quede vacío tras limpiar no debe generar un nodo vacío.
-  // CDATA es correcto: SUNAT lo acepta (verificado con GRE real: el certificado 15M…E del vehículo
-  // principal fue aceptado dentro de CDATA). El rechazo 3355 depende del FORMATO del valor, no de
-  // la serialización — un TUC/Certificado con formato inválido se rechaza vaya o no en CDATA.
   const tuceXml = (v, ind) => {
     const tuce = limpiarIdVehicular(v?.tuce);
     return tuce
@@ -228,14 +143,11 @@ export function construirDespatchAdviceXML(d) {
       : '';
   };
   const [vp, vs] = vehiculos;
-  // Placas también saneadas (punto válido del review): un espacio final rompería el formato.
   const attachedXml = vs
     ? `\n        <cac:AttachedTransportEquipment>
           <cbc:ID>${cdata(limpiarIdVehicular(vs.placa))}</cbc:ID>${tuceXml(vs, '          ')}${autorizXml(vs, '          ')}
         </cac:AttachedTransportEquipment>`
     : '';
-  // ── Contenedores comex → cac:Package dentro de TransportHandlingUnit (tras TransportEquipment) ──
-  // ID = nº de contenedor, TraceID = nº de precinto (naviera). Calcado de EG07-273.
   const packagesXml = (comex?.contenedores || []).map((c) => `
       <cac:Package>
         <cbc:ID>${cdata(c.numero_contenedor)}</cbc:ID>${c.numero_precinto ? `
@@ -249,12 +161,10 @@ export function construirDespatchAdviceXML(d) {
       </cac:TransportEquipment>${packagesXml}
     </cac:TransportHandlingUnit>`
     : (esTercero && !registrar)
-      // ── Caso 1 (tercero sin registrar veh/cond): TransportHandlingUnit vacío (espeja EG07-81) ──
       ? `
     <cac:TransportHandlingUnit>
       <cac:TransportEquipment></cac:TransportEquipment>${packagesXml}
     </cac:TransportHandlingUnit>`
-      // Sin vehículo pero con contenedores (comex sin veh declarado): THU solo con Package.
       : (packagesXml
         ? `
     <cac:TransportHandlingUnit>
@@ -262,15 +172,10 @@ export function construirDespatchAdviceXML(d) {
     </cac:TransportHandlingUnit>`
         : '');
 
-  // Observación (texto libre + OC) → cbc:Note tras DespatchAdviceTypeCode.
   const notaXml = d.observacion
     ? `\n  <cbc:Note>${cdata(trunc(d.observacion, 250))}</cbc:Note>`
     : '';
 
-  // Documento relacionado (factura), opcional. Dos formas:
-  //   · Venta (legacy): ID + DocumentTypeCode escuetos.
-  //   · Compra: cuando viene issuerRuc, se emite la forma completa (cat.61 + DocumentType +
-  //     IssuerParty con el RUC del proveedor que emitió la factura). Espeja EG07-333.
   const docRelXml = d.docRelacionado
     ? (d.docRelacionado.issuerRuc
       ? `\n  <cac:AdditionalDocumentReference>
@@ -287,9 +192,6 @@ export function construirDespatchAdviceXML(d) {
   </cac:AdditionalDocumentReference>`)
     : '';
 
-  // ── Proveedor (solo GRE de compra) → cac:SellerSupplierParty tras DeliveryCustomerParty ──
-  // En una GRE de compra el remitente Y el destinatario son la propia empresa (recoge su
-  // mercadería con flota propia); el vendedor de los bienes se declara aquí. Espeja EG07-333.
   const sellerSupplierXml = d.proveedor?.ruc
     ? `\n  <cac:SellerSupplierParty>
     <cac:Party>
@@ -299,9 +201,6 @@ export function construirDespatchAdviceXML(d) {
   </cac:SellerSupplierParty>`
     : '';
 
-  // Documentos relacionados de VENTA (facturas): factura → guía. Array. Misma forma que la de
-  // compra con cac:IssuerParty, pero el emisor de la factura es la propia empresa (issuerRuc lo
-  // pasa el caller = empresa.ruc). Calcado del molde real aceptado docs/muestra/…EG07-358.xml.
   const docsVentaXml = (Array.isArray(d.docsRelacionadosVenta) ? d.docsRelacionadosVenta : [])
     .filter((doc) => doc && doc.numero)
     .map((doc) => `\n  <cac:AdditionalDocumentReference>
@@ -313,8 +212,6 @@ export function construirDespatchAdviceXML(d) {
     </cac:IssuerParty>
   </cac:AdditionalDocumentReference>`).join('');
 
-  // Documentos relacionados comex (catálogo 61): DAM (cód. 50), DS, etc. Cada uno con su
-  // DocumentType descriptivo. Calcado de EG07-273. GRE Remitente lleva serie → ID = serie-numero.
   const comexDocsXml = (comex?.docsRelacionados || []).map((doc) => {
     const id = doc.serie ? `${doc.serie}-${doc.numero}` : doc.numero;
     return `\n  <cac:AdditionalDocumentReference>
@@ -324,8 +221,6 @@ export function construirDespatchAdviceXML(d) {
   </cac:AdditionalDocumentReference>`;
   }).join('');
 
-  // AdditionalItemProperty (catálogo 55). 7022 siempre; los comex (7020 subpartida / 7021 nº DAM /
-  // 7023 nº serie DAM) solo si hay datos. Orden calcado de EG07-273: 7020, 7022, 7021, 7023.
   const CAT55 = 'listAgencyName="PE:SUNAT" listName="Propiedad del item" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo55"';
   const itemProp = (nombre, code, value) => `
       <cac:AdditionalItemProperty>
@@ -338,9 +233,6 @@ export function construirDespatchAdviceXML(d) {
     const prop7022 = itemProp('Indicador de bien regulado por SUNAT', '7022', '0');
     const prop7021 = comex?.damNumero ? itemProp('Numeracion de la DAM o DS', '7021', comex.damNumero) : '';
     const prop7023 = it.dam_serie ? itemProp('Numero de serie en la DAM o DS', '7023', it.dam_serie) : '';
-    // Código del bien: GTIN o código interno. Un ítem de MUESTRA de texto libre no tiene ninguno; en
-    // ese caso se omite SellersItemIdentification (calca el XML de portal EG07-321, que solo lleva la
-    // descripción). Con producto real, se emite como siempre.
     const itemCodigo = it.codigo_bien || it.codigo || (it.id_producto != null ? String(it.id_producto) : '');
     const sellerIdXml = itemCodigo
       ? `
@@ -355,8 +247,6 @@ export function construirDespatchAdviceXML(d) {
   </cac:DespatchLine>`;
   }).join('\n');
 
-  // OJO: sin xmlns:ds en la raíz (lo agrega la firma). ext:ExtensionContent vacío = placeholder
-  // que rellena firma.service con la firma envelopada.
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <DespatchAdvice xmlns="urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"

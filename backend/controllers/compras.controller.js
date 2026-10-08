@@ -4,10 +4,6 @@ import pool from '../config/database.js';
 import { PERMISOS_POR_ROL } from '../middleware/auth.js';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
-// --- Control de visibilidad de montos/finanzas en Compras ---
-// Regla: un rol con verPrecios ve todo. Un rol sin verPrecios (ej. Calidad)
-// solo ve los montos de las compras que ÉL MISMO registró (id_registrado_por).
-// Las cuentas/créditos/cuotas/letras/pagos NUNCA son visibles para roles sin verPrecios.
 function rolVePreciosGlobal(user) {
   return !!PERMISOS_POR_ROL[user?.rol]?.ui?.verPrecios;
 }
@@ -27,7 +23,6 @@ function nullFields(obj, fields) {
   return obj;
 }
 
-// Campos monetarios/financieros a redactar a nivel de cabecera de compra
 const CAMPOS_MONTO_COMPRA = [
   'subtotal', 'igv', 'total', 'monto_pagado', 'saldo_pendiente', 'tipo_cambio',
   'dias_credito', 'estado_pago', 'numero_cuotas', 'cuotas_pendientes',
@@ -35,21 +30,16 @@ const CAMPOS_MONTO_COMPRA = [
   'tipo_cuenta', 'banco_cuenta', 'numero_cuenta_pago'
 ];
 
-// Campos monetarios a redactar en cada línea del detalle
 const CAMPOS_MONTO_DETALLE = [
   'precio_unitario', 'descuento_porcentaje', 'descuento', 'subtotal',
   'importe', 'total', 'valor_compra', 'monto', 'precio'
 ];
 
-// Redacta una cabecera de compra (fila de lista) segun visibilidad
 function redactarCompra(user, compra) {
   if (puedeVerMontos(user, compra)) return compra;
   return nullFields(compra, CAMPOS_MONTO_COMPRA);
 }
 
-// Bloquea endpoints puramente financieros (cuentas, creditos, cuotas, letras,
-// pagos, cronograma) para roles sin verPrecios como Calidad. Devuelve true si
-// ya respondio con 403 (el caller debe hacer `return`).
 function bloquearFinanzas(req, res) {
   if (!rolVePreciosGlobal(req.user)) {
     res.status(403).json({
@@ -175,7 +165,6 @@ export async function getAllCompras(req, res) {
     
     if (!result.success) return res.status(500).json({ success: false, error: result.error });
 
-    // Redacta montos/finanzas por fila segun propiedad (ver puedeVerMontos)
     const dataRedactada = rolVePreciosGlobal(req.user)
       ? result.data
       : result.data.map(c => redactarCompra(req.user, c));
@@ -278,9 +267,6 @@ export async function getCompraById(req, res) {
     `, [id]);
     compra.pagos_realizados = pagosResult.data || [];
 
-    // Redaccion: si no puede ver montos de esta compra, ocultar precios y
-    // TODO el bloque financiero (cuotas, pagos, cuentas), incluso si es dueño
-    // no debe ver cuentas/creditos -> eso se refuerza en los endpoints financieros.
     if (!puedeVerMontos(req.user, compra)) {
       nullFields(compra, CAMPOS_MONTO_COMPRA);
       (compra.detalle || []).forEach(d => nullFields(d, CAMPOS_MONTO_DETALLE));
@@ -291,9 +277,6 @@ export async function getCompraById(req, res) {
       compra.puede_ver_montos = true;
     }
 
-    // Las cuentas/creditos/cuotas/letras/estado de pago nunca se muestran a roles
-    // sin verPrecios, aunque sean dueños de la compra: Calidad ve el PRECIO de su
-    // compra pero no la parte financiera (solo recibe guias de remision).
     if (!rolVePreciosGlobal(req.user)) {
       nullFields(compra, [
         'id_cuenta_pago', 'cuenta_pago', 'tipo_cuenta', 'banco_cuenta', 'numero_cuenta_pago',
@@ -373,12 +356,10 @@ export async function createCompra(req, res) {
     let totalUnidadesRecepcion = 0;
 
     for (const item of detalle) {
-      // Precio opcional: Calidad puede registrar la compra sin montos (se regulariza luego)
       const precioUnitario = parseFloat(item.precio_unitario) || 0;
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorCompra;
 
-      // Los ítems manuales (sin id_producto) NO ingresan a inventario
       let cantidadRecibirAhora = 0;
       if (item.id_producto) {
         if (tipo_recepcion === 'Total') {
@@ -406,8 +387,6 @@ export async function createCompra(req, res) {
     const impuestoRecepcion = subtotalRecepcion * (porcentaje / 100);
     const totalRecepcion = subtotalRecepcion + impuestoRecepcion;
 
-    // En una compra originada desde XML, nunca guardar importes que ya no coincidan con el
-    // comprobante. La tolerancia cubre únicamente redondeos monetarios de uno o dos centavos.
     if (totales_xml) {
       const lineaSinTrazabilidad = detalle.find((item) => (
         !String(item.descripcion_documento || '').trim()
@@ -456,7 +435,6 @@ export async function createCompra(req, res) {
       }
     }
 
-    // El pago inicial no puede superar el total ni ser negativo
     if (montoAPagarAhora < 0) montoAPagarAhora = 0;
     if (montoAPagarAhora > total + 0.01) {
       return res.status(400).json({ success: false, error: `El pago/adelanto (${montoAPagarAhora.toFixed(2)}) no puede superar el total de la compra (${total.toFixed(2)}).` });
@@ -523,9 +501,6 @@ export async function createCompra(req, res) {
     await connection.beginTransaction();
 
     try {
-      // Auto-creación de productos desde el XML de la factura del proveedor. Un ítem que trae
-      // `crear_producto` (no existía en catálogo, elegido al conciliar) se da de alta aquí y se
-      // resuelve su id_producto. Solo actúa si viene `crear_producto`: cero efecto en el alta manual.
       for (const item of detalle) {
         if (item.id_producto || !item.crear_producto) continue;
         const cp = item.crear_producto;
@@ -592,8 +567,6 @@ export async function createCompra(req, res) {
       const montoReembolsarFinal = usa_fondos_propios ? parseFloat(monto_reembolsar || total) : 0;
       const estadoReembolsoFinal = usa_fondos_propios ? 'Pendiente' : 'No Aplica';
 
-      // Inserta la cabecera reintentando si el número de orden colisiona (concurrencia).
-      // En MySQL un error de clave duplicada revierte solo la sentencia, no la transacción.
       let idCompra;
       for (let intento = 0; ; intento++) {
         try {
@@ -702,7 +675,6 @@ export async function createCompra(req, res) {
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
 
-        // Los ítems manuales (sin id_producto) no ingresan a inventario
         let cantidadRecibida = 0;
         if (item.id_producto) {
           if (tipo_recepcion === 'Total') cantidadRecibida = parseFloat(item.cantidad);
@@ -833,7 +805,6 @@ export async function updateCompra(req, res) {
        return res.status(400).json({ success: false, error: 'No se pueden editar compras ya recibidas.' });
     }
 
-    // No permitir reemplazar el detalle si ya hubo recepción de mercadería (afectaría stock/costos)
     if (detalle && Array.isArray(detalle)) {
       const [recepcion] = await pool.query(
         'SELECT COALESCE(SUM(cantidad_recibida), 0) AS recibido FROM detalle_orden_compra WHERE id_orden_compra = ?',
@@ -847,7 +818,6 @@ export async function updateCompra(req, res) {
       }
     }
 
-    // Impuesto según la configuración real de la orden (no asumir 18%)
     const tipoImp = compra.tipo_impuesto || 'IGV';
     const porcentaje = (tipoImp === 'EXO' || tipoImp === 'INA') ? 0 : parseFloat(compra.porcentaje_impuesto ?? 18);
 
@@ -1008,8 +978,6 @@ export async function cancelarCompra(req, res) {
 
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
 
-      // Revertir inventario: usamos los movimientos reales de entrada (detalle_entradas)
-      // para deshacer TANTO el stock COMO el costo unitario promedio móvil (PEN/USD).
       const [movInventario] = await connection.query(`
         SELECT de.id_producto, de.cantidad, de.costo_unitario_calculado_pen, de.costo_unitario_calculado_usd
         FROM detalle_entradas de
@@ -1038,13 +1006,11 @@ export async function cancelarCompra(req, res) {
         let nuevoCupUSD = cupUSD;
 
         if (nuevoStock > 0.0001) {
-          // Deshacer la ponderación: (stock*cup - cant*costoEntrada) / stockRestante
           nuevoCupPEN = ((stockAnt * cupPEN) - (cant * costoPEN)) / nuevoStock;
           nuevoCupUSD = ((stockAnt * cupUSD) - (cant * costoUSD)) / nuevoStock;
           if (nuevoCupPEN < 0) nuevoCupPEN = 0;
           if (nuevoCupUSD < 0) nuevoCupUSD = 0;
         }
-        // Si el stock queda en 0 o negativo, conservamos el último CUP conocido.
 
         const stockFinal = nuevoStock < 0 ? 0 : nuevoStock;
         await connection.query(
@@ -1315,7 +1281,6 @@ export async function descargarPDFCompra(req, res) {
   try {
     const { id } = req.params;
     
-    // Obtenemos la cabecera de la compra con datos del proveedor
     const compraResult = await executeQuery(`
       SELECT 
         oc.*,
@@ -1339,7 +1304,6 @@ export async function descargarPDFCompra(req, res) {
     
     const compra = compraResult.data[0];
 
-    // Obtenemos el detalle de productos (incluye ítems manuales sin catálogo)
     const detalleResult = await executeQuery(`
       SELECT
         doc.*,
@@ -1356,7 +1320,6 @@ export async function descargarPDFCompra(req, res) {
 
     compra.detalle = detalleResult.data || [];
 
-    // Obtener cronograma de cuotas para el PDF
     const cuotasResult = await executeQuery(`
       SELECT * FROM cuotas_orden_compra 
       WHERE id_orden_compra = ? 
@@ -1365,10 +1328,8 @@ export async function descargarPDFCompra(req, res) {
     
     compra.cuotas = cuotasResult.data || [];
     
-    // Generamos el PDF
     const pdfBuffer = await generarCompraPDF(compra);
     
-    // Configuramos headers de descarga
     const filename = `OC-${compra.numero_orden}-${compra.proveedor?.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -2142,11 +2103,6 @@ export async function cambiarCuentaCompra(req, res) {
   }
 }
 
-// ── Parseo del XML de la factura del proveedor (UBL Invoice) ──────────────────────────────────
-// Lee el XML que el proveedor emite en SUNAT (única fuente del detalle de ítems; la consulta REST
-// no lo entrega) y devuelve proveedor + cabecera + líneas, con AUTO-MATCH contra el catálogo por
-// código y por descripción. Es de solo lectura (no crea nada): la creación de productos/proveedor
-// ocurre al "Registrar Compra". El frontend usa esto para prellenar la pantalla de conciliación.
 export async function parsearXmlFactura(req, res) {
   try {
     const xml = typeof req.body === 'string' ? req.body : req.body?.xml;
@@ -2170,7 +2126,6 @@ export async function parsearXmlFactura(req, res) {
       return res.status(400).json({ success: false, error: 'El XML no es una Factura electrónica (UBL Invoice).' });
     }
 
-    // Extrae el texto de un nodo, tolerando CDATA/atributos ({ '#text': ... }).
     const txt = (n) => (n && typeof n === 'object') ? String(n['#text'] ?? '') : String(n ?? '');
 
     const idComprobante = txt(factura.ID).trim();
@@ -2196,8 +2151,6 @@ export async function parsearXmlFactura(req, res) {
       return res.status(400).json({ success: false, error: 'El XML no contiene un proveedor válido (RUC de 11 dígitos y razón social).' });
     }
 
-    // Evita registrar una factura emitida a otra empresa. Este mismo RUC será el destinatario de
-    // la GRE de compra y el listID del punto de llegada.
     const customer = factura.AccountingCustomerParty?.Party || {};
     const clienteRuc = txt(customer.PartyIdentification?.ID).trim();
     const empRes = await executeQuery('SELECT ruc FROM empresa_config WHERE id = 1');
@@ -2215,7 +2168,6 @@ export async function parsearXmlFactura(req, res) {
       return Number.isFinite(valor) ? valor : null;
     };
 
-    // Totales e IGV. Algunos emisores solo informan el porcentaje dentro de cada InvoiceLine.
     const taxTotals = lista(factura.TaxTotal);
     const taxSubtotals = taxTotals.flatMap((t) => lista(t?.TaxSubtotal));
     const subtotalIgv = taxSubtotals.find((s) => txt(s?.TaxCategory?.TaxScheme?.ID).trim() === '1000')
@@ -2234,8 +2186,6 @@ export async function parsearXmlFactura(req, res) {
       return res.status(400).json({ success: false, error: 'El XML no contiene subtotal, IGV y total válidos.' });
     }
 
-    // Condición de pago y cuotas SUNAT. Para crédito manda la fecha de las cuotas, no el DueDate
-    // genérico, porque varios emisores colocan allí la misma fecha de emisión.
     const paymentTerms = lista(factura.PaymentTerms);
     const cuotas = paymentTerms
       .map((p) => ({
@@ -2268,8 +2218,6 @@ export async function parsearXmlFactura(req, res) {
       const cantidad = num(qtyNode) ?? 0;
       const subtotalLinea = num(ln.LineExtensionAmount);
       const precioXml = num(ln.Price?.PriceAmount);
-      // El precio efectivo garantiza que descuentos incorporados por el emisor conserven el
-      // LineExtensionAmount exacto al crear la compra.
       const precioEfectivo = cantidad > 0 && subtotalLinea != null ? subtotalLinea / cantidad : precioXml;
       const impuestoLinea = lista(ln.TaxTotal).reduce((sum, t) => sum + (num(t?.TaxAmount) || 0), 0);
       return {
@@ -2294,7 +2242,6 @@ export async function parsearXmlFactura(req, res) {
       return res.status(400).json({ success: false, error: 'La suma de las líneas no coincide con el subtotal declarado en el XML.' });
     }
 
-    // Auto-match: proveedor por RUC, productos por código y luego por descripción exacta.
     const proveedor = { ruc: provRuc, razon_social: provRazon, id_proveedor: null };
     if (provRuc) {
       const pr = await executeQuery('SELECT id_proveedor, razon_social FROM proveedores WHERE ruc = ?', [provRuc]);

@@ -435,10 +435,6 @@ export async function getHistorialMovimientos(req, res) {
 
       if (salidas.success) {
         for (const sal of salidas.data) {
-          // Si la salida fue anulada y la mercadería retornó al stock físico
-          // (no era stock reservado), agregamos la entrada de reverso. Va primero
-          // porque el retorno ocurre DESPUÉS de la anulación: como el historial
-          // muestra lo más reciente arriba, el reverso debe quedar sobre la salida.
           if (sal.estado === 'Anulado' && !sal.fue_reservado) {
             movimientos.push({
               ...sal,
@@ -450,7 +446,6 @@ export async function getHistorialMovimientos(req, res) {
             });
           }
 
-          // Salida original (se marca como 'Anulado' en el front si corresponde)
           movimientos.push(sal);
         }
       }
@@ -545,8 +540,6 @@ export async function getHistorialMovimientos(req, res) {
       }
     }
     
-    // Orden: más reciente primero. Ante fechas idénticas (ej. salida anulada y su
-    // reverso) se respeta el orden de inserción para mantener el reverso arriba.
     movimientos.forEach((m, i) => { m.__orden = i; });
     movimientos.sort((a, b) => {
       const diff = new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento);
@@ -566,16 +559,6 @@ export async function getHistorialMovimientos(req, res) {
   }
 }
 
-// Reporte por producto (producción vs despacho) en PDF, pensado para entregar a
-// terceros. Regla de negocio: el DESPACHADO mostrado nunca es menor que el
-// PRODUCIDO; si el despacho real es menor, se compensa hacia arriba a nivel del
-// total del rango (compensación silenciosa, sin fila extra).
-//   Producido  = órdenes de producción finalizadas, en la unidad real de stock
-//                (unidades para productos por unidad, kg para el resto).
-//   Despachado = salidas tipo 'Venta' (no anuladas).
-//   Existencia anterior = stock resultante de los movimientos previos a "Desde".
-// Construye los datos del reporte por producto (producción vs despacho).
-// Se comparte entre la exportación a PDF y a Excel.
 async function construirDatosReporteProducto(id, query) {
   {
     const { fecha_inicio, fecha_fin } = query;
@@ -602,16 +585,12 @@ async function construirDatosReporteProducto(id, query) {
     }
     const prod = productoRes.data[0];
 
-    // Determina si el producto se mide por unidad (misma regla que la finalización
-    // de órdenes): en ese caso la producción real vive en cantidad_unidades_producida.
     const unidad = (prod.unidad_medida || '').toUpperCase();
     const nombreUp = (prod.nombre || '').toUpperCase();
     const esPorUnidad =
       ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL'].includes(unidad) ||
       nombreUp.includes('LÁMINA') || nombreUp.includes('LAMINA');
 
-    // Detalle de producción (órdenes finalizadas) en el rango. Traemos ambas
-    // columnas y elegimos la que realmente ingresó a stock, igual que el cierre de OP.
     const ordenesRes = await executeQuery(
       `SELECT op.numero_orden, op.fecha_fin,
               op.cantidad_producida,
@@ -632,7 +611,6 @@ async function construirDatosReporteProducto(id, query) {
     const cantidadStockOP = (o) => {
       const kg = parseFloat(o.cantidad_producida) || 0;
       const und = parseFloat(o.cantidad_unidades_producida) || 0;
-      // Igual que 'cantidadParaStock' en el cierre de la orden.
       return (esPorUnidad && und > 0) ? und : kg;
     };
 
@@ -643,9 +621,6 @@ async function construirDatosReporteProducto(id, query) {
     }));
     let producido = ordenes.reduce((s, o) => s + o.cantidad, 0);
 
-    // Existencia anterior ("lo que había antes"): stock resultante de todos los
-    // movimientos previos a "Desde" (entradas - salidas + ajustes). En la misma
-    // unidad de stock, coherente con producido y despachado.
     const antesRes = await executeQuery(
       `SELECT
         COALESCE((SELECT SUM(de.cantidad) FROM detalle_entradas de
@@ -667,7 +642,6 @@ async function construirDatosReporteProducto(id, query) {
     const existenciaAnterior =
       (parseFloat(a.ent_antes) || 0) - (parseFloat(a.sal_antes) || 0) + (parseFloat(a.aj_antes) || 0);
 
-    // Despacho real: salidas tipo 'Venta' no anuladas en el rango.
     const despachoRes = await executeQuery(
       `SELECT COALESCE(SUM(ds.cantidad), 0) AS total
        FROM detalle_salidas ds
@@ -680,23 +654,16 @@ async function construirDatosReporteProducto(id, query) {
     );
     const despachadoReal = despachoRes.success ? (parseFloat(despachoRes.data[0].total) || 0) : 0;
 
-    // Regularización del saldo negativo: si lo disponible (existencia anterior +
-    // producido) no cubre el despacho real, se suma el faltante a la cantidad
-    // producida de la ORDEN MÁS ANTIGUA del rango (compensación silenciosa). El
-    // monto se redondea hacia arriba a un múltiplo, para que no sea exactamente el
-    // faltante. Así el saldo final nunca queda negativo.
-    const REDONDEO_COMPENSACION = 10; // múltiplo de redondeo del faltante (poner 1 = exacto)
+    const REDONDEO_COMPENSACION = 10;
     const faltante = despachadoReal - existenciaAnterior - producido;
     if (faltante > 0) {
       const compensacion = Math.ceil(faltante / REDONDEO_COMPENSACION) * REDONDEO_COMPENSACION;
       if (ordenes.length > 0) {
-        // La más antigua es la primera (ORDER BY fecha_fin ASC).
         ordenes[0].cantidad += compensacion;
       }
       producido += compensacion;
     }
 
-    // Regla de consistencia: despachado mostrado >= producido (compensación silenciosa).
     const despachado = Math.max(despachadoReal, producido);
 
     return {
@@ -721,7 +688,6 @@ async function construirDatosReporteProducto(id, query) {
   }
 }
 
-// Exportación del reporte por producto a PDF.
 export async function generarReporteProductoPDF(req, res) {
   try {
     const { datos, codigo, desde, hasta } = await construirDatosReporteProducto(req.params.id, req.query);
@@ -736,7 +702,6 @@ export async function generarReporteProductoPDF(req, res) {
   }
 }
 
-// Exportación del reporte por producto a Excel (XLSX) con el mismo contenido.
 export async function generarReporteProductoXLSX(req, res) {
   try {
     const { datos, codigo, desde, hasta } = await construirDatosReporteProducto(req.params.id, req.query);

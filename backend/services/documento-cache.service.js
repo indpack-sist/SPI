@@ -1,18 +1,7 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC as apiValidarRUC, validarDNI as apiValidarDNI } from './api-validation.service.js';
 
-// ============================================================
-// Caché de consultas RUC/DNI (SUNAT/RENIEC vía APISPeru).
-// Drop-in de api-validation.service: misma firma y misma forma de
-// respuesta, pero sirve desde la BD si el documento ya se consultó
-// hace poco, ahorrando cupo del plan gratuito. Beneficia tanto a
-// Prospección como a la validación de Clientes.
-//
-// Si la tabla documento_cache no existe todavía, todo cae con
-// gracia a la consulta directa (no rompe nada).
-// ============================================================
-
-const TTL_DIAS = 60; // frescura del dato antes de re-consultar
+const TTL_DIAS = 60;
 
 function soloDigitos(v) {
   return String(v || '').replace(/\D/g, '');
@@ -29,7 +18,7 @@ async function leerCache(documento) {
       const datos = typeof row.datos === 'string' ? JSON.parse(row.datos) : row.datos;
       return { valido: !!row.valido, datos };
     }
-  } catch { /* tabla ausente / error: se ignora y se consulta directo */ }
+  } catch {}
   return null;
 }
 
@@ -41,13 +30,12 @@ async function guardarCache(documento, tipo, datos) {
        ON DUPLICATE KEY UPDATE tipo = VALUES(tipo), valido = 1, datos = VALUES(datos), fecha_actualizacion = CURRENT_TIMESTAMP`,
       [documento, tipo, JSON.stringify(datos || null)]
     );
-  } catch { /* noop */ }
+  } catch {}
 }
 
-/** Igual que api-validation.validarRUC pero con caché. */
 export async function validarRUC(ruc) {
   const doc = soloDigitos(ruc);
-  if (!/^\d{11}$/.test(doc)) return apiValidarRUC(ruc); // que la API devuelva el error de formato
+  if (!/^\d{11}$/.test(doc)) return apiValidarRUC(ruc);
 
   const hit = await leerCache(doc);
   if (hit && hit.valido && hit.datos) {
@@ -55,14 +43,12 @@ export async function validarRUC(ruc) {
   }
 
   const res = await apiValidarRUC(ruc);
-  // Solo cacheamos respuestas confiables (no timeouts / caídas del servicio).
   if (res.valido && res.datos && !res.error_servicio) {
     await guardarCache(doc, 'RUC', res.datos);
   }
   return res;
 }
 
-/** Igual que api-validation.validarDNI pero con caché. */
 export async function validarDNI(dni) {
   const doc = soloDigitos(dni);
   if (!/^\d{8}$/.test(doc)) return apiValidarDNI(dni);

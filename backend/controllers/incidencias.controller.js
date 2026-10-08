@@ -17,11 +17,8 @@ const getFechaPeru = () => {
 
 const getIdEmpleado = (req) => req.user?.id_empleado || req.user?.id || req.user?.userId || null;
 
-// Estados válidos del workflow
 const ESTADOS_VALIDOS = ['Abierta', 'En análisis', 'En tratamiento', 'Verificación', 'Cerrada', 'Anulada'];
 
-// SELECT base con los datos permitidos de la Orden de Venta (SIN PRECIOS).
-// Solo: correlativo, cliente, cantidad del producto y fecha de despacho.
 const SELECT_INCIDENCIA = `
   SELECT
     i.*,
@@ -109,7 +106,6 @@ export async function getIncidenciaById(req, res) {
   }
 }
 
-// Todas las incidencias de un producto con su trazabilidad (OP, OV, cliente). SIN PRECIOS.
 export async function getIncidenciasPorProducto(req, res) {
   try {
     const { idProducto } = req.params;
@@ -147,16 +143,13 @@ export async function crearIncidencia(req, res) {
       unidad_medida,
       disposicion,
       decision_final,
-      productos // opcional: [{ id_producto, unidad_medida, cantidad_afectada }] cuando la queja
-                // abarca varios productos de una misma salida (se crea 1 incidencia por producto)
+      productos
     } = req.body;
 
     if (!descripcion || !descripcion.trim()) {
       return res.status(400).json({ success: false, error: 'La descripción es requerida' });
     }
 
-    // Normalizamos la lista de productos afectados. Si viene 'productos' (desde una salida),
-    // se genera una incidencia por cada uno; si no, se respeta el comportamiento clásico (1 producto o ninguno).
     let lineas;
     if (Array.isArray(productos) && productos.length > 0) {
       lineas = productos
@@ -181,7 +174,6 @@ export async function crearIncidencia(req, res) {
     const fechaActual = getFechaPeru();
     const year = new Date().getFullYear();
 
-    // Secuencia base a partir del último correlativo; se incrementa localmente por cada producto.
     const ultimaResult = await executeQuery(
       'SELECT codigo FROM incidencias_calidad ORDER BY id_incidencia DESC LIMIT 1'
     );
@@ -249,7 +241,6 @@ export async function crearIncidencia(req, res) {
         ? 'Incidencia registrada exitosamente'
         : `${creadas.length} incidencias registradas exitosamente`,
       data: {
-        // Compatibilidad: primer registro en la raíz; lista completa en 'incidencias'.
         id_incidencia: creadas[0].id_incidencia,
         codigo: creadas[0].codigo,
         creadas: creadas.length,
@@ -406,8 +397,6 @@ export async function getHistorial(req, res) {
   }
 }
 
-// ===================== ADJUNTOS (mismo patrón que op_adjuntos) =====================
-
 export async function subirAdjunto(req, res) {
   try {
     const { id } = req.params;
@@ -417,8 +406,6 @@ export async function subirAdjunto(req, res) {
       return res.status(400).json({ success: false, error: 'No se recibió ningún archivo.' });
     }
 
-    // Categoría del adjunto: 'Evidencia' (enviada por el cliente) o 'Informe' (documento
-    // de resolución que elabora Calidad). Cualquier otro valor cae en 'Otro'.
     const CATEGORIAS_VALIDAS = ['Evidencia', 'Informe', 'Otro'];
     const categoria = CATEGORIAS_VALIDAS.includes(req.body.categoria) ? req.body.categoria : 'Evidencia';
 

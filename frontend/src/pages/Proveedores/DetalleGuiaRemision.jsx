@@ -274,7 +274,6 @@ function DetalleGuiaRemision() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button className="btn btn-outline" onClick={() => navigate('/ventas/guias-remision')}>
@@ -322,7 +321,6 @@ function DetalleGuiaRemision() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Estado */}
       <div className={`card border-l-4 ${estadoConfig.color} mb-4`}>
         <div className="card-body">
           <div className="flex items-center justify-between">
@@ -356,7 +354,6 @@ function DetalleGuiaRemision() {
         </div>
       </div>
 
-      {/* Fechas Importantes */}
       <div className="card mb-4">
         <div className="card-body">
           <div className="flex items-center gap-6">
@@ -381,9 +378,7 @@ function DetalleGuiaRemision() {
         </div>
       </div>
 
-      {/* Información General */}
       <div className="grid grid-cols-3 gap-4 mb-4">
-        {/* Cliente y Orden */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -412,7 +407,6 @@ function DetalleGuiaRemision() {
           </div>
         </div>
 
-        {/* Datos del Traslado */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -438,7 +432,6 @@ function DetalleGuiaRemision() {
           </div>
         </div>
 
-        {/* Peso y Bultos */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -461,9 +454,7 @@ function DetalleGuiaRemision() {
         </div>
       </div>
 
-      {/* Puntos de Traslado */}
       <div className="grid grid-cols-2 gap-4 mb-4">
-        {/* Punto de Partida */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -483,7 +474,6 @@ function DetalleGuiaRemision() {
           </div>
         </div>
 
-        {/* Punto de Llegada */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -510,7 +500,6 @@ function DetalleGuiaRemision() {
         </div>
       </div>
 
-      {/* Guía de Transportista (si existe) */}
       {guia.guia_transportista && (
         <div className="card mb-4 border-l-4 border-info">
           <div className="card-header">
@@ -541,7 +530,6 @@ function DetalleGuiaRemision() {
         </div>
       )}
 
-      {/* Detalle de Productos */}
       <div className="card mb-4">
         <div className="card-header">
           <h2 className="card-title">
@@ -569,7 +557,6 @@ function DetalleGuiaRemision() {
         </div>
       </div>
 
-      {/* Observaciones */}
       {guia.observaciones && (
         <div className="card mb-4">
           <div className="card-header">
@@ -581,7 +568,6 @@ function DetalleGuiaRemision() {
         </div>
       )}
 
-      {/* Modal Cambiar Estado */}
       <Modal
         isOpen={modalEstadoOpen}
         onClose={() => setModalEstadoOpen(false)}
@@ -615,7 +601,6 @@ function DetalleGuiaRemision() {
         </div>
       </Modal>
 
-      {/* Modal Confirmar Entrega */}
       <Modal
         isOpen={modalEntregaOpen}
         onClose={() => setModalEntregaOpen(false)}

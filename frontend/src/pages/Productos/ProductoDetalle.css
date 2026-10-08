@@ -1,17 +1,8 @@
-/* =====================================================
-   PRODUCTO DETALLE — INDUSTRIAL DARK THEME
-   Usa variables de index.css
-   ===================================================== */
-
 .producto-detalle-container {
   padding: 1.5rem;
   max-width: 1600px;
   margin: 0 auto;
 }
-
-/* =====================================================
-   SECCIÓN INFO PRODUCTO
-   ===================================================== */
 
 .seccion-info-producto {
   background: var(--bg-secondary);
@@ -45,10 +36,6 @@
   font-size: 0.813rem;
   margin-top: 0.25rem;
 }
-
-/* =====================================================
-   GRID INFO
-   ===================================================== */
 
 .info-producto-grid {
   display: grid;
@@ -90,10 +77,6 @@
   padding: 1.25rem;
 }
 
-/* =====================================================
-   FILAS INFO
-   ===================================================== */
-
 .info-row {
   display: flex;
   justify-content: space-between;
@@ -131,10 +114,6 @@
   font-size: 0.813rem;
   letter-spacing: 0.05em;
 }
-
-/* =====================================================
-   STOCK CARD
-   ===================================================== */
 
 .stock-principal {
   text-align: center;
@@ -177,10 +156,6 @@
   color: var(--success) !important;
   font-weight: 700 !important;
 }
-
-/* =====================================================
-   CUP
-   ===================================================== */
 
 .cup-principal {
   text-align: center;
@@ -259,16 +234,11 @@
   color: var(--danger);
 }
 
-/* Costos y precios info panel */
 .grid.grid-cols-2.gap-4.mb-4.bg-gray-50 {
   background: var(--carbon-light) !important;
   border: 1px solid var(--border) !important;
   border-radius: 2px !important;
 }
-
-/* =====================================================
-   DESCRIPCIÓN
-   ===================================================== */
 
 .descripcion-producto {
   background: var(--carbon-light);
@@ -294,10 +264,6 @@
   line-height: 1.6;
   font-size: 0.875rem;
 }
-
-/* =====================================================
-   TABS PRINCIPALES
-   ===================================================== */
 
 .seccion-tabs {
   background: var(--bg-secondary);
@@ -347,10 +313,6 @@
 .tabs-content {
   padding: 2rem;
 }
-
-/* =====================================================
-   RECETAS TABS
-   ===================================================== */
 
 .recetas-tabs-container {
   background: var(--carbon-light);
@@ -449,10 +411,6 @@
   font-family: monospace;
 }
 
-/* =====================================================
-   DETALLE RECETA
-   ===================================================== */
-
 .receta-detalle-header {
   background: var(--carbon-light);
   border: 1px solid var(--border);
@@ -495,10 +453,6 @@
   margin-bottom: 1rem;
   font-size: 0.875rem;
 }
-
-/* =====================================================
-   MÉTRICAS
-   ===================================================== */
 
 .receta-metricas {
   display: grid;
@@ -558,10 +512,6 @@
   gap: 0.5rem;
 }
 
-/* =====================================================
-   INSUMOS
-   ===================================================== */
-
 .insumos-section { margin-top: 1.5rem; }
 
 .insumos-header {
@@ -594,7 +544,6 @@
   margin-bottom: 1.5rem;
 }
 
-/* Celdas de tabla */
 .orden-badge {
   background: var(--carbon-light);
   color: var(--text-secondary);
@@ -702,10 +651,6 @@
   justify-content: center;
 }
 
-/* =====================================================
-   RESUMEN COSTOS
-   ===================================================== */
-
 .costos-resumen {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -778,10 +723,6 @@
   color: var(--text-secondary);
 }
 
-/* =====================================================
-   HISTORIAL
-   ===================================================== */
-
 .historial-header {
   display: flex;
   justify-content: space-between;
@@ -817,7 +758,6 @@
   overflow: hidden;
 }
 
-/* Celdas historial */
 .fecha-text {
   font-size: 0.813rem;
   color: var(--text-secondary);
@@ -898,10 +838,6 @@
   color: var(--text-secondary);
 }
 
-/* =====================================================
-   EMPTY STATE
-   ===================================================== */
-
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
@@ -933,10 +869,6 @@
   font-size: 0.875rem;
 }
 
-/* =====================================================
-   MODALES
-   ===================================================== */
-
 .form-checkbox-label {
   display: flex;
   align-items: center;
@@ -959,10 +891,6 @@
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
-
-/* =====================================================
-   EVOLUCIÓN CUP / DESGLOSE
-   ===================================================== */
 
 .cup-desglose {
   margin-top: 1rem;
@@ -1075,10 +1003,6 @@
   border: 1px solid var(--border);
 }
 
-/* =====================================================
-   TOOLTIP
-   ===================================================== */
-
 .info-tooltip {
   position: relative;
   display: inline-flex;
@@ -1148,7 +1072,6 @@
   color: #0f0f0f;
 }
 
-/* info-row resaltada con valor destacado */
 .info-row:has(.valor-destacado) {
   background: rgba(46, 204, 113, 0.04);
   padding: 0.6rem 0.5rem;
@@ -1158,11 +1081,6 @@
   border-bottom: 1px solid rgba(46, 204, 113, 0.12);
 }
 
-/* =====================================================
-   OVERRIDES para clases Tailwind hardcodeadas en JSX
-   ===================================================== */
-
-/* Panel CUP inventario (bg-gray-50 inline en jsx) */
 .info-card-body .bg-gray-50 {
   background: var(--carbon-light) !important;
   border-color: var(--border) !important;
@@ -1172,12 +1090,7 @@
 .info-card-body .text-success  { color: var(--success) !important; }
 .info-card-body .text-muted    { color: var(--text-secondary) !important; }
 
-/* Texto gris del JSX */
 .text-gray-500 { color: var(--text-secondary) !important; }
-
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
 
 @media (max-width: 768px) {
   .producto-detalle-container { padding: 1rem; }

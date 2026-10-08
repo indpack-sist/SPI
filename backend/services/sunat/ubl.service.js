@@ -1,20 +1,13 @@
-// services/sunat/ubl.service.js  —  Constructores de XML UBL 2.1.
-// FASE 6: Factura (01). Notas de Crédito/Débito (07/08) en FASE 7.
 import { numeroALetras } from '../../utils/numeroALetras.js';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-// Helpers puros compartidos (reusados por ubl-nota.service.js — no dependen del orden XSD).
 export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const roundN = (n, d) => { const f = 10 ** d; return Math.round((Number(n) + Number.EPSILON) * f) / f; };
-export const m2 = (n) => round2(n).toFixed(2);       // montos: 2 decimales
-export const u6 = (n) => roundN(n, 6).toFixed(6);    // valores unitarios: 6 decimales
+export const m2 = (n) => round2(n).toFixed(2);
+export const u6 = (n) => roundN(n, 6).toFixed(6);
 export const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
-// Trunca a la longitud máxima que exige el anexo SUNAT (evita observaciones de formato).
 export const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
 const valorReal = (v) => String(v ?? '').trim() && String(v).trim() !== '-';
 
-// Texto que muestra SUNAT cuando se marca que la entrega/prestación ocurre en el establecimiento
-// del emisor. Los componentes UBL permanecen también como campos estructurados en PostalAddress.
 const direccionEstablecimientoEmisor = (empresa = {}) => {
   const direccion = [empresa.direccion, empresa.urbanizacion]
     .filter(valorReal)
@@ -25,7 +18,6 @@ const direccionEstablecimientoEmisor = (empresa = {}) => {
   return [direccion, ubicacion].filter(valorReal).join(' ');
 };
 
-// Catálogo 07 (afectación IGV) -> TaxScheme + porcentaje.
 export const AFECTACION = {
   '10': { scheme: '1000', name: 'IGV', typeCode: 'VAT', percent: 18, gravado: true },
   '20': { scheme: '9997', name: 'EXO', typeCode: 'VAT', percent: 0, gravado: false },
@@ -33,12 +25,6 @@ export const AFECTACION = {
   '40': { scheme: '9995', name: 'EXP', typeCode: 'FRE', percent: 0, gravado: false }
 };
 
-// ── Afectación IGV por operación ─────────────────────────────────────────────
-// Mapea el tratamiento tributario declarado a nivel de ORDEN (ordenes_venta.tipo_impuesto)
-// al código de afectación IGV del catálogo 07. El negocio maneja UN tratamiento por
-// comprobante; la exportación se resuelve aparte por el flag es_exportacion. Se aceptan las
-// variantes de texto que conviven en el sistema (largas 'EXONERADO'/'INAFECTO' y cortas
-// 'EXO'/'INA', además del propio código 07 por si algún día se guarda directo).
 const TIPO_IMPUESTO_AFECTACION = {
   IGV: '10', GRAVADO: '10', GRAVADA: '10', '10': '10',
   EXO: '20', EXONERADO: '20', EXONERADA: '20', '20': '20',
@@ -46,18 +32,10 @@ const TIPO_IMPUESTO_AFECTACION = {
   EXP: '40', EXPORT: '40', EXPORTACION: '40', '40': '40'
 };
 
-// Afectación derivada del tratamiento de la orden. Ante un valor desconocido cae a gravado
-// '10' (comportamiento previo → cero regresión para el flujo gravado 18%).
 export function afectacionDesdeOrden(tipoImpuesto) {
   return TIPO_IMPUESTO_AFECTACION[String(tipoImpuesto ?? '').toUpperCase().trim()] || '10';
 }
 
-// Afectación resuelta de UNA línea, en orden de prioridad:
-//  1) exportación (es_exportacion=1) manda → '40';
-//  2) override explícito por línea (codigo_afectacion_igv poblado y distinto del default '10');
-//  3) el tratamiento declarado en la orden (tipo_impuesto).
-// Cierra la deuda "afectacion-igv-no-poblada": antes se usaba '10' fijo ignorando tipo_impuesto,
-// por lo que una orden EXONERADA/INAFECTA se habría emitido como GRAVADA 18% (mala declaración).
 export function afectacionLinea(ov, d) {
   if (Number(ov?.es_exportacion) === 1) return '40';
   const linea = String(d?.codigo_afectacion_igv ?? '').trim();
@@ -65,22 +43,11 @@ export function afectacionLinea(ov, d) {
   return afectacionDesdeOrden(ov?.tipo_impuesto);
 }
 
-// Catálogo 01 (tipo de documento) — subconjunto admitido como GUÍA relacionada de una factura
-// (cac:DespatchDocumentReference). SUNAT solo acepta guías de remisión aquí: Remitente (09) o
-// Transportista (31). Cualquier otro código sería observado/rechazado.
 export const TIPOS_GUIA_REF = {
   '09': 'Guía de Remisión Remitente',
   '31': 'Guía de Remisión Transportista'
 };
 
-/**
- * Normaliza una referencia de guía (para cac:DespatchDocumentReference) desde cualquiera de las dos
- * fuentes: guía del sistema (`{ serie_sunat, numero_sunat }`, siempre tipo 09) o entrada manual del
- * buscador (`{ tipo_documento|tipo, serie, numero }`). Devuelve `{ tipoDoc, serie, numero, id }` o
- * null si falta serie/número. La serie se pasa a MAYÚSCULAS; el número se conserva literal (el
- * cbc:ID debe coincidir EXACTO con el documento tal como SUNAT lo registró). NO valida formato: eso
- * lo hace el controller (validarGuiaRef) antes de aceptar la lista del usuario.
- */
 export function normalizarGuiaRef(g) {
   if (!g) return null;
   const tipoDoc = String(g.tipo_documento ?? g.tipoDoc ?? g.tipo ?? '09').trim() || '09';
@@ -90,7 +57,6 @@ export function normalizarGuiaRef(g) {
   return { tipoDoc, serie, numero, id: `${serie}-${numero}` };
 }
 
-// Catálogo 06 (documento de identidad del cliente).
 export function schemeIdDocumento(tipoDoc) {
   switch (String(tipoDoc || '').toUpperCase()) {
     case 'RUC': return '6';
@@ -102,36 +68,19 @@ export function schemeIdDocumento(tipoDoc) {
   }
 }
 
-/**
- * FUENTE ÚNICA DE CÁLCULO del comprobante (base/IGV/total + desglose por línea).
- * La usan TANTO el constructor UBL (emisión real) como el endpoint de vista previa, para que la
- * previsualización del frontend muestre EXACTAMENTE lo que se firma y envía a SUNAT (misma
- * afectación por línea, mismo redondeo half-up por línea, misma agrupación).
- *
- * Reglas: afectación por línea (esExport fuerza '40'); descuento plegado en el precio unitario;
- * `valorVenta` e `igv` de la línea redondeados a 2 decimales; totales = round2(Σ líneas ya redondeadas).
- * NO valida `codigo_unidad_sunat` (eso es requisito del XML, no del cálculo) → sirve para previsualizar
- * aunque falte la unidad; el constructor XML sí lo exige.
- *
- * @returns {{ moneda, esExport, lineas:Array, grupos:Object, subtotal:number, igv:number, total:number, montoEnLetras:string }}
- */
 export function calcularComprobante({ ov, detalle }) {
   const moneda = ov.moneda || 'PEN';
   const esExport = Number(ov.es_exportacion) === 1;
-  const grupos = {}; // afectación -> { base, igv, cfg }
+  const grupos = {};
 
   const lineas = (detalle || []).map((d, i) => {
     const afect = afectacionLinea(ov, d);
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);
-    // OJO: en ventas, `descuento_porcentaje` guarda el MARGEN (markup sobre costo), NO un descuento.
-    // `precio_unitario` ya es el precio final; el total de la OV es cantidad × precio_unitario sin
-    // restar nada. Restar el margen aquí (sobre todo si es negativo) descuadraba la factura respecto
-    // a la OV y saldría a SUNAT con un valor equivocado. Se factura el precio unitario tal cual.
     const desc = Number(d.descuento_porcentaje || 0);
-    const netUnit = Number(d.precio_unitario);                          // valor unitario sin IGV (precio final)
-    const lineExt = round2(cantidad * netUnit);                         // valor de venta de la línea
+    const netUnit = Number(d.precio_unitario);
+    const lineExt = round2(cantidad * netUnit);
     const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;
 
@@ -150,10 +99,10 @@ export function calcularComprobante({ ov, detalle }) {
       porcentajeIgv: cfg.percent,
       gravado: cfg.gravado,
       descuentoPorcentaje: desc,
-      valorUnitario: netUnit,            // sin IGV
+      valorUnitario: netUnit,
       precioUnitarioConIgv: precioConIgvUnit,
-      valorVenta: lineExt,               // base de la línea (2 dec)
-      igv: igvLine,                      // IGV de la línea (2 dec)
+      valorVenta: lineExt,
+      igv: igvLine,
       cfg
     };
   });
@@ -165,10 +114,6 @@ export function calcularComprobante({ ov, detalle }) {
   return { moneda, esExport, lineas, grupos, subtotal, igv, total, montoEnLetras: numeroALetras(total, moneda) };
 }
 
-/**
- * Construye el XML de una Factura (01) a partir de la OV, su detalle, el cliente y empresa_config.
- * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
- */
 export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias }) {
   if (!detalle || !detalle.length) {
     const err = new Error('La orden de venta no tiene líneas para facturar');
@@ -178,7 +123,6 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   const esExport = Number(ov.es_exportacion) === 1;
   const idComprobante = `${serie}-${numero}`;
 
-  // ── Líneas + totales (cálculo compartido con la vista previa) ───────────────
   const { lineas, grupos, subtotal: totalBase, igv: totalIgv, total: totalPagar } = calcularComprobante({ ov, detalle });
   const lineasXml = lineas.map((L) => {
     if (!L.unidad) {
@@ -232,7 +176,6 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
     </cac:TaxSubtotal>`;
   }).join('\n');
 
-  // ── Forma de pago (Contado / Crédito 1 cuota) ───────────────────────────────
   const esCredito = String(ov.tipo_venta || '').toLowerCase().startsWith('cr');
   let paymentTerms;
   if (esCredito) {
@@ -254,19 +197,12 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   </cac:PaymentTerms>`;
   }
 
-  // ── Cliente (receptor) ──────────────────────────────────────────────────────
   const cliScheme = esExport ? '-' : schemeIdDocumento(cliente.tipo_documento);
-  // Export: receptor no domiciliado = "SIN DOCUMENTO". El portal SUNAT distingue "SIN DOCUMENTO"
-  // (schemeID/número '-') de "DOC.TRIB.NO.DOM.SIN.RUC" (cat.06 '0', que EXIGE número). Clavamos el
-  // molde real aceptado E001-1997 (docs/FACTURA_EXPORT_E001-1997.xml): schemeID='-', número='-',
-  // schemeName="Documento de Identidad". r97/2800 solo prohíbe schemeID '6' (RUC) en op. 0200.
   const cliNumDoc = esExport ? '-' : (cliente.ruc || '0');
   const cliSchemeName = esExport ? ' schemeName="Documento de Identidad"' : '';
   const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
   const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
 
-  // Si SUNAT recibe "Sí" para el establecimiento del emisor, el receptor no lleva dirección:
-  // la ubicación se expresa aparte en SellerSupplierParty/PostalAddress (molde aceptado E001-1800).
   const customerAddress = esExport
     ? ''
     : `        <cac:RegistrationAddress>
@@ -288,22 +224,11 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   </cac:SellerSupplierParty>\n`
     : '';
 
-  // ── OC del cliente + observaciones ──────────────────────────────────────────
-  // SUNAT no tiene un campo propio de "orden de compra": el estándar la lleva en
-  // cac:OrderReference/cbc:ID (así SÍ queda en el XML/CDR, no solo en el PDF). Las
-  // observaciones libres van como cbc:Note adicional, aparte del Note reservado al monto
-  // en letras (languageLocaleID="1000").
   const ocCliente = trunc(ov.orden_compra_cliente, 20);
   const observaciones = String(ov.observaciones || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
   const notaObservaciones = observaciones ? `\n  <cbc:Note>${cdata(observaciones)}</cbc:Note>` : '';
   const orderReference = ocCliente ? `\n  <cac:OrderReference><cbc:ID>${cdata(ocCliente)}</cbc:ID></cac:OrderReference>` : '';
 
-  // ── Guías de remisión que amparan el traslado (factura → GRE) ────────────────
-  // La factura declara cada guía con cac:DespatchDocumentReference (una por guía). El origen puede
-  // ser una GRE del sistema ya aceptada (tipo 09) o una guía ingresada a mano en el buscador del
-  // panel (tipo 09 Remitente o 31 Transportista) cuando la GRE se emitió directo en SUNAT y no hay
-  // registro local. normalizarGuiaRef unifica ambas fuentes; el DocumentTypeCode sale del propio
-  // ítem (ya no es fijo). Va tras OrderReference y antes de cac:Signature, según el orden del XSD.
   const despatchReferences = (guias || [])
     .map(normalizarGuiaRef)
     .filter(Boolean)

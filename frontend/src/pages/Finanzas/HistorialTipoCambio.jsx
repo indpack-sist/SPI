@@ -16,8 +16,7 @@ const HistorialTipoCambio = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [alert, setAlert] = useState({ show: false, type: '', message: '' });
-  
-  // Estado para el modal de edición manual
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editData, setEditData] = useState({ fecha: '', compra: '', venta: '' });
   const [savingManual, setSavingManual] = useState(false);
@@ -240,7 +239,7 @@ const HistorialTipoCambio = () => {
       <div className="card">
         <div className="card-body" style={{ minHeight: '400px' }}>
           <div className="mb-4 text-sm text-muted">
-            <em>💡 Tip: Haz clic en cualquier día del calendario para ingresar o editar el tipo de cambio manualmente.</em>
+            <em>Tip: Haz clic en cualquier día del calendario para ingresar o editar el tipo de cambio manualmente.</em>
           </div>
           {loading ? (
              <div className="flex justify-center items-center h-64"><Loading size="lg" /></div>

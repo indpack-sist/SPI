@@ -1,7 +1,3 @@
-// components/Ventas/sunat/PanelFacturacionSee.jsx — Fase 14.
-// Card independiente de Facturación Electrónica (SEE) nativa para el detalle de una OV.
-// Coexiste con el panel de facturación manual (no lo reemplaza). Gatear su render con
-// tienePermiso('facturacion') desde el contenedor. Toda la lógica SEE de comprobantes vive aquí.
 import { useState, useEffect } from 'react';
 import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck, Pencil, Check, X } from 'lucide-react';
 import Modal from '../../UI/Modal';
@@ -9,7 +5,6 @@ import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
 import { sunatAPI } from '../../../config/api';
 
-// Catálogo 09 (Nota de Crédito) y 10 (Nota de Débito) — deben coincidir con el backend.
 const MOTIVOS = {
   '07': [
     ['01', 'Anulación de la operación'], ['02', 'Anulación por error en el RUC'],
@@ -20,22 +15,18 @@ const MOTIVOS = {
   '08': [['01', 'Intereses por mora'], ['02', 'Aumento en el valor'], ['03', 'Penalidades / otros']]
 };
 
-// `soloLectura`: perfiles de venta (Comercial/Ventas) solo ven/descargan los documentos
-// (PDF, XML, CDR) de comprobantes ya emitidos. No emiten, ni notas (NC/ND), ni baja.
 export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, soloLectura = false }) {
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
-  const [modalNota, setModalNota] = useState(null);   // { factura }
-  const [modalBaja, setModalBaja] = useState(null);    // { factura }
+  const [modalNota, setModalNota] = useState(null);
+  const [modalBaja, setModalBaja] = useState(null);
   const [notaTipo, setNotaTipo] = useState('07');
   const [notaMotivo, setNotaMotivo] = useState('01');
   const [bajaMotivo, setBajaMotivo] = useState('');
-  // Vista previa calculada por el backend (misma lógica que el UBL builder → lo que se firma).
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
-  // Wizard de emisión de factura (2 pasos, igual que NC/ND): 1 = opciones editables, 2 = preliminar SUNAT.
   const [emitStep, setEmitStep] = useState(1);
 
   const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
@@ -43,22 +34,14 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const fmtCant = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parseFloat(v || 0));
   const esCredito = String(orden?.tipo_venta || '').toLowerCase().startsWith('cr');
 
-  // Datos derivados para la vista previa del comprobante (lo que se enviará a SUNAT).
   const esExportacion = Number(orden?.es_exportacion) === 1;
   const lineas = orden?.detalle || [];
-  // Fecha de emisión editable: por defecto hoy; se permite retro-fechar hasta 2 días, nunca a
-  // futuro, y nunca por debajo de la última factura ya emitida de la serie (regla cronológica:
-  // los días previos solo quedan libres mientras no se haya avanzado la facturación). El backend
-  // revalida ambas reglas. `preview.ultimaFechaEmitida` (YYYY-MM-DD) llega al abrir el modal.
-  const hoyISO = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+  const hoyISO = new Date().toLocaleDateString('en-CA');
   const minVentana = new Date(Date.now() - 2 * 86400000).toLocaleDateString('en-CA');
   const ultimaFechaEmitida = preview?.ultimaFechaEmitida || null;
   const minISO = ultimaFechaEmitida && ultimaFechaEmitida > minVentana ? ultimaFechaEmitida : minVentana;
   const [fechaEmision, setFechaEmision] = useState(hoyISO);
   const fechaFmt = (iso) => { const [y, m, d] = (iso || '').split('-'); return d ? `${d}/${m}/${y}` : iso; };
-  // Vencimiento del crédito = fecha de EMISIÓN de la factura + días de crédito (mismo cálculo que el
-  // backend en el XML/PDF). Se recalcula al cambiar la fecha de emisión para que la previa no muestre
-  // el vencimiento de la OV (que parte de la fecha de la orden, no de la emisión).
   const addDiasISO = (iso, dias) => {
     const d = new Date(`${iso}T00:00:00`);
     if (Number.isNaN(d.getTime())) return iso;
@@ -66,20 +49,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     return d.toLocaleDateString('en-CA');
   };
   const vencimientoISO = esCredito ? addDiasISO(fechaEmision, orden?.dias_credito) : null;
-  // Observaciones (cbc:Note) que SUNAT muestra como "Observaciones". Texto LIBRE editable.
   const [observaciones, setObservaciones] = useState('');
   const OBS_MAX = 200;
-  // Orden de compra (cac:OrderReference) — campo PROPIO, ya no embebido en las observaciones.
   const [ordenCompra, setOrdenCompra] = useState('');
   const OC_MAX = 20;
-  // ── Wizard de Nota de Crédito/Débito (2 pasos: formulario → preliminar estilo SUNAT) ──
-  const [notaStep, setNotaStep] = useState(1);          // 1 = datos, 2 = preliminar
-  const [notaSustento, setNotaSustento] = useState(''); // Motivo o Sustento (cbc:Description), lo escribe el usuario
-  const [notaFecha, setNotaFecha] = useState(hoyISO);   // fecha de emisión editable (retro ≤2 días)
+  const [notaStep, setNotaStep] = useState(1);
+  const [notaSustento, setNotaSustento] = useState('');
+  const [notaFecha, setNotaFecha] = useState(hoyISO);
   const [notaPreview, setNotaPreview] = useState(null);
   const [notaPreviewLoading, setNotaPreviewLoading] = useState(false);
   const [notaPreviewError, setNotaPreviewError] = useState(null);
-  // Motivo 09: catálogo de líneas de la factura + captura por ítem/global.
   const [notaCatalogo, setNotaCatalogo] = useState(null);
   const [notaCatalogoLoading, setNotaCatalogoLoading] = useState(false);
   const [notaModo, setNotaModo] = useState('item');
@@ -87,40 +66,25 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const [notaEditando, setNotaEditando] = useState(null);
   const [notaMontoGlobal, setNotaMontoGlobal] = useState('');
   const SUSTENTO_MAX = 250;
-  // Símbolo/formato de la nota (según su propia moneda, que hereda de la factura afectada).
   const notaMoneda = notaPreview?.moneda || notaCatalogo?.moneda || modalNota?.factura?.moneda;
   const notaSimbolo = notaMoneda === 'USD' ? '$' : 'S/';
   const notaFmt = (v) => `${notaSimbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
   const notaFmtCaptura = (v) => `${notaSimbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
   const notaUltima = notaPreview?.ultimaFechaEmitida || null;
   const notaMinISO = notaUltima && notaUltima > minVentana ? notaUltima : minVentana;
-  // Guías de remisión relacionadas (buscador manual): las GRE se emiten directo en SUNAT y no hay
-  // registro local, así que se ingresan a mano (tipo 09/31 + serie + número) y se declaran en la
-  // factura como cac:DespatchDocumentReference. `nuevaGuia` es la fila del formulario de alta.
   const [guiasRef, setGuiasRef] = useState([]);
   const [nuevaGuia, setNuevaGuia] = useState({ tipo_documento: '09', serie: '', numero: '' });
   const [guiaError, setGuiaError] = useState(null);
-  // GRE del sistema ya ACEPTADAS de la OV: se auto-declaran (solo lectura, el backend las une).
   const [guiasSistema, setGuiasSistema] = useState([]);
   const TIPOS_GUIA = [['09', 'Guía de Remisión Remitente'], ['31', 'Guía de Remisión Transportista']];
 
-  // ── Datos derivados para el preliminar (paso 2): lo que realmente se enviará a SUNAT ──
-  // La OC viaja como campo propio; si la observación solo la repite, no se muestra (evita duplicado).
   const normTxt = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  // Se quita el prefijo "OC"/"O/C"/"ORDEN DE COMPRA" a AMBOS lados: la OC puede escribirse con ese
-  // prefijo dentro del propio campo (p. ej. "OC - 4600144796"); sin quitárselo también a la OC la
-  // comparación no casaba y la observación se mostraba duplicada.
   const stripOC = (s) => normTxt(s).replace(/^(OC|ORDENDECOMPRA)+/, '');
   const obsRepiteOC = !!normTxt(ordenCompra) && stripOC(observaciones) === stripOC(ordenCompra);
   const obsPreliminar = obsRepiteOC ? '' : observaciones.trim();
-  // Guías declaradas en la factura: las del sistema (auto) + las agregadas a mano en el buscador.
   const guiasPreliminar = [...guiasSistema, ...guiasRef];
-  // Caso de exportación: datos precargados desde empresa_config y usados por el backend para el
-  // RegistrationAddress del XML (equivalente a seleccionar "Otro local" en el portal SUNAT).
   const ubicacionExport = preview?.ubicacionEntregaExportacion || null;
 
-  // Alta de una guía en la lista, con la MISMA validación de formato que el backend (para no llegar
-  // a un rechazo de SUNAT): serie = 4 alfanuméricos; número = hasta 8 dígitos; sin duplicados.
   const agregarGuia = () => {
     const tipo_documento = nuevaGuia.tipo_documento;
     const serie = String(nuevaGuia.serie || '').toUpperCase().trim();
@@ -136,17 +100,13 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   };
   const quitarGuia = (i) => setGuiasRef((prev) => prev.filter((_, idx) => idx !== i));
 
-  // Comprobantes electrónicos (nativos): tienen sunat_estado. Los manuales quedan en su panel.
-  // Todos los comprobantes electrónicos, en ORDEN CRONOLÓGICO (id ascendente) para que la historia se
-  // lea natural: factura rechazada → reemisión → nota que la anula → refacturación.
   const comprobantes = (facturas || [])
     .filter((f) => f.sunat_estado)
     .sort((a, b) => (Number(a.id_factura) || 0) - (Number(b.id_factura) || 0));
-  // Relaciones entre comprobantes para rotular cada fila con claridad.
-  const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);          // factura afectada por una nota
+  const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);
   const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
     && x.codigo_tipo_sunat === '07' && x.motivo_nota_codigo === '01'
-    && x.sunat_estado === 'ACEPTADO');                                                        // solo NC 01 anula esta factura
+    && x.sunat_estado === 'ACEPTADO');
   const facturaEnCursoOV = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
     && f.estado !== 'Anulada'
     && ['ENVIADO', 'ACEPTADO'].includes(f.sunat_estado));
@@ -156,7 +116,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
 
   const errorMsg = (e) => {
     const d = e?.response?.data;
-    // Bloqueo por validación previa (422): además del resumen, se listan los errores concretos.
     if (d?.errores?.length) return `${d.error || 'Validación previa'} → ${d.errores.map((x) => x.mensaje).join(' • ')}`;
     return d?.error || e?.message || 'Error inesperado';
   };
@@ -172,13 +131,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     } finally { setProcesando(false); }
   };
 
-  // Render de la validación previa: errores (rojo, bloquean) + observaciones (amarillo, avisan).
   const ListaHallazgos = ({ errores = [], observaciones = [] }) => (
     <>
       {errores.length > 0 && (
         <div className="rounded border border-red-300 bg-red-50 p-2 text-xs">
           <div className="font-semibold text-red-700 mb-1">
-            ⛔ {errores.length} error(es) impiden emitir — corríjalos (NO se pierde correlativo):
+            {errores.length} error(es) impiden emitir — corríjalos (NO se pierde correlativo):
           </div>
           <ul className="list-disc pl-4 space-y-0.5 text-red-700">
             {errores.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
@@ -188,7 +146,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
       {observaciones.length > 0 && (
         <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs">
           <div className="font-semibold text-amber-700 mb-1">
-            ⚠️ {observaciones.length} observación(es) — SUNAT podría aceptar con reparos (no bloquean):
+            {observaciones.length} observación(es) — SUNAT podría aceptar con reparos (no bloquean):
           </div>
           <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
             {observaciones.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
@@ -201,7 +159,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const handleEmitir = async () => {
     const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta, {
       fecha_emision: fechaEmision,
-      // Se envía exactamente lo mostrado en el preliminar: sin saltos laterales ni OC duplicada.
       observaciones: obsPreliminar,
       orden_compra_cliente: ordenCompra.trim(),
       guias: guiasRef
@@ -217,10 +174,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
 
   const handleVerificar = (f) => tras(() => sunatAPI.estadoComprobante(f.id_factura), 'Estado consultado.');
   const handlePdf = async (f) => { try { await sunatAPI.verPdfComprobante(f.id_factura); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
-  // Descarga directa (con nombre SUNAT) del XML firmado o del CDR, igual que las cotizaciones.
   const handleDescargar = async (url) => { try { await sunatAPI.descargarArchivoUrl(url); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
 
-  // Abre el wizard de nota sobre una factura, reiniciando el formulario en el paso 1.
   const abrirNota = (factura) => {
     setNotaTipo('07'); setNotaMotivo('01'); setNotaSustento('');
     setNotaFecha(hoyISO); setNotaStep(1);
@@ -274,7 +229,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     setModalBaja(null); setBajaMotivo('');
   };
 
-  // Al abrir el modal de emisión, pide al backend la vista previa (fuente única de cálculo).
   useEffect(() => {
     if (!modalEmitir || !orden?.id_orden_venta) return undefined;
     let cancel = false;
@@ -295,8 +249,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     return () => { cancel = true; };
   }, [modalEmitir, orden?.id_orden_venta]);
 
-  // Para motivo 09 se carga la factura vigente como catálogo seleccionable. El servidor incluye
-  // el saldo disponible después de NC de disminución anteriores, por ítem y global.
   useEffect(() => {
     if (!modalNota?.factura || !esDisminucion) return undefined;
     let cancel = false;
@@ -315,8 +267,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     return () => { cancel = true; };
   }, [modalNota, esDisminucion, notaTipo, notaMotivo]);
 
-  // Al entrar al paso 2 (preliminar), pide al backend el mismo cálculo/desglose que se firmará.
-  // Se refresca si cambia el tipo o el motivo (cambian serie, etiqueta y documento).
   useEffect(() => {
     if (!modalNota?.factura || notaStep !== 2) return undefined;
     let cancel = false;
@@ -331,7 +281,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     return () => { cancel = true; };
   }, [modalNota, notaStep, notaTipo, notaMotivo]);
 
-  // En solo lectura la tarjeta aparece únicamente cuando ya hay un comprobante emitido.
   if (soloLectura && comprobantes.length === 0) return null;
 
   return (
@@ -360,11 +309,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             const esFactura = f.codigo_tipo_sunat === '01';
             const esNC = f.codigo_tipo_sunat === '07';
             const esND = f.codigo_tipo_sunat === '08';
-            // Anulada = factura reversada por una NC de anulación (sigue ACEPTADA en SUNAT, pero sin efecto).
             const anulada = f.estado === 'Anulada';
             const aceptado = f.sunat_estado === 'ACEPTADO' && !anulada;
             const esRechazo = f.sunat_estado === 'RECHAZADO' || f.sunat_estado === 'ERROR';
-            // Etiqueta de ROL que deja claro qué es cada fila y a qué documento se relaciona.
             let rol = null;
             if (anulada) rol = { clase: 'badge-danger', txt: `Anulada por NC ${notaQueAnula(f)?.numero_factura || ''}`.trim() };
             else if (esNC) rol = { clase: 'badge-info', txt: `Nota de Crédito${f.motivo_nota_codigo === '09' ? ' · Disminución' : ''} → ${refDe(f)?.numero_factura || 'factura'}` };
@@ -375,7 +322,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50/40' : (esNC || esND ? 'border-sky-200 bg-sky-50/40' : 'border-gray-200')}`}>
                 <span className={`font-mono font-bold text-sm ${anulada ? 'line-through text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
                 <BadgeEstadoSunat estado={f.sunat_estado} />
-                {/* Transición de estado: la factura fue ACEPTADA y luego ANULADA por una NC → se muestra con flecha. */}
                 {rol && anulada && <span className="text-xs text-muted" aria-hidden="true">→</span>}
                 {rol && <span className={`badge ${rol.clase} text-xs`}>{rol.txt}</span>}
                 <span className="text-xs text-muted">{fmt(f.total)}</span>
@@ -426,19 +372,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         </div>
       )}
 
-      {/* Modal: emisión de factura — wizard 2 pasos (opciones editables → preliminar estilo SUNAT) */}
       <Modal
         isOpen={modalEmitir}
         onClose={() => !procesando && setModalEmitir(false)}
         title={emitStep === 1 ? 'Emitir factura electrónica (SEE)' : 'Preliminar de Factura electrónica'}
         size="xl"
       >
-        {/* ── Paso 1: opciones editables (fecha, orden de compra, observaciones, guías) ── */}
         {emitStep === 1 && (
         <div className="space-y-3 text-sm">
           <p className="text-muted text-xs">Completa los datos del comprobante. En el siguiente paso verás el preliminar exacto que se declarará a SUNAT.</p>
 
-          {/* Cabecera del comprobante */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div className="bg-gray-50 rounded p-2">
               <div className="text-[10px] text-muted uppercase">Comprobante</div>
@@ -493,9 +436,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </div>
           )}
 
-          {/* Información adicional del comprobante: Orden de compra (campo propio) + Observaciones */}
           <div className="border border-gray-200 rounded p-3 space-y-3">
-            {/* Orden de compra → cac:OrderReference (ya no viaja dentro de las observaciones). */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] text-muted uppercase">Orden de compra</label>
@@ -514,7 +455,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 Coloque solo el número, sin "OC" adelante y sin espacios. Ejemplo correcto: <strong>15152</strong>. Ejemplos incorrectos: <span className="line-through">OC 15152</span>, <span className="line-through">O/C-15152</span>, <span className="line-through">151 52</span>. Viaja como campo propio del comprobante (cac:OrderReference) y se rotula aparte en el PDF, igual que en SUNAT. Si atiende dos órdenes, coloque ambas directamente en Observaciones.
               </div>
             </div>
-            {/* Observaciones → cbc:Note (texto libre). */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] text-muted uppercase">Observaciones (aparecen en SUNAT)</label>
@@ -535,20 +475,17 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </div>
           </div>
 
-          {/* Guías de remisión relacionadas → cac:DespatchDocumentReference (buscador manual). */}
           <div className="border border-gray-200 rounded p-3 space-y-2">
             <label className="text-[10px] text-muted uppercase">Guías de remisión relacionadas</label>
             <div className="text-[10px] text-muted -mt-1">
               Agrega las guías que amparan el traslado (se declaran en la factura). Como las emites directo en SUNAT, ingrésalas a mano.
             </div>
-            {/* GRE ya emitidas desde el sistema para esta OV: se declaran solas (no editables). */}
             {guiasSistema.length > 0 && (
               <div className="text-[11px] bg-blue-50 border border-blue-200 rounded px-2 py-1">
                 <span className="text-blue-700 font-semibold">Ya incluidas (emitidas desde el sistema): </span>
                 <span className="font-mono">{guiasSistema.map((g) => `${g.serie}-${g.numero}`).join(', ')}</span>
               </div>
             )}
-            {/* Formulario de alta: tipo + serie + número + botón agregar. */}
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[180px]">
                 <label className="block text-[10px] text-muted mb-0.5">Tipo de documento</label>
@@ -585,7 +522,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               </button>
             </div>
             {guiaError && <div className="text-[11px] text-red-600">{guiaError}</div>}
-            {/* Lista de guías agregadas, con eliminar por fila. */}
             {guiasRef.length > 0 ? (
               <ul className="space-y-1">
                 {guiasRef.map((g, i) => (
@@ -603,11 +539,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             )}
           </div>
 
-          {/* Avisos del backend (no bloquean la vista previa, sí la emisión real). */}
           {previewError && <Alert type="error" message={previewError} onClose={() => setPreviewError(null)} />}
           {preview?.avisos?.length > 0 && <Alert type="warning" message={preview.avisos.join(' ')} />}
 
-          {/* Validación previa: errores bloquean el botón; observaciones solo avisan. */}
           <ListaHallazgos errores={preview?.errores} observaciones={preview?.observaciones} />
 
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
@@ -620,14 +554,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         </div>
         )}
 
-        {/* ── Paso 2: preliminar estilo SUNAT (read-only, lo que se declara) ── */}
         {emitStep === 2 && (
         <div className="space-y-3 text-sm">
           {previewLoading && <p className="text-muted text-xs">Calculando preliminar…</p>}
           {previewError && <Alert type="error" message={previewError} />}
           {preview && (
             <>
-              {/* Cabecera del emisor */}
               <div className="text-center border-b border-gray-200 pb-2">
                 <div className="font-bold uppercase">{preview.empresa?.razon_social}</div>
                 <div className="text-[10px] text-muted">{preview.empresa?.direccion}</div>
@@ -636,7 +568,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 <div className="font-mono text-[11px] text-muted">Serie FE01 · el número se asigna al emitir</div>
               </div>
 
-              {/* Datos de cabecera (formato SUNAT) */}
               <div className="text-xs space-y-0.5">
                 <div><span className="text-muted">Fecha de Emisión: </span><strong>{fechaFmt(fechaEmision)}</strong></div>
                 <div><span className="text-muted">Señor(es): </span><strong>{preview.cliente?.razon_social || orden?.cliente || '-'}</strong></div>
@@ -675,7 +606,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </div>
               )}
 
-              {/* Guías de remisión declaradas en la factura */}
               {guiasPreliminar.length > 0 && (
                 <div className="text-xs">
                   <span className="text-muted">Guía(s) de remisión: </span>
@@ -683,7 +613,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </div>
               )}
 
-              {/* Detalle de productos — calculado por el backend (fuente única) */}
               <div className="border border-gray-200 rounded overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-100 text-muted">
@@ -715,7 +644,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </table>
               </div>
 
-              {/* Desglose de totales (estilo SUNAT) */}
               <div className="border border-gray-200 rounded divide-y divide-gray-100 text-xs">
                 {[
                   ['Sub Total Ventas', preview.subtotal],
@@ -743,7 +671,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 <p className="text-[11px] text-muted"><span className="uppercase font-semibold">Son:</span> {preview.montoEnLetras}</p>
               )}
 
-              {/* Información del crédito (solo si la venta es a crédito) */}
               {esCredito && vencimientoISO && (
                 <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
                   <div className="font-semibold">Información del crédito</div>
@@ -769,7 +696,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </>
           )}
 
-          {/* Recordatorio de la validación previa también antes de emitir. */}
           <ListaHallazgos errores={preview?.errores} observaciones={preview?.observaciones} />
 
           <div className="flex justify-between gap-2 pt-2 border-t border-gray-200">
@@ -786,14 +712,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         )}
       </Modal>
 
-      {/* Modal: Nota de Crédito/Débito — wizard 2 pasos (datos → preliminar estilo SUNAT) */}
       <Modal
         isOpen={!!modalNota}
         onClose={() => !procesando && setModalNota(null)}
         title={notaStep === 1 ? 'Emitir Nota de Crédito / Débito' : `Preliminar de ${notaTipo === '08' ? 'Nota de Débito' : 'Nota de Crédito'}`}
         size={esDisminucion ? 'xl' : 'lg'}
       >
-        {/* ── Paso 1: datos de la nota ── */}
         {notaStep === 1 && (
           <div className="space-y-3 text-sm">
             <p className="text-muted text-xs">
@@ -981,14 +905,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
           </div>
         )}
 
-        {/* ── Paso 2: preliminar estilo SUNAT ── */}
         {notaStep === 2 && (
           <div className="space-y-3 text-sm">
             {notaPreviewLoading && <p className="text-muted text-xs">Calculando preliminar…</p>}
             {notaPreviewError && <Alert type="error" message={notaPreviewError} />}
             {notaPreview && (
               <>
-                {/* Cabecera del emisor */}
                 <div className="text-center border-b border-gray-200 pb-2">
                   <div className="font-bold uppercase">{notaPreview.empresa?.razon_social}</div>
                   <div className="text-[10px] text-muted">{notaPreview.empresa?.direccion}</div>
@@ -996,7 +918,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <div className="font-mono text-xs">RUC: {notaPreview.empresa?.ruc}</div>
                 </div>
 
-                {/* Datos de cabecera */}
                 <div className="text-xs space-y-0.5">
                   <div><span className="text-muted">Fecha de Emisión: </span><strong>{fechaFmt(notaFecha)}</strong></div>
                   <div><span className="text-muted">Documento que modifica — {notaPreview.docAfectado?.tipoLabel}: </span>
@@ -1014,8 +935,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   )}
                 </div>
 
-                {/* Líneas exactas que se firmarán. En motivo 09 el valor unitario es la
-                    disminución capturada (p. ej. 2.80), no el precio original de la factura. */}
                 <div className="border border-gray-200 rounded overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-100">
@@ -1041,7 +960,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   </table>
                 </div>
 
-                {/* Desglose de totales (estilo SUNAT) */}
                 <div className="border border-gray-200 rounded divide-y divide-gray-100 text-xs">
                   {[
                     ['Sub Total Ventas', notaPreview.totales?.subtotal],
@@ -1069,7 +987,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <p className="text-[11px] text-muted"><span className="uppercase font-semibold">Son:</span> {notaPreview.montoEnLetras}</p>
                 )}
 
-                {/* Información del crédito (solo si la factura es a crédito) */}
                 {notaPreview.credito?.esCredito && (
                   <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
                     <div className="font-semibold">Información del crédito</div>
@@ -1099,7 +1016,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               </>
             )}
 
-            {/* Validación previa de la nota: errores bloquean, observaciones avisan. */}
             <ListaHallazgos errores={notaPreview?.errores} observaciones={notaPreview?.observaciones} />
 
             <div className="flex justify-between gap-2 pt-2 border-t border-gray-200">
@@ -1116,7 +1032,6 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         )}
       </Modal>
 
-      {/* Modal: comunicación de baja */}
       <Modal isOpen={!!modalBaja} onClose={() => !procesando && setModalBaja(null)} title="Comunicación de baja (RA)" size="sm">
         <div className="space-y-3 text-sm">
           <p className="text-muted">Se dará de baja la factura <strong className="font-mono">{modalBaja?.factura?.numero_factura}</strong> ante SUNAT (solo dentro de los 7 días de emitida).</p>

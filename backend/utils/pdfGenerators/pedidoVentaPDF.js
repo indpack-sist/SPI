@@ -7,7 +7,6 @@ const __dirname = path.dirname(__filename);
 
 const TIMEZONE = 'America/Lima';
 
-// Cantidad con 5 decimales (formato del documento fuente: 2,000.00000)
 const fmtCantidad = (num) => {
   return Number(num || 0).toLocaleString('en-US', {
     minimumFractionDigits: 5,
@@ -15,7 +14,6 @@ const fmtCantidad = (num) => {
   });
 };
 
-// Precio unitario: hasta 6 decimales para reconciliar con el importe.
 const fmtPrecio = (num) => {
   return Number(num || 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -23,7 +21,6 @@ const fmtPrecio = (num) => {
   });
 };
 
-// Importes/totales: 2 decimales con separador de miles.
 const fmtMonto = (num) => {
   return Number(num || 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -58,12 +55,6 @@ function dibujarLogoFallback(doc) {
   doc.text('IndPack', 40, 45);
 }
 
-/**
- * Genera el PDF de "PEDIDO" a partir de una orden de venta.
- * Replica el layout comercial: cabecera de empresa, datos del cliente,
- * tabla CANT./DESCRIPCION/P.U./IMPORTE, nota y totales.
- * @param {Object} orden - Orden de venta con `detalle` cargado.
- */
 export async function generarPedidoVentaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -96,7 +87,6 @@ export async function generarPedidoVentaPDF(orden) {
         dibujarLogoFallback(doc);
       }
 
-      // ===== Cabecera empresa =====
       const yEmpresa = 85;
       doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 30, yEmpresa);
@@ -107,7 +97,6 @@ export async function generarPedidoVentaPDF(orden) {
       doc.text('Tel.: 01- 312 7858  |  E-mail: informes@indpackperu.com', 30, yEmpresa + 32);
       doc.text('Web: https://www.indpackperu.com/', 30, yEmpresa + 42);
 
-      // ===== Recuadro RUC / PEDIDO / No. =====
       const xBox = 350, yBox = 30, wBox = 215, hBox = 75;
       doc.roundedRect(xBox, yBox, wBox, hBox, 5).lineWidth(1).stroke('#000000');
 
@@ -121,7 +110,6 @@ export async function generarPedidoVentaPDF(orden) {
       doc.fontSize(12);
       doc.text(`${orden.numero_orden || ''}`, xBox, yText, { width: wBox, align: 'center' });
 
-      // ===== Datos del cliente =====
       const clienteTexto = orden.cliente || orden.razon_social || 'VARIOS';
       const rucTexto = orden.ruc_cliente || orden.ruc || '-';
       const direccionLimpia = (orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '-').replace(/[\r\n]+/g, ' ');
@@ -135,7 +123,6 @@ export async function generarPedidoVentaPDF(orden) {
       const wInfo = 535;
       const labelX = 40, valueX = 130, valueW = 260;
 
-      // Altura dinámica del bloque
       const filas = [
         ['Cliente:', clienteTexto],
         ['Dirección:', direccionLimpia],
@@ -165,7 +152,6 @@ export async function generarPedidoVentaPDF(orden) {
         currentY += alturasFilas[idx];
       });
 
-      // ===== Cabecera de la tabla =====
       let yTable = yInfo + hInfo + 15;
 
       const COL = {
@@ -197,7 +183,6 @@ export async function generarPedidoVentaPDF(orden) {
       detalle.forEach((item, i) => {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioUnitario = parseFloat(item.precio_unitario || 0);
-        // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
         const brutoLinea = cantidad * precioUnitario;
         const importeLinea = brutoLinea;
 
@@ -233,7 +218,6 @@ export async function generarPedidoVentaPDF(orden) {
       doc.moveTo(30, yTable).lineTo(565, yTable).lineWidth(0.5).stroke('#aaaaaa');
       yTable += 12;
 
-      // Salto de página si no hay espacio para nota + totales
       if (yTable > 640) {
         doc.addPage();
         yTable = 40;
@@ -241,14 +225,12 @@ export async function generarPedidoVentaPDF(orden) {
 
       const yFooter = yTable;
 
-      // ===== Nota (observaciones) =====
       doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold').text('Nota:', 30, yFooter);
       doc.font('Helvetica').fontSize(8).text(
         orden.observaciones || '',
         30, yFooter + 12, { width: 330, lineGap: 2 }
       );
 
-      // ===== Totales =====
       const subtotalNeto = parseFloat(orden.subtotal || (importeBruto - descuentoTotal));
       const igv = esSinImpuesto ? 0 : parseFloat(orden.igv || 0);
       const total = esSinImpuesto ? subtotalNeto : parseFloat(orden.total || (subtotalNeto + igv));

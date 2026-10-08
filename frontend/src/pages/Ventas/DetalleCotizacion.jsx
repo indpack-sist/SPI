@@ -22,7 +22,6 @@ function DetalleCotizacion() {
   const navigate = useNavigate();
   const location = useLocation();
   const { rol } = usePermisos();
-  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
   const esAdmin = rol === 'Administrador';
   
   const [cotizacion, setCotizacion] = useState(null);
@@ -363,8 +362,6 @@ function DetalleCotizacion() {
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
-  // El precio unitario puede tener hasta 6 decimales; se muestra completo
-  // para que P. Venta × Cantidad reconcilie con el Subtotal (que usa precisión completa).
   const formatearNumeroPrecio = (valor) => {
     return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
@@ -611,8 +608,6 @@ function DetalleCotizacion() {
     const esExonerado = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImp);
     const pct = parseFloat(cotizacion.porcentaje_impuesto || 18);
 
-    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
-    // para que la cotización cuadre con la OV que se genera al convertirla.
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let pesoTotal = 0;
     let sub = 0;

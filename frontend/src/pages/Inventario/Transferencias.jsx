@@ -279,14 +279,12 @@ function Transferencias() {
     });
   };
 
-  // 1. FILTRADO
   const transferenciasFiltradas = transferencias.filter(t =>
     (t.tipo_inventario_origen && t.tipo_inventario_origen.toLowerCase().includes(filtro.toLowerCase())) ||
     (t.tipo_inventario_destino && t.tipo_inventario_destino.toLowerCase().includes(filtro.toLowerCase())) ||
     (t.registrado_por && t.registrado_por.toLowerCase().includes(filtro.toLowerCase()))
   );
 
-  // 2. PAGINACIÓN
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = transferenciasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -437,9 +435,7 @@ function Transferencias() {
         </div>
       </div>
 
-      {/* TABLA CON PAGINACIÓN */}
       <div className="card">
-        {/* Info Superior */}
         <div className="p-3 border-b border-border text-sm text-muted">
              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, transferenciasFiltradas.length)} de {transferenciasFiltradas.length} transferencias
         </div>
@@ -450,7 +446,6 @@ function Transferencias() {
           emptyMessage="No se encontraron transferencias"
         />
 
-        {/* Footer de Paginación */}
         {transferenciasFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 

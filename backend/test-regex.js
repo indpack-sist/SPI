@@ -45,16 +45,13 @@ const extractMultiple = (regexes) => {
     return '';
 };
 
-// Buscamos el bloque de arriba (Emisor + Correlativo)
 const emisorBlock = cleanText.substring(0, 500);
 const correlativo = emisorBlock.match(/(?:FACTURA|BOLETA).*?\n*([EF][A-Z0-9]{3}\s*-\s*\d+)/i)?.[1] || 
                     emisorBlock.match(/([EF][A-Z0-9]{3}\s*-\s*\d+)/i)?.[1] || '';
 
-// Buscamos el bloque de etiquetas para saber dónde buscar los valores
-const rucLabelIndex = cleanText.indexOf('RUC\nDirección'); 
+const rucLabelIndex = cleanText.indexOf('RUC\nDirección');
 const total = extractMultiple([/Importe\s+Total\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i]);
 
-// RUC CLIENTE: Buscamos 11 dígitos que aparezcan DESPUÉS de Señor(es) y que tengan un ":" cerca
 const rucCliente = extractMultiple([
     /Señor(?:es)?[\s\S]{0,600}:\s*.*?\s+:\s*(\d{11})/i,
     /RUC[\s\S]{0,600}:\s*(\d{11})/i

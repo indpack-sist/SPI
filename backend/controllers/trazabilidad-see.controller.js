@@ -1,13 +1,6 @@
-// controllers/trazabilidad-see.controller.js
-// Trazabilidad del SEE (Sistema de Emisión Electrónica): listados totalmente detallados de
-// comprobantes (facturas + notas de crédito/débito) y de guías de remisión, con todos sus
-// estados (emitido/aceptado/rechazado/anulado/baja) para auditoría de Administración.
-// Solo lectura. Protegido por permiso 'facturacion' (Administrador / Administrativo).
 import { pool } from '../config/database.js';
 import { extraerUrl } from '../services/sunat/util.service.js';
 
-// Una factura queda ANULADA cuando existe una Nota de Crédito 07 con motivo 01 (anulación de la
-// operación) ya ACEPTADA por SUNAT que la referencia. Mismo criterio que el Monitor SUNAT.
 const NC_ANULACION = `EXISTS (
   SELECT 1 FROM facturas_venta nc
    WHERE nc.id_factura_ref = fv.id_factura
@@ -16,8 +9,6 @@ const NC_ANULACION = `EXISTS (
      AND nc.sunat_estado = 'ACEPTADO'
 )`;
 
-// Estado "de negocio" de un comprobante: prioriza la anulación, luego el estado real ante SUNAT y,
-// por último, reconoce las facturas manuales históricas (sin fila SUNAT) marcadas en la orden.
 function estadoFinalComprobante(r) {
   if (r.estado === 'Anulada' || r.anulada_por_nc) return 'ANULADA';
   if (r.sunat_estado) return String(r.sunat_estado).toUpperCase();
@@ -41,9 +32,6 @@ function construirResumen(filas) {
   return { total: filas.length, porEstado, porClase };
 }
 
-// GET /api/sunat/trazabilidad/comprobantes
-// Filtros (todos opcionales): tipo (FACTURA|NOTA_CREDITO|NOTA_DEBITO), estado (sunat_estado o
-// ANULADA), desde, hasta (YYYY-MM-DD sobre fecha_emision), q (texto libre).
 export async function listarComprobantes(req, res) {
   try {
     const { tipo = 'all', estado = 'all', desde, hasta, q, solo_sistema } = req.query;
@@ -54,8 +42,6 @@ export async function listarComprobantes(req, res) {
     else if (tipo === 'NOTA_CREDITO') where.push(`fv.codigo_tipo_sunat = '07'`);
     else if (tipo === 'NOTA_DEBITO') where.push(`fv.codigo_tipo_sunat = '08'`);
 
-    // solo_sistema=1 → únicamente comprobantes emitidos electrónicamente desde el sistema
-    // (excluye las facturas manuales/legacy cargadas antes de la integración SEE).
     if (String(solo_sistema) === '1') {
       where.push(`NOT (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL)`);
     }
@@ -118,8 +104,6 @@ export async function listarComprobantes(req, res) {
   }
 }
 
-// GET /api/sunat/trazabilidad/guias
-// Filtros (todos opcionales): estado (sunat_estado o ANULADA), desde, hasta, q.
 export async function listarGuias(req, res) {
   try {
     const { estado = 'all', desde, hasta, q } = req.query;
@@ -164,13 +148,6 @@ export async function listarGuias(req, res) {
       return row;
     });
 
-    // Intentos RECHAZADOS/ERROR que fueron SOBRESCRITOS al reemitir: al pasar al siguiente
-    // correlativo la cabecera de `guias_remision` se pisa con el nuevo número, así que ese rechazo
-    // solo queda archivado en `guias_remision_emisiones` y jamás vuelve a ser una fila de cabecera.
-    // Sin esto, un rechazo desaparece de la trazabilidad al reemitir/aceptar/dar de baja la guía.
-    // Se muestran como filas propias (una por intento), excluyendo el correlativo que sí quedó en la
-    // cabecera (ese ya se lista arriba con su estado final). Best-effort: si la tabla de historial no
-    // existe (instalación sin el DDL nuevo) la trazabilidad no se rompe.
     const incluirEmisiones = !estado || estado === 'all' || estado === 'RECHAZADO' || estado === 'ERROR';
     let emisiones = [];
     if (incluirEmisiones) {

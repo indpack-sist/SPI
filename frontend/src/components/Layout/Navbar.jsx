@@ -50,25 +50,21 @@ function Navbar({ onToggleSidebar }) {
         setNotificaciones(prev => [notif, ...prev]);
         setNoLeidas(prev => prev + 1);
         setToastNotificaciones(prev => [notif, ...prev]);
-        
-        // 🔊 Sonido de notificación generado (Web Audio API)
+
         try {
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
-          
+
           oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
-          
-          // Configuración del sonido (tono agradable)
-          oscillator.frequency.value = 800; // Frecuencia en Hz
-          oscillator.type = 'sine'; // Tipo de onda suave
-          
-          // Control de volumen (fade out)
+
+          oscillator.frequency.value = 800;
+          oscillator.type = 'sine';
+
           gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-          
-          // Reproducir por 0.5 segundos
+
           oscillator.start(audioContext.currentTime);
           oscillator.stop(audioContext.currentTime + 0.5);
         } catch (e) {

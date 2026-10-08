@@ -33,7 +33,6 @@ async function cargarLogoURL() {
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  // Validar fecha inválida
   if (isNaN(date.getTime())) return 'N/A';
 
   return date.toLocaleDateString('es-PE', {
@@ -435,8 +434,8 @@ export async function generarPDFSalida(datos) {
       const hCliente = calcularAlturaTexto(doc, clienteTexto, 180, 8);
       const hDireccion = calcularAlturaTexto(doc, direccionTexto, 180, 8);
 
-      let leftH = 15; // Fecha
-      leftH += 15; // Tipo
+      let leftH = 15;
+      leftH += 15;
       leftH += Math.max(15, hCliente + 5);
       if (datos.direccion_despacho) leftH += Math.max(15, hDireccion + 5);
       if (rucTexto) leftH += 15;
@@ -446,13 +445,13 @@ export async function generarPDFSalida(datos) {
       const xValueRight = 375;
       const wValueRight = 175;
 
-      let rightH = 15; // Estado
-      rightH += 15; // Orden Venta
-      rightH += 15; // OC Cliente
-      rightH += 15; // Cotizacion
-      
+      let rightH = 15;
+      rightH += 15;
+      rightH += 15;
+      rightH += 15;
+
       if (datos.tipo_entrega) {
-        rightH += 15; // Espacio y Titulo
+        rightH += 15;
         rightH += alturaTransporte;
       }
 
@@ -627,17 +626,12 @@ export async function generarPDFSalida(datos) {
       const detalles = datos.detalles || datos.detalle || [];
 
       const mostrarDetalleExtendido = detalles.some(d => d.cantidad_pendiente !== undefined);
-      // Variante valorizada (uso interno): solo en la vista simple de un despacho.
       const mostrarValores = !!datos.incluir_valores && !mostrarDetalleExtendido;
       const simboloMonedaSalida = datos.moneda === 'USD' ? '$' : 'S/';
-      // Decimales: precio unitario y los importes intermedios (V. VENTA, SUBTOTAL, IGV)
-      // conservan hasta 6 decimales (según el precio de la OV). Solo el TOTAL final
-      // se redondea a 2 decimales. Todo con separador de miles.
       const fmtPrecio = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
       const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
       const fmtTotal  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
 
-      // Columnas de la variante valorizada (dentro del ancho útil 33..562, sin desborde).
       const COLV = {
         codigo:  { x: 40,  w: 52 },
         desc:    { x: 94,  w: 176 },
@@ -743,12 +737,8 @@ export async function generarPDFSalida(datos) {
         yPos += alturaFila;
       });
 
-      // Totales valorizados del despacho (solo variante interna): SUBTOTAL / IGV / TOTAL,
-      // para que el TOTAL sea comparable con la factura (que incluye IGV).
       if (mostrarValores) {
         const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
-        // Subtotal e IGV conservan su precisión completa (hasta 6 dec, según el precio).
-        // El redondeo a 2 decimales se aplica RECIÉN al total final.
         const subT = itemsAMostrar.reduce(
           (acc, it) => acc + parseFloat(it.cantidad || 0) * parseFloat(it.precio_unitario || 0), 0
         );
@@ -770,7 +760,6 @@ export async function generarPDFSalida(datos) {
           doc.text(label, COLV.vunit.x + 5, yPos + 4, { width: COLV.vunit.w - 10 });
           doc.roundedRect(COLV.vventa.x, yPos, COLV.vventa.w, 15, 3).stroke('#CCCCCC');
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000000');
-          // El TOTAL (bold) se muestra redondeado a 2 decimales; subtotal/IGV con su precisión.
           doc.text((bold ? fmtTotal : fmtValor)(val), COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
           yPos += 18;
         });
@@ -1054,7 +1043,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
-      // ===== Encabezado de empresa =====
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 100);
 
@@ -1068,12 +1056,10 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.fontSize(8).font('Helvetica');
       doc.text('Documento de Producción', 385, 72, { align: 'center', width: 155 });
 
-      // ===== Barra de título =====
       doc.rect(33, 150, 529, 22).fill('#1e88e5');
       doc.fillColor('#FFFFFF').fontSize(12).font('Helvetica-Bold');
       doc.text(`ORDEN DE PRODUCCIÓN  -  ${datos.numero_orden || 'N/A'}`, 33, 157, { align: 'center', width: 529 });
 
-      // ===== Helpers de formato locales =====
       const fmt5 = (v) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }).format(parseFloat(v || 0));
       const hora24 = (fecha) => {
         if (!fecha) return '--:--';
@@ -1087,7 +1073,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       };
 
-      // Cantidad a producir: preferimos unidades (UND/MILL); si no hay, usamos kilos.
       const cantProducir = parseFloat(datos.cantidad_unidades) > 0
         ? `${fmt5(datos.cantidad_unidades)} ${datos.unidad_medida || 'UND'}`
         : `${fmt5(datos.cantidad_planificada)} KG`;
@@ -1096,7 +1081,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         ? `${formatearFechaHora(datos.fecha_programada)}${datos.fecha_programada_fin ? '  -  ' + formatearFechaHora(datos.fecha_programada_fin) : ''}`
         : 'N/A';
 
-      // ===== Recuadro de datos generales =====
       const boxTop = 182;
       const boxH = 138;
       doc.roundedRect(33, boxTop, 529, boxH, 3).stroke('#000000');
@@ -1145,7 +1129,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
 
       let yPos = boxTop + boxH + 20;
 
-      // ===== PRODUCTOS CONSUMIDOS =====
       const C = {
         n:    { x: 36,  w: 24 },
         prod: { x: 62,  w: 236 },
@@ -1514,9 +1497,9 @@ export async function generarPDFOrdenVenta(orden) {
       leftH += hRuc;
       leftH += Math.max(15, hDireccion + 5);
 
-      let rightH = 15; // Moneda
-      rightH += 15; // Estado
-      rightH += 15; // Prioridad
+      let rightH = 15;
+      rightH += 15;
+      rightH += 15;
       if (orden.orden_compra_cliente) rightH += 15;
 
       const hRecuadro = Math.max(75, Math.max(leftH, rightH) + 15);
@@ -1748,15 +1731,15 @@ export async function generarPDFGuiaRemision(guia) {
       const alturaTipo = calcularAlturaTexto(doc, tipoTrasladoTexto, 230, 8);
       const alturaMotivo = calcularAlturaTexto(doc, motivoTexto, 135, 8);
 
-      let leftH = 15; // Fecha
+      let leftH = 15;
       leftH += Math.max(15, alturaCliente + 5);
       leftH += Math.max(15, alturaRUC + 5);
       leftH += Math.max(15, alturaTipo + 5);
 
       let rightH = Math.max(15, alturaMotivo + 5);
-      rightH += 15; // Modalidad
-      rightH += 15; // Peso
-      rightH += 15; // Bultos
+      rightH += 15;
+      rightH += 15;
+      rightH += 15;
 
       const alturaRecuadroInfo = Math.max(105, Math.max(leftH, rightH) + 15);
       
@@ -1811,9 +1794,8 @@ export async function generarPDFGuiaRemision(guia) {
       doc.text(guia.numero_bultos || '', 450, rightY);
 
       let yPosTable = 195 + alturaRecuadroInfo + 10;
-      yPosTable = 310; // Manteniendo el yPos original del Punto de Partida si es posible o ajustando
-      
-      // Ajuste: Si el recuadro creció mucho, el yPos del Punto de Partida debe bajar
+      yPosTable = 310;
+
       const yPuntos = Math.max(310, 195 + alturaRecuadroInfo + 10);
       let yPos = yPuntos;
 
@@ -2118,9 +2100,9 @@ export async function generarPDFOrdenCompra(orden) {
       leftH += hRuc;
       leftH += Math.max(15, hDir + 5);
 
-      let rightH = 15; // Condicion
-      rightH += 15; // Fecha Pedido
-      rightH += 15; // Entrega esperada
+      let rightH = 15;
+      rightH += 15;
+      rightH += 15;
 
       const hRecuadro = Math.max(75, Math.max(leftH, rightH) + 15);
       
@@ -2582,23 +2564,17 @@ export async function generarPDFHojaRuta(orden, receta = []) {
   });
 }
 
-// Reporte Kardex de inventario (resumen por producto en un rango de fechas).
-// `datos.filas` es un arreglo con: categoria, codigo, producto, unidad,
-// balance_inicial, entrada, salida, stock_terminado.
-// `datos.filtros` lleva { desde, hasta, tipo_inventario } para el encabezado.
 export async function generarPDFKardex(datos) {
   const logoBuffer = await cargarLogoURL();
   const filas = datos.filas || [];
   const filtros = datos.filtros || {};
 
-  // Formatea cantidades: entero si no tiene decimales, si no hasta 2 decimales.
   const fmtNum = (valor) => {
     const n = parseFloat(valor || 0);
     const redondeado = Math.round(n * 100) / 100;
     const str = Number.isInteger(redondeado)
       ? String(redondeado)
       : redondeado.toFixed(2);
-    // Separador de miles
     const [entero, dec] = str.split('.');
     const enteroFmt = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return dec ? `${enteroFmt}.${dec}` : enteroFmt;
@@ -2618,7 +2594,6 @@ export async function generarPDFKardex(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Geometría de columnas (A4 apaisado: 842 x 595, usable ~782)
       const cols = {
         categoria: { x: 30, w: 82, align: 'left' },
         codigo: { x: 112, w: 78, align: 'left' },
@@ -2629,10 +2604,9 @@ export async function generarPDFKardex(datos) {
         salida: { x: 560, w: 70, align: 'right' },
         stockTerm: { x: 630, w: 115, align: 'right' }
       };
-      const tablaFin = cols.stockTerm.x + cols.stockTerm.w; // 745
-      const LIMITE_Y = 560; // salto de página
+      const tablaFin = cols.stockTerm.x + cols.stockTerm.w;
+      const LIMITE_Y = 560;
 
-      // --- Encabezado de empresa + título ---
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 30, 25, { width: 150, height: 45, fit: [150, 45] });
@@ -2648,7 +2622,6 @@ export async function generarPDFKardex(datos) {
       doc.fontSize(9).font('Helvetica');
       doc.text(`R.U.C. ${EMPRESA.ruc} - INDPACK S.A.C.`, 200, 50, { align: 'right', width: tablaFin - 200 });
 
-      // --- Metadatos del reporte ---
       doc.fontSize(8).fillColor('#000000');
       doc.font('Helvetica-Bold').text('Fecha de impresión:', 30, 78, { continued: true });
       doc.font('Helvetica').text(` ${formatearFechaHora(new Date())}`);
@@ -2662,7 +2635,6 @@ export async function generarPDFKardex(datos) {
 
       let yPos = 110;
 
-      // --- Cabecera de tabla (reutilizable por página) ---
       const dibujarCabecera = (y) => {
         doc.rect(30, y, tablaFin - 30, 22).fill('#333333');
         doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -2679,7 +2651,6 @@ export async function generarPDFKardex(datos) {
 
       yPos = dibujarCabecera(yPos);
 
-      // --- Filas ---
       if (filas.length === 0) {
         doc.fontSize(9).font('Helvetica-Oblique').fillColor('#666666');
         doc.text('No se encontraron productos con movimientos o stock en el rango seleccionado.', 30, yPos + 10, { width: tablaFin - 30, align: 'center' });
@@ -2697,7 +2668,6 @@ export async function generarPDFKardex(datos) {
           yPos = dibujarCabecera(yPos);
         }
 
-        // Zebra
         if (idx % 2 === 0) {
           doc.rect(30, yPos, tablaFin - 30, altoFila).fill('#F5F5F5');
         }
@@ -2716,8 +2686,6 @@ export async function generarPDFKardex(datos) {
         yPos += altoFila;
       });
 
-      // --- Conteo de productos (sin totales numéricos: las unidades de medida
-      // difieren entre productos, así que sumar cantidades no tiene sentido) ---
       if (filas.length > 0) {
         if (yPos + 20 > LIMITE_Y) {
           doc.addPage();
@@ -2730,10 +2698,6 @@ export async function generarPDFKardex(datos) {
         yPos += 18;
       }
 
-      // --- Numeración de páginas ---
-      // El pie va cerca del borde inferior; se anula el margen inferior de la
-      // página mientras se escribe para que PDFKit no cuente el texto como
-      // desbordamiento y agregue páginas en blanco al final.
       const rango = doc.bufferedPageRange();
       for (let i = rango.start; i < rango.start + rango.count; i++) {
         doc.switchToPage(i);
@@ -2756,13 +2720,6 @@ export async function generarPDFKardex(datos) {
   });
 }
 
-// Reporte por producto (producción vs despacho) para entrega a terceros.
-// Regla de consistencia: el DESPACHADO mostrado nunca es menor que el PRODUCIDO
-// (se compensa hacia arriba a nivel del total del rango). `datos` lleva:
-//   producto: { codigo, nombre, unidad, stock_actual }
-//   filtros:  { desde, hasta }
-//   producido (num), despachado_real (num), despachado (num, ya compensado)
-//   ordenes:  [{ fecha, numero_orden, cantidad }]
 export async function generarPDFReporteProducto(datos) {
   const logoBuffer = await cargarLogoURL();
   const producto = datos.producto || {};
@@ -2793,10 +2750,9 @@ export async function generarPDFReporteProducto(datos) {
       doc.on('error', reject);
 
       const izq = 30;
-      const der = 565; // margen derecho
+      const der = 565;
       const anchoUtil = der - izq;
 
-      // --- Encabezado empresa ---
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, izq, 25, { width: 170, height: 50, fit: [170, 50] });
@@ -2813,7 +2769,6 @@ export async function generarPDFReporteProducto(datos) {
       doc.text('Producción y Despacho', 300, 48, { align: 'right', width: der - 300 });
       doc.text(`R.U.C. ${EMPRESA.ruc} - INDPACK S.A.C.`, 300, 61, { align: 'right', width: der - 300 });
 
-      // --- Datos del producto ---
       let y = 95;
       doc.roundedRect(izq, y, anchoUtil, 74, 4).stroke('#000000');
       doc.fontSize(9).fillColor('#000000');
@@ -2835,12 +2790,10 @@ export async function generarPDFReporteProducto(datos) {
       doc.font('Helvetica-Bold').text('Fecha de impresión:', izq + 8, y + 60, { continued: true });
       doc.font('Helvetica').text(` ${formatearFechaHora(new Date())}`);
 
-      // --- Resumen: Existencia anterior / Producido / Despachado / Saldo final ---
       y += 92;
       const existenciaAnterior = parseFloat(datos.existencia_anterior || 0);
       const producido = parseFloat(datos.producido || 0);
       const despachado = parseFloat(datos.despachado || 0);
-      // Saldo final = lo que había antes + lo producido - lo despachado.
       const saldo = existenciaAnterior + producido - despachado;
 
       const cajas = [
@@ -2861,7 +2814,6 @@ export async function generarPDFReporteProducto(datos) {
         doc.text(unidad, cx, y + 40, { align: 'center', width: cajaW });
       });
 
-      // --- Detalle de producción ---
       y += 74;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Detalle de Producción (órdenes finalizadas)', izq, y);
@@ -2908,21 +2860,18 @@ export async function generarPDFReporteProducto(datos) {
         y += 16;
       });
 
-      // Total producido
       doc.rect(izq, y, anchoUtil, 18).fill('#DDDDDD');
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('TOTAL PRODUCIDO', cols.fecha.x + 5, y + 5, { width: cols.orden.w + cols.fecha.w });
       doc.text(`${fmtNum(producido)} ${unidad}`, cols.cant.x, y + 5, { width: cols.cant.w - 5, align: 'right' });
       y += 26;
 
-      // --- Pie de página (nota + numeración) por página, en posición fija dentro
-      // de los márgenes para no desbordar y crear una hoja vacía. ---
       const rango = doc.bufferedPageRange();
       for (let i = rango.start; i < rango.start + rango.count; i++) {
         doc.switchToPage(i);
-        const pageH = doc.page.height;          // A4 ~ 841.9
-        const notaY = pageH - 66;               // ~776
-        const pagY = pageH - 44;                // ~798 (dentro del margen inferior)
+        const pageH = doc.page.height;
+        const notaY = pageH - 66;
+        const pagY = pageH - 44;
 
         doc.fontSize(7).font('Helvetica-Oblique').fillColor('#888888');
         doc.text(

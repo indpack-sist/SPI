@@ -58,17 +58,14 @@ function Cotizaciones() {
     const primeraVez = firmaFiltrosRef.current === null;
     const firmaCambio = !primeraVez && firma !== firmaFiltrosRef.current;
 
-    // Si cambió un filtro estando en otra página, resetear a la 1 y dejar que el
-    // re-render dispare la carga completa (evita pedir la página vieja del filtro nuevo)
     if (firmaCambio && currentPage !== 1) {
       setCurrentPage(1);
       return;
     }
 
-    // Solo se movió la página: no recalcular conteo/resumen
     const soloPagina = !primeraVez && !firmaCambio;
     firmaFiltrosRef.current = firma;
-    cargarDatos(!primeraVez, soloPagina); // silencioso salvo la primera carga
+    cargarDatos(!primeraVez, soloPagina);
     cargarTCDesdeSession();
   }, [filtroEstado, busquedaAplicada, ordenAscendente, currentPage]);
 
@@ -157,7 +154,6 @@ function Cotizaciones() {
       if (response.data.success && requestId === requestIdRef.current) {
         setCotizaciones(response.data.data || []);
         if (soloDatos) {
-          // Solo cambió la página: se conserva el total/resumen ya conocidos
           setPagination(prev => ({ ...prev, page: response.data.pagination?.page ?? prev.page }));
         } else {
           setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });

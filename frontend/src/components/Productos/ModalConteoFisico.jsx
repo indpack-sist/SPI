@@ -79,7 +79,7 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
 
     try {
       const token = localStorage.getItem('token');
-      console.log('🔑 Token presente:', !!token);
+      console.log('Token presente:', !!token);
       
       if (!token) {
         throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
@@ -92,7 +92,7 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
         observaciones: formData.observaciones || null
       });
 
-      console.log('✅ Respuesta del servidor:', response.data);
+      console.log('Respuesta del servidor:', response.data);
 
       if (response.data.success) {
         if (onSuccess) {
@@ -105,8 +105,8 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
       }
 
     } catch (err) {
-      console.error('❌ Error completo:', err);
-      console.error('❌ Error response:', err.response?.data);
+      console.error('Error completo:', err);
+      console.error('Error response:', err.response?.data);
       
       let mensajeError = 'Error al realizar el conteo físico';
       
@@ -146,7 +146,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
       size="lg"
     >
       <form onSubmit={handleSubmit}>
-        {/* Información del Producto */}
         <div className="bg-gray-50 rounded-lg p-4 mb-4">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
@@ -180,9 +179,7 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
           </div>
         )}
 
-        {/* Formulario */}
         <div className="space-y-4">
-          {/* Stock Físico */}
           <div className="form-group">
             <label className="form-label">
               Stock Físico Contado *
@@ -205,7 +202,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
             </small>
           </div>
 
-          {/* Resumen de Diferencia */}
           {diferencia !== null && diferencia !== 0 && (
             <div className={`p-4 rounded-lg border-2 ${
               tipoAjuste === 'Positivo' 
@@ -275,7 +271,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
             </div>
           )}
 
-          {/* Motivo */}
           <div className="form-group">
             <label className="form-label">Motivo del Ajuste *</label>
             <select
@@ -297,7 +292,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
             )}
           </div>
 
-          {/* Observaciones */}
           <div className="form-group">
             <label className="form-label">Observaciones</label>
             <textarea
@@ -313,7 +307,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
           </div>
         </div>
 
-        {/* Advertencia */}
         {diferencia !== null && diferencia !== 0 && (
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-start gap-2">
@@ -330,7 +323,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
           </div>
         )}
 
-        {/* Botones */}
         <div className="flex gap-3 justify-end mt-6">
           <button
             type="button"
@@ -351,7 +343,7 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
           >
             {loading ? (
               <>
-                <span className="animate-spin mr-2">⏳</span>
+                <span className="animate-spin mr-2"></span>
                 Procesando...
               </>
             ) : (

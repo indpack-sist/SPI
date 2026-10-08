@@ -6,9 +6,6 @@
   padding: 0;
 }
 
-/* La pantalla de login mantiene su identidad oscura (es pre-login, sin el
-   toggle de tema). Los tokens se scopean aquí en vez de :root para no
-   filtrarse al resto de la app ni pelear con [data-theme]. */
 .login-container {
   --carbon: #0f0f0f;
   --carbon-mid: #1a1a1a;
@@ -32,7 +29,6 @@
   overflow: hidden;
 }
 
-/* Panel izquierdo — decorativo industrial */
 .login-left-panel {
   position: relative;
   display: flex;
@@ -129,7 +125,6 @@
   margin-top: 3px;
 }
 
-/* Número decorativo grande */
 .login-deco-number {
   position: absolute;
   top: 50%;
@@ -146,7 +141,6 @@
   letter-spacing: -0.05em;
 }
 
-/* Texto inferior del panel */
 .login-left-bottom {
   position: relative;
   z-index: 1;
@@ -177,7 +171,6 @@
   max-width: 360px;
 }
 
-/* Barra de acento inferior */
 .login-accent-bar {
   width: 48px;
   height: 3px;
@@ -185,7 +178,6 @@
   margin-bottom: 1.25rem;
 }
 
-/* Panel derecho — formulario */
 .login-wrapper {
   position: relative;
   z-index: 1;
@@ -209,7 +201,6 @@
   }
 }
 
-/* Etiqueta de sistema */
 .login-sys-label {
   font-family: var(--font-display);
   font-size: 0.65rem;
@@ -230,7 +221,6 @@
   background: var(--carbon-light);
 }
 
-/* Títulos del form */
 .login-card-title {
   font-family: var(--font-display);
   font-weight: 700;
@@ -250,7 +240,6 @@
   margin-bottom: 2.5rem;
 }
 
-/* Formulario */
 .login-form {
   display: flex;
   flex-direction: column;
@@ -335,7 +324,6 @@
   color: var(--mist);
 }
 
-/* Botón submit */
 .login-submit-btn {
   width: 100%;
   padding: 1rem;
@@ -382,7 +370,6 @@
   cursor: not-allowed;
 }
 
-/* Loading state */
 .login-loading {
   display: flex;
   align-items: center;
@@ -403,7 +390,6 @@
   to { transform: rotate(360deg); }
 }
 
-/* Footer */
 .login-footer {
   margin-top: 2.5rem;
   padding-top: 1.5rem;
@@ -417,9 +403,6 @@
   font-weight: 300;
 }
 
-/* =====================================================
-   RESPONSIVE — móvil: una sola columna
-   ===================================================== */
 @media (max-width: 860px) {
   .login-container {
     grid-template-columns: 1fr;

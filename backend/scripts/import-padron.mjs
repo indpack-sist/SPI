@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-// ============================================================
-// CLI: importa el Padrón Reducido RUC de SUNAT a la tabla padron_empresas,
-// filtrado a empresas objetivo (personas jurídicas ACTIVAS de un sector
-// comprador de empaque). Reemplaza el "Descubrir todo" de Google Places.
-//
-// Se corre A MANO (no en el proceso web): el padrón pesa ~1.5 GB sin comprimir,
-// por eso se procesa por streaming. Requiere las mismas env de BD que el server.
-//
-// Uso:
-//   node scripts/import-padron.mjs --file=./padron_reducido_ruc.zip
-//   node scripts/import-padron.mjs --file=./padron_reducido_ruc.txt
-//   node scripts/import-padron.mjs --url=https://.../padron_reducido_ruc.zip
-//   node scripts/import-padron.mjs --file=... --departamentos="LIMA,AREQUIPA"
-//
-// El .zip se descarga de SUNAT (Consultas → "Descarga del Padrón Reducido").
-// ============================================================
 import 'dotenv/config';
 import { importarPadron } from '../services/padron-import.service.js';
 

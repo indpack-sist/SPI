@@ -20,21 +20,16 @@ const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasGuiasRemision);
 
-// Maestro de transportistas (terceros, modalidad pública). Declarado antes de '/:id'
-// para que '/transportistas' no sea capturado por la ruta paramétrica.
 router.get('/transportistas', getTransportistas);
 router.post('/transportistas', createTransportista);
 
-// Catálogo de destinatarios comex (exportación). Antes de '/:id' por el mismo motivo.
 router.get('/destinatarios-comex', getDestinatariosComex);
 router.post('/destinatarios-comex', createDestinatarioComex);
 
-// Datos de la empresa remitente (para prellenar partida/llegada en los wizards). Antes de '/:id'.
 router.get('/empresa-remitente', getEmpresaRemitente);
 
 router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);
-// Guía de remisión de COMPRA (motivo 02): SPI recoge su mercadería. Antes de '/:id'.
 router.post('/compra', createGuiaCompra);
 
 router.get('/:id/pdf', descargarPDFGuiaRemision);

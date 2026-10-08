@@ -95,9 +95,8 @@ function VerificarOrdenes() {
     try {
       setLoading(true);
       setError(null);
-      
-      // Obtenemos órdenes aprobadas o rechazadas recientemente
-      const response = await ordenesVentaAPI.getAll({ 
+
+      const response = await ordenesVentaAPI.getAll({
         limit: 50,
         verificadas: true 
       });
@@ -137,15 +136,14 @@ function VerificarOrdenes() {
 
   const abrirVisor = (url, titulo) => {
     if (!url) return;
-    
-    // Defensa contra arrays u objetos que lleguen a este punto
+
     let cleanUrl = url;
     if (Array.isArray(cleanUrl)) cleanUrl = cleanUrl[0];
     if (typeof cleanUrl !== 'string') {
         try {
             cleanUrl = String(cleanUrl);
         } catch {
-            return; // No se puede procesar
+            return;
         }
     }
     
@@ -182,7 +180,6 @@ function VerificarOrdenes() {
     try {
       setGuardandoVerifOC(true);
       await ordenesVentaAPI.verificarOC(datosVerificacion.orden.id_orden_venta, true);
-      // Refresh datosVerificacion so badge updates
       const res = await ordenesVentaAPI.getDatosVerificacion(datosVerificacion.orden.id_orden_venta);
       if (res.data.success) setDatosVerificacion(res.data.data);
       setModalVerifOCOpen(false);
@@ -640,7 +637,6 @@ function VerificarOrdenes() {
                     <div className="pt-3 border-t border-blue-200 mt-2">
                         <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
 
-                        {/* Badge de verificación OC */}
                         {datosVerificacion.orden.orden_compra_url && (
                           <div className="mb-2">
                             {datosVerificacion.orden.estado_verificacion_oc === 'Verificado' ? (
@@ -664,7 +660,6 @@ function VerificarOrdenes() {
                           </div>
                         )}
 
-                        {/* Preview inline de la Orden de Compra */}
                         {datosVerificacion.orden.orden_compra_url && (() => {
                             let urls = [];
                             try {
@@ -711,7 +706,6 @@ function VerificarOrdenes() {
                             );
                         })()}
 
-                        {/* Botón para abrir ModalVerificacionOC */}
                         {datosVerificacion.orden.orden_compra_url && (
                           <div className="flex mb-3">
                             <button
@@ -726,7 +720,6 @@ function VerificarOrdenes() {
                           </div>
                         )}
 
-                        {/* Preview inline del Comprobante/Voucher */}
                         {datosVerificacion.orden.comprobante_url && (() => {
                             let urls = [];
                             try {
@@ -1318,7 +1311,6 @@ function VerificarOrdenes() {
         </div>
       </Modal>
 
-      {/* Modal verificación OC — solo disponible cuando hay una orden abierta */}
       {datosVerificacion && (
         <ModalVerificacionOC
           isOpen={modalVerifOCOpen}

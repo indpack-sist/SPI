@@ -5,11 +5,9 @@ import './ModalValidacionSunat.css';
 
 const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null, resumen = null, fetchSalidaPDF = null }) => {
     const esFacturacionParcial = Number(totalFacturado) > 0;
-    // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
         ? Number(saldoPendiente)
         : Number(orden?.total || 0);
-    // Formato de moneda para importes/totales: símbolo + separador de miles + 2 decimales.
     const simboloMoneda = orden?.moneda === 'USD' ? '$' : 'S/';
     const fmtMoneda = (v) => `${simboloMoneda} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
     const [parsedData, setParsedData] = useState(null);
@@ -23,18 +21,14 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         importe_total: ''
     });
     const [pdfUrl, setPdfUrl] = useState(null);
-    // Pestañas por factura (modo visor con múltiples facturas por orden).
     const tieneTabs = readOnly && Array.isArray(facturas) && facturas.length > 0;
     const [tabActiva, setTabActiva] = useState(0);
     useEffect(() => { if (isOpen) setTabActiva(0); }, [isOpen]);
 
-    // Sub-pestañas del visor: alternar entre la Factura y la Guía de Salida (con precios).
     const [vistaDoc, setVistaDoc] = useState('factura');
     const [salidaUrl, setSalidaUrl] = useState(null);
     const [loadingSalida, setLoadingSalida] = useState(false);
-    // Al cambiar de factura (pestaña) o abrir/cerrar, se vuelve a la vista de factura.
     useEffect(() => { setVistaDoc('factura'); setSalidaUrl(null); }, [tabActiva, isOpen]);
-    // Libera la object-URL de la salida cuando se reemplaza o al desmontar.
     useEffect(() => () => { if (salidaUrl) URL.revokeObjectURL(salidaUrl); }, [salidaUrl]);
 
     const cargarVerSalida = async (idSal) => {
@@ -66,7 +60,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         if (!isOpen) return;
 
         if (readOnly && (tieneTabs || existingData)) {
-            // Modo Visor. Con pestañas: usamos la factura activa; sin pestañas: datos de la orden.
             const f = tieneTabs ? facturas[Math.min(tabActiva, facturas.length - 1)] : null;
 
             setFormData({
@@ -79,7 +72,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 importe_total: f ? (f.total || '') : (orden.total || '')
             });
 
-            // Resolver URL de PDF (puede ser string o array JSON)
             let url = f ? f.url_pdf : orden.comprobante_sunat_url;
             if (url && typeof url === 'string' && url.startsWith('[')) {
                 try {
@@ -119,23 +111,19 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         if (!parsedData || readOnly) return;
 
         let advertencias = [];
-        
+
         if (!formData.ruc_cliente || !formData.importe_total || !formData.numero_comprobante_sunat) {
             advertencias.push('No se detectaron todos los datos automáticamente. Por favor, complételos o corríjalos manualmente.');
         }
 
-        // Comparar RUC
         if (formData.ruc_cliente && orden?.ruc_cliente && formData.ruc_cliente !== orden.ruc_cliente) {
             advertencias.push(`El RUC (${formData.ruc_cliente}) no coincide con el cliente de la Orden (${orden.ruc_cliente}).`);
         }
 
-        // Comparar Totales (Tolerancia de decimales)
         if (formData.importe_total) {
             const totalPdf = parseFloat(String(formData.importe_total).replace(/,/g, ''));
             if (!isNaN(totalPdf)) {
                 if (esFacturacionParcial || idSalida) {
-                    // Factura parcial o atada a un despacho: validamos contra el monto objetivo
-                    // (saldo pendiente de la orden, o el valor del despacho según corresponda).
                     if (totalPdf > montoObjetivo + 1) {
                         advertencias.push(idSalida
                             ? `El Total (${fmtMoneda(totalPdf)}) excede el valor pendiente de este despacho (${fmtMoneda(montoObjetivo)}).`
@@ -171,8 +159,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             if (response.data.success) {
                 const extraido = response.data.data;
                 setParsedData(extraido);
-                
-                // Autocompletar el formulario con lo extraído
+
                 setFormData({
                     numero_comprobante_sunat: extraido?.comprobante?.serie_correlativo || '',
                     fecha_emision: extraido?.comprobante?.fecha_emision || '',
@@ -208,12 +195,10 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             if (forzar) {
                 formDataSubmit.append('forzar', 'true');
             }
-            // Vincular la factura directamente a un despacho concreto (si aplica).
             if (idSalida) {
                 formDataSubmit.append('id_salida', idSalida);
             }
 
-            // Convertimos la fecha DD/MM/YYYY a YYYY-MM-DD para MySQL si está presente
             if (formData.fecha_emision) {
                 const parts = formData.fecha_emision.split('/');
                 if (parts.length === 3) {
@@ -231,8 +216,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 setAlert({ type: 'error', message: response.data.error || 'Error al vincular la factura' });
             }
         } catch (error) {
-            // El backend rechaza (409) cuando el total excede el saldo pendiente,
-            // o cuando el despacho ya tiene una factura. En ambos casos permitimos forzar.
             if (error?.response?.status === 409 && ['EXCEDE_SALDO', 'EXCEDE_DESPACHO', 'DESPACHO_YA_FACTURADO'].includes(error.response.data?.code)) {
                 const confirmar = window.confirm(
                     `${error.response.data.error}\n\n¿Deseas registrar esta factura de todas formas?`
@@ -259,12 +242,11 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             return;
         }
 
-        // Doble validación: Si hay advertencias (vacíos o discrepancias), pedir confirmación
         let forzar = false;
         if (alert && alert.type === 'warning') {
             const confirmar = window.confirm("Cuidado: Hay datos que no coinciden con la orden original o no pudieron ser leídos.\n\n¿Estás seguro de que deseas forzar la vinculación de este documento de todas formas?");
             if (!confirmar) {
-                return; // Se cancela la vinculación
+                return;
             }
             forzar = true;
         }
@@ -339,7 +321,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 )}
 
                 <div className="modal-sunat-body">
-                    {/* Panel Izquierdo: Formulario de Datos Extraídos */}
                     <div className="sunat-panel-izquierdo">
                         <h3>{readOnly ? 'Datos Registrados' : 'Datos Extraídos'}</h3>
                         {alert && <Alert type={alert.type} message={alert.message} onClose={() => setAlert(null)} />}
@@ -432,7 +413,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                         </form>
                     </div>
 
-                    {/* Panel Derecho: Visor de PDF (con sub-pestañas Factura / Guía de salida) */}
                     <div className="sunat-panel-derecho">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
                             <h3 style={{ margin: 0 }}>Vista del Documento</h3>

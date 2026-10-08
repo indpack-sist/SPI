@@ -7,7 +7,6 @@ export default function WidgetDescargaMasiva() {
   const { estado, cancelar, cerrar } = useDescargaMasiva();
   const { activa, terminada, total, hechos, actual, ok, fallidos, omitidos, cancelada } = estado;
 
-  // Aviso nativo si intenta cerrar/recargar con una descarga en curso.
   useEffect(() => {
     if (!activa) return undefined;
     const handler = (e) => { e.preventDefault(); e.returnValue = ''; };

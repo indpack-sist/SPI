@@ -1,7 +1,3 @@
-// components/Ventas/sunat/PanelGuiaRemisionSee.jsx — Fase 14 (paso 4).
-// Card independiente de GRE Remitente (09) electrónica para el detalle de una guía de remisión.
-// Espeja PanelFacturacionSee pero opera sobre UNA sola guía. Coexiste con el flujo manual (no lo
-// reemplaza). Gatear su render con tienePermiso('facturacion') desde el contenedor.
 import { useState, useEffect } from 'react';
 import { Zap, FileText, FileCode, FileCheck, RefreshCw, Ban, ChevronLeft, ChevronRight, Check, Truck, MapPin, Package, ExternalLink } from 'lucide-react';
 import Modal from '../../UI/Modal';
@@ -11,15 +7,12 @@ import UbigeoSelector from '../../common/UbigeoSelector';
 import { resolverUbigeoDesdeDireccion } from '../../../utils/ubigeo';
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../../config/api';
 
-// ── Validadores de formato (espejo del backend util.service.js) para bloquear "Emitir" ───────────
-// Placa peruana: alfanumérica, sin guion/espacios; se acepta "B2Q671" y "B2Q-671" (ambas → B2Q671).
 const normPlaca = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const placaOk = (p) => /^[A-Z0-9]{6,8}$/.test(normPlaca(p));
 const dniOk = (d) => /^\d{8}$/.test(String(d || '').trim());
 const ubigeoOk = (u) => /^\d{6}$/.test(String(u || '').trim());
 const codigoBienOk = (v) => !v || /^\d{13}$/.test(String(v).trim());
 
-// Motivo de traslado (catálogo 20) según sea comercio exterior o no.
 const MOTIVOS_DOMESTICO = [
   { cod: '01', label: 'Venta' },
   { cod: '02', label: 'Compra' },
@@ -33,33 +26,23 @@ const MOTIVOS_COMEX = [
 ];
 const labelMotivo = (cod) => [...MOTIVOS_DOMESTICO, ...MOTIVOS_COMEX].find((m) => m.cod === cod)?.label || cod;
 
-// Epoch (ms) → fecha/hora en zona Lima. El backend devuelve created_ms vía UNIX_TIMESTAMP para
-// no arrastrar el desfase +5h de la sesión UTC de la BD (mismo patrón que el Monitor SUNAT).
 const fmtFechaLima = (ms) => ms == null ? '' : new Date(Number(ms)).toLocaleString('es-PE', {
   timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-// `soloLectura`: perfiles de venta (Comercial/Ventas) ven y descargan PDF/XML/CDR de la GRE
-// ya emitida. No emiten ni registran bajas.
 export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = false }) {
   const [alerta, setAlerta] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [modalEmitir, setModalEmitir] = useState(false);
-  // Wizard de emisión estilo SUNAT: paso actual + formulario editable (prellenado desde la guía/OV).
   const [wizStep, setWizStep] = useState(0);
   const [emitForm, setEmitForm] = useState(null);
-  // Catálogos de flota para el modo "vehículo propio de la empresa".
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
-  // empresa_config es la fuente autoritativa del punto de partida en ventas y del punto de llegada
-  // en compras.
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
-  // Despacho (Poner En Tránsito) desde el propio panel, sin salir del detalle de la OV.
   const [modalDespachar, setModalDespachar] = useState(false);
   const [fechaDespacho, setFechaDespacho] = useState('');
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
-  // Alta manual de factura relacionada (factura → guía) en el wizard de venta.
   const [facturaManual, setFacturaManual] = useState({ serie: '', numero: '' });
   const hoyIsoLima = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -69,24 +52,19 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     confirmacionSol: false, evidenciaUrl: '', origen: 'SOL_PREVIA'
   });
 
-  const estado = guia?.sunat_estado || null;               // null = sin emitir (estado SUNAT)
-  const estadoNegocio = guia?.estado || null;              // Emitida/En Tránsito/Entregada/Anulada
-  // La guía puede despacharse (pasar a En Tránsito) solo si está Emitida y no fue anulada.
+  const estado = guia?.sunat_estado || null;
+  const estadoNegocio = guia?.estado || null;
   const puedeDespachar = !soloLectura && estadoNegocio === 'Emitida';
   const tieneComprobante = !!(guia?.serie_sunat && guia?.numero_sunat);
   const comprobante = tieneComprobante ? `${guia.serie_sunat}-${guia.numero_sunat}` : null;
 
-  // Datos derivados para la vista previa de la GRE (lo que se enviará a SUNAT).
   const lineas = guia?.detalle || [];
   const hoy = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtPeso = (v) => `${Number(v || 0).toFixed(2)} kg`;
   const fmtCant = (v) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parseFloat(v || 0));
 
-  // Máquina de estados (sunat_estado de guias_remision).
-  // Regla de negocio: la GRE se emite una vez que la ORDEN ya está "Despachada".
   const guiaVigente = !!estadoNegocio && estadoNegocio !== 'Anulada';
   const sinEmitirSunat = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
-  // Guía de COMPRA (motivo 02): SPI recoge su mercadería; NO depende de una OV despachada.
   const esCompra = guia?.tipo_origen === 'Compra';
   const ordenDespachada = esCompra || guia?.estado_orden === 'Despachada';
   const puedeEmitir = guiaVigente && sinEmitirSunat && ordenDespachada;
@@ -95,8 +73,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const bajaLocalSinConfirmar = estado === 'ANULADA' && Number(guia?.baja_sunat_confirmada) !== 1;
   const cerradaOk = ['ACEPTADO', 'ANULADA', 'REEMPLAZADA'].includes(estado);
 
-  // En venta el punto de partida vigente siempre procede de empresa_config. Las guías de compra
-  // conservan como partida el domicilio del proveedor porque SPI recoge allí la mercadería.
   const partidaDireccion = esCompra
     ? (guia?.direccion_partida || guia?.punto_partida || '')
     : (empresaRemitente?.direccion_completa || empresaRemitente?.direccion || guia?.direccion_partida || guia?.punto_partida || '');
@@ -111,7 +87,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     ? (empresaRemitente?.ubigeo || '')
     : (guia?.ubigeo_llegada || '');
 
-  // Prerrequisitos autoritativos: empresa_config aporta partida en ventas y llegada en compras.
   const faltantes = [];
   if (puedeEmitir && (!partidaDireccion || !/^\d{6}$/.test(String(partidaUbigeo || '')))) {
     faltantes.push(esCompra ? 'dirección/ubigeo de partida del proveedor' : 'dirección/ubigeo de partida en la configuración de la empresa');
@@ -133,13 +108,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     } finally { setProcesando(false); }
   };
 
-  // Modo de transporte inicial derivado de la guía: tercero (empresa de transporte), particular
-  // (carro común del cliente, texto libre) o flota (vehículo propio de la empresa).
   const modoInicial = guia?.id_transportista
     ? 'tercero'
     : (guia?.transporte_modo === 'particular' || guia?.transporte_placa) ? 'particular' : 'flota';
 
-  // Catálogos de flota (solo se necesitan para el modo "vehículo propio"). Se cargan una vez.
   useEffect(() => {
     if (soloLectura) return;
     (async () => {
@@ -147,19 +119,17 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         const [rc, rv] = await Promise.all([ordenesVentaAPI.getConductores(), ordenesVentaAPI.getVehiculos()]);
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
-      } catch { /* no crítico: el modo flota simplemente no listará opciones */ }
+      } catch { }
       try {
         const re = await guiasRemisionAPI.getEmpresaRemitente();
         if (re.data?.data) setEmpresaRemitente(re.data.data);
-      } catch { /* no crítico: solo respalda el punto de partida */ }
+      } catch { }
     })();
   }, [soloLectura]);
 
-  // Abre el wizard de emisión, prellenando TODOS los campos editables desde la guía/OV.
   const abrirEmitir = () => {
     const comex = !!guia?.es_comercio_exterior;
     const direccionLlegada = llegadaDireccion;
-    // En comercio exterior manda el ubigeo fijo elegido con el puerto; no se recalcula desde texto.
     const ubicacion = comex ? null : resolverUbigeoDesdeDireccion(direccionLlegada);
     const ubigeoGuardado = llegadaUbigeo;
     setUbigeoDetectado(!ubigeoGuardado ? ubicacion : null);
@@ -184,13 +154,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       indTransbordo: !!guia?.ov_ind_transbordo,
       indM1l: !!guia?.ov_ind_m1l,
       indRetornoVacio: !!guia?.ov_ind_retorno_vacio,
-            // Código de Bien opcional por línea (lo indica el cliente): si se completa, reemplaza al
-      // código interno del producto en esa línea al declararla a SUNAT. Editable antes de emitir.
       codigosBien: Object.fromEntries(
         (guia?.detalle || []).map((it) => [it.id_detalle, it.codigo_bien || ''])
       ),
-      // Facturas relacionadas (venta): si ya hay guardadas se usan; si no, se pre-marcan las
-      // facturas SEE aceptadas de la OV (auto-carga). El usuario puede quitar o agregar más.
       facturasRel: (guia?.facturas_relacionadas?.length
         ? guia.facturas_relacionadas.map((x) => ({ serie: x.serie, numero: String(x.numero), id_factura: x.id_factura || null, incluida: true }))
         : (guia?.facturas_sugeridas || []).map((x) => ({ serie: x.serie, numero: String(x.numero), id_factura: x.id_factura, incluida: true }))),
@@ -202,7 +168,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   };
 
   const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
-  // Facturas relacionadas (venta): incluir/excluir, quitar y agregar manual.
   const toggleFacturaRel = (i, incluida) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).map((x, j) => j === i ? { ...x, incluida } : x) }));
   const quitarFacturaRel = (i) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).filter((_, j) => j !== i) }));
   const agregarFacturaRel = () => {
@@ -244,12 +209,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     setUbigeoDetectado(ubicacion);
   };
 
-  // Al cambiar comercio exterior se reajusta el motivo al primero válido de su lista.
   const toggleComex = (comex) => {
     setEmitForm((f) => ({
       ...f,
       es_comercio_exterior: comex,
-      // En compra el motivo siempre es 02 (no cae a "01 Venta" si se togglea comercio exterior).
       motivo_traslado_cod: comex ? MOTIVOS_COMEX[0].cod : (esCompra ? '02' : MOTIVOS_DOMESTICO[0].cod),
     }));
   };
@@ -262,7 +225,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
         : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null,
             id_conductor2: f.id_conductor2 || null, id_vehiculo2: f.id_vehiculo2 || null };
-        const payload = {
+    const payload = {
       observaciones: f.observaciones,
       direccion_llegada: f.direccion_llegada,
       ubigeo_llegada: f.ubigeo_llegada,
@@ -271,14 +234,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       motivo_traslado_cod: f.motivo_traslado_cod,
       es_comercio_exterior: f.es_comercio_exterior,
       transporte,
-            // Código de Bien del cliente (13 dígitos), opcional por línea: si se envía, reemplaza el
-      // código interno en esa línea del XML. Se filtran las vacías para no pisar con ''.
       codigos_bien: Object.entries(f.codigosBien || {})
         .filter(([, v]) => v)
         .map(([id_detalle, codigo_bien]) => ({ id_detalle: Number(id_detalle), codigo_bien })),
     };
-    // Facturas relacionadas (venta doméstica): lista autoritativa. En compra/comex no se envía
-    // (la referencia documental la maneja su propia rama en el backend).
     if (!esCompra && !f.es_comercio_exterior) {
       payload.docs_relacionados_venta = (f.facturasRel || [])
         .filter((x) => x.incluida && x.serie && x.numero)
@@ -314,7 +273,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
   const handleVerificar = () => tras(() => sunatAPI.estadoGuia(guia.id_guia), 'Estado consultado en SUNAT.');
   const handlePdf = async () => { try { await sunatAPI.verPdfGuia(guia.id_guia); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
-  // Historial: PDF de un intento archivado (rechazado con su marca/motivo) + descarga directa de sus XML/CDR.
   const handlePdfEmision = async (idEmision) => { try { await sunatAPI.verPdfGuiaEmision(guia.id_guia, idEmision); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
   const handleDescargarUrl = async (url) => { try { await sunatAPI.descargarArchivoUrl(url); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
   const archivoUrl = (v) => {
@@ -354,14 +312,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     if (r) setModalSinEfecto(false);
   };
 
-  // ── Estado derivado del wizard de emisión (recomputado en cada render; emitForm es null si cerrado) ──
   const f = emitForm;
   const condFlota = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor));
   const vehFlota = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo));
   const condFlota2 = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor2));
   const vehFlota2 = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo2));
   const MOTIVOS_ACTUALES = f?.es_comercio_exterior ? MOTIVOS_COMEX : MOTIVOS_DOMESTICO;
-  // Resumen de transporte para la vista previa (según el modo elegido).
   const resTransporte = !f ? null : (
     f.transporteModo === 'tercero'
       ? { modalidad: f.registrar ? 'Público (01) — registra veh/cond (Caso 2/3)' : 'Público (01) — solo transportista (Caso 1)',
@@ -384,9 +340,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         : { modalidad: 'Privado (02) — vehículo propio', conductor: condFlota?.nombre_completo, dni: condFlota?.dni, licencia: condFlota?.licencia_conducir, placa: vehFlota?.placa,
             conductor2: condFlota2?.nombre_completo, dni2: condFlota2?.dni, licencia2: condFlota2?.licencia_conducir, placa2: vehFlota2?.placa }
   );
-  
-  // Validez por paso (bloquea "Siguiente"/"Emitir" hasta que el formato sea correcto → sin rechazos SUNAT).
-    const codigosBienOk = !f ? true : Object.values(f.codigosBien || {}).every(codigoBienOk);
+
+  const codigosBienOk = !f ? true : Object.values(f.codigosBien || {}).every(codigoBienOk);
   const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod && codigosBienOk;
   const vLlegada = !!f && !!String(f.direccion_llegada).trim() && ubigeoOk(f.ubigeo_llegada);
   const vTransporte = !f ? false : (
@@ -395,7 +350,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       : f.transporteModo === 'particular'
         ? placaOk(f.placa) && dniOk(f.dni) && !!String(f.conductor).trim() && !!String(f.licencia).trim()
         : !!(f.id_conductor && f.id_vehiculo && condFlota?.licencia_conducir
-             // Si se eligió un 2º conductor, debe tener licencia registrada (SUNAT la exige).
              && (!f.id_conductor2 || !!condFlota2?.licencia_conducir))
   );
   const vPaso1 = vLlegada && vTransporte;
@@ -403,7 +357,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const pasoActualValido = wizStep === 0 ? vGeneral : wizStep === 1 ? vPaso1 : puedeEmitirWizard;
   const PASOS = ['Datos generales', 'Transporte y llegada', 'Vista previa'];
 
-  // En solo lectura la tarjeta aparece únicamente cuando la GRE ya está emitida y con PDF disponible.
   if (soloLectura && !(tieneComprobante && cerradaOk)) return null;
 
   return (
@@ -461,7 +414,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         </div>
       </div>
 
-      {/* Descripción de la última respuesta de SUNAT (rechazo/observación/mock). */}
       {guia?.sunat_response_desc && (estado === 'RECHAZADO' || estado === 'ERROR') && (
         <p className="text-xs text-danger">SUNAT: {guia.sunat_response_desc}</p>
       )}
@@ -469,11 +421,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         <p className="text-xs text-muted">Esta guía fue reemplazada por una GRE corregida.</p>
       )}
 
-      {/* Aviso de prerrequisitos faltantes antes de emitir. */}
       {puedeEmitir && faltantes.length > 0 && (
         <p className="text-xs text-warning">Antes de emitir, completa: {faltantes.join(', ')}.</p>
       )}
-      {/* La emisión requiere que la orden ya esté despachada. */}
       {guiaVigente && sinEmitirSunat && !ordenDespachada && (
         <p className="text-xs text-warning">
           Para emitir la GRE, la orden de venta debe estar en estado "Despachada"{guia?.estado_orden ? ` (actualmente: ${guia.estado_orden})` : ''}.
@@ -483,8 +433,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         <p className="text-xs text-muted">Aún no se ha emitido la GRE electrónica de esta guía.</p>
       )}
 
-      {/* Historial de emisiones SUNAT: cada intento (incluidos los rechazados que se sobrescribieron
-          al reemitir) con su estado, motivo y documentos. Espeja el historial de facturas. */}
       {(guia?.emisiones || []).length > 0 && (
         <div className="border border-gray-200 rounded p-2 space-y-2">
           <div className="text-[10px] text-muted uppercase">Historial de emisiones SUNAT</div>
@@ -499,8 +447,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 {ok && <span className="badge badge-success text-xs">Aceptada</span>}
                 {em.created_ms && <span className="text-[11px] text-muted">{fmtFechaLima(em.created_ms)}</span>}
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
-                  {/* El PDF solo aplica si el intento guardó snapshot. Un registro reconstruido para
-                      trazabilidad (p.ej. una emisión rechazada anterior a esta función) no lo tiene. */}
                   {em.tiene_snapshot ? (
                     <button className="btn btn-xs btn-outline" onClick={() => handlePdfEmision(em.id_emision)} disabled={procesando}
                       title={rechazo ? 'Ver PDF (rechazado, con marca de agua y motivo)' : 'Ver PDF de este intento'}>
@@ -532,11 +478,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         </div>
       )}
 
-      {/* Wizard de emisión estilo SUNAT: 3 pasos + Retroceder/Cancelar/Emitir */}
       <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Emitir Guía de Remisión Electrónica (GRE 09)" size="xl">
         {f && (
         <div className="space-y-3 text-sm">
-          {/* Barra de pasos */}
           <div className="flex items-center gap-1 text-xs">
             {PASOS.map((p, i) => (
               <div key={p} className="flex items-center gap-1">
@@ -549,7 +493,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             ))}
           </div>
 
-          {/* ── PASO 1: Datos generales ── */}
           {wizStep === 0 && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -568,8 +511,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               </div>
 
-              {/* Contraparte: cliente (venta) o proveedor (compra). En compra el destinatario del XML
-                  es la propia empresa; aquí se muestra el proveedor como referencia de la operación. */}
               <div className="border border-gray-200 rounded p-3">
                 <div className="text-[10px] text-muted uppercase mb-1">{esCompra ? 'Proveedor' : 'Destinatario (de la orden)'}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
@@ -578,8 +519,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               </div>
 
-              {/* Detalle de bienes (de la OV, solo lectura) */}
-                            <div className="border border-gray-200 rounded overflow-x-auto">
+              <div className="border border-gray-200 rounded overflow-x-auto">
                 <div className="text-[10px] text-muted uppercase px-2 pt-2 flex items-center gap-1"><Package size={12} /> Bienes por transportar (de la orden)</div>
                 <table className="w-full text-xs">
                   <thead className="bg-gray-100 text-muted">
@@ -623,7 +563,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </table>
               </div>
 
-              {/* Carga */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Unidad de peso bruto</label>
@@ -638,7 +577,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             </div>
           )}
 
-          {/* ── PASO 2: Transporte y punto de llegada ── */}
           {wizStep === 1 && (
             <div className="space-y-3">
               <div>
@@ -658,7 +596,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               </div>
 
-              {/* Campos por modalidad */}
               {f.transporteModo === 'flota' && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -677,7 +614,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       </select>
                     </div>
                   </div>
-                  {/* Datos que se declaran a SUNAT, autocompletados del maestro al elegir conductor/vehículo. */}
                   {(condFlota || vehFlota) && (
                     <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-800 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
                       <div>DNI: <span className="font-mono font-semibold">{condFlota?.dni || '—'}</span></div>
@@ -689,7 +625,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     </div>
                   )}
 
-                  {/* Segundo conductor / vehículo (opcional). SUNAT admite hasta 2 de cada uno. */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor secundario (opcional)</label>
@@ -755,7 +690,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       <p className="text-muted mt-1">Empresa, vehículos y conductores se toman de la orden ("Transporte y Logística"). Aquí ajustas el registro y los indicadores para esta emisión.</p>
                     </div>
 
-                    {/* Interruptor registrar veh/cond (Caso 1 ↔ 2/3) */}
                     <label className="flex items-start gap-2 cursor-pointer border border-gray-200 rounded p-2">
                       <input type="checkbox" className="mt-1" checked={f.registrar} onChange={(e) => setF('registrar', e.target.checked)} />
                       <span className="text-xs">
@@ -783,7 +717,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       </div>
                     )}
 
-                    {/* Indicadores (opcional) */}
                     <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
                       <div className="text-[10px] text-muted uppercase">Indicadores (opcional)</div>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={f.indTransbordo} onChange={(e) => setF('indTransbordo', e.target.checked)} /> Transbordo programado</label>
@@ -796,7 +729,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 )
               )}
 
-              {/* Punto de partida (fijo) / llegada (editable) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="border border-gray-200 rounded p-3">
                   <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><MapPin size={12} /> Punto de partida (fijo)</div>
@@ -849,7 +781,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             </div>
           )}
 
-          {/* ── PASO 3: Vista previa ── */}
           {wizStep === 2 && (
             <div className="space-y-3">
               <p className="text-muted text-xs">Esto es lo que se declarará a SUNAT (DespatchAdvice UBL 2.1). Revísalo antes de emitir.</p>
@@ -1022,7 +953,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             </div>
           )}
 
-          {/* Footer de navegación */}
           <div className="flex justify-between items-center gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
             <div className="flex gap-2">
@@ -1046,7 +976,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         )}
       </Modal>
 
-      {/* Modal: despachar la guía (Poner En Tránsito) desde el propio panel */}
       <Modal isOpen={modalDespachar} onClose={() => !procesando && setModalDespachar(false)} title="Despachar Guía de Remisión" size="md">
         <div className="space-y-4 text-sm">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -1059,7 +988,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <li>✓ Se descontará el stock de cada producto</li>
                   <li>✓ La guía cambiará a estado "En Tránsito"</li>
                   <li>✓ La orden de venta se marcará como "Despachada"</li>
-                  <li>⚠️ Esta acción no se puede deshacer</li>
+                  <li>⚠ Esta acción no se puede deshacer</li>
                 </ul>
               </div>
             </div>
@@ -1111,7 +1040,6 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         </div>
       </Modal>
 
-      {/* Modal: baja oficial en SOL + sincronización local */}
       <Modal isOpen={modalSinEfecto} onClose={() => !procesando && setModalSinEfecto(false)} title="Dar de baja la GRE en SUNAT" size="md">
         <div className="space-y-3 text-sm">
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">

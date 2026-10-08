@@ -1,34 +1,8 @@
-// services/compras/recepcion.service.js — Ingreso de mercadería a inventario por COMPRA.
-//
-// Reutiliza el motor de `entradas`/`detalle_entradas` (mismo que createCompra) para subir
-// stock_actual y recalcular el costo unitario promedio móvil (PEN/USD). Se invoca DENTRO de una
-// transacción ya abierta (recibe el `conn`), de modo que la guía de compra y su ingreso de stock
-// sean atómicos. La GRE de compra (SUNAT) es un paso posterior e independiente.
-//
-// Un ítem SOLO ingresa a inventario si tiene id_producto de catálogo; los productos de una compra
-// siempre lo tienen (se auto-crean al conciliar el XML). El costo unitario sale del precio de la
-// COMPRA (detalle_orden_compra), no de la guía (la guía solo transporta cantidades).
-
-/**
- * @param {import('mysql2/promise').PoolConnection} conn  conexión con transacción abierta
- * @param {object} p
- * @param {number} p.idOrdenCompra
- * @param {number} p.idProveedor
- * @param {string} p.docSoporte        Nº de factura ("F001-123") o número de orden
- * @param {'PEN'|'USD'} p.moneda
- * @param {number} p.tipoCambio
- * @param {number} p.porcentajeIgv
- * @param {number} p.idRegistradoPor
- * @param {string} [p.observaciones]
- * @param {Array}  p.items  [{ id_producto, id_tipo_inventario, cantidad, precio_unitario, descuento_porcentaje }]
- * @returns {Promise<number[]>} ids de las entradas creadas (una por tipo_inventario presente)
- */
 export async function ingresarStockCompra(conn, p) {
   const { idOrdenCompra, idProveedor, docSoporte, moneda, tipoCambio, porcentajeIgv, idRegistradoPor } = p;
   const tc = parseFloat(tipoCambio || 1) || 1;
   const pIgv = parseFloat(porcentajeIgv || 0) || 0;
 
-  // Agrupar por tipo de inventario: `entradas` tiene un solo id_tipo_inventario por cabecera.
   const grupos = new Map();
   for (const it of p.items) {
     if (!it.id_producto || !(parseFloat(it.cantidad) > 0)) continue;
@@ -80,7 +54,6 @@ export async function ingresarStockCompra(conn, p) {
         [idEntrada, it.id_producto, cantidad, neto, costoPEN, costoUSD]
       );
 
-      // Costo promedio móvil ponderado (mismo cálculo que createCompra).
       const [[prod]] = await conn.query(
         'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
         [it.id_producto]

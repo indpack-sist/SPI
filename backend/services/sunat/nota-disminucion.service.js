@@ -1,6 +1,3 @@
-// Reglas de negocio para NC 07, motivo 09 (Disminución en el valor).
-// Este módulo no accede a BD: recibe las líneas originales y devuelve las líneas exactas
-// que deben viajar tanto al preliminar como al XML firmado.
 import { round2, afectacionLinea } from './ubl.service.js';
 
 function errorValidacion(mensaje) {
@@ -34,12 +31,6 @@ export function prepararCatalogoDisminucion({ ov, detalle, consumos = {} }) {
   });
 }
 
-/**
- * Convierte la captura del usuario en líneas UBL de disminución.
- * - Por ítem: el valor ingresado es la disminución UNITARIA sin IGV.
- * - Global: el valor ingresado es el valor de venta TOTAL a disminuir, sin IGV. Se reparte
- *   proporcionalmente por afectación tributaria y se emite una línea de servicio por grupo.
- */
 export function prepararDetalleDisminucion({ ov, detalle, consumos = {}, modo, items, montoGlobal }) {
   const catalogo = prepararCatalogoDisminucion({ ov, detalle, consumos });
   const porId = new Map(catalogo.map((it) => [it.id_detalle_ref, it]));

@@ -24,7 +24,6 @@ function Empleados() {
   const [datosRENIEC, setDatosRENIEC] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Reemplazo de empleado (persona nueva reutilizando el correo del saliente)
   const [reemplazoOpen, setReemplazoOpen] = useState(false);
   const [saliente, setSaliente] = useState(null);
   const [reemplazoSaving, setReemplazoSaving] = useState(false);
@@ -39,7 +38,6 @@ function Empleados() {
     transferir_cartera: false
   });
 
-  // Cartera de clientes asignados (roles Comercial / Ventas)
   const ROLES_CARTERA = ['Comercial', 'Ventas'];
   const [carteraModalOpen, setCarteraModalOpen] = useState(false);
   const [carteraEmpleado, setCarteraEmpleado] = useState(null);
@@ -377,7 +375,6 @@ function Empleados() {
     try {
       await empleadosAPI.updateClientesAsignados(carteraEmpleado.id_empleado, {
         restringir_clientes: carteraRestringir,
-        // Se conserva la cartera aunque el interruptor este apagado (solo desactiva el enforcement).
         ids: carteraIds
       });
       setSuccess(`Cartera de ${carteraEmpleado.nombre_completo} actualizada exitosamente`);
@@ -390,8 +387,6 @@ function Empleados() {
     }
   };
 
-  // Lista del modal de cartera: los clientes ya asignados siempre aparecen primero
-  // (respetando la busqueda de texto, ignorando el filtro de atencion) para poder quitarlos.
   const carteraListaMostrada = (() => {
     const search = carteraSearch.trim();
     const searchLower = search.toLowerCase();
@@ -414,7 +409,6 @@ function Empleados() {
   const { currentItems, setCurrentPage, ...paginacion } = usePagination(empleadosFiltrados, { storageKey: 'empleados_pagina' });
 
   const getRolBadgeClass = (rol) => {
-    // CAMBIO: Se cambió 'Gerencia' por 'Calidad'
     if (rol === 'Administrador') return 'badge-danger';
     if (rol === 'Calidad') return 'badge-danger';
     if (rol === 'Supervisor' || rol === 'Produccion') return 'badge-primary';
@@ -578,9 +572,7 @@ function Empleados() {
       >
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4">
-            {/* Columna Izquierda */}
             <div>
-              {/* DNI con validación */}
               <div className="form-group">
                 <label className="form-label">DNI</label>
                 <div className="flex gap-2">
@@ -589,7 +581,6 @@ function Empleados() {
                     className="form-input"
                     value={formData.dni}
                     onChange={(e) => {
-                      // Al cambiar el DNI se re-exige validar (o re-confirmar sin validar).
                       setFormData({ ...formData, dni: e.target.value, validar_dni: true });
                       setDniValidado(null);
                       setDatosRENIEC(null);
@@ -649,7 +640,6 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* Nombre Completo */}
               <div className="form-group">
                 <label className="form-label">Nombre Completo *</label>
                 <input
@@ -667,7 +657,6 @@ function Empleados() {
                 )}
               </div>
 
-              {/* Cargo */}
               <div className="form-group">
                 <label className="form-label">Cargo</label>
                 <input
@@ -682,7 +671,6 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* ✅ ROL ACTUALIZADO CON CALIDAD */}
               <div className="form-group">
                 <label className="form-label">Rol *</label>
                 <select
@@ -727,14 +715,12 @@ function Empleados() {
               </div>
             </div>
 
-            {/* Columna Derecha - ACCESO AL SISTEMA */}
             <div>
               <div className="alert alert-info mb-3">
                 <strong>Datos de Acceso al Sistema</strong>
                 <p className="text-sm mt-1">Estos datos se usarán para iniciar sesión</p>
               </div>
 
-              {/* Email con validación */}
               <div className="form-group">
                 <label className="form-label">Email *</label>
                 <div className="flex gap-2">
@@ -802,10 +788,9 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* Contraseña */}
               <div className="form-group">
                 <label className="form-label">
-                  Contraseña {!editando && '*'} 
+                  Contraseña {!editando && '*'}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -841,7 +826,6 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* Estado */}
               <div className="form-group">
                 <label className="form-label">Estado *</label>
                 <select
@@ -857,7 +841,6 @@ function Empleados() {
             </div>
           </div>
 
-          {/* Datos de RENIEC si están disponibles */}
           {datosRENIEC && (
             <div className="alert alert-info mt-3">
               <strong>Datos de RENIEC:</strong>
@@ -1005,7 +988,6 @@ function Empleados() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Columna Izquierda — datos de la persona nueva */}
             <div>
               <div className="form-group">
                 <label className="form-label">DNI</label>
@@ -1080,7 +1062,6 @@ function Empleados() {
               </div>
             </div>
 
-            {/* Columna Derecha — acceso */}
             <div>
               <div className="alert alert-info mb-3">
                 <strong>Datos de Acceso al Sistema</strong>

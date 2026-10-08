@@ -201,13 +201,10 @@ function OrdenesVenta() {
       const emitidas = (data.facturas || []).filter(f => f.estado === 'Emitida');
       setModalSunat({ isOpen: true, orden: row, facturas: emitidas, resumen: data.resumen || null });
     } catch (e) {
-      // Fallback: abre el visor simple con lo que tenga la orden.
       setModalSunat({ isOpen: true, orden: row, facturas: null, resumen: null });
     }
   };
 
-  // Devuelve una object-URL del PDF valorizado (con precios) de una salida/despacho,
-  // para mostrarlo dentro del mismo modal (sub-pestaña "Guía de salida").
   const fetchSalidaValorizada = async (idSalida) => {
     if (!idSalida || !modalSunat.orden) return null;
     const res = await ordenesVentaAPI.descargarPDFDespacho(modalSunat.orden.id_orden_venta, idSalida, true);
@@ -276,7 +273,6 @@ function OrdenesVenta() {
 
   useEffect(() => {
     const firma = JSON.stringify([filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin, busquedaAplicada]);
-    // Si los filtros no cambiaron, solo se movió la página: no recalcular conteo/resumen
     const soloPagina = firmaFiltrosRef.current !== null && firma === firmaFiltrosRef.current;
     firmaFiltrosRef.current = firma;
     cargarDatos(ordenes.length === 0, soloPagina);
@@ -363,7 +359,6 @@ function OrdenesVenta() {
       if (response.data.success && requestId === requestIdRef.current) {
         setOrdenes(response.data.data || []);
         if (soloDatos) {
-          // Solo cambió la página: se conserva el total/resumen ya conocidos
           setPagination(prev => ({ ...prev, page: response.data.pagination?.page ?? prev.page }));
         } else {
           setPagination(response.data.pagination || { total: response.data.data?.length || 0, totalPages: 1 });
@@ -390,32 +385,26 @@ function OrdenesVenta() {
     setFechaFin(e.target.value);
   };
 
-  // --- CALCULO DINAMICO DE FECHAS PARA EL TEXTO SUPERIOR ---
   const [textoFechaPeriodo, setTextoFechaPeriodo] = useState('');
 
   useEffect(() => {
     if (fechaInicio && fechaFin) {
-      // Si el usuario aplicó filtro de fechas manual
       setTextoFechaPeriodo(`${formatearFechaVisual(fechaInicio)} — ${formatearFechaVisual(fechaFin)}`);
     } else if (resumen?.fecha_minima) {
       setTextoFechaPeriodo(`${formatearFechaVisual(resumen.fecha_minima)} — ${formatearFechaVisual(resumen.fecha_maxima || resumen.fecha_minima)}`);
     } else if (ordenes.length > 0) {
-      // Si no hay filtro manual, buscamos la orden válida más antigua
       const ordenesValidas = ordenes.filter(o => o.estado !== 'Cancelada' && o.fecha_emision);
-      
+
       if (ordenesValidas.length > 0) {
-        // Ordenar por fecha para encontrar la más antigua
-        // Asumiendo formato YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss.sssZ
         const fechasOrdenadas = [...ordenesValidas].sort((a, b) => {
           return new Date(a.fecha_emision.split('T')[0]) - new Date(b.fecha_emision.split('T')[0]);
         });
-        
+
         const fechaMasAntigua = fechasOrdenadas[0].fecha_emision;
-        
-        // Obtener el día de hoy en formato local
+
         const hoy = new Date();
         const strHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-        
+
         setTextoFechaPeriodo(`${formatearFechaVisual(fechaMasAntigua)} — ${formatearFechaVisual(strHoy)}`);
       } else {
         setTextoFechaPeriodo('SIN REGISTROS VÁLIDOS');
@@ -424,7 +413,6 @@ function OrdenesVenta() {
        setTextoFechaPeriodo('CARGANDO...');
     }
   }, [ordenes, resumen, fechaInicio, fechaFin]);
-  // ---------------------------------------------------------
 
   const limpiarFiltros = () => {
     setFiltroEstado([]);
@@ -799,10 +787,6 @@ function OrdenesVenta() {
       render: (value, row) => {
         const config = getEstadoConfig(value);
         const esFactura = String(row.tipo_comprobante || '').toLowerCase().includes('factura');
-        // Correlativos de guía según el tipo de comprobante:
-        //   - Factura → correlativo SUNAT (serie-numero) de sus GRE, solo si ACEPTADO.
-        //               Las rechazadas/pendientes no aportan línea (quedan invisibles).
-        //   - Nota de Venta / Sin comprobante → guía interna del despacho (GI-YYYY-XXXX).
         const correlativos = esFactura
           ? (row.guias || [])
               .map((g) => (
@@ -849,8 +833,6 @@ function OrdenesVenta() {
     }
   ];
 
-  // Para roles sin acceso financiero (Calidad/Supervisor): se ocultan las columnas
-  // de montos/pagos/SUNAT y en Acciones solo queda "Ver" (sin editar ni PDF valorizado).
   const columnasFinancieras = ['total', 'estado_pago', 'facturado_sunat'];
   const columnasVisibles = verFinanzas
     ? columns
@@ -1096,7 +1078,6 @@ function OrdenesVenta() {
 
           {pagination.total > itemsPerPage && (
             <div className="px-4 sm:px-6 py-4 bg-carbon-mid/60 border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
-              {/* Rango de registros */}
               <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1 flex items-center gap-1.5">
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
                 <span className="text-steel">–</span>
@@ -1106,7 +1087,6 @@ function OrdenesVenta() {
                 <span className="uppercase tracking-widest text-[0.6rem]">órdenes</span>
               </div>
 
-              {/* Controles de página */}
               <div className="flex items-center gap-1.5 order-1 lg:order-2">
                 <button className="pagination-nav" onClick={goToPrevPage} disabled={currentPage === 1}>
                   <ChevronLeft size={16} /> <span className="hidden sm:inline">ANTERIOR</span>
@@ -1123,7 +1103,6 @@ function OrdenesVenta() {
                 </button>
               </div>
 
-              {/* Salto a página */}
               <div className="flex items-center gap-2 order-3">
                 <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">Ir a</span>
                 <input type="number" min="1" max={totalPages} value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handlePageJump} onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }} className="w-14 h-9 text-center text-sm font-bold text-primary bg-carbon border border-steel rounded-lg focus:border-primary outline-none transition-all" />

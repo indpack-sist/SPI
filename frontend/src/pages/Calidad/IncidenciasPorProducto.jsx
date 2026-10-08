@@ -22,7 +22,6 @@ function IncidenciasPorProducto() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Solo productos que requieren receta (BOM)
     productosAPI.getAll({ estado: 'Activo', requiere_receta: 'true' })
       .then(res => setProductos(res.data.data || []))
       .catch(() => setError('Error al cargar productos'))
@@ -129,7 +128,6 @@ function IncidenciasPorProducto() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Listado de productos */}
         <div className="card">
           <div className="card-header"><h2 className="card-title flex items-center gap-2"><Package size={18} /> Productos</h2></div>
           <div className="card-body">
@@ -173,7 +171,6 @@ function IncidenciasPorProducto() {
           </div>
         </div>
 
-        {/* Incidencias del producto */}
         <div className="lg:col-span-2 card">
           <div className="card-header">
             <h2 className="card-title flex items-center gap-2">

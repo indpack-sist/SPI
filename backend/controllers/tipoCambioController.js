@@ -56,7 +56,6 @@ export const subirHistorialExcel = async (req, res) => {
     const sheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
-    // Columns should be: FECHA | TC. COMER. | VENTA FP | COMPRA FP
     const insertedRecords = [];
     
     for (let i = 1; i < data.length; i++) {
@@ -64,7 +63,7 @@ export const subirHistorialExcel = async (req, res) => {
       const rowArr = Object.values(row);
       
       if (rowArr.length >= 4) {
-        let fechaExcel = rowArr[0]; // Ej: "01/05/2026" o número serial excel
+        let fechaExcel = rowArr[0];
         let venta = parseFloat(rowArr[2]);
         let compra = parseFloat(rowArr[3]);
         
@@ -72,20 +71,15 @@ export const subirHistorialExcel = async (req, res) => {
           let promedio = (compra + venta) / 2;
           let fecha = null;
           
-          // Parsear la fecha del Excel
           if (typeof fechaExcel === 'number') {
-            // Es un número de serie de Excel (días desde 1/1/1900)
             const excelEpoch = new Date(1899, 11, 30);
             const dateObj = new Date(excelEpoch.getTime() + fechaExcel * 86400000);
             fecha = dateObj.toISOString().split('T')[0];
           } else if (typeof fechaExcel === 'string') {
-             // Asumimos formato DD/MM/YYYY
              const parts = fechaExcel.split('/');
              if (parts.length === 3) {
                fecha = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
              } else {
-                 // Fallback por si la fecha viene mal formada pero conocemos el mes y anio de la peticion
-                 // Intenta extraer solo el día
                  const maybeDay = parseInt(fechaExcel.replace(/\D/g, '').substring(0,2));
                  if(!isNaN(maybeDay) && maybeDay > 0 && maybeDay <= 31) {
                      fecha = `${anio}-${String(mes).padStart(2, '0')}-${String(maybeDay).padStart(2, '0')}`;
@@ -111,7 +105,6 @@ export const subirHistorialExcel = async (req, res) => {
       compra = VALUES(compra), venta = VALUES(venta), promedio = VALUES(promedio), origen = VALUES(origen)
     `;
     
-    // pool.query support bulk inserts, unlike pool.execute
     await pool.query(query, [insertedRecords]);
 
     res.json({ success: true, message: `Se importaron ${insertedRecords.length} registros exitosamente.` });

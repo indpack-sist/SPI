@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Package, AlertCircle, Filter } from 'lucide-react'; // Importamos Filter
+import { Search, Package, AlertCircle, Filter } from 'lucide-react';
 import { productosAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 
@@ -8,8 +8,6 @@ function ListaProductosSimple() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  
-  // 1. Nuevo estado para el filtro de stock
   const [soloConStock, setSoloConStock] = useState(false);
 
   useEffect(() => {
@@ -22,8 +20,7 @@ function ListaProductosSimple() {
       const response = await productosAPI.getAll({ estado: 'Activo' });
       
       if (response.data.success) {
-        // Filtrar solo los Productos Terminados (id_tipo_inventario 3 o tipo_inventario === 'Productos Terminados')
-        const terminados = (response.data.data || []).filter(p => 
+        const terminados = (response.data.data || []).filter(p =>
           Number(p.id_tipo_inventario) === 3 || 
           p.tipo_inventario === 'Productos Terminados'
         );
@@ -39,12 +36,10 @@ function ListaProductosSimple() {
     }
   };
 
-  // 2. Lógica de filtrado actualizada
   const productosFiltrados = productos.filter(p => {
     const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
                              p.codigo.toLowerCase().includes(busqueda.toLowerCase());
-    
-    // Si el filtro está activo, validamos que tenga al menos 1 de stock
+
     const cumpleStock = soloConStock ? parseFloat(p.stock_actual) >= 1 : true;
 
     return coincideBusqueda && cumpleStock;
@@ -56,7 +51,6 @@ function ListaProductosSimple() {
     <div className="container py-8">
       
       <div className="card">
-        {/* Encabezado */}
         <div className="card-header border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="card-title text-primary flex items-center gap-2">
@@ -74,11 +68,8 @@ function ListaProductosSimple() {
         </div>
 
         <div className="card-body">
-          
-          {/* Contenedor Flex para Buscador y Botón de Filtro */}
+
           <div className="mb-4 flex flex-col md:flex-row gap-3">
-            
-            {/* Barra de Búsqueda */}
             <div className="search-input-wrapper flex-1">
               <Search size={20} className="search-icon" />
               <input
@@ -91,14 +82,13 @@ function ListaProductosSimple() {
               />
             </div>
 
-            {/* 3. Botón de Filtro Claro */}
             <button
               onClick={() => setSoloConStock(!soloConStock)}
               className={`
                 flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-medium whitespace-nowrap
-                ${soloConStock 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' // Estilo Activo (Claro pero distintivo)
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50' // Estilo Inactivo (Muy claro)
+                ${soloConStock
+                  ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                 }
               `}
             >
@@ -115,7 +105,6 @@ function ListaProductosSimple() {
             </div>
           )}
 
-          {/* Tabla */}
           <div className="table-container">
             <table className="table">
               <thead>

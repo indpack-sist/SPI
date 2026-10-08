@@ -20,8 +20,6 @@ export default function useReordenarFilas(setFilas) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(index));
 
-    // El navegador normalmente mostraría solo el asa como imagen de arrastre.
-    // Usamos la fila completa para que producto, cantidad y precio acompañen al cursor.
     const fila = event.currentTarget.closest('tr');
     if (fila) event.dataTransfer.setDragImage(fila, 24, fila.offsetHeight / 2);
   };
@@ -54,8 +52,6 @@ export default function useReordenarFilas(setFilas) {
       return nuevasFilas;
     });
 
-    // Anima desde la ubicación anterior hasta la nueva después de que React
-    // haya reordenado las filas. Así el desplazamiento no se percibe como un salto.
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       requestAnimationFrame(() => {
         Array.from(cuerpoTabla?.children || []).forEach(fila => {

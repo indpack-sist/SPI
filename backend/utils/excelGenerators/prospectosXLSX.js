@@ -12,7 +12,6 @@ const BORDE_FINO = {
   right: { style: 'thin', color: { argb: 'FF000000' } }
 };
 
-// Etiquetas legibles del estado del workflow (deben coincidir con el frontend).
 const ESTADO_LABEL = {
   Nuevo: 'Nuevo',
   En_gestion: 'En gestión',
@@ -26,7 +25,6 @@ const DUP_LABEL = {
   Posible_duplicado: 'Posible duplicado'
 };
 
-// Columnas del reporte, en el mismo orden que tenía el export del navegador.
 const COLUMNAS = [
   { key: 'score',       header: 'SCORE',            width: 8,  align: 'center', num: true },
   { key: 'razon',       header: 'RAZÓN SOCIAL',     width: 40, align: 'left',  wrap: true },
@@ -47,7 +45,6 @@ const COLUMNAS = [
   { key: 'por_que',     header: 'POR QUÉ CONTACTAR', width: 60, align: 'left', wrap: true }
 ];
 
-// score_detalle llega como objeto (columna JSON) o como texto; saca el motivo.
 function porQueContactar(scoreDetalle) {
   if (!scoreDetalle) return '';
   let obj = scoreDetalle;
@@ -57,21 +54,12 @@ function porQueContactar(scoreDetalle) {
   return obj?.por_que_contactar || '';
 }
 
-/**
- * Genera el Excel de prospectos. Recibe las filas ya consultadas (con los
- * mismos campos que devuelve el listado) y una descripción de los filtros
- * aplicados para el encabezado.
- *
- * @param {{ filas?: Array, filtros?: object }} arg
- * @returns {Promise<Buffer>}
- */
 export async function generarProspectosXLSX({ filas = [], filtros = {} } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'INDPACK S.A.C.';
   wb.created = new Date();
 
   const totalCols = COLUMNAS.length;
-  // Soporta más de 26 columnas por si crece; aquí son 17 (A..Q).
   const colLetter = (n) => {
     let s = '';
     while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
@@ -110,7 +98,6 @@ export async function generarProspectosXLSX({ filas = [], filtros = {} } = {}) {
 
   ws.columns = COLUMNAS.map((c) => ({ key: c.key, width: c.width }));
 
-  // --- Encabezado del reporte ---
   ws.mergeCells(`A1:${lastCol}1`);
   ws.getCell('A1').value = `${EMPRESA.razon_social}   -   R.U.C. ${EMPRESA.ruc}`;
   ws.getCell('A1').font = { bold: true, size: 12 };
@@ -133,9 +120,6 @@ export async function generarProspectosXLSX({ filas = [], filtros = {} } = {}) {
   ws.getCell('A4').font = { size: 10 };
   ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  // Fila 5 separadora.
-
-  // --- Cabecera de tabla (fila 6) ---
   const headerRowIdx = 6;
   const headerRow = ws.getRow(headerRowIdx);
   COLUMNAS.forEach((c, i) => {
@@ -148,7 +132,6 @@ export async function generarProspectosXLSX({ filas = [], filtros = {} } = {}) {
   });
   headerRow.height = 26;
 
-  // --- Filas de datos ---
   let rowIdx = headerRowIdx + 1;
   datos.forEach((f) => {
     const row = ws.getRow(rowIdx);

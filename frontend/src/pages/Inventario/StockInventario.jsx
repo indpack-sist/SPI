@@ -30,7 +30,6 @@ function StockInventario() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Kardex: filtros y estado de generación del PDF
   const [todosTipos, setTodosTipos] = useState([]);
   const [kardexDesde, setKardexDesde] = useState('');
   const [kardexHasta, setKardexHasta] = useState('');
@@ -38,7 +37,6 @@ function StockInventario() {
   const [generandoKardex, setGenerandoKardex] = useState(false);
   const [generandoKardexXLSX, setGenerandoKardexXLSX] = useState(false);
 
-  // Reporte por producto (producción vs despacho)
   const [repProdTexto, setRepProdTexto] = useState('');
   const [repProdDesde, setRepProdDesde] = useState('');
   const [repProdHasta, setRepProdHasta] = useState('');
@@ -61,7 +59,6 @@ function StockInventario() {
       ]);
       
       const resumenData = resumenRes.data.data.filter(item => item.tipo_inventario === 'Productos Terminados');
-      // Lista completa de tipos de inventario para el filtro del Kardex
       setTodosTipos(tiposRes.data.data);
       const tiposData = tiposRes.data.data.filter(tipo => tipo.nombre === 'Productos Terminados');
       const idsPermitidos = tiposData.map(t => t.id_tipo_inventario);
@@ -117,7 +114,6 @@ function StockInventario() {
       setError('Selecciona o escribe un producto para generar su reporte.');
       return;
     }
-    // Resuelve el producto por "código - nombre", por código o por nombre.
     const codigoBuscado = texto.split(' - ')[0].trim().toLowerCase();
     const prod = productos.find(p =>
       `${p.codigo} - ${p.nombre}`.toLowerCase() === texto.toLowerCase() ||
@@ -320,7 +316,6 @@ function StockInventario() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* TARJETAS DE RESUMEN GLOBAL */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="card p-4 flex flex-col items-center justify-center">
           <p className="text-xs text-muted mb-1 uppercase tracking-wider">Productos Totales</p>
@@ -349,7 +344,6 @@ function StockInventario() {
         </div>
       </div>
 
-      {/* FILTROS */}
       <div className="card mb-6 p-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -383,7 +377,6 @@ function StockInventario() {
         </div>
       </div>
 
-      {/* REPORTE KARDEX */}
       <div className="card mb-6 p-4">
         <div className="flex items-center gap-2 mb-3">
           <FileText size={18} className="text-primary" />
@@ -449,7 +442,6 @@ function StockInventario() {
         </div>
       </div>
 
-      {/* REPORTE POR PRODUCTO */}
       <div className="card mb-6 p-4">
         <div className="flex items-center gap-2 mb-3">
           <FileText size={18} className="text-primary" />
@@ -516,7 +508,6 @@ function StockInventario() {
         </div>
       </div>
 
-      {/* ALERTAS */}
       {productosStockBajo.length > 0 && (
         <div className="alert alert-warning mb-4 flex items-start gap-3">
           <AlertTriangle size={24} className="mt-1 flex-shrink-0" />
@@ -530,7 +521,6 @@ function StockInventario() {
         </div>
       )}
 
-      {/* LISTADO POR TIPO DE INVENTARIO */}
       <div className="space-y-6">
         {resumenStock
           .filter(item => !filtroTipo || item.id_tipo_inventario == filtroTipo)
@@ -546,37 +536,31 @@ function StockInventario() {
 
             return (
               <div key={tipoInventario.id_tipo_inventario} className="card overflow-hidden border-0 shadow-sm">
-                
-                {/* CABECERA DE SECCIÓN (ACORDEÓN) */}
-                <div 
+                <div
                   className="p-4 cursor-pointer transition-colors hover:bg-gray-50"
                   style={{ borderLeft: `4px solid ${config.color}` }}
                   onClick={() => toggleSeccion(tipoInventario.id_tipo_inventario)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      {/* Icono */}
-                      <div 
+                      <div
                         className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm"
                         style={{ background: config.gradient }}
                       >
                         <Icon size={20} />
                       </div>
-                      
-                      {/* Títulos y Valores Resumidos */}
+
                       <div>
                         <h2 className="text-lg font-bold text-gray-800 m-0">{tipoInventario.tipo_inventario}</h2>
                         <div className="flex gap-4 text-xs text-muted mt-1">
                           <span className="flex items-center gap-1">
                             <Package size={12} /> {productosFiltradosDelTipo.length} items
                           </span>
-                          
-                          {/* VALOR COSTO */}
+
                           <span className="font-medium text-gray-600">
                              Costo: {formatearMoneda(tipoInventario.valor_costo)}
                           </span>
 
-                          {/* VALOR VENTA (Solo si aplica) */}
                           {esTerminado && tipoInventario.valor_venta > 0 && (
                             <span className="font-medium text-green-600">
                                Venta: {formatearMoneda(tipoInventario.valor_venta)}
@@ -587,8 +571,7 @@ function StockInventario() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {/* Badges de estado */}
-                      {productosFiltrados(productosDelTipo).filter(p => 
+                      {productosFiltrados(productosDelTipo).filter(p =>
                         getEstadoStock(p.stock_actual, p.stock_minimo, p.stock_maximo) === 'bajo'
                       ).length > 0 && (
                         <span className="badge badge-danger">
@@ -603,7 +586,6 @@ function StockInventario() {
                   </div>
                 </div>
 
-                {/* TABLA DE PRODUCTOS */}
                 {isExpanded && (
                   <div className="border-t border-gray-100">
                     <Table

@@ -5,7 +5,6 @@ const EMPRESA = {
   razon_social: 'INDPACK S.A.C.'
 };
 
-// Borde fino negro en las 4 caras
 const BORDE_FINO = {
   top: { style: 'thin', color: { argb: 'FF000000' } },
   left: { style: 'thin', color: { argb: 'FF000000' } },
@@ -13,8 +12,6 @@ const BORDE_FINO = {
   right: { style: 'thin', color: { argb: 'FF000000' } }
 };
 
-// Definición de columnas del Kardex. Las numéricas usan formato de número y se
-// alinean a la derecha; el producto y la categoría hacen wrap para no recortar.
 const COLUMNAS = [
   { key: 'categoria',       header: 'CATEGORÍA',      min: 16, max: 30, wrap: true,  align: 'left',   num: false },
   { key: 'codigo',          header: 'CÓDIGO',         min: 12, max: 20, wrap: false, align: 'left',   num: false },
@@ -26,28 +23,23 @@ const COLUMNAS = [
   { key: 'stock_terminado', header: 'STOCK TERMINADO', min: 14, max: 18, wrap: false, align: 'right', num: true }
 ];
 
-// Calcula ancho de columna según el contenido (sin recortes), acotado por min/max.
 function calcularAncho(valores, header, min, max) {
   let maxLen = header.length;
   for (const v of valores) {
     const len = String(v ?? '').length;
     if (len > maxLen) maxLen = len;
   }
-  // +2 de holgura. Si se alcanza el max, el texto hará wrap (columnas con wrap).
   return Math.min(Math.max(min, maxLen + 2), max);
 }
 
-// Genera el Kardex en Excel con el mismo contenido que el PDF.
-// Espera { filas, filtros } tal como los construye construirDatosKardex().
 export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'INDPACK S.A.C.';
   wb.created = new Date();
 
   const totalCols = COLUMNAS.length;
-  const lastColLetter = String.fromCharCode(64 + totalCols); // 9 -> 'I'
+  const lastColLetter = String.fromCharCode(64 + totalCols);
 
-  // Normalizar filas a números para las columnas numéricas.
   const datos = filas.map(f => ({
     categoria: f.categoria || '-',
     codigo: f.codigo || '-',
@@ -68,7 +60,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
     }
   });
 
-  // Anchos por columna (según contenido, con las numéricas formateadas).
   ws.columns = COLUMNAS.map(c => ({
     key: c.key,
     width: calcularAncho(
@@ -77,7 +68,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
     )
   }));
 
-  // --- Encabezado del reporte ---
   ws.mergeCells(`A1:${lastColLetter}1`);
   ws.getCell('A1').value = `${EMPRESA.razon_social}   -   R.U.C. ${EMPRESA.ruc}`;
   ws.getCell('A1').font = { bold: true, size: 12 };
@@ -101,9 +91,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
   ws.getCell('A4').font = { size: 10 };
   ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  // Fila 5 vacía (separador)
-
-  // --- Cabecera de tabla (fila 6) ---
   const headerRowIdx = 6;
   const headerRow = ws.getRow(headerRowIdx);
   COLUMNAS.forEach((c, i) => {
@@ -116,7 +103,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
   });
   headerRow.height = 26;
 
-  // --- Filas de datos ---
   let rowIdx = headerRowIdx + 1;
 
   datos.forEach((f) => {
@@ -144,8 +130,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
     cell.border = BORDE_FINO;
     rowIdx++;
   } else {
-    // --- Conteo de productos (sin totales numéricos: las unidades de medida
-    // difieren entre productos, así que sumar cantidades no tiene sentido) ---
     const row = ws.getRow(rowIdx);
     COLUMNAS.forEach((c, i) => {
       const cell = row.getCell(i + 1);

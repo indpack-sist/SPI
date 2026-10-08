@@ -41,7 +41,6 @@ async function cargarLogoAsync() {
   }
 }
 
-// Definición de columnas (A4 landscape, área útil x: 30 -> 812)
 const COLS = {
   fecha:      { x: 35,  w: 58,  label: 'F. EMISIÓN' },
   material:   { x: 95,  w: 175, label: 'MATERIAL' },
@@ -70,7 +69,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
 
       const rangoTexto = `${formatearFecha(filtros.fecha_inicio)} - ${formatearFecha(filtros.fecha_fin)}`;
 
-      // ====== ENCABEZADO ======
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 30, 30, { width: 180, height: 50, fit: [180, 50] });
@@ -98,7 +96,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text(rangoTexto, 585, 71, { align: 'center', width: 220 });
 
-      // Recuadro info
       doc.roundedRect(30, 145, 782, 40, 3).stroke('#000000');
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Reporte:', 40, 155);
@@ -140,7 +137,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
         const material = mov.material || '-';
         const proveedor = mov.proveedor || '-';
 
-        // Calcular altura de fila según el texto más alto
         doc.fontSize(8).font('Helvetica');
         const hMaterial = doc.heightOfString(material, { width: COLS.material.w - 5, lineGap: 1 });
         const hProveedor = doc.heightOfString(proveedor, { width: COLS.proveedor.w - 5, lineGap: 1 });
@@ -161,7 +157,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
         doc.text(formatearFecha(mov.fecha_movimiento), COLS.fecha.x, yPos + 4, { width: COLS.fecha.w });
         doc.text(material, COLS.material.x, yPos + 4, { width: COLS.material.w - 5, lineGap: 1 });
 
-        // Movimiento: Compra (verde) / otro tipo de entrada (azul)
         const esCompra = String(mov.tipo_entrada || '').toLowerCase() === 'compra';
         doc.fillColor(esCompra ? '#15803D' : '#1D4ED8').font('Helvetica-Bold');
         doc.text(esCompra ? 'Compra' : (mov.tipo_entrada || 'Entrada'), COLS.movimiento.x, yPos + 4, { width: COLS.movimiento.w });
@@ -177,7 +172,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
         yPos += alturaFila;
       });
 
-      // ====== RESUMEN POR MATERIAL ======
       if (movimientos.length > 0) {
         const totalesPorMaterial = {};
         movimientos.forEach(m => {
@@ -227,7 +221,6 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
         });
       }
 
-      // Pie de página
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Reporte generado por sistema - INDPACK S.A.C.', 30, 565, { align: 'center', width: 782 });
 

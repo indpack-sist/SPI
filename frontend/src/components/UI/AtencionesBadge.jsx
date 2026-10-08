@@ -1,12 +1,3 @@
-/**
- * Muestra el numero de "atenciones" de un cliente (ordenes de venta despachadas,
- * despacho parcial o entregadas) con el desglose completo por estado al pasar el mouse.
- *
- * Props:
- *  - atenciones: numero de ordenes en estados de atencion
- *  - totalOrdenes: total de ordenes de venta del cliente
- *  - desglose: string "Estado:cnt|Estado:cnt" (viene del backend como ordenes_desglose)
- */
 export default function AtencionesBadge({ atenciones = 0, totalOrdenes = 0, desglose = '' }) {
   const n = Number(atenciones) || 0;
   const total = Number(totalOrdenes) || 0;

@@ -1,22 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import ubigeos from '../../data/ubigeos.json';
 
-/**
- * Selector de UBIGEO en cascada Departamento → Provincia → Distrito.
- * Arma el código INEI de 6 dígitos (2 depto + 2 prov + 2 distrito) que SUNAT exige en la GRE.
- *
- * @param {string}   value     código de 6 dígitos actual (o '' si incompleto). Prellenable.
- * @param {function} onChange  (codigo6|'' , meta) — meta = {departamento, provincia, distrito} (nombres).
- * @param {boolean}  required
- */
 export default function UbigeoSelector({ value = '', onChange, required = false }) {
   const [dep, setDep] = useState('');
   const [prov, setProv] = useState('');
   const [dist, setDist] = useState('');
   const ultimoCambioEmitido = useRef(null);
 
-  // Sincroniza desde un value externo (p. ej. autocompletado desde la dirección). Si el propio
-  // selector emitió '' al cambiar departamento/provincia, conserva esa selección parcial.
   useEffect(() => {
     const cambioEmitido = ultimoCambioEmitido.current;
     ultimoCambioEmitido.current = null;

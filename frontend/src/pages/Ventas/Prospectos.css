@@ -1,8 +1,3 @@
-/* ============================================================
-   Módulo Prospección (bandeja CRM). Estilos autocontenidos que
-   consumen los tokens del tema (claro/oscuro) del index.css.
-   ============================================================ */
-
 .pros-wrap {
   padding: 1.25rem;
   max-width: 1360px;
@@ -15,7 +10,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Encabezado --- */
 .pros-head {
   display: flex;
   align-items: center;
@@ -37,7 +31,6 @@
 }
 .pros-title svg { color: var(--accent); }
 
-/* Indicador de actualización en vivo (WebSocket) */
 .pros-live {
   display: inline-flex;
   align-items: center;
@@ -80,7 +73,6 @@
 .pros-subtitle { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem; }
 .pros-head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-/* --- Tarjetas de estadística --- */
 .pros-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -118,7 +110,6 @@
 .ico-client   { background: rgba(46,204,113,0.12); color: #2ecc71; }
 .ico-score    { background: rgba(155,89,182,0.16); color: #b07cc6; }
 
-/* --- Barra de filtros --- */
 .pros-toolbar {
   display: flex;
   gap: 0.6rem;
@@ -130,7 +121,6 @@
 .pros-search svg { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--wire); }
 .pros-search input { padding-left: 2.2rem !important; }
 
-/* --- Tabla / filas --- */
 .pros-table-wrap {
   background: var(--carbon-mid);
   border: 1px solid var(--steel);
@@ -176,7 +166,6 @@
 .pros-empresa-doc { font-size: 0.72rem; color: var(--text-secondary); }
 .pros-sin-doc { color: #e8b84b; font-weight: 600; }
 
-/* Selector de departamentos (zonas del descubrimiento) */
 .pros-zonas-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-top: 0.7rem; margin-bottom: 0.35rem; flex-wrap: wrap;
@@ -206,7 +195,6 @@
   .pros-zonas-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Mini-resumen de contacto en la fila (correo primero, luego teléfono) */
 .pros-contact-mini {
   display: flex; flex-wrap: wrap; gap: 0.35rem 0.8rem;
   margin-top: 3px; font-size: 0.7rem; color: var(--text-secondary);
@@ -219,7 +207,6 @@
 .pros-mini-warn { color: #e8b84b; }
 .pros-mini-warn svg { color: #e8b84b; }
 
-/* --- Anillo de score --- */
 .pros-ring {
   width: 46px; height: 46px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -239,7 +226,6 @@
   color: var(--white);
 }
 
-/* --- Chips de estado / duplicado --- */
 .pros-chip {
   display: inline-flex; align-items: center; gap: 0.25rem;
   padding: 0.15rem 0.5rem;
@@ -260,7 +246,6 @@
 
 .pros-actions-cell { display: flex; gap: 0.3rem; justify-content: flex-end; }
 
-/* --- Panel de detalle (slide-over) --- */
 .pros-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.5);
@@ -317,7 +302,6 @@
 }
 .pros-contact-row svg { color: var(--accent); flex-shrink: 0; }
 
-/* Badge del área a la que pertenece un contacto (Ventas, Informes…) */
 .pros-area-badge {
   display: inline-flex; align-items: center;
   font-size: 0.64rem; font-weight: 700; letter-spacing: 0.02em;
@@ -327,7 +311,6 @@
   border: 1px solid var(--accent-border);
 }
 
-/* Aviso claro cuando falta un canal de contacto */
 .pros-nocontact {
   display: flex; align-items: center; gap: 0.4rem;
   font-size: 0.8rem; color: #e8b84b;
@@ -347,7 +330,6 @@
   padding-top: 0.9rem;
 }
 
-/* --- Bloqueo por dueño --- */
 .pros-lock {
   display: flex; align-items: center; gap: 0.6rem;
   padding: 0.6rem 0.7rem; border-radius: 8px; margin-bottom: 0.8rem;
@@ -358,12 +340,10 @@
 .pros-lock-mine { background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.4); }
 .pros-lock-mine > svg { color: #2ecc71; }
 
-/* --- Historial de gestión --- */
 .pros-historial { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; margin: 0.4rem 0; padding: 0; }
 .pros-historial li { display: flex; align-items: flex-start; gap: 0.5rem; }
 .pros-historial svg { color: var(--text-secondary); flex-shrink: 0; margin-top: 2px; }
 
-/* --- Ingesta result --- */
 .pros-ingesta-res {
   margin-top: 0.9rem;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
@@ -393,7 +373,6 @@
 }
 .pros-empty svg { color: var(--steel-light); margin-bottom: 0.75rem; }
 
-/* --- Panel de actividad (jobs) --- */
 .pros-jobs {
   background: var(--carbon-mid);
   border: 1px solid var(--steel);
@@ -434,7 +413,6 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-/* ---------- Paginación ---------- */
 .pros-pagination {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 0.8rem;
@@ -471,7 +449,6 @@
   .pros-hide-sm { display: none; }
 }
 
-/* ---- Badge "Hoy/Nuevo" en la columna Descubierto ---- */
 .pros-nuevo-badge {
   display: inline-block;
   margin-left: 6px;
@@ -484,7 +461,6 @@
   vertical-align: middle;
 }
 
-/* ---- Barra(s) de progreso en vivo de operaciones masivas ---- */
 .pros-lotes {
   display: flex;
   flex-direction: column;

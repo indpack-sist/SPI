@@ -38,13 +38,10 @@ export const getSeveridadBadge = (severidad) => {
   return 'badge-success';
 };
 
-// Formatea SIEMPRE en hora de Perú (America/Lima), sin importar la zona del navegador.
 export const formatearFecha = (fecha) => {
   if (!fecha) return '-';
   const str = String(fecha);
 
-  // Caso 1: texto plano "YYYY-MM-DD HH:mm[:ss]" (hora de pared de Perú ya guardada).
-  // No lo pasamos por new Date() para no reinterpretarlo con la zona del navegador.
   const naive = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::\d{2})?$/.exec(str);
   if (naive) {
     const [, y, mo, d, h, mi] = naive;
@@ -54,7 +51,6 @@ export const formatearFecha = (fecha) => {
     return `${d}/${mo}/${y}, ${String(hh).padStart(2, '0')}:${mi} ${ampm}`;
   }
 
-  // Caso 2: ISO con zona (ej. "2026-06-24T13:00:00.000Z") → instante real → lo mostramos en Perú.
   const dt = new Date(str);
   if (!isNaN(dt.getTime()) && (str.includes('T') || str.includes('Z'))) {
     return dt.toLocaleString('es-PE', {
@@ -64,7 +60,6 @@ export const formatearFecha = (fecha) => {
     });
   }
 
-  // Caso 3: solo fecha "YYYY-MM-DD".
   const partes = str.split(' ')[0].split('-');
   if (partes.length === 3) {
     const [year, month, day] = partes;
@@ -98,18 +93,14 @@ function Incidencias() {
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  // Apertura automática del modal cuando se llega desde Salidas con una salida precargada.
   useEffect(() => {
     if (location.state?.prefillSalida) {
       setPrefillModal(location.state.prefillSalida);
       setModalNueva(true);
-      // Limpiamos el state de navegación para que no se reabra al refrescar/volver.
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state]);
 
-  // Cargamos todas las incidencias una vez; el filtrado es 100% en cliente para
-  // que todos los filtros se combinen (AND) de forma instantánea.
   useEffect(() => {
     cargarDatos({ silencioso: incidencias.length > 0 });
   }, []);
@@ -128,7 +119,6 @@ function Incidencias() {
     }
   };
 
-  // Tipos de defecto presentes en los datos (para el desplegable de filtro).
   const tiposDisponibles = [...new Set(incidencias.map(i => i.tipo_nombre).filter(Boolean))].sort();
 
   const stats = {
@@ -173,7 +163,6 @@ function Incidencias() {
     filtroDisposicion, filtroDecision, fechaInicio, fechaFin, busqueda
   ].filter(Boolean).length;
 
-  // Si hay algún filtro activo, abrimos el panel automáticamente.
   useEffect(() => {
     if (filtrosActivos > 0) setMostrarFiltros(true);
   }, [filtrosActivos]);

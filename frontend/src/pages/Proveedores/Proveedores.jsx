@@ -285,7 +285,6 @@ function Proveedores() {
         size="lg"
       >
         <form onSubmit={handleSubmit}>
-          {/* Campo RUC con validación */}
           <div className="form-group">
             <label className="form-label">RUC *</label>
             <div className="flex gap-2">
@@ -323,8 +322,7 @@ function Proveedores() {
                 )}
               </button>
             </div>
-            
-            {/* Indicador de validación */}
+
             {rucValidado === true && (
               <div className="mt-2 flex items-center gap-2 text-sm text-success">
                 <CheckCircle size={16} />
@@ -340,7 +338,6 @@ function Proveedores() {
             )}
           </div>
 
-          {/* Mostrar datos de SUNAT si están disponibles */}
           {datosSUNAT && (
             <div className="alert alert-info mb-3">
               <strong>Datos de SUNAT:</strong>

@@ -49,9 +49,6 @@ function esFechaISOValida(value) {
     && date.getUTCDate() === day;
 }
 
-// Las primeras salidas creadas desde una GRE guardaban el id interno de la OV en el texto
-// (p. ej. "Orden 666"). La FK sigue siendo la fuente de vinculación; al presentar esos registros
-// antiguos sustituimos el id técnico por el correlativo visible de la orden.
 function normalizarObservacionOrden(observaciones, numeroOrden) {
   if (!observaciones || !numeroOrden) return observaciones;
   return String(observaciones).replace(
@@ -280,7 +277,6 @@ export async function getAllOrdenesVenta(req, res) {
       sql += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     }
 
-    // Al solo cambiar de página, el conteo y el resumen no cambian: se omiten
     const incluirMeta = paginated && req.query.solo_datos !== '1';
 
     const dataParams = params;
@@ -300,12 +296,6 @@ export async function getAllOrdenesVenta(req, res) {
       return res.status(500).json({ success: false, error: countResult?.error || summaryResult?.error });
     }
 
-    // Guías relacionadas de las órdenes de esta página, para la columna "Logística" del
-    // listado. Hay dos fuentes según el tipo de comprobante (el frontend elige cuál usar):
-    //   - Facturas   → GRE electrónica en `guias_remision`; se muestra el correlativo SUNAT
-    //                  (serie_sunat-numero_sunat) solo si sunat_estado = 'ACEPTADO'.
-    //   - Notas de venta / Sin comprobante → guía interna del despacho (GI-YYYY-XXXX),
-    //                  embebida en `salidas.observaciones` (una por despacho).
     const idsPagina = (result.data || []).map(o => o.id_orden_venta).filter(Boolean);
     if (idsPagina.length > 0) {
       const placeholders = idsPagina.map(() => '?').join(',');
@@ -344,8 +334,6 @@ export async function getAllOrdenesVenta(req, res) {
       if (salidasResult.success) {
         for (const s of salidasResult.data) {
           if (!salidasPorOrden.has(s.id_orden_venta)) salidasPorOrden.set(s.id_orden_venta, []);
-          // El nº de guía interna (GI-YYYY-XXXX) se guarda dentro de la observación del
-          // despacho; se extrae con regex (null si al despacho aún no se le asignó guía).
           const matchGI = String(s.observaciones || '').match(/GI-\d{4}-\d+/);
           salidasPorOrden.get(s.id_orden_venta).push({
             id_salida: s.id_salida,
@@ -734,8 +722,6 @@ export async function createOrdenVenta(req, res) {
       }
     }
 
-    // Orden de muestra: sin valor comercial (precio/total 0), no se factura, correlativo MUE-YYYY-XXXX
-    // y admite ítems de texto libre (sin producto de catálogo) mezclados con productos reales.
     const esMuestra = Number(es_muestra) === 1;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -757,8 +743,6 @@ export async function createOrdenVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
     }
 
-    // Los ítems de texto libre (sin producto de catálogo) son EXCLUSIVOS de las órdenes de muestra.
-    // En cualquier otra orden todo ítem debe apuntar a un producto real del inventario.
     if (!esMuestra && detalle.some((it) => it.es_producto_libre || !it.id_producto)) {
       return res.status(400).json({ success: false, error: 'Los ítems de texto libre solo se permiten en órdenes de muestra.' });
     }
@@ -836,14 +820,10 @@ export async function createOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    // Exportación (SUNAT 0200): IGV 0%, se calcula igual que una Nota de Venta. La emisión SEE deriva
-    // la afectación de es_exportacion; aquí solo cuadramos los totales de la OV con ese 0%.
     const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
     const sinIgv = esNotaVenta || esExport;
     if (esExport) porcentaje = 0;
 
-    // Totales con redondeo POR LÍNEA, igual que la factura electrónica (ver ubl.service.js
-    // calcularComprobante), para que el detalle de la OV cuadre con el comprobante emitido.
     let subtotal = 0;
     let impuesto = 0;
     for (const item of detalle) {
@@ -851,7 +831,7 @@ export async function createOrdenVenta(req, res) {
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const valorVenta = cantidad * precioVenta;
       if (isNaN(valorVenta)) continue;
-      const lineBase = Math.round(valorVenta * 100) / 100;             // base de la línea (2 dec)
+      const lineBase = Math.round(valorVenta * 100) / 100;
       subtotal += lineBase;
       if (!sinIgv) impuesto += Math.round(lineBase * (porcentaje / 100) * 100) / 100;
     }
@@ -860,9 +840,6 @@ export async function createOrdenVenta(req, res) {
     if (esMuestra) { subtotal = 0; impuesto = 0; }
     const total = Math.round((subtotal + impuesto) * 100) / 100;
 
-    // Correlativo por prefijo: OV-… para ventas, MUE-… para muestras (continúa la secuencia
-    // histórica leyendo el máximo entre ordenes_venta y cotizaciones). Filtrar por prefijo evita
-    // que una fila MUE contamine el correlativo OV (y viceversa) al interlevarse en la tabla.
     const anioOrden = getFechaPeru().getFullYear();
     const ultimaOrdenPromise = esMuestra
       ? Promise.all([
@@ -937,7 +914,6 @@ export async function createOrdenVenta(req, res) {
     const detalleValues = detalle.map((item, index) => {
       const esLibre = item.es_producto_libre ? 1 : 0;
       const cantidad = parseFloat(item.cantidad || 0);
-      // Muestra = sin valor comercial: precio 0. Ítem libre: sin producto de catálogo (id_producto NULL).
       const precioVenta = esMuestra ? 0 : parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = esMuestra ? 0 : parseFloat(item.precio_base || 0);
       const codigoBien = item.codigo_bien ? String(item.codigo_bien).trim() : null;
@@ -1092,8 +1068,6 @@ export async function updateOrdenVenta(req, res) {
     let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
-    // The frontend sends the remaining URLs stringified if some were deleted. 
-    // If it's explicitly null string from frontend, we clear it.
     if (req.body.orden_compra_url !== undefined) {
       if (req.body.orden_compra_url === 'null' || req.body.orden_compra_url === '') {
         nuevaOrdenCompraUrl = null;
@@ -1117,7 +1091,6 @@ export async function updateOrdenVenta(req, res) {
       nuevoComprobanteUrl = null;
     }
 
-    // Helper para concatenar URLs nuevas a un JSON existente de forma segura
     const appendUrls = (existingJson, newUrls) => {
       if (!newUrls || newUrls.length === 0) return existingJson;
       let existingArray = [];
@@ -1137,9 +1110,6 @@ export async function updateOrdenVenta(req, res) {
         Promise.all((req.files.orden_compra || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra'))),
         Promise.all((req.files.comprobante || []).map(file => subirArchivoACloudinary(file, 'indpack_ventas/comprobantes')))
       ]);
-      // Se concatena sobre la lista ya recalculada (nueva*Url), no sobre la
-      // original en BD, para que una eliminación + alta en la misma edición
-      // compongan bien (si se usara ordenActual se perdería el borrado).
       if (ordenesCompra.length > 0) nuevaOrdenCompraUrl = appendUrls(nuevaOrdenCompraUrl, ordenesCompra.map(resultado => resultado.secure_url));
       if (comprobantes.length > 0) nuevoComprobanteUrl = appendUrls(nuevoComprobanteUrl, comprobantes.map(resultado => resultado.secure_url));
     }
@@ -1173,14 +1143,10 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    // Exportación (SUNAT 0200): IGV 0%, se calcula igual que una Nota de Venta. La emisión SEE deriva
-    // la afectación de es_exportacion; aquí solo cuadramos los totales de la OV con ese 0%.
     const esExport = Number((typeof es_exportacion !== 'undefined' && es_exportacion !== null) ? es_exportacion : (typeof ordenActual !== 'undefined' ? ordenActual.es_exportacion : 0)) === 1;
     const sinIgv = esNotaVenta || esExport;
     if (esExport) porcentaje = 0;
 
-    // Totales con redondeo POR LÍNEA, igual que la factura electrónica (ver ubl.service.js
-    // calcularComprobante), para que el detalle de la OV cuadre con el comprobante emitido.
     let subtotal = 0;
     let impuesto = 0;
     let totalComision = 0;
@@ -1191,7 +1157,7 @@ export async function updateOrdenVenta(req, res) {
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const valorVenta = cantidad * precioVenta;
       if (!isNaN(valorVenta)) {
-        const lineBase = Math.round(valorVenta * 100) / 100;           // base de la línea (2 dec)
+        const lineBase = Math.round(valorVenta * 100) / 100;
         subtotal += lineBase;
         if (!sinIgv) impuesto += Math.round(lineBase * (porcentaje / 100) * 100) / 100;
       }
@@ -1319,8 +1285,6 @@ export async function updateOrdenVenta(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
-      // Los ítems libres (muestra) no se pueden cruzar por id_producto (es NULL); su despacho se
-      // arrastra por la guía, no aquí, así que parten de 0 al reinsertar.
       const infoDespacho = (!esLibre && item.id_producto != null)
         ? (mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 })
         : { cantidad_despachada: 0, cantidad_reservada: 0 };
@@ -1662,7 +1626,6 @@ export async function registrarDespacho(req, res) {
       });
     }
 
-    // Ya no generamos el correlativo aquí, ahora es manual
     const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, id_orden_venta, total_costo,
@@ -1752,7 +1715,6 @@ export async function anularDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
     const id_usuario = req.user?.id_empleado || null;
-    // El usuario puede pedir anular también la guía de remisión asociada a este despacho.
     const anularGuia = req.body?.anular_guia === true || req.body?.anular_guia === 'true';
     const motivoGuia = (req.body?.motivo_guia || '').trim();
     const confirmacionBajaSunat = req.body?.confirmacion_baja_sunat === true;
@@ -1769,9 +1731,6 @@ export async function anularDespacho(req, res) {
     }
     const orden = ordenResult.data[0];
 
-    // Vinculación por FK real (id_orden_venta) con fallback por texto para salidas viejas
-    // (mismo criterio que getSalidasOrden). Antes solo hacía LIKE '%numero_orden%', lo que dejaba
-    // fuera las salidas de guía (su observación lleva el id de OV, no el numero_orden).
     const salidaResult = await executeQuery(
       `SELECT * FROM salidas
         WHERE id_salida = ?
@@ -1787,9 +1746,6 @@ export async function anularDespacho(req, res) {
       return res.status(400).json({ error: 'Esta salida ya fue anulada' });
     }
 
-    // ¿Este despacho proviene de una guía de remisión? El vínculo es por el texto de la
-    // observación ("Despacho Guía <numero_guia> - Orden <correlativo>"). Si el usuario pidió anular
-    // también la guía, la resolvemos y validamos precondiciones ANTES de tocar el stock.
     const salida = salidaResult.data[0];
     salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
     let guiaVinculada = null;
@@ -1813,7 +1769,6 @@ export async function anularDespacho(req, res) {
       if (guiaVinculada.estado === 'Anulada') {
         return res.status(400).json({ error: `La guía ${guiaVinculada.numero_guia} ya está anulada.` });
       }
-      // Si la GRE fue aceptada por SUNAT, "dejar sin efecto" exige un motivo.
       if (guiaVinculada.sunat_estado === 'ACEPTADO' && !motivoGuia) {
         return res.status(400).json({ error: 'Indica el motivo para dejar sin efecto la GRE aceptada por SUNAT.' });
       }
@@ -1911,8 +1866,6 @@ export async function anularDespacho(req, res) {
       await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
     }
 
-    // Sincronizar la guía asociada si el usuario lo pidió. Las precondiciones de la baja SOL ya se
-    // validaron antes de tocar stock, para evitar una reversión parcial por datos inválidos.
     let guiaAnulada = null;
     if (anularGuia && guiaVinculada) {
       try {
@@ -1927,7 +1880,6 @@ export async function anularDespacho(req, res) {
           });
           guiaAnulada = { numero_guia: guiaVinculada.numero_guia, baja_sunat_confirmada: true };
         } else {
-          // GRE no emitida/no aceptada: anulación puramente interna.
           const fechaAnulacion = getFechaPeru();
           const motivoAnulacion = motivoGuia || 'Anulación de despacho';
           const localResult = await executeTransaction([
@@ -1951,8 +1903,6 @@ export async function anularDespacho(req, res) {
           guiaAnulada = { numero_guia: guiaVinculada.numero_guia, sin_efecto_sunat: false };
         }
       } catch (e) {
-        // El despacho ya se revirtió; informamos que la guía no pudo anularse para que el usuario
-        // la gestione desde su panel (p. ej. reglas de SUNAT/autorización de Administrador).
         return res.json({
           success: true,
           message: `Despacho anulado. La guía ${guiaVinculada.numero_guia} NO se pudo anular: ${e?.message || 'error'}. Gestiónala desde su panel SEE.`,
@@ -2326,7 +2276,6 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
     const salida = salidaResult.data[0];
     salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
 
-    // Extraer el correlativo GI de las observaciones
     const matchGI = salida.observaciones.match(/GI-\d{4}-\d+/);
     const numeroGuiaInterna = matchGI ? matchGI[0] : 'GI-PROV';
 
@@ -2348,10 +2297,9 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
       return res.status(500).json({ success: false, error: 'Error al obtener detalle del despacho' });
     }
 
-    // Preparar el objeto orden simulado con los datos de la salida para el generador
     const datosOrdenParaPDF = {
       ...orden,
-      fecha_emision: salida.fecha_movimiento, // Usamos la fecha del despacho
+      fecha_emision: salida.fecha_movimiento,
       detalle: detalleResult.data,
       direccion_entrega: orden.direccion_entrega || orden.direccion_cliente_base,
       observaciones: salida.observaciones
@@ -2374,7 +2322,7 @@ export async function descargarPDFGuiaInternaSalida(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { tipo } = req.query; // 'orden' o 'comprobante'
+    const { tipo } = req.query;
 
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ success: false, error: 'ID inválido' });
@@ -2438,8 +2386,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     let pdfBuffer;
     let nombreArchivo;
 
-    // 2. LÓGICA PARA SELECCIONAR EL GENERADOR CORRECTO
-    // Si el frontend solicita específicamente el "comprobante" Y es una Nota de Venta
     if (tipo === 'pedido') {
         pdfBuffer = await generarPedidoVentaPDF(orden);
         nombreArchivo = `Pedido-${orden.numero_orden}.pdf`;
@@ -2449,10 +2395,7 @@ export async function descargarPDFOrdenVenta(req, res) {
         const correlativo = orden.numero_comprobante || orden.numero_orden;
         nombreArchivo = `NotaVenta-${correlativo}.pdf`;
     }
-    // Si tienes un generador de Factura, agrégalo aquí con un else if
-    // else if (tipo === 'comprobante' && orden.tipo_comprobante === 'Factura') { ... }
     else {
-        // Por defecto o si piden tipo 'orden', genera la Orden Interna
         pdfBuffer = await generarOrdenVentaPDF(orden);
         nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
     }
@@ -2470,7 +2413,6 @@ export async function descargarPDFOrdenVenta(req, res) {
 export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
-    // Variante valorizada (uso interno): ?valores=1 muestra precios y valor del despacho.
     const incluirValores = req.query.valores === '1' || req.query.valores === 'true';
 
     const ordenResult = await executeQuery(`
@@ -2539,12 +2481,8 @@ export async function descargarPDFDespacho(req, res) {
 
     const salida = salidaResult.data[0];
     salida.observaciones = normalizarObservacionOrden(salida.observaciones, orden.numero_orden);
-    // Resuelve el nº interno de guía (T001-…) al comprobante SUNAT vigente (p. ej. TE01-6),
-    // igual que el detalle de OV en pantalla, para que el PDF no muestre el interno desfasado.
     salida.observaciones = await resolverGuiaSunatEnObservacion(salida.observaciones);
 
-    // El precio unitario se toma de detalle_orden_venta (precisión completa, hasta 6
-    // decimales), no de detalle_salidas (que puede estar truncado a 2). Fallback a ds.
     const detalleResult = await executeQuery(`
       SELECT
         ds.cantidad,
@@ -2569,10 +2507,6 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
-    // Opción B (SOLO muestra): los ítems de texto libre NO están en la salida (no mueven stock), pero
-    // SÍ se transportan. Se anexan al PDF de despacho desde el detalle de la guía vinculada
-    // (salidas.id_guia_remision) para que el documento físico refleje todo lo que va en el envío.
-    // No afectan el stock ni los totales de inventario. Exclusivo de muestra: en ventas no existen ítems libres.
     let detallesPDF = detalleResult.data;
     if (Number(orden.es_muestra) === 1 && salida.id_guia_remision) {
       const libresResult = await executeQuery(`
@@ -2703,7 +2637,6 @@ export async function registrarPagoOrden(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
     const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
     const totalOrden = esNotaVenta 
         ? Math.round(parseFloat(orden.subtotal) * 100) / 100 
@@ -2955,7 +2888,6 @@ export async function anularPagoOrden(req, res) {
     const orden = ordenResult.data[0];
     const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
     
-    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
     const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
     const totalOrden = esNotaVenta ? parseFloat(orden.subtotal) : parseFloat(orden.total);
 
@@ -3127,7 +3059,6 @@ export async function getResumenPagosOrden(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
     const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
     const totalOrden = esNotaVenta ? parseFloat(orden.subtotal) : parseFloat(orden.total);
     
@@ -3174,8 +3105,6 @@ export async function getSalidasOrden(req, res) {
     
     const numeroOrden = ordenRes.data[0].numero_orden;
 
-    // Vinculación por FK real (id_orden_venta) con fallback por texto para
-    // salidas viejas que no alcanzaron el backfill de la migración.
     const sql = `
       SELECT
         s.id_salida,
@@ -3204,7 +3133,6 @@ export async function getSalidasOrden(req, res) {
     });
     const ids = salidas.map(s => s.id_salida);
 
-    // Anidar factura (1 por despacho) y documentos adicionales de cada despacho.
     if (ids.length > 0) {
       const placeholders = ids.map(() => '?').join(',');
 
@@ -3235,7 +3163,6 @@ export async function getSalidasOrden(req, res) {
         (docsPorSalida[d.id_salida] = docsPorSalida[d.id_salida] || []).push(d);
       });
 
-      // Productos despachados por cada salida (sin datos de precio/costo).
       const detalleRes = await executeQuery(`
         SELECT
           ds.id_salida,
@@ -3257,7 +3184,7 @@ export async function getSalidasOrden(req, res) {
 
       salidas.forEach(s => {
         const fs = facturasPorSalida[s.id_salida] || [];
-        s.factura = fs[0] || null;                    // 1 factura por despacho
+        s.factura = fs[0] || null;
         s.documentos = docsPorSalida[s.id_salida] || [];
         s.productos = productosPorSalida[s.id_salida] || [];
       });
@@ -3363,7 +3290,6 @@ export async function actualizarTipoComprobante(req, res) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }
 
-    // Notificación SUNAT si el nuevo tipo es Factura y ya está en estados relevantes
     if (tipo_comprobante === 'Factura' && ['En espera', 'Despacho Parcial', 'Despachada', 'Entregada'].includes(orden.estado)) {
       await notificarPendienteMarcarSunat(id, orden.numero_orden, orden.estado, getIO(req));
     }
@@ -3425,7 +3351,6 @@ export async function actualizarDatosTransporte(req, res) {
       });
     }
 
-    // ✅ Preparar valores según tipo de entrega
     let idVehiculoFinal = null;
     let idConductorFinal = null;
     let transNombreFinal = null;
@@ -3437,7 +3362,6 @@ export async function actualizarDatosTransporte(req, res) {
       idVehiculoFinal = id_vehiculo || null;
       idConductorFinal = id_conductor || null;
       
-      // Validar que el vehículo exista si se proporcionó
       if (idVehiculoFinal) {
         const vCheck = await executeQuery('SELECT id_vehiculo FROM flota WHERE id_vehiculo = ?', [idVehiculoFinal]);
         if (!vCheck.success || vCheck.data.length === 0) {
@@ -3445,7 +3369,6 @@ export async function actualizarDatosTransporte(req, res) {
         }
       }
       
-      // Validar que el conductor exista si se proporcionó
       if (idConductorFinal) {
         const cCheck = await executeQuery('SELECT id_empleado FROM empleados WHERE id_empleado = ?', [idConductorFinal]);
         if (!cCheck.success || cCheck.data.length === 0) {
@@ -3454,38 +3377,27 @@ export async function actualizarDatosTransporte(req, res) {
       }
       
     } else if (tipo_entrega === 'Transporte Privado' || tipo_entrega === 'Vehiculo Particular') {
-      // 'Transporte Privado'  = empresa de transporte tercero (modalidad 01 pública, requiere RUC).
-      // 'Vehiculo Particular' = carro común del cliente SIN RUC (modalidad 02 privada, texto libre):
-      //   solo conductor + DNI + licencia + placa; no lleva RUC/MTC/TUC/autorización/2º vehículo.
       transNombreFinal = transporte_nombre || null;
       transPlacaFinal = transporte_placa || null;
       transCondFinal = transporte_conductor || null;
       transDniFinal = transporte_dni || null;
     }
-    // Si es 'Recojo Tienda', todos quedan null
 
-    // Datos del transportista tercero: solo aplican en 'Transporte Privado' (público SUNAT).
-    // El RUC + razón social + placa + conductor + licencia van al XML de la GRE; el MTC (empresa)
-    // en cbc:CompanyID y el TUC (certificado del vehículo) en RegistrationNationalityID.
     const esTercero = tipo_entrega === 'Transporte Privado';
     const esParticular = tipo_entrega === 'Vehiculo Particular';
     const transRucFinal = esTercero ? (transporte_ruc || null) : null;
     const transMtcFinal = esTercero ? (transporte_mtc || null) : null;
     const transTucFinal = esTercero ? (transporte_tuc || null) : null;
-    // La licencia aplica tanto al tercero como al carro particular del cliente.
     const transLicFinal = (esTercero || esParticular) ? (transporte_licencia || null) : null;
     const transAutFinal = esTercero ? (transporte_autorizacion || null) : null;
     const transPlaca2Final = esTercero ? (transporte_placa2 || null) : null;
     const transTuc2Final = esTercero ? (transporte_tuc2 || null) : null;
     const transAut2Final = esTercero ? (transporte_autorizacion2 || null) : null;
     const transFechaEntregaFinal = esTercero ? (transporte_fecha_entrega || null) : null;
-    // Interruptor "registrar veh/cond del transportista" (solo tercero; default 1 = Caso 2/3).
     const transRegistrarFinal = esTercero ? (transporte_registrar === false ? 0 : 1) : 1;
-    // Conductor secundario (solo tercero).
     const transDni2Final = esTercero ? (transporte_dni2 || null) : null;
     const transCond2Final = esTercero ? (transporte_conductor2 || null) : null;
     const transLic2Final = esTercero ? (transporte_licencia2 || null) : null;
-    // Indicadores SUNAT (opcionales; se persisten según el payload del form).
     const transIndTransbordoFinal = transporte_ind_transbordo ? 1 : 0;
     const transIndM1lFinal = transporte_ind_m1l ? 1 : 0;
     const transIndRetVacioFinal = transporte_ind_retorno_vacio ? 1 : 0;
@@ -3735,7 +3647,6 @@ export async function rectificarCantidadProducto(req, res) {
     
     ordenCompletaDetalle.data.forEach(d => {
       const cant = (d.id_producto == id_producto) ? cantidadNueva : parseFloat(d.cantidad);
-      // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
       nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario));
     });
 
@@ -3867,7 +3778,6 @@ export async function descargarPDFGuiaInterna(req, res) {
 
     let numeroGuiaInterna = orden.numero_guia_interna;
 
-    // Si no tiene guía global, buscamos si tiene algún despacho registrado para usar ese correlativo
     if (!numeroGuiaInterna) {
         const despachoResult = await executeQuery(`
             SELECT observaciones FROM salidas 
@@ -4031,7 +3941,6 @@ export async function getDatosVerificacionOrden(req, res) {
       });
     }
 
-    // 1. DATOS DE LA ORDEN
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -4069,7 +3978,6 @@ export async function getDatosVerificacionOrden(req, res) {
 
     const orden = ordenResult.data[0];
 
-    // 2. DETALLE DE LA ORDEN
     const detalleResult = await executeQuery(`
       SELECT
         dov.*,
@@ -4085,7 +3993,6 @@ export async function getDatosVerificacionOrden(req, res) {
 
     orden.detalle = detalleResult.data || [];
 
-    // 3. HISTORIAL DE ÓRDENES DEL CLIENTE (últimas 10)
     const historialResult = await executeQuery(`
       SELECT 
         id_orden_venta,
@@ -4122,7 +4029,6 @@ export async function getDatosVerificacionOrden(req, res) {
 
     const historial = historialResult.data || [];
 
-    // 4. CALCULAR DEUDA ACTUAL DEL CLIENTE
     const deudaResult = await executeQuery(`
       SELECT 
         COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN (total - monto_pagado) ELSE 0 END), 0) AS deuda_pen,
@@ -4136,7 +4042,6 @@ export async function getDatosVerificacionOrden(req, res) {
 
     const deuda = deudaResult.data[0] || { deuda_pen: 0, deuda_usd: 0, total_ordenes_pendientes: 0 };
 
-    // 5. ÓRDENES VENCIDAS DEL CLIENTE
     const vencidasResult = await executeQuery(`
       SELECT 
         numero_orden,
@@ -4156,7 +4061,6 @@ export async function getDatosVerificacionOrden(req, res) {
 
     const ordenes_vencidas = vencidasResult.data || [];
 
-    // 6. ESTADÍSTICAS DE PAGO DEL CLIENTE
     const estadisticasResult = await executeQuery(`
       SELECT 
         COUNT(*) AS total_ordenes,
@@ -4187,7 +4091,6 @@ export async function getDatosVerificacionOrden(req, res) {
       promedio_dias_retraso: 0
     };
 
-    // 7. ANÁLISIS DE CRÉDITO
     let analisis_credito = null;
 
     if (orden.plazo_pago !== 'Contado' && orden.usar_limite_credito) {
@@ -4214,7 +4117,6 @@ export async function getDatosVerificacionOrden(req, res) {
       };
     }
 
-    // 8. RESPUESTA COMPLETA
     res.json({
       success: true,
       data: {
@@ -4296,7 +4198,6 @@ export async function aprobarOrdenVerificacion(req, res) {
     }
 
     await notificarOrdenAprobada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, getIO(req));
-    // Las órdenes de muestra no se facturan: no se pide definir comprobante.
     if (Number(orden.es_muestra) !== 1) {
       await notificarComercialDefinirComprobante(id, orden.numero_orden, orden.id_comercial, getIO(req));
     }
@@ -4612,7 +4513,6 @@ export async function desmarcarFacturadoSunat(req, res) {
   }
 }
 
-// POST /:id/facturas/:idFactura/anular — anula una factura específica de la orden.
 export async function anularFacturaSunat(req, res) {
   try {
     const { id, idFactura } = req.params;
@@ -4668,9 +4568,6 @@ export async function anularFacturaSunat(req, res) {
   }
 }
 
-// DELETE /:id/facturas/:idFactura — elimina (soft) una factura por confusión/error
-// de sistema (documento equivocado, mal vinculada, etc.). Distinto de "Anular"
-// (que es una anulación formal hecha en el portal de SUNAT).
 export async function eliminarFacturaVenta(req, res) {
   try {
     const { id, idFactura } = req.params;
@@ -4698,9 +4595,6 @@ export async function eliminarFacturaVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Esta factura ya fue eliminada' });
     }
 
-    // Libera el numero_factura del índice UNIQUE renombrándolo con un sufijo único.
-    // El número legible queda igual en las columnas serie/numero para auditoría, y
-    // como las 'Eliminada' nunca se muestran, el sufijo no afecta la vista.
     const upd = await executeQuery(
       `UPDATE facturas_venta
           SET estado = 'Eliminada', motivo_eliminacion = ?, fecha_eliminacion = ?, id_eliminado_por = ?,
@@ -4713,7 +4607,6 @@ export async function eliminarFacturaVenta(req, res) {
       return res.status(500).json({ success: false, error: upd.error });
     }
 
-    // Recalcula el resumen: al no contar 'Emitida', libera saldo y despacho.
     await sincronizarResumenFacturacion(id);
 
     res.json({
@@ -4769,7 +4662,6 @@ export async function asignarGuiaInternaASalida(req, res) {
   try {
     const { id, idSalida } = req.params;
 
-    // 1. Verificar existencia de la orden y que sea Nota de Venta
     const ordenResult = await executeQuery(
       'SELECT id_orden_venta, numero_orden, tipo_comprobante, numero_guia_interna FROM ordenes_venta WHERE id_orden_venta = ?',
       [id]
@@ -4788,7 +4680,6 @@ export async function asignarGuiaInternaASalida(req, res) {
       });
     }
 
-    // 2. Verificar existencia del despacho
     const salidaResult = await executeQuery(
       'SELECT id_salida, observaciones FROM salidas WHERE id_salida = ?',
       [idSalida]
@@ -4800,7 +4691,6 @@ export async function asignarGuiaInternaASalida(req, res) {
 
     const salida = salidaResult.data[0];
 
-    // 3. Verificar si ya tiene una guía asignada
     const matchExistente = salida.observaciones.match(/GI-\d{4}-\d+/);
     if (matchExistente) {
       return res.status(400).json({ 
@@ -4809,10 +4699,8 @@ export async function asignarGuiaInternaASalida(req, res) {
       });
     }
 
-    // 4. Búsqueda Inteligente Doble del Correlativo (Lógica MAX + 1)
     const year = new Date().getFullYear();
     
-    // Buscar en Salidas
     const ultimaGuiaSalida = await executeQuery(`
         SELECT observaciones 
         FROM salidas 
@@ -4820,7 +4708,6 @@ export async function asignarGuiaInternaASalida(req, res) {
         ORDER BY id_salida DESC LIMIT 1
     `, [`GI-${year}-%`]);
 
-    // Buscar en Ordenes de Venta
     const ultimaGuiaOV = await executeQuery(`
         SELECT numero_guia_interna
         FROM ordenes_venta
@@ -4844,8 +4731,6 @@ export async function asignarGuiaInternaASalida(req, res) {
     const secuenciaFinal = Math.max(secSalida, secOV) + 1;
     const numeroGuiaInterna = `GI-${year}-${String(secuenciaFinal).padStart(4, '0')}`;
 
-    // 5. Actualizar despacho y orden
-    // Si la observación original es 'Despacho Orden OV-XXXX', ahora será 'GI-2026-0025 - Despacho Orden OV-XXXX'
     const nuevaObservacion = `${numeroGuiaInterna} - ${salida.observaciones}`;
     
     const queries = [
@@ -4885,7 +4770,6 @@ export async function parsearFacturaSunat(req, res) {
       return res.status(400).json({ success: false, error: 'No se subió ningún archivo PDF.' });
     }
     
-    // El archivo está en memoria gracias a multer.memoryStorage()
     const parsedData = await parseSunatInvoice(req.file.buffer);
     
     res.json({
@@ -4931,7 +4815,6 @@ export async function agregarDocumentoAdicional(req, res) {
     const { id } = req.params;
     const { tipo_documento, correlativo } = req.body;
     const id_registrado_por = req.user?.id_empleado || null;
-    // id_salida opcional: cuando el documento (guía, etc.) se adjunta a un despacho concreto.
     const idSalida = req.body.id_salida ? parseInt(req.body.id_salida, 10) : null;
 
     if (!tipo_documento) {
@@ -5044,11 +4927,7 @@ export async function verificarOC(req, res) {
   }
 }
 
-// ==========================================================================
-// FACTURACIÓN SUNAT (multi-factura por orden — tabla facturas_venta)
-// ==========================================================================
 
-// Normaliza el valor de url_pdf (JSON en BD) a una URL string simple.
 function extraerUrlPdf(v) {
   if (!v) return null;
   let val = v;
@@ -5065,7 +4944,6 @@ function extraerUrlPdf(v) {
   return null;
 }
 
-// Deriva subtotal e IGV a partir del importe total y la config de impuesto de la orden.
 function derivarMontosFactura(total, orden) {
   const t = parseFloat(total) || 0;
   const pct = parseFloat(orden?.porcentaje_impuesto || 0);
@@ -5079,8 +4957,6 @@ function derivarMontosFactura(total, orden) {
   return { subtotal, igv, total: +t.toFixed(4) };
 }
 
-// Recalcula los campos resumen de facturación en ordenes_venta desde facturas_venta.
-// Mantiene compatibilidad con el listado y las vistas que leen ov.facturado_sunat, etc.
 async function sincronizarResumenFacturacion(idOrden) {
   const emitidas = await executeQuery(
     `SELECT id_factura, numero_factura, url_pdf, fecha_emision, id_registrado_por
@@ -5114,7 +4990,6 @@ async function sincronizarResumenFacturacion(idOrden) {
   );
 }
 
-// GET /:id/facturas — todas las facturas (Emitidas y Anuladas) + resumen de saldo.
 export async function getFacturasOrden(req, res) {
   try {
     const { id } = req.params;
@@ -5154,10 +5029,6 @@ export async function getFacturasOrden(req, res) {
       xml_url: extraerUrlPdf(f.xml_url),
       cdr_url: extraerUrlPdf(f.cdr_url)
     }));
-    // Solo suman al facturado las facturas realmente vigentes: FACTURAS (01) o manuales, en estado
-    // 'Emitida' y aceptadas por SUNAT. Se EXCLUYEN: notas de crédito/débito (07/08 — no facturan la OV,
-    // solo ajustan/anulan), rechazadas/enviadas/error, y las dadas de baja (BAJA). Así el total facturado
-    // y el saldo no se inflan con la NC ni con documentos sin efecto.
     const emitidas = facturas.filter(f =>
       f.estado === 'Emitida' &&
       f.codigo_tipo_sunat !== '07' && f.codigo_tipo_sunat !== '08' &&
@@ -5190,7 +5061,6 @@ export async function vincularFacturaSunat(req, res) {
     const { id } = req.params;
     let { numero_comprobante_sunat, fecha_facturacion_sunat, importe_total, comprobante_url, forzar } = req.body;
     const id_empleado = req.user?.id_empleado || null;
-    // id_salida opcional: cuando la factura se sube desde un despacho concreto.
     const idSalida = req.body.id_salida ? parseInt(req.body.id_salida, 10) : null;
     const forzarBool = forzar === true || forzar === 'true' || forzar === 1 || forzar === '1';
 
@@ -5213,11 +5083,8 @@ export async function vincularFacturaSunat(req, res) {
     }
     const orden = ordenRes.data[0];
 
-    // Si viene id_salida: validar que el despacho pertenece a esta orden y
-    // aplicar la regla blanda "1 factura por despacho" (avisa, permite forzar).
-    // Guardamos el valor del despacho para validar el monto de la factura más abajo.
-    let totalDespacho = null;      // salidas.total_precio del despacho
-    let yaFacturadoDespacho = 0;   // suma facturas Emitidas ya vinculadas a este despacho
+    let totalDespacho = null;
+    let yaFacturadoDespacho = 0;
     if (idSalida) {
       const salidaRes = await executeQuery(
         `SELECT id_salida, total_precio FROM salidas
@@ -5248,8 +5115,6 @@ export async function vincularFacturaSunat(req, res) {
       }
     }
 
-    // Duplicado: numero_factura es UNIQUE global. Las 'Eliminada' (error de sistema)
-    // se ignoran para permitir volver a registrar incluso el mismo número.
     const dup = await executeQuery(
       "SELECT id_factura, id_orden_venta FROM facturas_venta WHERE numero_factura = ? AND estado != 'Eliminada'",
       [numero]
@@ -5258,7 +5123,6 @@ export async function vincularFacturaSunat(req, res) {
       return res.status(400).json({ success: false, error: `El comprobante ${numero} ya está registrado en el sistema.` });
     }
 
-    // Validación de saldo pendiente
     const totalNuevo = parseFloat(String(importe_total ?? '').replace(/,/g, '')) || parseFloat(orden.total) || 0;
     const totalOrden = parseFloat(orden.total || 0);
     const sumaRes = await executeQuery(
@@ -5278,9 +5142,6 @@ export async function vincularFacturaSunat(req, res) {
       });
     }
 
-    // Validación por despacho: la factura (incluye IGV) no debe exceder el valor
-    // del despacho CON IGV. El total_precio de la salida es neto (sin IGV), así que
-    // lo llevamos a bruto con la config de impuesto de la orden.
     if (idSalida && totalDespacho > 0) {
       const pctImp = parseFloat(orden.porcentaje_impuesto || 0);
       const tipoImp = String(orden.tipo_impuesto || '').toUpperCase();
@@ -5298,7 +5159,6 @@ export async function vincularFacturaSunat(req, res) {
       }
     }
 
-    // Subir PDF a Cloudinary
     if (req.file) {
       const resultCloudinary = await subirArchivoACloudinary(req.file, 'indpack_ventas/facturas_sunat');
       comprobante_url = resultCloudinary.secure_url;

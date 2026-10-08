@@ -1,18 +1,14 @@
-// services/sunat/util.service.js — utilidades compartidas del módulo SUNAT (controller + servicios).
 import { promises as fs } from 'fs';
 
-/** Promesa que resuelve tras ms milisegundos (usada en los polls de tickets). */
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Copia local de depuración en sunat-output/ (gitignored). No crítico: nunca lanza. */
 export async function copiaLocal(nombre, contenido) {
   try {
     await fs.mkdir('sunat-output', { recursive: true });
     await fs.writeFile(`sunat-output/${nombre}`, contenido);
-  } catch { /* depuración, no crítico */ }
+  } catch {}
 }
 
-/** Las columnas xml_url/cdr_url guardan {url:...} (JSON u objeto según el driver). Devuelve el string. */
 export function extraerUrl(v) {
   if (!v) return null;
   const desdeValor = (valor) => {
@@ -25,81 +21,45 @@ export function extraerUrl(v) {
   try { return desdeValor(JSON.parse(v)); } catch { return v; }
 }
 
-/**
- * Placa para SUNAT: alfanumérica en MAYÚSCULAS, sin guion ni espacios. Así la registra el MTC y
- * así la refleja la representación impresa de SUNAT (p. ej. "AVZ-890" → "AVZ890"); el guion puede
- * provocar rechazo en la GRE REST. Devuelve null si queda vacía. Se aplica solo al valor enviado,
- * no al dato de flota.
- */
 export function normalizarPlaca(placa) {
   const s = String(placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return s || null;
 }
 
-/**
- * Valida la placa YA normalizada (sin guion/espacios). Las placas peruanas del MTC son alfanuméricas
- * de 6 caracteres (autos/camionetas: "B2Q671", "AVZ890") y hasta 7-8 en casos especiales (remolques,
- * placas antiguas). Aceptamos 6–8 alfanuméricos. Devuelve true/false. Úsese sobre normalizarPlaca().
- */
 export function placaValida(placa) {
   const s = normalizarPlaca(placa);
   return !!s && /^[A-Z0-9]{6,8}$/.test(s);
 }
 
-/** DNI: exactamente 8 dígitos. */
 export function dniValido(dni) {
   return /^\d{8}$/.test(String(dni || '').trim());
 }
 
-/** RUC: exactamente 11 dígitos. */
 export function rucValido(ruc) {
   return /^\d{11}$/.test(String(ruc || '').trim());
 }
 
-/** Ubigeo INEI: exactamente 6 dígitos. */
 export function ubigeoValido(ubigeo) {
   return /^\d{6}$/.test(String(ubigeo || '').trim());
 }
 
-/**
- * Código de Bien (GTIN) para el detalle de la GRE: opcional, y cuando se usa es de exactamente
- * 13 dígitos numéricos (GTIN-13), distinto del código interno de producto. Devuelve true si el
- * campo viene vacío (es opcional) o si cumple el formato.
- */
 export function codigoBienValido(codigoBien) {
   const v = String(codigoBien ?? '').trim();
-  if (!v) return true; // opcional: nada que validar
+  if (!v) return true;
   return /^\d{13}$/.test(v);
 }
-/**
- * Observación por defecto de un comprobante (factura/GRE): concatena el texto libre con la orden
- * de compra del cliente (si la OV la tiene) en un solo campo. SUNAT lo refleja como "Observaciones"
- * y viaja en cbc:Note. Formato "<texto libre> | OC: <oc>" (igual etiqueta que la representación de
- * SUNAT). Máx 250. Es solo el valor SUGERIDO: en la factura el usuario puede editarlo antes de emitir.
- */
+
 export function componerObservacion(observaciones, ordenCompra) {
   const partes = [];
   const obs = String(observaciones || '').replace(/[\r\n]+/g, ' ').trim();
   if (obs) partes.push(obs);
   const oc = String(ordenCompra || '').trim();
-  // Solo se agrega "OC: <oc>" si la OC NO está ya mencionada en el texto libre (evita el duplicado
-  // "OC - 123 | OC: OC - 123" cuando el usuario ya escribió la OC en las observaciones). Además la
-  // OC viaja aparte en cac:OrderReference del XML, así que esto es solo la sugerencia del panel.
   if (oc && !obs.toLowerCase().includes(oc.toLowerCase())) partes.push(`OC: ${oc}`);
   return partes.join(' | ').slice(0, 250);
 }
 
-// Alias histórico usado por la GRE; misma composición.
 export const componerObservacionGuia = componerObservacion;
 
-/**
- * Arma la dirección fiscal completa de la empresa a partir de los campos de empresa_config:
- * "<direccion> <urbanizacion> <departamento> - <provincia> - <distrito>"
- * (p. ej. "AV. EL SOL MZ. LL-1 LOTE. 4 B COO. LAS VERTIENTES ... LIMA - LIMA - VILLA EL SALVADOR").
- * Fuente única compartida por el alta de la guía (controller) y la re-sincronización de origen/llegada
- * en la emisión (gre-emision.service), para que ambos guarden EXACTAMENTE el mismo texto y no diverjan.
- * Si no hay más campos que `direccion`, cae a ese valor.
- */
 export function armarDireccionEmpresa(cfg = {}) {
   const valorReal = (v) => v && String(v).trim() && String(v).trim() !== '-';
   const partes = [cfg.direccion, cfg.urbanizacion].filter(valorReal).join(' ');

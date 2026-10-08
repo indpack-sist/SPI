@@ -18,8 +18,6 @@ import { usePermisos } from '../../context/PermisosContext';
 function NuevaCompra() {
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  // verFinanzas: quién maneja cuentas/créditos/condiciones de pago. Calidad = false:
-  // registra la compra (con o sin montos) y la parte de pago la regulariza un Admin.
   const verFinanzas = tienePermiso('verPrecios');
 
   const [loading, setLoading] = useState(false);
@@ -52,12 +50,12 @@ function NuevaCompra() {
     if (!itemManual.nombre.trim()) return;
 
     const nuevoItem = {
-      id_producto: null, // Indica que es manual
+      id_producto: null,
       codigo_producto: 'MANUAL',
       producto: itemManual.nombre.toUpperCase(),
       unidad_medida: itemManual.unidad_medida,
       cantidad: parseFloat(itemManual.cantidad),
-      cantidad_a_recibir: 0, // Por lo general ítems manuales no entran a stock físico automáticamente
+      cantidad_a_recibir: 0,
       precio_unitario: parseFloat(itemManual.precio_unitario),
       descuento_porcentaje: 0.00
     };
@@ -74,7 +72,7 @@ function NuevaCompra() {
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   
   const [accionPago, setAccionPago] = useState('registro');
-  const [modoRegistro, setModoRegistro] = useState('compra'); // 'compra' o 'solicitud'
+  const [modoRegistro, setModoRegistro] = useState('compra');
   const [formData, setFormData] = useState({
     id_proveedor: '',
     id_cuenta_pago: '',
@@ -181,7 +179,6 @@ function NuevaCompra() {
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      // Calidad no accede a cuentas de pago (403): solo se piden si maneja finanzas.
       const peticiones = [
         proveedoresAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: '1,2,4,5,6' }),
@@ -830,9 +827,6 @@ function NuevaCompra() {
           <div className="space-y-6">
             {detalle.length > 0 && (
               <>
-                {/* Panel único de Condición de Pago + Cronograma (visible en compra y solicitud) */}
-                {/* Calidad (sin verFinanzas) no ve/elige cuentas ni condiciones: la compra
-                    nace pendiente de regularizar (Contado, accionPago='registro', sin cuenta). */}
                 {verFinanzas && (modoRegistro === 'compra' || modoRegistro === 'solicitud') && (
                   <div className="card">
                     <div className="card-header bg-gray-50">

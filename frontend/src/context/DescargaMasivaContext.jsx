@@ -4,23 +4,21 @@ import { sunatAPI } from '../config/api';
 const DescargaMasivaContext = createContext(null);
 export const useDescargaMasiva = () => useContext(DescargaMasivaContext);
 
-// ¿El navegador soporta escribir carpetas (File System Access API)?
 export const soportaDescargaCarpetas = () => typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
-// Sanea un nombre para usarlo como carpeta/archivo (quita caracteres inválidos en Windows).
 const sanear = (s) => String(s ?? '').replace(/[\\/:*?"<>|]/g, '-').trim() || 'sin-nombre';
 
 const ESTADO_INICIAL = {
   activa: false,
   total: 0,
   hechos: 0,
-  actual: '',          // correlativo en curso
-  ok: 0,               // comprobantes procesados sin fallo
-  fallidos: [],        // [{ documento, error }]
-  omitidos: [],        // [{ documento, archivo }] (no existía XML/CDR)
+  actual: '',
+  ok: 0,
+  fallidos: [],
+  omitidos: [],
   terminada: false,
   cancelada: false,
-  carpeta: '',         // nombre de la carpeta padre
+  carpeta: '',
 };
 
 export function DescargaMasivaProvider({ children }) {
@@ -30,9 +28,6 @@ export function DescargaMasivaProvider({ children }) {
   const cancelar = useCallback(() => { cancelarRef.current = true; }, []);
   const cerrar = useCallback(() => setEstado(ESTADO_INICIAL), []);
 
-  // comprobantes: [{ id_factura, documento, xml_url, cdr_url }]
-  // opciones: { pdf: bool, xml: bool, cdr: bool }
-  // rango: { desde, hasta }  → para nombrar la carpeta padre
   const iniciarDescarga = useCallback(async (comprobantes, opciones, rango) => {
     if (!soportaDescargaCarpetas()) {
       throw new Error('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.');
@@ -40,11 +35,9 @@ export function DescargaMasivaProvider({ children }) {
     if (!comprobantes?.length) throw new Error('No hay comprobantes seleccionados.');
     if (!opciones.pdf && !opciones.xml && !opciones.cdr) throw new Error('Elige al menos un tipo de archivo.');
 
-    // 1) Elegir carpeta destino (gesto del usuario). Debe llamarse desde el click.
     const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
 
-    // 2) Crear la carpeta padre: rango consultado + día de descarga.
-    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // YYYY-MM-DD
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
     const rangoTxt = (rango?.desde && rango?.hasta) ? `${rango.desde}_${rango.hasta}` : hoy;
     const carpetaPadre = sanear(`Comprobantes ${rangoTxt} (descarga ${hoy})`);
     const padre = await dirHandle.getDirectoryHandle(carpetaPadre, { create: true });
@@ -56,14 +49,12 @@ export function DescargaMasivaProvider({ children }) {
     const fallidos = [];
     const omitidos = [];
 
-    // 3) Bucle SECUENCIAL (1 comprobante a la vez → no ahoga Render).
     for (let i = 0; i < comprobantes.length; i++) {
       if (cancelarRef.current) break;
       const c = comprobantes[i];
       const doc = sanear(c.documento || `comprobante-${c.id_factura}`);
       setEstado((e) => ({ ...e, actual: doc, hechos: i }));
 
-      // Crear la subcarpeta del comprobante. Si esto falla, no hay dónde escribir → todo el comprobante falla.
       let sub;
       try {
         sub = await padre.getDirectoryHandle(doc, { create: true });
@@ -73,7 +64,6 @@ export function DescargaMasivaProvider({ children }) {
         continue;
       }
 
-      // Cada archivo se maneja por separado: un PDF que falla NO impide bajar el XML/CDR.
       const tareas = [];
       if (opciones.pdf) tareas.push({ tipo: 'PDF', nombre: `${doc}.pdf`, get: () => sunatAPI.obtenerBlobPdfComprobante(c.id_factura) });
       if (opciones.xml) {
@@ -90,7 +80,7 @@ export function DescargaMasivaProvider({ children }) {
       for (const t of tareas) {
         if (cancelarRef.current) break;
         try {
-          const blob = await conReintento(t.get);   // reintenta ante fallos transitorios
+          const blob = await conReintento(t.get);
           await escribir(sub, t.nombre, blob);
           okArchivos += 1;
         } catch (err) {
@@ -101,7 +91,6 @@ export function DescargaMasivaProvider({ children }) {
       }
 
       if (okArchivos > 0 && falloArchivos === 0) ok += 1;
-      // Respiro entre comprobantes: alivia la CPU del Render Free si se piden PDFs.
       await new Promise((r) => setTimeout(r, 150));
     }
 
@@ -125,7 +114,6 @@ export function DescargaMasivaProvider({ children }) {
   );
 }
 
-// Ejecuta una promesa con reintentos ante fallos transitorios (red, 5xx puntual bajo carga).
 async function conReintento(fn, intentos = 2, esperaMs = 500) {
   let ultimo;
   for (let k = 0; k < intentos; k++) {
@@ -135,7 +123,6 @@ async function conReintento(fn, intentos = 2, esperaMs = 500) {
   throw ultimo;
 }
 
-// Escribe un blob como archivo dentro de un directorio (File System Access API).
 async function escribir(dirHandle, nombre, blob) {
   const fileHandle = await dirHandle.getFileHandle(nombre, { create: true });
   const writable = await fileHandle.createWritable();

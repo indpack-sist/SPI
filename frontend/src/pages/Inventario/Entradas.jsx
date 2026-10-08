@@ -75,7 +75,6 @@ function Entradas() {
     setCurrentPage(1);
   }, [filtro]);
 
-  // Efecto para limpiar o establecer el tipo de cambio por defecto
   useEffect(() => {
     if (formData.moneda === 'PEN') {
       setFormData(prev => ({ ...prev, tipo_cambio: '1.0000' }));

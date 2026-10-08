@@ -54,7 +54,6 @@ export default function TableroSupervisor() {
       if (agrupadas[orden.estado]) {
         agrupadas[orden.estado].push(orden);
       } else if (orden.estado === 'En Espera') {
-         // Ajuste por si el estado viene como 'En Espera' en vez de Pendiente
          agrupadas['Pendiente'].push(orden);
       }
     });

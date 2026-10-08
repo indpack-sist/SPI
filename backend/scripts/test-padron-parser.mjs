@@ -1,6 +1,5 @@
 import { parsearResultadosRucPe, parsearFicha } from '../services/padron-ruc.service.js';
 
-// Muestra REAL de la página de resultados de ruc.pe (?s=20600869737).
 const resultadosHtml = `
 <html><body>
 Resultados de la búsqueda de «20600869737»
@@ -9,7 +8,6 @@ RUC.PE Directorio Empresarial Menu RUC CONSULTA MULTIPLE CONSULTA RUC
 Search Results for: 20600869737 VANGUARD INTERNATIONAL GROUP PERU SAC AV. LOS CONQUISTADORES NRO 605 SAN ISIDRO LIMA LIMA
 </body></html>`;
 
-// Muestra de una ficha de empresa (estructura tabla clave/valor de ruc.pe).
 const fichaHtml = `
 <html><body>
 <h1>VANGUARD INTERNATIONAL GROUP PERU SAC</h1>

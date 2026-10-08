@@ -1,6 +1,3 @@
-/* Trazabilidad SEE — diseño administrativo. Todo se apoya en los tokens de tema
-   (--bg-*, --text-*, --border) para funcionar en claro y oscuro sin contrastes rotos. */
-
 .tz-page {
   max-width: 1500px;
   margin: 0 auto;
@@ -10,7 +7,6 @@
 .tz-spin { animation: tz-spin 1s linear infinite; }
 @keyframes tz-spin { to { transform: rotate(360deg); } }
 
-/* ------------------------------- Cabecera -------------------------------- */
 .tz-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;
   margin-bottom: 1.25rem;
@@ -35,7 +31,6 @@
 .tz-refresh:hover:not(:disabled) { border-color: var(--text-secondary); }
 .tz-refresh:disabled { opacity: .6; cursor: default; }
 
-/* --------------------------------- Tabs --------------------------------- */
 .tz-tabs { display: flex; gap: .35rem; border-bottom: 1px solid var(--border); margin-bottom: 1.1rem; }
 .tz-tab {
   display: inline-flex; align-items: center; gap: .5rem;
@@ -46,7 +41,6 @@
 .tz-tab:hover { color: var(--text-primary); }
 .tz-tab.active { color: var(--text-primary); border-bottom-color: #6366f1; }
 
-/* ------------------------------- Toolbar -------------------------------- */
 .tz-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
   margin-bottom: 1rem;
@@ -96,7 +90,6 @@
 .tz-btn-primary { background: #6366f1; color: #fff; }
 .tz-btn-primary:hover { background: #4f52e0; }
 
-/* -------------------------------- Chips --------------------------------- */
 .tz-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
 .tz-chip {
   display: inline-flex; align-items: center; gap: .45rem; cursor: pointer;
@@ -110,7 +103,6 @@
 .tz-chip.on { border-color: var(--c, #6366f1); background: color-mix(in srgb, var(--c, #6366f1) 12%, var(--bg-primary)); color: var(--text-primary); }
 .tz-chip.total.on { border-color: #6366f1; background: color-mix(in srgb, #6366f1 12%, var(--bg-primary)); }
 
-/* -------------------------------- Toast --------------------------------- */
 .tz-toast {
   display: flex; align-items: center; gap: .5rem; cursor: pointer;
   padding: .6rem .85rem; margin-bottom: 1rem; border-radius: 9px; font-size: .84rem;
@@ -118,7 +110,6 @@
   border: 1px solid color-mix(in srgb, #ef4444 40%, var(--border)); color: var(--text-primary);
 }
 
-/* -------------------------------- Tabla --------------------------------- */
 .tz-table-wrap {
   background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px;
   overflow: auto; box-shadow: 0 1px 2px rgba(0,0,0,.04);
@@ -192,7 +183,6 @@
 .tz-iconbtn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-secondary); background: var(--bg-tertiary); }
 .tz-iconbtn:disabled { opacity: .35; cursor: default; }
 
-/* --------------------------- Fila de detalle ---------------------------- */
 .tz-detail-row td { padding: 0; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
 .tz-detail {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .85rem 1.5rem;
@@ -205,7 +195,6 @@
 }
 .tz-det-item strong { font-size: .84rem; font-weight: 600; color: var(--text-primary); word-break: break-word; }
 
-/* ------------------------------- Estados -------------------------------- */
 .tz-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem;
   padding: 4rem 1.5rem; text-align: center; color: var(--text-secondary);
@@ -220,7 +209,6 @@
   border: 1px solid color-mix(in srgb, #ef4444 40%, var(--border)); color: var(--text-primary);
 }
 
-/* -------------------------------- Drawer -------------------------------- */
 .tz-drawer-scrim {
   position: fixed; inset: 0; z-index: 1200;
   background: rgba(0,0,0,.45); backdrop-filter: blur(2px);
@@ -284,17 +272,14 @@
 .tz-drawer-foot { padding: 1rem 1.35rem; border-top: 1px solid var(--border); }
 .tz-drawer-foot .tz-btn { width: 100%; justify-content: center; }
 
-/* ------------------------------ Responsive ------------------------------ */
 @media (max-width: 720px) {
   .tz-page { padding: 1rem; }
   .tz-header { flex-direction: column; gap: .75rem; }
   .tz-drawer-card { grid-template-columns: 1fr; }
 }
 
-/* ===================== Pestaña: descarga masiva ===================== */
 .tz-descarga { display: flex; flex-direction: column; gap: 1rem; }
 
-/* --- Paso 1: tarjeta de consulta --- */
 .tz-dm-consulta {
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem;
   padding: 1.1rem 1.25rem; border-radius: 12px;
@@ -304,7 +289,6 @@
 .tz-dm-consulta-lead p { margin: .35rem 0 0; font-size: .84rem; color: var(--text-secondary); line-height: 1.5; max-width: 44ch; }
 .tz-dm-consulta-form { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
-/* --- Paso 2: barra de acción (selección + descarga) --- */
 .tz-dm-actionbar {
   position: sticky; top: .5rem; z-index: 3;
   display: flex; align-items: center; gap: .8rem;
@@ -324,12 +308,10 @@
 }
 .tz-dm-clear:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
-/* Botón de descarga: acento verde sólido (lenguaje de "bajar archivos"). */
 .tz-btn-download { background: #16a34a; color: #fff; }
 .tz-btn-download:hover:not(:disabled) { background: #15803d; }
 .tz-btn-download:disabled { opacity: .45; cursor: default; }
 
-/* --- Nota de descarga en curso --- */
 .tz-descarga-nota {
   display: flex; align-items: center; gap: .55rem;
   font-size: .8rem; padding: .6rem .85rem; border-radius: 9px;
@@ -337,7 +319,6 @@
   border: 1px solid color-mix(in srgb, #f59e0b 32%, var(--border)); color: var(--text-primary);
 }
 
-/* --- Tabla de descarga: checkbox, selección y reveal escalonado --- */
 .tz-col-check { width: 42px; text-align: center !important; }
 .tz-col-check input {
   width: 16px; height: 16px; accent-color: #16a34a; cursor: pointer; vertical-align: middle;
@@ -350,10 +331,8 @@
 .tz-dm-row:hover { background: var(--bg-secondary); }
 .tz-dm-row.sel { background: color-mix(in srgb, #22c55e 9%, var(--bg-primary)); }
 .tz-dm-row.sel:hover { background: color-mix(in srgb, #22c55e 13%, var(--bg-primary)); }
-/* Filo verde a la izquierda de la fila seleccionada. */
 .tz-dm-row.sel td:first-child { box-shadow: inset 3px 0 0 #16a34a; }
 
-/* Aparición suave y escalonada al cargar resultados. */
 .tz-dm-row { animation: tz-dm-in .34s ease backwards; animation-delay: calc(var(--i, 0) * 22ms); }
 @keyframes tz-dm-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {

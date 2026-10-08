@@ -20,13 +20,10 @@ function DetalleCompra() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  // verFinanzas: cuentas/créditos/pagos/letras y acciones financieras → nunca para Calidad
   const verFinanzas = tienePermiso('verPrecios');
 
   const [compra, setCompra] = useState(null);
   const [modalGuiaOpen, setModalGuiaOpen] = useState(false);
-  // verMontos: mostrar PRECIOS de ESTA compra. El backend marca puede_ver_montos
-  // por propiedad (Calidad ve montos solo en las compras que él mismo registró).
   const verMontos = compra?.puede_ver_montos ?? verFinanzas;
   const [cuentasPago, setCuentasPago] = useState([]);
   const [letras, setLetras] = useState([]);
@@ -115,7 +112,6 @@ function DetalleCompra() {
     try {
       setLoading(true); 
       setError(null);
-      // Calidad no accede a cuentas de pago (403): solo se piden si maneja finanzas.
       const peticiones = [
         comprasAPI.getById(id),
         productosAPI.getAll({ estado: 'Activo' })
@@ -534,7 +530,6 @@ function DetalleCompra() {
       setLoading(true);
       const response = await comprasAPI.update(id, {
         ...datosConvertir,
-        // Al convertir, aseguramos que ya no sea solo formato
         tipo_documento: datosConvertir.tipo_documento
       });
       if (response.data.success) {
@@ -1009,7 +1004,6 @@ function DetalleCompra() {
                 </div>
                 <div className="card-body text-sm text-gray-600">
                   {(() => {
-                    // Ocultar metadatos internos embebidos en registros antiguos
                     const obs = (compra.observaciones || '')
                       .replace(/\[ITEM_MANUAL_ID_\d+\]:.*(\n|$)/g, '')
                       .replace(/\[PLAZO_PAGO\]:.*(\n|$)/g, '')

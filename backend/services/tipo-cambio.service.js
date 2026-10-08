@@ -44,11 +44,8 @@ export function obtenerTipoCambioCache() {
 
 export async function actualizarTipoCambio(date = null) {
   try {
-    // 1. Determinar la fecha a consultar
-    const dateToQuery = date || new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }).split(',')[0].split('/').reverse().join('-'); 
-    // Format mm/dd/yyyy to yyyy-mm-dd roughly, or just rely on MySQL handling if we parse date cleanly
-    
-    // Mejor formato de fecha actual en Lima
+    const dateToQuery = date || new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }).split(',')[0].split('/').reverse().join('-');
+
     let fechaConsulta = date;
     if (!fechaConsulta) {
        const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -58,7 +55,6 @@ export async function actualizarTipoCambio(date = null) {
        fechaConsulta = `${yyyy}-${mm}-${dd}`;
     }
 
-    // 2. Consulta Inteligente: Verificar BD Local primero
     try {
       const dbResult = await executeQuery(
         `SELECT compra, venta, promedio, fecha, moneda_base, moneda_destino 
@@ -69,8 +65,7 @@ export async function actualizarTipoCambio(date = null) {
       
       if (dbResult.success && dbResult.data && dbResult.data.length > 0) {
         const localTC = dbResult.data[0];
-        
-        // Formatear la fecha para que sea string en lugar de objeto Date de MySQL
+
         const dateObj = new Date(localTC.fecha);
         const fechaStr = dateObj.toISOString().split('T')[0];
 
@@ -83,7 +78,6 @@ export async function actualizarTipoCambio(date = null) {
           moneda_destino: localTC.moneda_destino || 'PEN'
         };
 
-        // Actualizar caché
         tipoCambioCache = {
           data: tipoCambioLocal,
           timestamp: Date.now()
@@ -103,7 +97,6 @@ export async function actualizarTipoCambio(date = null) {
       console.error('Error leyendo TC local, procediendo a API externa:', dbReadError);
     }
 
-    // 3. Si no existe localmente, consultar API de Decolecta
     console.log(`TC para ${fechaConsulta} no encontrado localmente. Consultando API Decolecta...`);
     const params = {};
     if (date) {

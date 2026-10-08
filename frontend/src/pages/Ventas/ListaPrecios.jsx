@@ -11,8 +11,6 @@ function ListaPrecios() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Solo el creador puede editar. Las listas antiguas sin dueño (creado_por NULL)
-  // quedan abiertas hasta que alguien las edite y las reclame.
   const puedeEditar = (lista) => !lista?.creado_por || Number(lista.creado_por) === Number(user?.id);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -58,7 +56,6 @@ function ListaPrecios() {
       
       if (resClientes.data.success) setClientes(resClientes.data.data);
       if (resProductos.data.success) {
-        // En caso la API no soporte el filtrado directo, filtramos en el cliente por seguridad
         const terminados = resProductos.data.data.filter(p => p.id_tipo_inventario === 3);
         setProductosCatalogo(terminados.length > 0 ? terminados : resProductos.data.data.filter(p => p.id_tipo_inventario === 3));
       }
@@ -226,7 +223,6 @@ function ListaPrecios() {
     }
   };
 
-  // La fecha llega como DATE ('YYYY-MM-DD'); se muestra sin hora y sin desfase de zona.
   const fmtFecha = (f) => {
     if (!f) return '—';
     const [y, m, d] = String(f).slice(0, 10).split('-');
@@ -252,10 +248,8 @@ function ListaPrecios() {
       setNuevaLista(prev => {
           const items = { ...prev.items };
           if (items[idProducto] !== undefined) {
-              // Si ya existe, lo quitamos de la lista
               delete items[idProducto];
           } else {
-              // Si no existe, lo agregamos con su precio de referencia
               items[idProducto] = precioRef;
           }
           return { ...prev, items };
@@ -299,9 +293,8 @@ function ListaPrecios() {
       if (res.data.success) {
         setSuccess(modoEdicion ? 'Lista actualizada correctamente' : 'Lista creada correctamente');
         setModalOpen(false);
-        seleccionarCliente(clienteSel); 
-        
-        // Si estábamos viendo la lista que acabamos de editar, recargar el detalle
+        seleccionarCliente(clienteSel);
+
         if (modoEdicion && listaSeleccionadaID === idListaEditar) {
             verDetalle({ id_lista: idListaEditar, moneda: nuevaLista.moneda });
         }
@@ -354,8 +347,7 @@ function ListaPrecios() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0">
-        
-        {/* Selector de Clientes */}
+
         <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col h-full">
           <div className="card-header border-b border-steel/20 p-4">
             <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">1. Seleccionar Cliente</h2>
@@ -384,11 +376,9 @@ function ListaPrecios() {
           </div>
         </div>
 
-        {/* Panel Central y Derecho */}
         <div className="md:col-span-2 flex flex-col gap-6 h-full min-h-0">
           {clienteSel ? (
             <>
-              {/* Contenedor de Listas */}
               <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col shrink-0 max-h-[40%]">
                 <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light">
                   <div>
@@ -461,7 +451,6 @@ function ListaPrecios() {
                 </div>
               </div>
 
-              {/* Contenedor de Detalle de Productos */}
               <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex-1 flex flex-col min-h-0">
                 <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light shrink-0">
                   <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">

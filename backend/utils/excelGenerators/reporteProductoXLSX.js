@@ -15,7 +15,6 @@ const formatearFecha = (fecha) => {
   return `${d}/${m}/${y}`;
 };
 
-// Borde fino negro en las 4 caras
 const BORDE_FINO = {
   top: { style: 'thin', color: { argb: 'FF000000' } },
   left: { style: 'thin', color: { argb: 'FF000000' } },
@@ -23,15 +22,12 @@ const BORDE_FINO = {
   right: { style: 'thin', color: { argb: 'FF000000' } }
 };
 
-// Aplica borde fino a un rango de celdas A..C de una fila.
 function bordearFila(ws, rowIdx, nCols) {
   for (let i = 1; i <= nCols; i++) {
     ws.getCell(rowIdx, i).border = BORDE_FINO;
   }
 }
 
-// Genera el reporte por producto (producción vs despacho) en Excel, con el mismo
-// contenido que el PDF. Espera el objeto `datos` que arma construirDatosReporteProducto().
 export async function generarReporteProductoXLSX(datos = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'INDPACK S.A.C.';
@@ -47,7 +43,7 @@ export async function generarReporteProductoXLSX(datos = {}) {
   const despachado = parseFloat(datos.despachado || 0);
   const saldo = existenciaAnterior + producido - despachado;
 
-  const NCOLS = 3; // FECHA | N° ORDEN | PRODUCIDO
+  const NCOLS = 3;
   const lastCol = 'C';
 
   const ws = wb.addWorksheet('Reporte Producto', {
@@ -58,15 +54,12 @@ export async function generarReporteProductoXLSX(datos = {}) {
     }
   });
 
-  // Anchos: la primera columna suficiente para fechas/etiquetas, la del medio ancha
-  // para el nombre del producto y N° de orden, la tercera para cantidades.
   ws.getColumn(1).width = 26;
   ws.getColumn(2).width = 40;
   ws.getColumn(3).width = 20;
 
   let r = 1;
 
-  // --- Encabezado del reporte ---
   ws.mergeCells(`A${r}:${lastCol}${r}`);
   ws.getCell(`A${r}`).value = `${EMPRESA.razon_social}   -   R.U.C. ${EMPRESA.ruc}`;
   ws.getCell(`A${r}`).font = { bold: true, size: 12 };
@@ -81,9 +74,8 @@ export async function generarReporteProductoXLSX(datos = {}) {
   ws.getRow(r).height = 22;
   r++;
 
-  r++; // fila vacía separadora
+  r++;
 
-  // --- Datos del producto (etiqueta | valor) ---
   const infoFilas = [
     ['Producto:', `${producto.codigo || ''} - ${producto.nombre || ''}`],
     ['Unidad:', unidad || 'N/A'],
@@ -106,16 +98,14 @@ export async function generarReporteProductoXLSX(datos = {}) {
     r++;
   });
 
-  r++; // fila vacía separadora
+  r++;
 
-  // --- Resumen (Existencia anterior / Producido / Despachado / Saldo final) ---
   ws.mergeCells(`A${r}:${lastCol}${r}`);
   ws.getCell(`A${r}`).value = 'RESUMEN';
   ws.getCell(`A${r}`).font = { bold: true, size: 12, color: { argb: 'FF1D4ED8' } };
   ws.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' };
   r++;
 
-  // Cabecera del resumen
   const cabResumen = ['CONCEPTO', 'CANTIDAD', 'UNIDAD'];
   const alinResumen = ['left', 'right', 'center'];
   cabResumen.forEach((h, i) => {
@@ -151,9 +141,8 @@ export async function generarReporteProductoXLSX(datos = {}) {
     r++;
   });
 
-  r++; // fila vacía separadora
+  r++;
 
-  // --- Detalle de producción (órdenes finalizadas) ---
   ws.mergeCells(`A${r}:${lastCol}${r}`);
   ws.getCell(`A${r}`).value = 'DETALLE DE PRODUCCIÓN (órdenes finalizadas)';
   ws.getCell(`A${r}`).font = { bold: true, size: 12, color: { argb: 'FF1D4ED8' } };
@@ -198,7 +187,6 @@ export async function generarReporteProductoXLSX(datos = {}) {
     });
   }
 
-  // Total producido
   ws.mergeCells(r, 1, r, 2);
   const tot1 = ws.getCell(r, 1);
   tot1.value = 'TOTAL PRODUCIDO';
@@ -218,7 +206,6 @@ export async function generarReporteProductoXLSX(datos = {}) {
   ws.getRow(r).height = 18;
   r += 2;
 
-  // Nota informativa
   ws.mergeCells(`A${r}:${lastCol}${r}`);
   ws.getCell(`A${r}`).value =
     'El total despachado corresponde a las salidas por venta del producto en el periodo. Documento informativo emitido por INDPACK S.A.C.';
@@ -229,7 +216,6 @@ export async function generarReporteProductoXLSX(datos = {}) {
   return Buffer.from(buffer);
 }
 
-// Formato de número con separador de miles y 2 decimales (para textos, p. ej. stock).
 function formatearNum(valor) {
   const n = parseFloat(valor || 0);
   return n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

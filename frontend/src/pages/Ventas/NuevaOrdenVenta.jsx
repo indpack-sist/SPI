@@ -34,7 +34,6 @@ function NuevaOrdenVenta() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const idCotizacionParam = searchParams.get('cotizacion');
-  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
   const esAdmin = user?.rol === 'Administrador';
 
   const modoEdicion = !!id;
@@ -58,7 +57,6 @@ function NuevaOrdenVenta() {
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
 
-  // Restriccion de cartera de clientes (roles Comercial / Ventas)
   const [restringidoCartera, setRestringidoCartera] = useState(false);
   const [idsAsignados, setIdsAsignados] = useState([]);
   const [vistaCartera, setVistaCartera] = useState('asignados');
@@ -590,8 +588,6 @@ useEffect(() => {
     setBusquedaProducto('');
   };
 
-  // Ítem de MUESTRA de texto libre: no está en el catálogo, no descuenta stock; se emite solo por
-  // su descripción/unidad (NIU por defecto) y un código de bien opcional (GTIN).
   const handleAgregarItemLibre = () => {
     setDetalle([...detalle, {
       id_producto: null,
@@ -669,11 +665,8 @@ useEffect(() => {
   };
 
   const calcularTotales = () => {
-    // Exportación fuerza IGV 0% (SUNAT 0200), independiente del tipo_impuesto seleccionado.
     const esExport = Number(formCabecera.es_exportacion) === 1;
     const porcentaje = esExport ? 0 : (parseFloat(formCabecera.porcentaje_impuesto) || 0);
-    // Totales con redondeo POR LÍNEA (igual que la factura electrónica y el backend de la OV),
-    // para que la vista previa coincida con lo que se guarda al crear la orden.
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
     let impuesto = 0;
@@ -703,8 +696,6 @@ useEffect(() => {
     }
   };
 
-  // Exportación (SUNAT 0200, IGV 0%). Es un flag propio (es_exportacion), no un tipo_impuesto:
-  // al marcarlo fuerza el porcentaje a 0 y bloquea el selector; al desmarcarlo restaura el % del tipo.
   const handleExportacionChange = (checked) => {
     setFormCabecera(prev => {
       const cfg = TIPOS_IMPUESTO.find(t => t.codigo === prev.tipo_impuesto);
@@ -764,7 +755,6 @@ useEffect(() => {
     if (!clienteSeleccionado) return 'Debe seleccionar un cliente';
     if (detalle.length === 0) return esMuestra ? 'Debe agregar al menos un ítem de muestra' : 'Debe agregar al menos un producto';
     if (esMuestra) {
-      // Muestra: sin precio (sin valor comercial). Solo se exige descripción en los ítems libres.
       const sinDesc = detalle.some(item => item.es_producto_libre && !String(item.producto || '').trim());
       if (sinDesc) return 'Cada ítem libre de muestra debe tener una descripción';
     } else {
@@ -818,11 +808,6 @@ useEffect(() => {
         orden: index + 1
       }))));
 
-      // Archivos previos conservados: el usuario pudo eliminar alguno de forma
-      // individual. Enviamos la lista restante (JSON) para que el backend la
-      // persista tal cual; si quedó vacía (o null) pedimos limpiar todo. Antes
-      // solo se mandaba 'limpiar_oc' cuando se borraban TODOS, así que borrar
-      // 1 de 2 archivos no se guardaba.
       const ocRestantes = getArrayFromUrls(archivosPrevios.orden_compra_url);
       if (archivosPrevios.orden_compra_url === null || ocRestantes.length === 0) {
         formData.append('limpiar_oc', 'true');
@@ -867,9 +852,7 @@ useEffect(() => {
           setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
           setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
         }
-        // Éxito: se mantiene el bloqueo mientras se redirige. No reactivar el botón.
       } else {
-        // Respuesta sin éxito: liberar para permitir reintento.
         submitCooldown.current = false;
         setCooldownActivo(false);
       }
@@ -937,7 +920,6 @@ useEffect(() => {
   const tituloFormulario = modoEdicion
     ? (esMuestra ? 'Editar Orden de Muestra' : 'Editar Orden de Venta')
     : (esMuestra ? 'Nueva Orden de Muestra' : 'Nueva Orden de Venta');
-  // Columnas visibles de la tabla de ítems (para el colSpan del estado vacío).
   const colCountItems = 4 + (modoEdicion ? 1 : 0) + (esMuestra ? 1 : (3 + (esAdmin ? 1 : 0)));
 
   return (
@@ -1466,7 +1448,6 @@ useEffect(() => {
                             <Info size={14} className="animate-bounce" />
                             <span>¡ASIGNAR T.C. UTILIZADO!</span>
                           </div>
-                          {/* Triángulo de la nube */}
                           <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-orange-500 rotate-45 border-r border-b border-white/10"></div>
                         </div>
                       </div>
@@ -1815,8 +1796,6 @@ useEffect(() => {
                   <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                 </div>
 
-                {/* Factura de exportación (SUNAT 0200, IGV 0%). Fuerza el impuesto a 0 y bloquea el tipo.
-                    No aplica a órdenes de muestra (sin valor comercial). */}
                 {!esMuestra && (
                 <label className="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                   <input

@@ -2,11 +2,6 @@ import { useEffect } from 'react';
 
 const ACTION_LABELS = /^(acciones?|opciones?|acción|operaciones?)$/i;
 
-/**
- * Adapta también las tablas antiguas que no usan el componente <Table />.
- * En escritorio solo añade metadatos; la presentación cambia exclusivamente
- * desde las media queries responsive de index.css.
- */
 function ResponsiveTables() {
   useEffect(() => {
     let animationFrame = null;

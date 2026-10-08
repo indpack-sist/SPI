@@ -14,63 +14,27 @@ import { descubrirWeb } from './descubrir-web.service.js';
 import { consultarPorRuc } from './padron-ruc.service.js';
 import { scrapeSocial } from './scraper-social.service.js';
 
-// ============================================================
-// Worker en proceso para la cola scraping_jobs. Corre dentro del
-// mismo servidor (I/O asíncrono, no bloquea): sondea la cola, procesa
-// un job a la vez y emite progreso por socket.io. Diseñado para la
-// escala de INDPACK; no requiere Redis ni un proceso aparte.
-// ============================================================
-
 let socketIo = null;
 let procesando = false;
 let intervalo = null;
 
-// Cuántos jobs se procesan EN PARALELO. Cada job es casi todo I/O de red
-// (fetch de dominios candidatos, web y redes) que NO está limitado por el
-// throttle de búsqueda —ese sigue siendo un candado global anti-baneo—, así
-// que solapar varios multiplica el throughput sin golpear más por segundo a
-// los buscadores ni perder precisión. La toma de jobs ya es atómica
-// (tomarSiguienteJob reclama con UPDATE optimista), así que varios obreros
-// compiten por la cola sin pisarse. Ajustable por entorno.
-// Default 2 (antes 8): en hosting con CPU compartida (Render/Railway) 8 obreros
-// en paralelo ahogaban la CPU y multiplicaban las consultas concurrentes a MySQL.
-// 2 procesa los lotes algo más lento pero baja el consumo; subir por entorno si hace falta.
 const CONCURRENCIA = Math.max(1, Number(process.env.PROSPECTOS_WORKER_CONCURRENCIA) || 2);
 
-// Tras cuántos intentos un job que se cuelga deja de reintentarse y se cierra como
-// error (evita que un job "veneno" reviva para siempre y clave la barra de progreso).
 const MAX_INTENTOS = Math.max(1, Number(process.env.PROSPECTOS_WORKER_MAX_INTENTOS) || 3);
-// Un job en 'procesando' más viejo que esto se considera colgado (fetch trabado) y
-// se recupera en caliente. En el arranque no se aplica el tiempo: TODO 'procesando'
-// es huérfano porque el worker es único y aún no tomó nada.
 const STALE_MIN = Math.max(1, Number(process.env.PROSPECTOS_WORKER_STALE_MIN) || 15);
 
-let ultimoStaleCheck = 0; // epoch ms del último barrido de huérfanos en caliente
+let ultimoStaleCheck = 0;
 
-/** Arranca el worker. Se llama desde server.js con la instancia de socket.io. */
 export function startWorker(io) {
   socketIo = io;
   if (intervalo) clearInterval(intervalo);
-  // Poll de RESPALDO cada 30s (antes 5s). No afecta la reactividad: notificarJob()
-  // despierta al worker al instante en cada encolado y cada obrero drena TODA la cola
-  // en una pasada. Este intervalo solo cubre casos borde (job huérfano / re-encolado),
-  // así que 30s en vez de 5s recorta ~83% de las consultas ociosas a scraping_jobs
-  // (y deja que el pool MySQL entre en reposo cuando no hay nadie usando el sistema).
   intervalo = setInterval(tick, 30000);
-  // Recupera jobs que quedaron en 'procesando' de una corrida anterior (deploy /
-  // reinicio a mitad de proceso). Son huérfanos: el worker que los tomó ya no
-  // existe. Se rescatan ANTES de la primera pasada para que se re-procesen y no
-  // dejen la barra de progreso pegada al 100 % con "N en curso" fantasma.
   recuperarHuerfanos({ soloArranque: true })
     .catch((e) => console.error('Error recuperando jobs huérfanos:', e.message))
     .finally(() => tick());
-  console.log('🛰️  Worker de prospección iniciado (cola scraping_jobs)');
+  console.log('Worker de prospección iniciado (cola scraping_jobs)');
 }
 
-// Rescata jobs atascados en 'procesando'. Los que aún tienen intentos disponibles
-// vuelven a 'pendiente' (se re-procesan); los que agotaron el cupo se cierran como
-// 'error' para que el lote deje de contarse como activo. En el arranque se rescata
-// todo lo 'procesando'; en caliente solo lo que lleva demasiado tiempo colgado.
 async function recuperarHuerfanos({ soloArranque = false } = {}) {
   const filtroTiempo = soloArranque ? '' : ` AND fecha_inicio < (NOW() - INTERVAL ${STALE_MIN} MINUTE)`;
 
@@ -90,7 +54,6 @@ async function recuperarHuerfanos({ soloArranque = false } = {}) {
   }
 }
 
-/** Despierta al worker de inmediato (lo llama el controller al encolar). */
 export function notificarJob() {
   tick();
 }
@@ -103,14 +66,10 @@ async function tick() {
   if (procesando) return;
   procesando = true;
   try {
-    // Red de seguridad: cada ~2 min rescata jobs colgados en 'procesando' (fetch
-    // trabado sin que el proceso se haya reiniciado). Barato: casi siempre 0 filas.
     if (Date.now() - ultimoStaleCheck > 120000) {
       ultimoStaleCheck = Date.now();
       await recuperarHuerfanos({ soloArranque: false }).catch(() => {});
     }
-    // Lanza CONCURRENCIA obreros que compiten por la cola en paralelo. Cada uno
-    // drena jobs mientras haya; el claim atómico evita que dos tomen el mismo.
     await Promise.all(Array.from({ length: CONCURRENCIA }, () => obrero()));
   } catch (e) {
     console.error('Error en worker de prospección:', e.message);
@@ -119,8 +78,6 @@ async function tick() {
   }
 }
 
-// Un obrero: toma y procesa jobs pendientes en cascada hasta que la cola se
-// vacía. Un fallo de un job no debe tumbar al obrero (ni al resto): se aísla.
 async function obrero() {
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -141,7 +98,6 @@ async function tomarSiguienteJob() {
   if (!sel.success || sel.data.length === 0) return null;
   const job = sel.data[0];
 
-  // Reclama el job (optimista). Si otro tick lo tomó, affectedRows = 0.
   const upd = await executeQuery(
     "UPDATE scraping_jobs SET estado = 'procesando', fecha_inicio = NOW(), intentos = intentos + 1 WHERE id_job = ? AND estado = 'pendiente'",
     [job.id_job]
@@ -180,7 +136,6 @@ async function procesarJob(job) {
     if (job.tipo === 'web_scrape' || job.tipo === 'enriquecer') {
       await procesarWebScrape(job, params);
     } else {
-      // 'google_places' quedó fuera de servicio (se eliminó la dependencia).
       await fallar(job.id_job, `Tipo de job no soportado por el worker: ${job.tipo}`);
     }
   } catch (e) {
@@ -188,11 +143,6 @@ async function procesarJob(job) {
   }
 }
 
-// ---- Compuerta CIIU: valida un prospecto del padrón contra su ACTIVIDAD REAL ----
-// Trae el CIIU de SUNAT (ruc.pe) y decide si es comercio de fruta/verdura. Si no
-// lo es, marca excluido=1 con motivo (registrado en prospecto_fuentes). Si la
-// fuente no responde, no excluye (queda "sin verificar"). Best-effort.
-// @returns {Promise<{excluido:boolean, motivo?:string, verificado:boolean}>}
 async function aplicarCompuertaCiiu(idProspecto, documento) {
   const doc = normalizarDocumento(documento);
   if (!/^\d{11}$/.test(doc)) return { excluido: false, verificado: false };
@@ -202,7 +152,6 @@ async function aplicarCompuertaCiiu(idProspecto, documento) {
   if (!val?.valido || !val.datos) return { excluido: false, verificado: false };
 
   const ciiu = val.datos.ciiu || [];
-  // Guarda el primer código CIIU si el prospecto no lo tenía.
   if (ciiu[0]?.codigo) {
     await executeQuery(
       'UPDATE prospectos SET ciiu = COALESCE(NULLIF(ciiu, ""), ?) WHERE id_prospecto = ?',
@@ -211,7 +160,7 @@ async function aplicarCompuertaCiiu(idProspecto, documento) {
   }
 
   const clasif = clasificarCiiuFrutaVerdura(ciiu);
-  if (!clasif) return { excluido: false, verificado: false }; // sin CIIU utilizable
+  if (!clasif) return { excluido: false, verificado: false };
 
   if (clasif.objetivo === false) {
     await executeQuery('UPDATE prospectos SET excluido = 1 WHERE id_prospecto = ?', [idProspecto]);
@@ -224,24 +173,13 @@ async function aplicarCompuertaCiiu(idProspecto, documento) {
   return { excluido: false, verificado: true };
 }
 
-// ---- Enriquecimiento por scraping de web corporativa (job manual) ----
 async function procesarWebScrape(job, params) {
   const idProspecto = params.id_prospecto;
   if (!idProspecto) return fallar(job.id_job, 'Falta id_prospecto');
 
-  // Compuerta CIIU: solo para prospectos del padrón (origen 'padron') y no en
-  // re-descubrir (que es una corrección manual). Si la actividad real no es
-  // fruta/verdura, se excluye y NO se gasta el scraping de web.
-  // Compuerta CIIU APAGADA por defecto: hoy las fuentes de CIIU (ruc.pe/datosperu)
-  // están bloqueadas/caídas y cada consulta cuesta ~15s de timeout, lo que ahogaría
-  // el enriquecimiento en Render Free. Se activa con PROSPECTOS_CIIU_GATE=1 cuando
-  // exista una fuente de CIIU fiable. Mientras tanto, el filtro por nombre manda.
   if (process.env.PROSPECTOS_CIIU_GATE === '1' && !params.redescubrir && params.accion === 'enriquecer') {
     const prg = await executeQuery('SELECT origen, documento, sector, estado_workflow, flag_duplicado, id_cliente_match FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const pr0 = prg.data?.[0];
-    // Solo se valida por CIIU el bucket de Agroexportación (separar fruta/verdura
-    // de la agroindustria de insumos). Los demás sectores no se tocan. Y NUNCA se
-    // toca un cliente ni un lead ya gestionado: solo 'Nuevo' que no es cliente.
     const esClienteOGestionado = pr0 && (pr0.estado_workflow !== 'Nuevo' || pr0.flag_duplicado === 'Ya_cliente' || pr0.id_cliente_match);
     if (pr0 && pr0.origen === 'padron' && pr0.documento && pr0.sector === 'Agroexportación' && !esClienteOGestionado) {
       const gate = await aplicarCompuertaCiiu(idProspecto, pr0.documento);
@@ -252,11 +190,6 @@ async function procesarWebScrape(job, params) {
     }
   }
 
-  // Re-descubrir: purga TODO lo recolectado automáticamente (web, teléfonos,
-  // correos y redes), CONSERVA lo ingresado a mano, y olvida la web guardada
-  // para forzar una búsqueda NUEVA (no desde caché). Sirve para corregir un
-  // prospecto al que se le pegaron datos de OTRA empresa por una web mal
-  // atribuida: se vuelve a verificar todo desde cero con matching estricto.
   const redescubrir = !!params.redescubrir;
   if (redescubrir) {
     await executeQuery(
@@ -267,25 +200,14 @@ async function procesarWebScrape(job, params) {
   }
 
   let url = redescubrir ? null : params.url;
-  let webVerificada = false; // el descubridor ya confirmó que la web es del prospecto
-  let motivoNoWeb = null;    // por qué el descubrimiento no halló web (diagnóstico)
+  let webVerificada = false;
+  let motivoNoWeb = null;
 
-  // Si no vino URL en el job, resolvemos en este orden:
-  //   1) la web que el prospecto YA tiene guardada  → se raspa directo.
-  //   2) descubrimiento anclado en el RUC (buscadores gratis + candado de RUC
-  //      en la página). Ya NO se usa Google Places.
-  // En re-descubrir la web quedó en NULL arriba, así que siempre cae en la
-  // búsqueda nueva (nunca reutiliza la web guardada).
   if (!url) {
     const pr = await executeQuery('SELECT razon_social, documento, distrito, provincia, web FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const p = pr.data?.[0];
     let documento = p?.documento || null;
 
-    // Recuperación de RUC faltante (clave para los leads viejos "sin RUC"): al
-    // re-descubrir, si el prospecto no tiene documento, se busca por nombre en
-    // ruc.pe (gratis, con triple candado de similitud/checksum). Opt-out con
-    // buscar_ruc:false. Si aparece, se aplica y el descubrimiento de web queda
-    // anclado a ese RUC. NO altera estado/gestor/historial.
     if (redescubrir && !documento && p?.razon_social && params.buscar_ruc !== false) {
       try {
         const hit = await buscarRucPorNombre(p.razon_social);
@@ -313,29 +235,19 @@ async function procesarWebScrape(job, params) {
       const disc = await descubrirWeb(p.razon_social, { ruc: documento, zona });
       url = disc?.web || null;
       motivoNoWeb = disc?.motivo || null;
-      // Descubrimiento anclado en RUC ya viene verificado (RUC en la página o
-      // dominio == nombre): no hace falta re-verificar al raspar.
       webVerificada = !!disc?.web;
     }
   }
 
-  // Sin web no se puede raspar contacto.
   if (!url) {
-    // En re-descubrir es un desenlace VÁLIDO: se purgó lo dudoso y no hay web
-    // que corresponda al nombre → el prospecto queda limpio (solo datos SUNAT).
     if (redescubrir) {
       const score = await recalcularScore(idProspecto, {}, { permitirBajar: true });
       emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
       return completar(job.id_job, { id_prospecto: idProspecto, redescubierto: true, web_no_encontrada: true, purgado: true, score });
     }
-    // El motivo permite distinguir IP bloqueada (busquedas_vacias) de web sin RUC
-    // visible (sin_ruc_en_paginas) al agrupar los errores por mensaje.
     return fallar(job.id_job, `No se encontró web verificable [${motivoNoWeb || 'desconocido'}].`);
   }
 
-  // Verificación de correspondencia de la web: activa por defecto. Se omite si
-  // el job la desactiva (web escrita a mano por el usuario) o si el descubridor
-  // ya la verificó por RUC (evita una segunda lectura innecesaria).
   const verificar = params.verificar !== false && !webVerificada;
   const resultado = await enriquecerDesdeWeb(idProspecto, url, { permitirBajar: redescubrir, verificar });
   if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
@@ -343,21 +255,14 @@ async function procesarWebScrape(job, params) {
   await completar(job.id_job, { id_prospecto: idProspecto, redescubierto: redescubrir, ...resultado });
 }
 
-// ============================================================
-// Verificación de que una web descubierta CORRESPONDE al prospecto.
-// Evita pegar la web (y sus contactos) de OTRA empresa co-ubicada que Google
-// Places o DuckDuckGo devolvieron por un dato cruzado (mismo edificio, el
-// "website" del place apunta a otra firma, etc.).
-// ============================================================
 function normalizarTextoNombre(s) {
   return String(s || '')
     .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
-// Palabras genéricas/geográficas que NO distinguen una empresa de otra.
 const GENERICOS_NOMBRE = new Set([
   'peru', 'peruana', 'peruano', 'lima', 'callao', 'sac', 'sa', 'srl', 'eirl', 'ltda',
   'sociedad', 'anonima', 'cerrada', 'group', 'grupo', 'international', 'internacional',
@@ -372,18 +277,6 @@ function tokensSignificativos(nombre) {
 function hostCompacto(url) {
   try { return new URL(url).host.toLowerCase().replace(/[^a-z0-9]/g, ''); } catch { return ''; }
 }
-/**
- * ¿La web scrapeada corresponde al prospecto? Criterio ESTRICTO (cero falsos
- * positivos):
- *  - Si el prospecto tiene RUC → la web debe publicar ESE RUC exacto en alguna
- *    de sus páginas (rucsWeb). Es la única prueba que se acepta cuando hay RUC:
- *    que el sitio muestre otros RUCs, o ninguno, NO basta → se rechaza. Así una
- *    web ajena (co-ubicada, directorio, dato cruzado) nunca contamina el lead.
- *  - Si el prospecto NO tiene RUC → se acepta solo si el token DISTINTIVO del
- *    nombre ES el dominio (ej. "anguard" ↔ anguardperu.com). El match por título
- *    se eliminó a propósito: era el que dejaba pasar directorios.
- * @returns {{ok:boolean, motivo:string}}
- */
 function webCorrespondeAlProspecto({ razonSocial, documentoProspecto, urlBase, rucsWeb = [] }) {
   const docP = normalizarDocumento(documentoProspecto);
   const rucs = (rucsWeb || []).map(normalizarDocumento);
@@ -397,26 +290,14 @@ function webCorrespondeAlProspecto({ razonSocial, documentoProspecto, urlBase, r
   const toks = tokensSignificativos(razonSocial);
   if (!toks.length) return { ok: false, motivo: 'nombre_sin_tokens_evaluables' };
   const host = hostCompacto(urlBase);
-  // El token distintivo debe SER el dominio (contenido y de largo parecido),
-  // no solo aparecer suelto en el título.
   const distintivo = toks.find((t) => t.length >= 4 && host.includes(t) && host.length <= t.length + 12);
   return distintivo ? { ok: true, motivo: 'dominio_es_nombre' } : { ok: false, motivo: 'sin_relacion_con_nombre' };
 }
 
-/**
- * Lee la web de un prospecto y vuelca lo público: correos y teléfonos (con el
- * área a la que pertenecen), redes, logo y RUC. Reutilizado por el job manual
- * "Enriquecer" y por el descubrimiento (para traer el RUC sin pasos extra).
- * @returns {Promise<Object|null>} resumen o null si no se pudo leer la web.
- */
 async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
   const data = await scrapeWebsite(url);
   if (!data.ok) return null;
 
-  // Verifica que la web sea realmente del prospecto (salvo que se pida omitir,
-  // p.ej. web escrita a mano por el usuario). Si NO corresponde, no se pega
-  // nada: ni contactos, ni web, ni logo. Así no se repite la contaminación de
-  // una web ajena (mismo edificio / place con website cruzado).
   if (opciones.verificar !== false) {
     const prow = await executeQuery('SELECT documento, razon_social FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
     const p = prow.data?.[0] || {};
@@ -433,8 +314,6 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
   }
 
   let nuevos = 0;
-  // fuenteUrl = URL EXACTA de donde salió el dato (página o perfil), para que la
-  // ficha permita verificar la veracidad de cada contacto.
   const agregar = async (tipo, valor, norm, area, fuente = 'web', fuenteUrl = null) => {
     const r = await executeQuery(
       `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente, fuente_url)
@@ -444,18 +323,14 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
     if (r.success && r.data.affectedRows > 0) nuevos++;
   };
 
-  // Contactos con área y URL de origen (correos primero, ya vienen priorizados).
   for (const c of data.contactos || []) {
     const norm = c.tipo === 'Email' ? normalizarEmail(c.valor) : normalizarTelefono(c.valor);
     await agregar(c.tipo, c.valor, norm, c.area, 'web', c.fuente_url || data.base);
   }
 
-  // Redes sociales: el perfil ES su propia fuente; las guardamos como contacto
-  // y TAMBIÉN intentamos rasparlas (su URL es la fuente de lo que devuelvan).
   for (const [red, redUrl] of Object.entries(data.redes)) {
     await agregar('RedSocial', redUrl, String(redUrl).toLowerCase(), null, 'web', redUrl);
 
-    // Raspar la red social (best-effort, aislado)
     try {
       const socialData = await scrapeSocial(redUrl);
       if (socialData) {
@@ -467,11 +342,9 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
         }
       }
     } catch (e) {
-      // Si falla una red, el proceso sigue
     }
   }
 
-  // Guarda la web y el logo en el prospecto si no los tenía.
   if (data.base) {
     await executeQuery(
       'UPDATE prospectos SET web = COALESCE(NULLIF(web, ""), ?) WHERE id_prospecto = ?',
@@ -485,10 +358,6 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
     );
   }
 
-  // RUC del pie de la web: si el prospecto no tenía documento, lo aplica tal
-  // cual y detecta si ya es cliente. SIN APISPeru y SIN tocar ruc.pe. La
-  // búsqueda de RUC por NOMBRE se hace BAJO DEMANDA con el botón "Buscar RUC"
-  // (no en el barrido, para no depender de ruc.pe ni arriesgar baneo de IP).
   let rucAplicado = null;
   if (data.ruc) {
     const pr = await executeQuery('SELECT documento FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
@@ -509,7 +378,6 @@ async function enriquecerDesdeWeb(idProspecto, url, opciones = {}) {
     }
   }
 
-  // Trazabilidad + recálculo de score con lo nuevo.
   await executeQuery(
     'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw, fecha_scraping) VALUES (?, "web", ?, ?, ?)',
     [idProspecto, data.base, JSON.stringify({ emails: data.emails, telefonos: data.telefonos, redes: data.redes }), getFechaPeru()]

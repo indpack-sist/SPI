@@ -40,7 +40,6 @@ export async function createListaPrecio(req, res) {
         let id_lista;
         try {
             await connection.beginTransaction();
-            // Atribuye al creador los registros de historial que dispararán los triggers.
             await connection.query(`SET @app_user_id = ${creadoPor != null ? Number(creadoPor) : 'NULL'}`);
             const [result] = await connection.execute(
                 'INSERT INTO listas_precios (id_cliente, nombre_lista, moneda, creado_por) VALUES (?, ?, ?, ?)',
@@ -74,7 +73,6 @@ export async function updateListaPrecio(req, res) {
         const { nombre_lista, moneda, productos } = req.body;
         const idEmpleado = req.user?.id_empleado ?? null;
 
-        // 1. Cargar la lista y validar que exista
         const listaRes = await executeQuery(
             'SELECT id_cliente, creado_por FROM listas_precios WHERE id_lista = ?',
             [id]
@@ -85,8 +83,6 @@ export async function updateListaPrecio(req, res) {
         const lista = listaRes.data[0];
         const dueno = lista.creado_por;
 
-        // Solo el creador puede editar. Las listas antiguas sin dueño (NULL) las
-        // reclama automáticamente el primer usuario que las edite.
         if (dueno != null && Number(dueno) !== Number(idEmpleado)) {
             return res.status(403).json({
                 success: false,
@@ -95,7 +91,6 @@ export async function updateListaPrecio(req, res) {
         }
         const nuevoDueno = dueno != null ? dueno : idEmpleado;
 
-        // 2. Leer el detalle actual para comparar precios
         const detalleActualRes = await executeQuery(
             'SELECT id_producto, precio_especial FROM listas_precios_detalle WHERE id_lista = ?',
             [id]
@@ -113,11 +108,8 @@ export async function updateListaPrecio(req, res) {
             productosNuevos.map(p => [Number(p.id_producto), fmt(p.precio_especial)])
         );
 
-        // 3. Diferenciar cambios a nivel de fila. NO se borra y reinserta todo:
-        //    así los triggers de la BD registran solo el cambio real (y también
-        //    capturarían cualquier edición hecha por SQL directo, fuera del sistema).
-        const aInsertar = [];   // producto nuevo en la lista
-        const aActualizar = []; // producto que cambió de precio
+        const aInsertar = [];
+        const aActualizar = [];
         for (const [idProd, precioNuevo] of preciosNuevos) {
             if (!preciosPrevios.has(idProd)) {
                 aInsertar.push([idProd, precioNuevo]);
@@ -125,13 +117,11 @@ export async function updateListaPrecio(req, res) {
                 aActualizar.push([idProd, precioNuevo]);
             }
         }
-        const aEliminar = []; // producto quitado de la lista
+        const aEliminar = [];
         for (const idProd of preciosPrevios.keys()) {
             if (!preciosNuevos.has(idProd)) aEliminar.push(idProd);
         }
 
-        // 4. Transacción. La variable de sesión @app_user_id le dice a los triggers
-        //    QUIÉN hizo el cambio; se limpia al final para no filtrarla a la conexión.
         const queries = [];
         queries.push({ sql: `SET @app_user_id = ${idEmpleado != null ? Number(idEmpleado) : 'NULL'}`, params: [] });
         queries.push({
@@ -200,9 +190,7 @@ export async function getHistorialLista(req, res) {
 export async function deleteListaPrecio(req, res) {
     try {
         const { id } = req.params;
-        
-        // Borrado lógico o físico. Aquí físico por cascada en BD, o lógico cambiando estado.
-        // Opción: Cambiar estado a Inactivo para mantener histórico
+
         const result = await executeQuery(
             `UPDATE listas_precios SET estado = 'Inactivo' WHERE id_lista = ?`,
             [id]

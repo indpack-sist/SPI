@@ -45,7 +45,6 @@ function Dashboard() {
   const [produccionFinalizada, setProduccionFinalizada] = useState([]);
   const [tipoCambio, setTipoCambio] = useState(null);
 
-  // Estados de Filtro
   const [filtroPeriodo, setFiltroPeriodo] = useState('mes');
   const [fechas, setFechas] = useState({
     inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
@@ -76,7 +75,6 @@ function Dashboard() {
     }
   }, []);
 
-  // Carga inicial
   useEffect(() => {
     cargarDatos(fechas.inicio, fechas.fin);
   }, []);
@@ -127,7 +125,6 @@ function Dashboard() {
   return (
     <div className="dashboard-container">
 
-      {/* Header */}
       <div className="dashboard-header">
         <div>
           <h1>Centro de Inteligencia SPI</h1>
@@ -150,7 +147,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Filtros de Fecha */}
       <div className="date-filters">
         <div className="flex gap-2">
           <button onClick={() => aplicarFiltroPredefinido('hoy')} className={`filter-btn ${filtroPeriodo === 'hoy' ? 'active' : ''}`}>Hoy</button>
@@ -169,7 +165,6 @@ function Dashboard() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* KPIs Finanzas (Separados) */}
       <div className="kpi-row">
         <div className="kpi-stat info">
           <p className="kpi-label">Ventas del Periodo</p>
@@ -201,7 +196,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Rankings */}
       <div className="analytics-grid">
         <div className="analytics-card">
           <div className="card-header">
@@ -263,7 +257,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Producción Finalizada */}
       <div className="analytics-grid" style={{ marginTop: '20px', gridTemplateColumns: '1fr' }}>
         <div className="analytics-card">
           <div className="card-header">
@@ -307,7 +300,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Gráficos */}
       <div className="charts-grid">
         <div className="card chart-card">
           <div className="card-header"><h3 className="card-title">Valorización de Almacén</h3></div>

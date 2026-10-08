@@ -9,10 +9,6 @@
   border-right: 1px solid var(--border);
 }
 
-/* =====================================================
-   HEADER
-   ===================================================== */
-
 .sidebar-header {
   padding: 0.875rem 1rem 0.875rem 1.25rem;
   display: flex;
@@ -126,10 +122,6 @@
   color: var(--white);
 }
 
-/* =====================================================
-   NAVEGACIÓN
-   ===================================================== */
-
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -166,10 +158,6 @@
 .sidebar-menu li {
   margin-bottom: 1px;
 }
-
-/* =====================================================
-   LINKS
-   ===================================================== */
 
 .sidebar-link {
   display: flex;
@@ -216,10 +204,6 @@
 .sidebar-link.active::before {
   transform: scaleY(1);
 }
-
-/* =====================================================
-   DROPDOWN & SUBMENU
-   ===================================================== */
 
 .sidebar-dropdown-toggle {
   width: 100%;
@@ -300,7 +284,6 @@
   box-shadow: 0 0 6px rgba(232, 184, 75, 0.5);
 }
 
-/* Contenedor de ícono */
 .sidebar-icon-container {
   display: flex;
   align-items: center;
@@ -317,8 +300,6 @@
   opacity: 1;
 }
 
-/* Icono por imagen (p. ej. logo SUNAT en Facturación Electrónica). Encaja en el contenedor
-   de 18px conservando su proporción; el PNG no tiene fondo, así que respeta claro/oscuro. */
 .sidebar-icon-img {
   width: 18px;
   height: 18px;
@@ -326,7 +307,6 @@
   display: block;
 }
 
-/* Link especial — Menú Principal */
 .sidebar-link-apps {
   background-color: var(--carbon-light);
   border: 1px solid var(--steel);
@@ -359,10 +339,6 @@
   margin: 0.75rem 1.25rem;
 }
 
-/* =====================================================
-   FOOTER
-   ===================================================== */
-
 .sidebar-footer {
   padding: 0.6rem 1.25rem;
   border-top: 1px solid var(--border);
@@ -393,10 +369,6 @@
   opacity: 0.5;
 }
 
-/* =====================================================
-   ANIMACIONES
-   ===================================================== */
-
 @keyframes slideInLink {
   from { opacity: 0; transform: translateX(-6px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -407,10 +379,6 @@
 .sidebar-section:nth-child(3) .sidebar-link { animation: slideInLink 0.25s ease-out 0.11s backwards; }
 .sidebar-section:nth-child(4) .sidebar-link { animation: slideInLink 0.25s ease-out 0.15s backwards; }
 .sidebar-section:nth-child(5) .sidebar-link { animation: slideInLink 0.25s ease-out 0.19s backwards; }
-
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
 
 @media (max-width: 1023px) {
   .sidebar-close-btn { display: flex; }

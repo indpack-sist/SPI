@@ -1,18 +1,8 @@
-/* =====================================================
-   DASHBOARD — estilos exclusivos
-   Las clases globales (card, table, badge, btn, etc.)
-   vienen de index.css. Aquí solo lo específico.
-   ===================================================== */
-
 .dashboard-container {
   padding: 1.5rem;
   max-width: 1600px;
   margin: 0 auto;
 }
-
-/* =====================================================
-   FILTROS DE FECHA
-   ===================================================== */
 
 .date-filters {
   display: flex;
@@ -72,14 +62,6 @@
   border-color: var(--accent);
 }
 
-/* =====================================================
-   HEADER
-   ===================================================== */
-
-/* =====================================================
-   PROGRESS BARS (Rankings)
-   ===================================================== */
-
 .progress-container {
   width: 100%;
   height: 4px;
@@ -111,10 +93,6 @@
   font-size: 0.7rem;
   color: var(--text-secondary);
 }
-
-/* =====================================================
-   GRID DE ANALÍTICA
-   ===================================================== */
 
 .analytics-grid {
   display: grid;
@@ -154,7 +132,6 @@
   flex: 1;
 }
 
-/* KPIs FINANCIEROS EN HEADER */
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -222,10 +199,6 @@
   flex-wrap: wrap;
 }
 
-/* =====================================================
-   BOTÓN MONEDA
-   ===================================================== */
-
 .btn-currency {
   display: flex;
   align-items: center;
@@ -253,10 +226,6 @@
   font-weight: 700;
   letter-spacing: 0.12em;
 }
-
-/* =====================================================
-   TIPO DE CAMBIO BADGE
-   ===================================================== */
 
 .tipo-cambio-badge {
   display: flex;
@@ -301,10 +270,6 @@
   font-size: 13px;
 }
 
-/* =====================================================
-   STAT CARDS — iconos con paleta industrial
-   ===================================================== */
-
 .stat-icon {
   width: 56px;
   height: 56px;
@@ -340,10 +305,6 @@
   color: #e74c3c;
 }
 
-/* =====================================================
-   GRÁFICOS
-   ===================================================== */
-
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
@@ -358,10 +319,6 @@
 .chart-card .card-body {
   padding: 1rem 0.5rem;
 }
-
-/* =====================================================
-   TARJETAS POR TIPO DE INVENTARIO
-   ===================================================== */
 
 .inventario-grid {
   display: grid;
@@ -388,7 +345,6 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  /* El 'background' viene del style inline del JSX */
   filter: brightness(0.85) saturate(0.8);
 }
 
@@ -429,7 +385,6 @@
   letter-spacing: 0.03em;
 }
 
-/* Valores dentro de la card */
 .inventario-valores {
   display: flex;
   flex-direction: column;
@@ -465,10 +420,6 @@
 .venta-item .valor-amount      { color: #2ecc71; }
 .margen-item .valor-amount     { color: var(--accent); }
 
-/* =====================================================
-   TIPO BADGE (tabla)
-   ===================================================== */
-
 .tipo-badge {
   display: inline-flex;
   align-items: center;
@@ -479,10 +430,6 @@
   font-weight: 500;
   background-color: var(--bg-tertiary);
 }
-
-/* =====================================================
-   ACCESOS RÁPIDOS
-   ===================================================== */
 
 .actions-grid {
   display: grid;
@@ -574,14 +521,9 @@
 .action-btn.warning  { --action-color: var(--accent); }
 .action-btn.secondary { --action-color: var(--wire); }
 
-/* =====================================================
-   DESGLOSE POR MONEDA (sección movimientos)
-   ===================================================== */
-
 .space-y-2 > * + * { margin-top: 0.5rem; }
 .space-y-6 > * + * { margin-top: 1.5rem; }
 
-/* Nota informativa */
 .bg-blue-50.rounded.border {
   background-color: rgba(93,173,226,0.06) !important;
   border: 1px solid rgba(93,173,226,0.2) !important;
@@ -595,20 +537,12 @@
   color: #5dade2;
 }
 
-/* =====================================================
-   SPINNER (btn loading)
-   ===================================================== */
-
 .spinner { animation: spin 1s linear infinite; }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
 
 @media (max-width: 1024px) {
   .charts-grid { grid-template-columns: 1fr; }
@@ -620,7 +554,6 @@
 
   .inventario-grid { grid-template-columns: 1fr; }
   .analytics-grid { grid-template-columns: 1fr; }
-  /* Evitar que las tablas de ranking fuercen ancho fijo y desborden */
   .analytics-card .card-body { overflow-x: auto; }
 
   .dashboard-header {

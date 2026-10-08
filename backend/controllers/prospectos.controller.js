@@ -14,9 +14,6 @@ import { notificarJob } from '../services/scraping-worker.js';
 
 const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'Descartado'];
 
-// Hora actual de Perú (America/Lima) como 'YYYY-MM-DD HH:mm:ss'. Se inserta
-// explícitamente porque el default CURRENT_TIMESTAMP de MySQL usa la zona del
-// servidor (UTC), lo que dejaba el historial 5 horas adelantado.
 function getFechaPeru() {
   const now = new Date();
   const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -29,27 +26,20 @@ function getFechaPeru() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-const POR_PAGINA = 50; // tamaño de página del sistema (también unidad de "hoja" en el export)
+const POR_PAGINA = 50;
 
-// Avisa a todos los clientes que están viendo el módulo de Prospección que algo
-// cambió, para que refresquen la lista (y el detalle abierto) sin recargar la
-// página. Best-effort: si el socket no está, no pasa nada.
 function emitirCambioProspecto(req, data = {}) {
   try {
     const io = req.app.get('socketio');
     io?.emit('prospectos:cambio', { ...data, ts: Date.now() });
-  } catch { /* noop */ }
+  } catch { }
 }
 
-// Arma el WHERE + ORDER BY del listado a partir de los filtros de la query.
-// Compartido entre el listado paginado y la exportación a Excel para que ambos
-// devuelvan exactamente el mismo conjunto.
 function construirFiltros(q = {}) {
   const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score } = q;
   let where = ' WHERE 1=1';
   const params = [];
 
-  // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
   where += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
 
   if (segmento) { where += ' AND p.segmento = ?'; params.push(segmento); }
@@ -57,7 +47,6 @@ function construirFiltros(q = {}) {
   if (flag)     { where += ' AND p.flag_duplicado = ?'; params.push(flag); }
   if (sector)   { where += ' AND p.sector = ?'; params.push(sector); }
   if (busqueda) { where += ' AND p.origen_query = ?'; params.push(busqueda); }
-  // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
   if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
     where += ' AND p.score >= ?'; params.push(Number(min_score));
   }
@@ -76,8 +65,6 @@ function construirFiltros(q = {}) {
   return { where, params, orderBy };
 }
 
-// SELECT del listado (con contactos agregados), reutilizado por listado y export.
-// El LIMIT/OFFSET se concatena aparte según el caso.
 function sqlListado(where, orderBy, limitClause = '') {
   return `
     SELECT p.*,
@@ -95,20 +82,15 @@ function sqlListado(where, orderBy, limitClause = '') {
     ${where}${orderBy}${limitClause}`;
 }
 
-// ------------------------------------------------------------
-// Listado con filtros
-// ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
     const { page, limit } = req.query;
     const { where, params, orderBy } = construirFiltros(req.query);
 
-    // --- Paginación (máx. 50 por página; se ignora si los valores no son válidos) ---
     const pageNum = Math.max(1, parseInt(page) || 1);
     const perPage = Math.min(Math.max(1, parseInt(limit) || POR_PAGINA), POR_PAGINA);
     const offset = (pageNum - 1) * perPage;
 
-    // Conteo total con los mismos filtros (para saber cuántas páginas hay).
     const countRes = await executeQuery(`SELECT COUNT(*) AS total FROM prospectos p${where}`, params);
     if (!countRes.success) return res.status(500).json({ error: countRes.error });
     const total = countRes.data[0].total;
@@ -129,28 +111,16 @@ export async function getAllProspectos(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Exportación a Excel (server-side). Genera el .xlsx en el backend y lo
-// envía como descarga, así el diálogo de guardado aparece de inmediato y no
-// hay que recorrer decenas de páginas desde el navegador.
-//
-// Alcance seleccionable con los mismos filtros del listado:
-//   - Todo el conjunto filtrado (sin desde_pagina/hasta_pagina), o
-//   - Un rango de "hojas" de 50 registros: desde_pagina..hasta_pagina.
-// Tope duro de seguridad para no generar archivos gigantes de golpe.
-// ------------------------------------------------------------
 const EXPORT_MAX_FILAS = 50000;
 
 export async function exportarProspectosExcel(req, res) {
   try {
     const { where, params, orderBy } = construirFiltros(req.query);
 
-    // Total con filtros: sirve para acotar el rango y para el encabezado.
     const countRes = await executeQuery(`SELECT COUNT(*) AS total FROM prospectos p${where}`, params);
     if (!countRes.success) return res.status(500).json({ error: countRes.error });
     const total = countRes.data[0].total;
 
-    // --- Alcance: rango de páginas (50/hoja) o todo ---
     let desdePag = parseInt(req.query.desde_pagina, 10);
     let hastaPag = parseInt(req.query.hasta_pagina, 10);
     const usaRango = Number.isFinite(desdePag) || Number.isFinite(hastaPag);
@@ -159,7 +129,6 @@ export async function exportarProspectosExcel(req, res) {
     let descripcion;
     if (usaRango) {
       const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-      // Normaliza el rango: valores por defecto y recorte a límites válidos.
       if (!Number.isFinite(desdePag)) desdePag = 1;
       if (!Number.isFinite(hastaPag)) hastaPag = totalPaginas;
       desdePag = Math.min(Math.max(1, desdePag), totalPaginas);
@@ -198,13 +167,8 @@ export async function exportarProspectosExcel(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Estadísticas para las tarjetas del encabezado
-// ------------------------------------------------------------
 export async function getEstadisticas(req, res) {
   try {
-    // El umbral de potencial (min_score) también recorta las tarjetas para
-    // que coincidan con la tabla y el Excel. Se ignora si no es número.
     const { min_score } = req.query;
     const params = [];
     let filtroScore = '';
@@ -230,10 +194,6 @@ export async function getEstadisticas(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Facetas para los filtros de la barra: sectores detectados y
-// búsquedas (rubros de Google) que originaron los prospectos, con conteo.
-// ------------------------------------------------------------
 export async function getFacetas(req, res) {
   try {
     const [sectores, busquedas] = await Promise.all([
@@ -256,10 +216,6 @@ export async function getFacetas(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Últimos barridos (Google Places) por zona: para avisar que una
-// zona ya fue explorada y evitar que otro usuario la repita sin querer.
-// ------------------------------------------------------------
 export async function getBarridos(req, res) {
   try {
     const r = await executeQuery(`
@@ -291,9 +247,6 @@ export async function getBarridos(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Detalle con contactos y fuentes
-// ------------------------------------------------------------
 export async function getProspectoById(req, res) {
   try {
     const { id } = req.params;
@@ -333,9 +286,6 @@ export async function getProspectoById(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Crear prospecto manual
-// ------------------------------------------------------------
 export async function createProspecto(req, res) {
   try {
     const { razon_social } = req.body;
@@ -356,14 +306,10 @@ export async function createProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Ingesta masiva de RUCs (enriquece con SUNAT en el momento)
-// ------------------------------------------------------------
 export async function ingestaLista(req, res) {
   try {
     const { texto, rucs, segmento } = req.body;
 
-    // Acepta un array o un bloque de texto (uno por línea / separado por comas).
     let lista = Array.isArray(rucs) ? rucs : [];
     if (texto) lista = lista.concat(String(texto).split(/[\s,;]+/));
     lista = [...new Set(lista.map((x) => normalizarDocumento(x)).filter((x) => x.length === 11))];
@@ -396,14 +342,12 @@ export async function ingestaLista(req, res) {
           provincia: d.provincia || null,
           distrito: d.distrito || null,
           direccion: d.direccion || null,
-          // CIIU real de SUNAT: código para la columna y detalle para el scoring.
           ciiu: d.ciiu?.[0]?.codigo || null,
           ciiu_detalle: d.ciiu || null,
           es_activo: d.es_activo,
           es_habido: d.es_habido,
           origen: 'sunat',
           url: d.fuentes?.[0]?.url || null,
-          // Guarda todo lo público (incluye representantes legales = decisores).
           datos_raw: d,
         };
 
@@ -411,7 +355,6 @@ export async function ingestaLista(req, res) {
         if (!ins.success) { resumen.errores.push({ ruc, error: ins.error }); continue; }
         if (ins.duplicado_prospecto) { resumen.ya_prospecto++; detalle.push({ ruc, estado: 'ya_prospecto' }); continue; }
 
-        // Encolar enriquecimiento automático: buscará la web sola y traerá contactos reales
         await encolarJob('web_scrape', { id_prospecto: ins.id_prospecto }, req.user?.id_empleado);
 
         if (ins.flag === 'Ya_cliente') resumen.ya_cliente++;
@@ -429,9 +372,6 @@ export async function ingestaLista(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Actualizar campos editables del prospecto
-// ------------------------------------------------------------
 export async function updateProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -456,11 +396,7 @@ export async function updateProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Historial de gestión y bloqueo por dueño
-// ------------------------------------------------------------
 
-// Registra una entrada en el historial del prospecto (quién, cuándo, qué).
 async function registrarHistorial(idProspecto, idEmpleado, accion, anterior, nuevo) {
   await executeQuery(
     `INSERT INTO prospecto_historial (id_prospecto, id_empleado, accion, valor_anterior, valor_nuevo, fecha)
@@ -469,10 +405,6 @@ async function registrarHistorial(idProspecto, idEmpleado, accion, anterior, nue
   );
 }
 
-// Devuelve el nombre del gestor si el prospecto está siendo gestionado por OTRO
-// usuario (bloqueado para el actual); null si está libre o es del propio usuario.
-// Usa id_gestor (se fija al gestionar), NO id_empleado_asignado (que marca quién
-// lo descubrió/creó y no debe bloquear).
 async function bloqueadoPorOtro(idProspecto, idEmpleado) {
   const r = await executeQuery(
     `SELECT p.id_gestor, e.nombre_completo
@@ -486,10 +418,6 @@ async function bloqueadoPorOtro(idProspecto, idEmpleado) {
   return null;
 }
 
-// ------------------------------------------------------------
-// Cambiar estado del workflow comercial
-// (reclama el prospecto para quien lo gestiona y bloquea a terceros)
-// ------------------------------------------------------------
 export async function cambiarEstado(req, res) {
   try {
     const { id } = req.params;
@@ -506,7 +434,6 @@ export async function cambiarEstado(req, res) {
     }
     const prev = actual.data[0];
 
-    // Bloqueo: si ya lo gestiona otro usuario, no se permite editar.
     const dueno = await bloqueadoPorOtro(id, yo);
     if (dueno) {
       return res.status(409).json({
@@ -515,8 +442,6 @@ export async function cambiarEstado(req, res) {
       });
     }
 
-    // Si nadie lo gestiona aún, lo reclama el usuario actual (queda bloqueado
-    // para los demás desde este momento).
     let sql, params;
     if (!prev.id_gestor) {
       sql = 'UPDATE prospectos SET estado_workflow = ?, id_gestor = ?, fecha_gestion = ? WHERE id_prospecto = ?';
@@ -536,10 +461,6 @@ export async function cambiarEstado(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Liberar la gestión (quita el dueño) para que otro pueda tomarlo.
-// Permitido al dueño actual o a un Administrador.
-// ------------------------------------------------------------
 export async function liberarProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -567,9 +488,6 @@ export async function liberarProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Asignar a un empleado
-// ------------------------------------------------------------
 export async function asignarProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -586,9 +504,6 @@ export async function asignarProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Contactos
-// ------------------------------------------------------------
 export async function addContacto(req, res) {
   try {
     const { id } = req.params;
@@ -615,7 +530,6 @@ export async function addContacto(req, res) {
 export async function deleteContacto(req, res) {
   try {
     const { id_contacto } = req.params;
-    // Recupera a qué prospecto pertenece ANTES de borrarlo, para avisar en vivo.
     const dueno = await executeQuery('SELECT id_prospecto FROM prospecto_contactos WHERE id_contacto = ?', [id_contacto]);
     const idProspecto = dueno.success && dueno.data[0] ? dueno.data[0].id_prospecto : null;
     const r = await executeQuery('DELETE FROM prospecto_contactos WHERE id_contacto = ?', [id_contacto]);
@@ -627,9 +541,6 @@ export async function deleteContacto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Convertir prospecto -> cliente (reusa la tabla clientes)
-// ------------------------------------------------------------
 export async function convertirACliente(req, res) {
   try {
     const { id } = req.params;
@@ -650,7 +561,6 @@ export async function convertirACliente(req, res) {
       return res.status(400).json({ error: 'Este prospecto ya fue convertido en cliente', id_cliente: p.id_cliente_match });
     }
 
-    // El documento es obligatorio para crear cliente (RUC o DNI).
     const documento = normalizarDocumento(req.body.documento || p.documento);
     if (!documento) {
       return res.status(400).json({ error: 'Se requiere RUC o DNI para crear el cliente. Ingresa el documento del prospecto.' });
@@ -658,7 +568,6 @@ export async function convertirACliente(req, res) {
     const tipo_documento = req.body.tipo_documento || p.tipo_documento || (documento.length === 8 ? 'DNI' : 'RUC');
     const razon_social = req.body.razon_social || p.razon_social;
 
-    // Si ya existe un cliente con ese documento, lo enlazamos en vez de duplicar.
     const existe = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [documento]);
     if (existe.data.length > 0) {
       const idCliente = existe.data[0].id_cliente;
@@ -670,7 +579,6 @@ export async function convertirACliente(req, res) {
       return res.json({ success: true, message: 'El prospecto ya existía como cliente; se enlazó.', data: { id_cliente: idCliente, ya_existia: true } });
     }
 
-    // Toma el primer teléfono/email del prospecto si no vienen en el body.
     const contactos = await executeQuery('SELECT tipo, valor FROM prospecto_contactos WHERE id_prospecto = ?', [id]);
     const primer = (tipo) => contactos.data?.find((c) => c.tipo === tipo || (tipo === 'Telefono' && c.tipo === 'Celular'))?.valor || null;
 
@@ -698,7 +606,6 @@ export async function convertirACliente(req, res) {
       );
     }
 
-    // Auto-asignación al comercial que convierte (mismo criterio que clientes).
     const idRegistrador = req.user?.id_empleado;
     if (idRegistrador && ['Comercial', 'Ventas'].includes(req.user?.rol)) {
       await executeQuery(
@@ -720,9 +627,6 @@ export async function convertirACliente(req, res) {
   }
 }
 
-// ============================================================
-// Cola de scraping (jobs asíncronos)
-// ============================================================
 const TIPOS_JOB = ['google_places', 'web_scrape', 'sunat_ruc', 'sunat_ciiu', 'enriquecer'];
 
 async function encolarJob(tipo, parametros, idEmpleado, prioridad = 5) {
@@ -732,17 +636,14 @@ async function encolarJob(tipo, parametros, idEmpleado, prioridad = 5) {
   );
   if (!ins.success) throw new Error(ins.error);
   const idJob = ins.data.insertId;
-  notificarJob(); // despierta al worker
+  notificarJob();
   return idJob;
 }
 
-// Id de lote para agrupar los jobs de una misma operación masiva y poder
-// mostrar una barra de progreso agregada (cuántos van de cuántos, y quién la lanzó).
 function genLote() {
   return 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-// Crea un job genérico
 export async function crearJob(req, res) {
   try {
     const { tipo, parametros } = req.body;
@@ -754,7 +655,6 @@ export async function crearJob(req, res) {
   }
 }
 
-// Lista los jobs recientes (para el panel de actividad)
 export async function listarJobs(req, res) {
   try {
     const r = await executeQuery(`
@@ -769,9 +669,6 @@ export async function listarJobs(req, res) {
   }
 }
 
-// Progreso agregado de las operaciones MASIVAS en curso (barra de carga en vivo).
-// Agrupa los jobs por lote/acción/usuario y devuelve cuántos van de cuántos.
-// Solo lotes con jobs aún activos (pendiente/procesando) para la barra visible.
 export async function getLotesActivos(req, res) {
   try {
     const r = await executeQuery(`
@@ -815,10 +712,6 @@ export async function getLotesActivos(req, res) {
   }
 }
 
-// Descubrimiento por rubro/zona (ANTES vía Google Places). Google Places se
-// eliminó por generar falsos positivos (atribuía webs/teléfonos de otras
-// empresas). El descubrimiento por rubro se reemplazará por padrón SUNAT / CIIU;
-// mientras tanto, el flujo confiable es ingesta por RUC + enriquecimiento.
 const PLACES_RETIRADO = {
   error: 'El descubrimiento por rubro con Google Places fue retirado (generaba falsos positivos). '
     + 'Usa "Ingresar por RUC" para dar de alta empresas reales y luego "Enriquecer": '
@@ -834,23 +727,9 @@ export async function descubrirTodo(req, res) {
   return res.status(410).json(PLACES_RETIRADO);
 }
 
-// ------------------------------------------------------------
-// Descubrimiento por PADRÓN SUNAT (reemplazo de "Descubrir todo").
-// Lee la tabla padron_empresas (empresas objetivo reales, ya filtradas del
-// Padrón Reducido de SUNAT por el script import-padron) y crea prospectos por
-// departamento + sector. Sin Google Places, sin falsos positivos.
-// ------------------------------------------------------------
 
-// Conteo disponible en el padrón, por departamento y por sector, para poblar el
-// modal de descubrimiento (y saber si hace falta correr el import).
-// Tope de prospectos a crear por clic desde el padrón. No es un límite técnico:
-// cada creación encola un enriquecimiento (throttle anti-baneo) y llena la
-// bandeja, así que se acota por lote (repetible). Ajustable por entorno.
 const PADRON_DESCUBRIR_MAX = Number(process.env.PADRON_DESCUBRIR_MAX) || 2000;
 
-// Prioridad por afinidad de sector (mismos bonos que el scoring): cuando se
-// eligen muchas zonas/sectores y el lote se topa, se crean PRIMERO las de mayor
-// potencial (agroexport, logística, e-commerce…). Empate → alfabético.
 const SECTOR_PRIORIDAD_SQL = `CASE pe.sector
   WHEN 'Agroexportación' THEN 16
   WHEN 'Logística / Almacenes' THEN 15
@@ -894,16 +773,12 @@ export async function padronStats(req, res) {
   }
 }
 
-// Crea prospectos desde el padrón para los departamentos (y sectores) elegidos.
-// Solo empresas que NO existen ya como prospecto ni como cliente. Cada nuevo
-// prospecto queda listo y se le encola el enriquecimiento (web/contactos por RUC).
 export async function descubrirPadron(req, res) {
   try {
     const { departamentos, sectores, limite } = req.body || {};
     const deps = Array.isArray(departamentos) ? departamentos.filter(Boolean) : [];
     const secs = Array.isArray(sectores) ? sectores.filter(Boolean) : [];
     if (!deps.length) return res.status(400).json({ error: 'Elige al menos un departamento' });
-    // Si no se indica límite, se crean hasta el tope configurado.
     const pedido = parseInt(limite, 10);
     const lim = Math.min(Math.max(Number.isFinite(pedido) ? pedido : PADRON_DESCUBRIR_MAX, 1), PADRON_DESCUBRIR_MAX);
 
@@ -915,16 +790,9 @@ export async function descubrirPadron(req, res) {
       where += ` AND pe.sector IN (${secs.map(() => '?').join(',')})`;
       params.push(...secs);
     }
-    // No recrear lo que ya es prospecto ni lo que ya es cliente.
-    // padron_empresas quedó en utf8mb4_0900_ai_ci (default de MySQL 8) mientras que
-    // prospectos/clientes usan utf8mb4_unicode_ci; sin forzar la collation en la
-    // comparación, MySQL lanza "Illegal mix of collations". Se ancla pe.ruc a la
-    // collation de las otras tablas.
     where += ' AND NOT EXISTS (SELECT 1 FROM prospectos p WHERE p.documento = pe.ruc COLLATE utf8mb4_unicode_ci)';
     where += ' AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.ruc = pe.ruc COLLATE utf8mb4_unicode_ci)';
 
-    // Orden por POTENCIAL: mayor afinidad de sector primero; empate, alfabético.
-    // Así, con el lote topado, se crean primero los mejores clientes potenciales.
     const sel = await executeQuery(
       `SELECT pe.* FROM padron_empresas pe ${where}
        ORDER BY (${SECTOR_PRIORIDAD_SQL}) DESC, pe.razon_social ASC
@@ -946,7 +814,7 @@ export async function descubrirPadron(req, res) {
           distrito: pe.distrito,
           direccion: pe.direccion,
           sector: pe.sector,
-          es_activo: true, // el padrón solo trae los ACTIVO
+          es_activo: true,
           es_habido: /HABIDO/i.test(pe.condicion || '') ? true : undefined,
           origen: 'padron',
           origen_query: `Padrón SUNAT · ${pe.sector || 'sin sector'}`,
@@ -958,7 +826,6 @@ export async function descubrirPadron(req, res) {
         if (ins.flag === 'Ya_cliente') resumen.ya_cliente++;
         resumen.creados++;
 
-        // Enriquecimiento en segundo plano (web/contactos anclados al RUC).
         if (ins.id_prospecto) {
           await encolarJob('web_scrape', { id_prospecto: ins.id_prospecto, lote: undefined, accion: 'enriquecer' }, req.user?.id_empleado, 8);
         }
@@ -976,8 +843,6 @@ export async function descubrirPadron(req, res) {
   }
 }
 
-// Buscar el RUC de un prospecto por su nombre en ruc.pe (BAJO DEMANDA, gratis,
-// sin APISPeru). Se aplica solo si el nombre de la ficha calza con el prospecto.
 export async function buscarRucProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -999,7 +864,6 @@ export async function buscarRucProspecto(req, res) {
       [hit.ruc, d.razon_social || null, id]
     );
 
-    // ¿Ese RUC ya es cliente?
     let ya_cliente = false;
     const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [hit.ruc]);
     if (cli.success && cli.data.length > 0) {
@@ -1010,8 +874,6 @@ export async function buscarRucProspecto(req, res) {
       ya_cliente = true;
     }
 
-    // Trae el resto de datos públicos por RUC (CIIU real, dirección, ubicación)
-    // para afinar el sector y el score. Best-effort: si falla, seguimos.
     try {
       const full = await consultarPorRuc(hit.ruc);
       const fd = full?.datos;
@@ -1028,10 +890,8 @@ export async function buscarRucProspecto(req, res) {
            fd.provincia || null, fd.distrito || null, id]
         );
       }
-    } catch { /* best-effort */ }
+    } catch { }
 
-    // Recalcula con la vigencia leída de la ficha (activo/habido) y el CIIU ya
-    // guardado → puede subir a caliente.
     const score = await recalcularScore(id, { es_activo: d.es_activo, es_habido: d.es_habido });
 
     emitirCambioProspecto(req, { accion: 'buscar_ruc', id_prospecto: Number(id) });
@@ -1044,7 +904,6 @@ export async function buscarRucProspecto(req, res) {
   }
 }
 
-// Enriquecer un prospecto scrapeando su web
 export async function enriquecerProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -1053,9 +912,6 @@ export async function enriquecerProspecto(req, res) {
     if (r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
 
     const web = url || r.data[0].web;
-    // Quitamos el check de if (!web) porque ahora el worker sabe descubrirla.
-    // Si el usuario escribió la web a mano, se confía (no se verifica); si es
-    // descubierta/guardada, el worker la verifica contra el nombre/RUC.
     const jobParams = { id_prospecto: parseInt(id), url: web || null };
     if (url) jobParams.verificar = false;
     const idJob = await encolarJob('web_scrape', jobParams, req.user?.id_empleado);
@@ -1065,26 +921,16 @@ export async function enriquecerProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Re-descubrir: fuerza una búsqueda NUEVA (sin caché). Purga lo recolectado
-// automáticamente (web/teléfonos/correos/redes), conserva lo ingresado a mano,
-// y vuelve a verificar la web desde cero con matching estricto de nombre. Sirve
-// para corregir un prospecto que quedó con datos de OTRA empresa (web mal
-// atribuida). Disponible para cualquier prospecto.
-// ------------------------------------------------------------
 export async function redescubrirProspecto(req, res) {
   try {
     const { id } = req.params;
     const r = await executeQuery('SELECT id_prospecto, estado_workflow, flag_duplicado FROM prospectos WHERE id_prospecto = ?', [id]);
     if (!r.success || r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
 
-    // No re-descubrir prospectos convertidos o ya ligados a un cliente: su ficha
-    // comercial vive en la tabla de clientes y no se debe alterar su contacto.
     if (r.data[0].estado_workflow === 'Convertido' || r.data[0].flag_duplicado === 'Ya_cliente') {
       return res.status(400).json({ error: 'Este prospecto ya es (o coincide con) un cliente; no se re-descubre para no alterar su información registrada.' });
     }
 
-    // Prioridad 3 (alta): es una corrección puntual pedida por el usuario.
     const idJob = await encolarJob('web_scrape', { id_prospecto: parseInt(id), redescubrir: true }, req.user?.id_empleado, 3);
     res.status(201).json({ success: true, message: 'Re-descubrimiento encolado (búsqueda nueva, sin caché)', id_job: idJob });
   } catch (error) {
@@ -1092,38 +938,19 @@ export async function redescubrirProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Enriquecimiento MASIVO: encola un job de enriquecimiento por cada prospecto
-// que cumpla el filtro. NO borra ni pisa nada (el worker solo AGREGA contactos
-// e info faltante). Pensado para poblar de contactos una base ya descubierta.
-//
-// El worker resuelve la web en orden barato→caro: web ya guardada (gratis) →
-// descubrimiento por Places (cuota). Por eso conviene saber cuántos NO tienen
-// web antes de correrlo con `solo_con_web=false` (ahí está el costo de Places).
-//
-// Filtros (body): solo_con_web, solo_sin_contacto (default true), min_score, limite.
-// ------------------------------------------------------------
 export async function enriquecerMasivo(req, res) {
   try {
     const { solo_con_web, solo_sin_contacto = true, min_score, limite } = req.body || {};
     const params = [];
-    // Excluye descartados y ya convertidos: a un cliente convertido no le
-    // aporta re-enriquecer el prospecto (y su ficha de cliente nunca se toca).
-    // Protege SIEMPRE a clientes: no se re-busca nada de un prospecto convertido,
-    // descartado ni que ya coincide con un cliente (pueden tener cotizaciones).
     let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
       + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
 
-    // Los prospectos En gestión / Contactado SÍ se re-buscan por defecto (se les
-    // refrescan los datos); el enriquecimiento solo AGREGA y nunca toca su
-    // estado, gestor ni historial. solo_nuevos=true lo limita a los intactos.
     if (req.body?.solo_nuevos) {
       where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL";
     }
 
     if (solo_con_web) where += " AND p.web IS NOT NULL AND p.web <> ''";
 
-    // Salta los que ya tienen algún teléfono/correo (ahorra trabajo del worker).
     if (solo_sin_contacto) {
       where += ` AND NOT EXISTS (SELECT 1 FROM prospecto_contactos pc
         WHERE pc.id_prospecto = p.id_prospecto
@@ -1134,19 +961,10 @@ export async function enriquecerMasivo(req, res) {
       where += ' AND p.score >= ?'; params.push(Number(min_score));
     }
 
-    // Idempotencia: no re-encolar prospectos que ya tienen un enriquecimiento
-    // pendiente o en curso (evita duplicar la cola si se dispara dos veces).
     where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
       WHERE j.tipo = 'web_scrape' AND j.estado IN ('pendiente','procesando')
         AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto)`;
 
-    // Ahorro de créditos de la API de búsqueda: salta los prospectos que YA se
-    // buscaron con un buscador que respondió y resultaron SIN web (job completado,
-    // o error de "no hay web" tipo sin_dominio/sin_ruc/solo_directorios). Así una
-    // segunda corrida (p.ej. con otra API key) NO re-gasta crédito confirmando otra
-    // vez que no tienen web y avanza sobre prospectos nuevos. SÍ se reintentan los
-    // que solo fallaron por 'busquedas_vacias' (buscador vacío / crédito agotado /
-    // corrida pre-API), que son justo los que valen la pena reintentar.
     if (req.body?.saltar_ya_buscados) {
       where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
         WHERE j.tipo = 'web_scrape'
@@ -1155,7 +973,6 @@ export async function enriquecerMasivo(req, res) {
                OR (j.estado = 'error' AND j.error NOT LIKE '%busquedas_vac%')))`;
     }
 
-    // Cuántos candidatos entran (para el aviso de respuesta).
     const cnt = await executeQuery(`SELECT COUNT(*) AS n FROM prospectos p${where}`, params);
     if (!cnt.success) return res.status(500).json({ error: cnt.error });
     const candidatos = cnt.data[0].n;
@@ -1163,9 +980,6 @@ export async function enriquecerMasivo(req, res) {
       return res.json({ success: true, encolados: 0, candidatos: 0, message: 'No hay prospectos por enriquecer con esos filtros.' });
     }
 
-    // Un solo INSERT...SELECT: encola un job por prospecto aunque sean miles.
-    // Prioridad 8 (baja): los descubrimientos activos siguen yendo primero.
-    // Mayor score primero, para que los mejores leads se enriquezcan antes.
     const lote = genLote();
     const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
     const ins = await executeQuery(
@@ -1177,7 +991,7 @@ export async function enriquecerMasivo(req, res) {
     );
     if (!ins.success) return res.status(500).json({ error: ins.error });
 
-    notificarJob(); // despierta al worker para que empiece de inmediato
+    notificarJob();
     const encolados = ins.data.affectedRows ?? candidatos;
     res.status(201).json({
       success: true,
@@ -1191,40 +1005,17 @@ export async function enriquecerMasivo(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Re-descubrimiento MASIVO: encola un re-descubrir (búsqueda nueva, sin caché)
-// por cada prospecto que cumpla el filtro. Purga lo auto-recolectado y lo
-// vuelve a verificar desde cero, para que CADA dato quede con su URL de origen
-// (link verificable). CONSERVA estado comercial, gestor, notas y lo manual.
-//
-// Filtros (body):
-//   - solo_sin_fuente (default true): solo re-traza prospectos que tienen algún
-//       dato auto SIN url de origen (los capturados antes de esta mejora). Así
-//       no se re-verifica de gratis lo que ya quedó trazado.
-//   - min_score, limite.
-// Excluye Descartados, Convertidos y excluidos (no aporta re-verificarlos).
-// ------------------------------------------------------------
 export async function redescubrirMasivo(req, res) {
   try {
     const { min_score, limite, solo_sin_fuente = true } = req.body || {};
     const params = [];
-    // Excluye descartados, convertidos y los ya ligados a un cliente: no se
-    // re-verifica nada que pertenezca a un cliente registrado.
-    // Protege SIEMPRE a clientes: convertidos, descartados y los que ya coinciden
-    // con un cliente NO se re-verifican (pueden tener cotizaciones).
     let where = " WHERE p.excluido = 0 AND p.estado_workflow NOT IN ('Descartado','Convertido')"
       + " AND (p.flag_duplicado IS NULL OR p.flag_duplicado <> 'Ya_cliente')";
 
-    // Los En gestión / Contactado SÍ se re-buscan por defecto: se les REFRESCAN
-    // los datos (web/contactos/RUC), pero el worker solo purga contactos AUTO y
-    // NUNCA toca estado_workflow, id_gestor, fecha_gestion, notas ni el historial
-    // de gestión. solo_nuevos=true lo limita a los intactos.
     if (req.body?.solo_nuevos) {
       where += " AND p.estado_workflow = 'Nuevo' AND p.id_gestor IS NULL";
     }
 
-    // Por defecto, solo los que tienen datos auto (web/redes/Places) SIN URL de
-    // origen: son los que necesitan re-trazado para ganar su link verificable.
     if (solo_sin_fuente) {
       where += ` AND EXISTS (SELECT 1 FROM prospecto_contactos pc
         WHERE pc.id_prospecto = p.id_prospecto
@@ -1236,7 +1027,6 @@ export async function redescubrirMasivo(req, res) {
       where += ' AND p.score >= ?'; params.push(Number(min_score));
     }
 
-    // Idempotencia: no re-encolar si ya hay un web_scrape pendiente/en curso.
     where += ` AND NOT EXISTS (SELECT 1 FROM scraping_jobs j
       WHERE j.tipo = 'web_scrape' AND j.estado IN ('pendiente','procesando')
         AND CAST(JSON_EXTRACT(j.parametros, '$.id_prospecto') AS UNSIGNED) = p.id_prospecto)`;
@@ -1248,8 +1038,6 @@ export async function redescubrirMasivo(req, res) {
       return res.json({ success: true, encolados: 0, candidatos: 0, message: 'No hay prospectos por re-descubrir con esos filtros.' });
     }
 
-    // Un solo INSERT...SELECT: encola un re-descubrir por prospecto. Prioridad 6
-    // (por debajo de un re-descubrir puntual, que es 3, y de los descubrimientos).
     const lote = genLote();
     const limClause = (limite && Number(limite) > 0) ? ` LIMIT ${Math.floor(Number(limite))}` : '';
     const ins = await executeQuery(
@@ -1275,9 +1063,6 @@ export async function redescubrirMasivo(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Excluir / restaurar (lista de exclusión)
-// ------------------------------------------------------------
 export async function excluirProspecto(req, res) {
   try {
     const { id } = req.params;
@@ -1291,9 +1076,6 @@ export async function excluirProspecto(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Proxy de foto de Google Places (mantiene la API key en el backend)
-// ------------------------------------------------------------
 export async function fotoProxy(req, res) {
   try {
     const ref = req.query.ref;
@@ -1313,9 +1095,6 @@ export async function fotoProxy(req, res) {
   }
 }
 
-// ------------------------------------------------------------
-// Descartar / eliminar
-// ------------------------------------------------------------
 export async function descartarProspecto(req, res) {
   try {
     const { id } = req.params;

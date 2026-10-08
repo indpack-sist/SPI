@@ -9,9 +9,7 @@ import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Loading from '../../components/UI/Loading'; 
 
-/* ─── Estilos scoped (no hay CSS separado para este componente) ─── */
 const S = {
-  /* Layout principal */
   root: {
     display: 'flex', flexDirection: 'row',
     height: 'calc(100vh - 80px)',
@@ -20,7 +18,6 @@ const S = {
     overflow: 'hidden',
     fontFamily: "'Barlow', sans-serif"
   },
-  /* Panel calendario */
   calPanel: {
     flex: 3, display: 'flex', flexDirection: 'column',
     backgroundColor: 'var(--bg-secondary)',
@@ -28,7 +25,6 @@ const S = {
     borderRadius: '2px',
     overflow: 'hidden'
   },
-  /* Header calendario */
   calHeader: {
     padding: '14px 16px',
     borderBottom: '1px solid var(--border)',
@@ -73,7 +69,6 @@ const S = {
     color: 'var(--text-secondary)',
     transition: 'border-color 0.15s'
   },
-  /* Días de semana */
   weekRow: {
     display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
     borderBottom: '1px solid var(--border)',
@@ -86,14 +81,12 @@ const S = {
     textTransform: 'uppercase', letterSpacing: '0.12em',
     color: 'var(--text-secondary)'
   },
-  /* Grid días */
   daysGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
     gridAutoRows: '1fr', flex: 1,
     overflowY: 'auto',
     backgroundColor: 'var(--border)', gap: '1px'
   },
-  /* Celda día */
   dayCell: (isToday, isPotentialEnd) => ({
     backgroundColor: isPotentialEnd
       ? 'rgba(93,173,226,0.08)'
@@ -127,7 +120,6 @@ const S = {
     fontFamily: "'Barlow Condensed', sans-serif",
     fontWeight: 700, letterSpacing: '0.06em'
   },
-  /* Sidebar */
   sidebar: {
     width: '300px', minWidth: '300px',
     backgroundColor: 'var(--bg-secondary)',
@@ -157,7 +149,6 @@ const S = {
     flex: 1, overflowY: 'auto', padding: '10px',
     backgroundColor: 'var(--bg-primary)'
   },
-  /* Pendiente resize banner */
   resizeBanner: {
     position: 'absolute', top: '20px', left: '50%',
     transform: 'translateX(-50%)',
@@ -177,7 +168,6 @@ const S = {
     padding: '4px', cursor: 'pointer', color: '#0f0f0f',
     display: 'flex', alignItems: 'center'
   },
-  /* Modal */
   modalOverlay: {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -211,7 +201,6 @@ const S = {
     display: 'flex', justifyContent: 'flex-end',
     backgroundColor: 'var(--carbon-light)'
   },
-  /* Orden card en modal */
   modalOrdenWrap: (colorEstado) => ({
     border: '1px solid var(--border)',
     borderLeft: `3px solid ${colorEstado}`,
@@ -238,7 +227,6 @@ const S = {
     fontFamily: "'Barlow Condensed', sans-serif",
     textTransform: 'uppercase', letterSpacing: '0.06em'
   },
-  /* Empty state */
   emptySidebar: {
     textAlign: 'center', color: 'var(--text-secondary)',
     marginTop: '40px', padding: '20px'
@@ -249,7 +237,6 @@ const S = {
   }
 };
 
-/* ─── Colores de estado (se mantienen como valores directos para bordes) ─── */
 const getStatusColor = (estado) => {
   switch(estado) {
     case 'Pendiente': case 'Pendiente Asignación': return 'var(--accent)';
@@ -400,7 +387,6 @@ const CalendarioProduccion = () => {
     catch { cargarOrdenes(); }
   };
 
-  /* ─── OrdenCard ─── */
   const OrdenCard = ({ orden, compact = false, isRangePart = false }) => {
     const isDraggable = !esComercial && (orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación');
     const isScheduled = !!orden.fecha_programada;
@@ -439,7 +425,6 @@ const CalendarioProduccion = () => {
           transition: 'opacity 0.15s'
         }}
       >
-        {/* Header row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {!compact && <IconEstado size={10} color={borderColor} />}
@@ -481,7 +466,6 @@ const CalendarioProduccion = () => {
           </div>
         </div>
 
-        {/* Producto */}
         <div style={{
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           color: 'var(--text-secondary)', margin: '2px 0', fontWeight: 500,
@@ -490,7 +474,6 @@ const CalendarioProduccion = () => {
           {orden.producto}
         </div>
 
-        {/* OV + prioridad */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
           {orden.numero_orden_venta ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
@@ -534,7 +517,6 @@ const CalendarioProduccion = () => {
           </div>
         </div>
 
-        {/* Cantidad + supervisor */}
         {!compact && (
           <div style={{ color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', marginTop: '4px', borderTop: '1px solid var(--border)', paddingTop: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -560,7 +542,6 @@ const CalendarioProduccion = () => {
   return (
     <div style={S.root}>
 
-      {/* Banner pending resize */}
       {pendingResize && (
         <div style={S.resizeBanner}>
           <ArrowRight size={18} />
@@ -571,10 +552,8 @@ const CalendarioProduccion = () => {
         </div>
       )}
 
-      {/* ── Panel Calendario ── */}
       <div style={S.calPanel}>
 
-        {/* Header */}
         <div style={S.calHeader}>
           <div style={S.calTitle}>
             <div style={S.calTitleIcon}>
@@ -591,12 +570,10 @@ const CalendarioProduccion = () => {
           </div>
         </div>
 
-        {/* Fila días semana */}
         <div style={S.weekRow}>
           {daysOfWeek.map(d => <div key={d} style={S.weekCell}>{d}</div>)}
         </div>
 
-        {/* Grid días */}
         <div style={S.daysGrid}>
           {calendarDays.map((item, index) => {
             if (!item.day) return <div key={`empty-${index}`} style={S.dayCellEmpty} />;
@@ -636,7 +613,6 @@ const CalendarioProduccion = () => {
         </div>
       </div>
 
-      {/* ── Sidebar ── */}
       <div style={S.sidebar}>
         <div style={S.sidebarHeader}>
           <h3 style={S.sidebarTitle}>
@@ -658,7 +634,6 @@ const CalendarioProduccion = () => {
         </div>
       </div>
 
-      {/* ── Modal día ── */}
       {modalOpen && selectedDay && (
         <div style={S.modalOverlay}>
           <div style={S.modalBox}>

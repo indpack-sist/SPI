@@ -1,18 +1,5 @@
-// services/sunat/ubl-baja.service.js  —  VoidedDocuments (RA / Comunicación de Baja).
-// FASE 8. Único mecanismo de anulación de facturas (01) y sus notas (07/08) dentro de 7 días.
-// (RC/Resumen Diario NO aplica: SPI no emite boletas.)
 import { cdata } from './ubl.service.js';
 
-/**
- * Construye el XML de una Comunicación de Baja (VoidedDocuments-1).
- * @param {object} ra
- * @param {string} ra.identificador     'RA-YYYYMMDD-#####' (== cbc:ID; comparte core con el filename)
- * @param {string} ra.fechaReferencia   'YYYY-MM-DD' fecha de EMISIÓN de los comprobantes
- * @param {string} ra.fechaComunicacion 'YYYY-MM-DD' fecha en que se comunica la baja
- * @param {object} ra.empresa           empresa_config (ruc, razon_social)
- * @param {Array<{lineId:number,tipoDoc:string,serie:string,numero:number,motivo:string}>} ra.lineas
- * @returns {string} XML sin firmar (con <ext:ExtensionContent/> reservado para la firma)
- */
 export function construirVoidedDocumentsXML(ra) {
   if (!ra.lineas || !ra.lineas.length) {
     const err = new Error('La comunicación de baja no tiene líneas');

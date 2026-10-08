@@ -126,16 +126,16 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       const alturaDireccion = calcularAlturaTexto(doc, direccionEntrega, 180, 8);
       const alturaConductor = calcularAlturaTexto(doc, conductorFinal || '', 180, 8);
 
-      let leftH = 15; // Fecha
-      leftH += 15; // Tipo
+      let leftH = 15;
+      leftH += 15;
       leftH += Math.max(15, alturaCliente + 5);
       if (direccionEntrega) leftH += Math.max(15, alturaDireccion + 5);
       if (rucTexto) leftH += 15;
 
-      let rightH = 15; // Estado
-      rightH += 15; // Orden Venta
-      rightH += 15; // OC Cliente
-      rightH += 15; // Cotizacion
+      let rightH = 15;
+      rightH += 15;
+      rightH += 15;
+      rightH += 15;
       if (conductorFinal) rightH += Math.max(15, alturaConductor + 5);
       if (dniFinal) rightH += 12;
       if (licenciaFinal) rightH += 12;
@@ -277,7 +277,6 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
 
       yPos += 15;
 
-      // -- LADO DERECHO: TOTAL ITEMS --
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text('TOTAL ITEMS', 390, yPos + 4);
@@ -285,7 +284,6 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
 
-      // -- LADO IZQUIERDO: OBSERVACIONES --
       if (orden.observaciones) {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES', 40, yPos);
@@ -293,14 +291,12 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
         doc.text(orden.observaciones, 40, yPos + 15, { width: 330 });
       }
 
-      // -- SECCIÓN DE FIRMA ESTÁTICA AL PIE DE PÁGINA --
-      const firmaY = 620; 
-      
+      const firmaY = 620;
+
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CONFORMIDAD DE RECEPCIÓN', 0, firmaY, { align: 'center' });
-      
+
       doc.font('Helvetica');
-      // Línea única centrada, 50 puntos por debajo del título
       doc.text('___________________________', 0, firmaY + 50, { align: 'center' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

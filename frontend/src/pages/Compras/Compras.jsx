@@ -17,9 +17,6 @@ import { usePermisos } from '../../context/PermisosContext';
 function Compras() {
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  // verFinanzas: cuentas/créditos/pagos/estadísticas → nunca para Calidad.
-  // puedeCrear: Calidad SÍ registra compras (recibe guías de remisión); los montos
-  // por fila los redacta el backend según propiedad (id_registrado_por).
   const verFinanzas = tienePermiso('verPrecios');
   const puedeCrear = tienePermiso('compras');
   
@@ -66,8 +63,6 @@ function Compras() {
         Object.entries(filtros).filter(([_, value]) => value !== '')
       );
       
-      // Roles sin acceso a finanzas (Calidad) no piden estadísticas/alertas/cuentas
-      // (esas rutas devuelven 403 y además exponen agregados financieros).
       const promesas = [comprasAPI.getAll(filtrosActivos)];
       if (verFinanzas) {
         promesas.push(
@@ -251,7 +246,6 @@ function Compras() {
       width: '130px',
       align: 'right',
       render: (value, row) => {
-        // value === null → monto redactado por backend (compra ajena para Calidad)
         if (value === null || value === undefined) {
           return <span className="text-gray-400">—</span>;
         }
@@ -635,14 +629,11 @@ function Compras() {
           <Table
             columns={(() => {
               if (activeTab === 'compras') {
-                // Calidad (sin verFinanzas): N° Compra, Proveedor, Recepción, Total y Acciones.
-                // El Total lo redacta el backend: muestra monto en compras propias y "—" en ajenas.
                 return verFinanzas ? columns : [columns[0], columns[1], columns[2], columns[5], columns[7]];
               }
-              // Pestaña Solicitudes OC
               const base = [
-                columns[0], // N° OC
-                columns[1], // Proveedor
+                columns[0],
+                columns[1],
                 {
                   header: 'Tipo Solicitud',
                   accessor: 'tipo_documento',
@@ -650,8 +641,8 @@ function Compras() {
                   render: () => <span className="badge badge-outline">Formato OC</span>
                 }
               ];
-              if (verFinanzas) base.push(columns[5]); // Total solo si puede ver montos
-              base.push(columns[7]); // Acciones
+              if (verFinanzas) base.push(columns[5]);
+              base.push(columns[7]);
               return base;
             })()}
             data={currentItems}

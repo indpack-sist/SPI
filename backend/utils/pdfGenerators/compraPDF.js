@@ -37,7 +37,6 @@ export const generarCompraPDF = async (orden) => {
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-      // Logo
       let logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       if (logoBuffer) {
         try { doc.image(logoBuffer, 50, 40, { width: 180 }); } catch (e) { doc.fontSize(16).font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 50); }
@@ -45,7 +44,6 @@ export const generarCompraPDF = async (orden) => {
         doc.fontSize(16).font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 50);
       }
 
-      // Datos de Empresa
       doc.fontSize(9).fillColor('#333333').font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 100);
       doc.fontSize(8).font('Helvetica')
         .text(EMPRESA.direccion, 50, 112, { width: 250 })
@@ -53,13 +51,11 @@ export const generarCompraPDF = async (orden) => {
         .text(`E-mail: ${EMPRESA.email}`)
         .text(`Web: ${EMPRESA.web}`);
 
-      // Cuadro de RUC
       doc.rect(350, 50, 200, 80).lineWidth(1.5).stroke();
       doc.fontSize(12).font('Helvetica-Bold').text(`R.U.C. ${EMPRESA.ruc}`, 350, 65, { align: 'center', width: 200 });
       doc.fontSize(14).text('ORDEN DE COMPRA', 350, 85, { align: 'center', width: 200 });
       doc.fontSize(12).text(`No. ${orden.numero_orden}`, 350, 105, { align: 'center', width: 200 });
 
-      // --- Bloque de Proveedor y Condiciones (DINÁMICO e INTELIGENTE) ---
       let y = 175;
       let yBloque = y;
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text('DATOS DEL PROVEEDOR', 60, yBloque + 10);
@@ -69,7 +65,6 @@ export const generarCompraPDF = async (orden) => {
       let currentYLeft = yBloque + 30;
       let currentYRight = yBloque + 30;
 
-      // Función auxiliar para dibujar filas que se ajustan al contenido
       const drawLeft = (label, value) => {
         doc.font('Helvetica-Bold').fontSize(8).text(label, 60, currentYLeft);
         doc.font('Helvetica').text(value || '-', 130, currentYLeft, { width: 160 });
@@ -82,7 +77,6 @@ export const generarCompraPDF = async (orden) => {
         currentYRight += Math.max(doc.heightOfString(value || '-', { width: 160 }), 10) + 4;
       };
 
-      // Columna Izquierda
       drawLeft('Proveedor:', orden.proveedor);
       drawLeft('RUC:', orden.ruc_proveedor);
       if (orden.contacto_proveedor) drawLeft('Contacto:', orden.contacto_proveedor);
@@ -90,7 +84,6 @@ export const generarCompraPDF = async (orden) => {
       drawLeft('Fecha Emisión:', orden.fecha_emision ? new Date(orden.fecha_emision).toLocaleDateString('es-PE') : '-');
       drawLeft('Fecha Venc.:', orden.fecha_vencimiento ? new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE') : '-');
 
-      // Columna Derecha (normalizamos para tolerar tildes: 'Crédito' vs 'Credito')
       const diacriticos = new RegExp('[\\u0300-\\u036f]', 'g');
       const normalizarTipo = (v) => (v || '').normalize('NFD').replace(diacriticos, '').toLowerCase();
       const tipoNorm = normalizarTipo(orden.tipo_compra) || normalizarTipo(orden.forma_pago_detalle);
@@ -104,18 +97,15 @@ export const generarCompraPDF = async (orden) => {
       }
       drawRight('Días c/cuota:', `${orden.dias_entre_cuotas || 0} días`);
 
-      // El lugar de entrega ahora puede ser extenso sin romper el diseño
       const lugarDefault = 'AV. EL SOL MZ. LL1 LOTE 4 B, Villa EL Salvador';
       drawRight('Lugar Entr.:', orden.direccion_entrega || orden.lugar_entrega || lugarDefault);
       drawRight('Entr. Estimada:', orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'POR COORDINAR');
 
-      // Calcular el final real del bloque
       const yFinBloque = Math.max(currentYLeft, currentYRight) + 5;
       doc.rect(50, yBloque, 500, yFinBloque - yBloque).lineWidth(0.5).strokeColor('#cccccc').stroke().strokeColor('#000000');
       
       y = yFinBloque + 20;
 
-      // --- Tabla de Productos ---
       doc.rect(50, y, 500, 20).fill('#f5f5f5').stroke('#cccccc');
       doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
       doc.text('CÓDIGO', 55, y + 6, { width: 70 });
@@ -150,7 +140,6 @@ export const generarCompraPDF = async (orden) => {
         doc.moveTo(50, y).lineTo(550, y).strokeColor('#eeeeee').lineWidth(0.5).stroke().strokeColor('#000000').lineWidth(1);
       });
 
-      // Totales
       y += 10;
       if (y > 700) { doc.addPage(); y = 50; }
       const totalX = 380;
@@ -169,7 +158,6 @@ export const generarCompraPDF = async (orden) => {
       y += 30;
       doc.fontSize(8).font('Helvetica-Oblique').text(`SON: ${numeroALetras(orden.total, orden.moneda)}`, 50, y);
 
-      // CRONOGRAMA DE PAGOS (SOLO SI HAY CUOTAS)
       if (orden.cuotas && orden.cuotas.length > 0) {
         y += 30;
         if (y > 650) { doc.addPage(); y = 50; }
@@ -197,7 +185,6 @@ export const generarCompraPDF = async (orden) => {
         doc.strokeColor('#000000');
       }
 
-      // Observaciones
       if (orden.observaciones) {
         y += 30;
         const obsLimpia = orden.observaciones.replace(/\[ITEM_MANUAL_ID_\d+\]:.*(\n|$)/g, '').replace(/\[PLAZO_PAGO\]:.*(\n|$)/g, '').replace(/\[LUGAR_ENTREGA\]:.*(\n|$)/g, '').trim();

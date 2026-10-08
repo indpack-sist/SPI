@@ -782,10 +782,8 @@ export const generarPDFEntradaController = async (req, res, next) => {
   }
 };
 
-// Obtiene los movimientos de ingreso de materia prima/insumos para el reporte.
 async function obtenerMovimientosMateriaPrima({ fecha_inicio, fecha_fin, id_tipo_inventario }) {
   const params = [fecha_inicio, fecha_fin];
-  // "Materia prima" abarca los tipos de inventario Insumo* y Materia Prima*
   let filtroInventario = `(ti.nombre LIKE 'Insumo%' OR ti.nombre LIKE 'Materia Prima%')`;
 
   if (id_tipo_inventario) {

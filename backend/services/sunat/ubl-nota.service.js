@@ -1,10 +1,6 @@
-// services/sunat/ubl-nota.service.js  —  Constructor de XML UBL 2.1 para Notas.
-// FASE 7: Nota de Crédito (07 / CreditNote) y Nota de Débito (08 / DebitNote).
-// Reusa la firma, el zip, el envío (sendBill) y el CDR de la Fase 6 sin cambios.
 import { numeroALetras } from '../../utils/numeroALetras.js';
 import { round2, m2, u6, cdata, trunc, AFECTACION, afectacionLinea, schemeIdDocumento } from './ubl.service.js';
 
-// Catálogo 09 (motivos de Nota de Crédito).
 const MOTIVOS_NC = {
   '01': 'ANULACION DE LA OPERACION',
   '02': 'ANULACION POR ERROR EN EL RUC',
@@ -17,7 +13,6 @@ const MOTIVOS_NC = {
   '09': 'DISMINUCION EN EL VALOR',
   '13': 'AJUSTES - MONTOS Y/O FECHAS DE PAGO'
 };
-// Catálogo 10 (motivos de Nota de Débito).
 const MOTIVOS_ND = {
   '01': 'INTERESES POR MORA',
   '02': 'AUMENTO EN EL VALOR',
@@ -28,7 +23,6 @@ export function motivosValidos(tipo) {
   return tipo === '08' ? MOTIVOS_ND : MOTIVOS_NC;
 }
 
-// Perfiles por tipo de nota (elementos que cambian entre CreditNote y DebitNote).
 const PERFIL = {
   '07': {
     root: 'CreditNote',
@@ -48,22 +42,6 @@ const PERFIL = {
   }
 };
 
-/**
- * Construye el XML de una Nota de Crédito (07) o Débito (08).
- * @param {object}  p
- * @param {'07'|'08'} p.tipo
- * @param {string}  p.serie          FC01 (NC) | FD01 (ND)
- * @param {number}  p.numero
- * @param {string}  p.motivoCodigo   catálogo 09 (NC) / 10 (ND)
- * @param {object}  p.docAfectado    { comprobante:'FE01-1', tipo:'01' }
- * @param {object}  p.ov             orden de venta del comprobante afectado (moneda, tipo_operacion_sunat, es_exportacion)
- * @param {array}   p.detalle        líneas de la nota (total: replica la factura; parcial: subconjunto/ítems)
- * @param {object}  p.cliente
- * @param {object}  p.empresa        empresa_config
- * @param {object}  p.fecha          { emision, hora }
- * @param {string}  [p.sustento]     texto libre del usuario (cbc:Description). Si vacío → etiqueta del catálogo.
- * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
- */
 export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectado, ov, detalle, cliente, empresa, fecha, sustento }) {
   const perfil = PERFIL[tipo];
   if (!perfil) {
@@ -84,8 +62,7 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
   const esExport = Number(ov.es_exportacion) === 1;
   const idComprobante = `${serie}-${numero}`;
 
-  // ── Líneas (misma matemática que la factura de la Fase 6) ───────────────────
-  const grupos = {}; // afectación -> { base, igv, cfg }
+  const grupos = {};
   const lineasXml = detalle.map((d, i) => {
     const unidad = d.codigo_unidad_sunat;
     if (!unidad) {
@@ -96,8 +73,6 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
     const cfg = AFECTACION[afect] || AFECTACION['10'];
 
     const cantidad = Number(d.cantidad);
-    // `descuento_porcentaje` es el MARGEN (markup), NO un descuento: precio_unitario ya es el
-    // precio final. No se resta, para que la nota cuadre con la OV/factura (ver ubl.service.js).
     const desc = Number(d.descuento_porcentaje || 0);
     const netUnit = Number(d.precio_unitario);
     const lineExt = round2(cantidad * netUnit);
@@ -140,7 +115,6 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
   </cac:${perfil.lineTag}>`;
   }).join('\n');
 
-  // ── Totales ─────────────────────────────────────────────────────────────────
   const totalBase = round2(Object.values(grupos).reduce((s, g) => s + g.base, 0));
   const totalIgv = round2(Object.values(grupos).reduce((s, g) => s + g.igv, 0));
   const totalPagar = round2(totalBase + totalIgv);
@@ -163,8 +137,6 @@ export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectad
   const cliScheme = esExport ? '0' : schemeIdDocumento(cliente.tipo_documento);
   const cliNumDoc = cliente.ruc || '0';
 
-  // ── XML. OJO orden XSD: DiscrepancyResponse y BillingReference van ANTES de
-  //    cac:Signature (mismo tipo de restricción que resolvió el 0306 en la dirección).
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <${perfil.root} xmlns="${perfil.ns}"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"

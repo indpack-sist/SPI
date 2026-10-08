@@ -16,17 +16,12 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalNuevaIncidencia from '../Calidad/ModalNuevaIncidencia';
 
-// Extrae las medidas numéricas de un nombre de producto.
-// Ej: "LÁMINA BURBUPACK 0.36 X 0.56 MTS" -> [0.36, 0.56]
-//     "ROLLO BURBUPACK 0.36 X 200 MTS"   -> [0.36, 200]
 const extraerMedidas = (nombre) => {
   if (!nombre) return [];
   const matches = nombre.toUpperCase().match(/\d+(?:[.,]\d+)?/g);
   return matches ? matches.map(m => parseFloat(m.replace(',', '.'))) : [];
 };
 
-// Un rollo coincide con la lámina si su ANCHO (la medida más pequeña del rollo,
-// ya que el largo suele ser 200 MTS) es una de las medidas de la lámina.
 const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
   const medidasLamina = extraerMedidas(nombreLamina);
   const medidasRollo = extraerMedidas(nombreRollo);
@@ -35,8 +30,6 @@ const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
   return medidasLamina.some(m => Math.abs(m - anchoRollo) < 0.001);
 };
 
-// Muestra cantidades de unidades/millares respetando decimales (ej: 12.5),
-// pero sin ".00" innecesario para enteros (ej: 12).
 const fmtUnid = (valor) => String(parseFloat(parseFloat(valor || 0).toFixed(2)));
 
 function OrdenDetalle() {
@@ -606,9 +599,6 @@ function OrdenDetalle() {
     );
   };
 
-  // Reparte un total real de insumos entre los insumos de la receta según su
-  // porcentaje original (derivado de cantidad_requerida) y llena las cantidades
-  // adicionales del cierre. El usuario revisa el resultado antes de confirmar.
   const distribuirTotalRealPorPorcentaje = () => {
     const total = parseFloat(totalRealInsumos);
     if (!total || total <= 0) {
@@ -616,7 +606,6 @@ function OrdenDetalle() {
       return;
     }
 
-    // Peso de cada insumo = su cantidad requerida planificada (el % de la receta).
     const sumaRequerida = insumosFinalesConsumo.reduce(
       (acc, item) => acc + (parseFloat(item.cantidad_requerida) || 0),
       0
@@ -632,7 +621,6 @@ function OrdenDetalle() {
         const requerido = parseFloat(item.cantidad_requerida) || 0;
         const porcentaje = requerido / sumaRequerida;
         const objetivoTotal = total * porcentaje;
-        // Descuenta lo ya consumido en parciales para obtener solo el adicional del cierre.
         const yaConsumido = parseFloat(item.cantidad_ya_consumida) || 0;
         const adicional = Math.max(0, objetivoTotal - yaConsumido);
         return { ...item, cantidad: parseFloat(adicional.toFixed(4)).toString() };
@@ -1063,8 +1051,7 @@ function OrdenDetalle() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    
-    // Si la fecha incluye hora (formato ISO o YYYY-MM-DD HH:mm:ss)
+
     if (fecha.includes('T') || (fecha.includes(' ') && fecha.includes(':'))) {
       return new Date(fecha).toLocaleString('es-PE', {
         day: '2-digit',
@@ -1075,8 +1062,7 @@ function OrdenDetalle() {
         hour12: true
       });
     }
-    
-    // Si es solo fecha YYYY-MM-DD
+
     const partes = fecha.split(' ')[0].split('-');
     if (partes.length === 3) {
       const [year, month, day] = partes;
@@ -1756,7 +1742,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* ── ADJUNTOS ─────────────────────────────────────────────────────── */}
       <div className="card mt-4">
         <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -1796,7 +1781,6 @@ function OrdenDetalle() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {adjuntos.map(adj => (
                 <div key={adj.id_adjunto} className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col">
-                  {/* Thumbnail o ícono */}
                   {adj.tipo_archivo === 'imagen' ? (
                     <button
                       className="block w-full aspect-square"
@@ -1819,7 +1803,6 @@ function OrdenDetalle() {
                       <span className="text-xs text-center text-gray-600 truncate w-full">{adj.nombre_archivo}</span>
                     </a>
                   )}
-                  {/* Metadata siempre visible */}
                   <div className="p-2 border-t border-gray-100 flex items-start justify-between gap-1 bg-white">
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-gray-700 truncate">{adj.nombre_archivo}</p>
@@ -1842,7 +1825,6 @@ function OrdenDetalle() {
         </div>
       </div>
 
-      {/* ── VISOR IMAGEN ─────────────────────────────────────────────────── */}
       {adjuntoVisor && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"

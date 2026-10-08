@@ -9,11 +9,6 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { ordenesVentaAPI } from '../../config/api';
 
-/**
- * Vista de SOLO seguimiento de despachos para el rol Calidad.
- * Muestra cliente / producto / cantidades / despachos / pendientes,
- * sin ningún dato financiero (precios, totales, pagos, facturación).
- */
 function SeguimientoVentas() {
   const navigate = useNavigate();
 

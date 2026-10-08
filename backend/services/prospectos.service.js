@@ -1,13 +1,5 @@
 import { executeQuery } from '../config/database.js';
 
-// ============================================================
-// Servicio de Prospección: normalización, scoring heurístico
-// (gratis, sin IA) y detección de duplicados contra clientes.
-// ============================================================
-
-// Hora actual de Perú (America/Lima) como 'YYYY-MM-DD HH:mm:ss'. Se inserta
-// explícitamente porque el default CURRENT_TIMESTAMP de MySQL usa la zona del
-// servidor (UTC), lo que dejaba las fechas de captura 5 horas adelantadas.
 export function getFechaPeru() {
   const now = new Date();
   const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -20,40 +12,19 @@ export function getFechaPeru() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// Normaliza el nombre para clasificar: sin acentos y en MAYÚSCULAS. Así "CÍTRICOS"
-// matchea "CITRIC" y "AGROQUÍMICOS" matchea "AGROQUIMIC" sin duplicar patrones.
 const DIACRITICOS_SECTOR = /[̀-ͯ]/g;
 function normalizarNombreSector(nombre) {
   return String(nombre || '').normalize('NFD').replace(DIACRITICOS_SECTOR, '').toUpperCase();
 }
 
-// Lista negra: agroindustria de INSUMOS (plaguicidas, fertilizantes, veterinaria,
-// viveros/semillas) y rubros ajenos que se cuelan por el prefijo "AGRO". Si el
-// nombre contiene cualquiera de estos, NO es comprador de empaque de fruta/verdura.
-// Substring a propósito (sin \b): "AGROABONOS" debe matchear "ABONO".
-const INSUMOS_AGRICOLAS = /AGROQUIMIC|CROPSCIENCE|INSECTICID|PLAGUICID|PESTICID|FUNGICID|HERBICID|ACARICID|NEMATICID|FERTILIZ|ABONO|FUMIGA|VETERINARI|PECUARI|SEMILLA|VIVERO|PLANTIN|AGROINSUMO|FOLIAR|RIEGO|PERFORACION|ASESOR|ABARROTE|CARNE|JARDIN|MASCOTA/;
+const INSUMOS_AGRICOLAS =/AGROQUIMIC|CROPSCIENCE|INSECTICID|PLAGUICID|PESTICID|FUNGICID|HERBICID|ACARICID|NEMATICID|FERTILIZ|ABONO|FUMIGA|VETERINARI|PECUARI|SEMILLA|VIVERO|PLANTIN|AGROINSUMO|FOLIAR|RIEGO|PERFORACION|ASESOR|ABARROTE|CARNE|JARDIN|MASCOTA/;
 
-// Patrón del sector Agroexportación. Incluye el prefijo AGRO/AGRIC (agrícola,
-// agroexportadora, agroindustrial, y también nombres neutros tipo "AGRO X") y
-// términos de fruta/verdura. La agroindustria de INSUMOS (insecticidas,
-// fertilizantes, veterinaria) y rubros ajenos claros se descartan aparte con
-// INSUMOS_AGRICOLAS dentro de detectarSector: el bucket agro = todo lo agro
-// MENOS la lista negra.
-const AGRO_SECTOR = /\b(AGRO|AGRIC|FRUT|HORTALIZ|PALT|ARANDAN|BLUEBERR|BERR|ESPARRAG|ASPARAG|CITRIC|MANDARIN|NARANJA|BANAN|PAPRIKA|PIMIENT|ALCACHOFA|ARTICHOKE|GRANAD|JENGIBRE|GINGER|QUINUA|CACAO|PRODUCE|AGROEXPORT|AGRICOLA|FRESH|FRUIT)|\b(UVA|UVAS|AJO|AJOS|KION|MANGO|MANGOS|PINA|CEBOLLA)\b/;
+const AGRO_SECTOR =/\b(AGRO|AGRIC|FRUT|HORTALIZ|PALT|ARANDAN|BLUEBERR|BERR|ESPARRAG|ASPARAG|CITRIC|MANDARIN|NARANJA|BANAN|PAPRIKA|PIMIENT|ALCACHOFA|ARTICHOKE|GRANAD|JENGIBRE|GINGER|QUINUA|CACAO|PRODUCE|AGROEXPORT|AGRICOLA|FRESH|FRUIT)|\b(UVA|UVAS|AJO|AJOS|KION|MANGO|MANGOS|PINA|CEBOLLA)\b/;
 
-/** ¿El nombre corresponde a agroindustria de INSUMOS o rubro ajeno (no compra empaque)? */
 export function esInsumoAgricola(nombre) {
   return INSUMOS_AGRICOLAS.test(normalizarNombreSector(nombre));
 }
 
-// Sectores que compran empaque terminado. Cada patrón aporta un
-// "sector legible" y un bono de encaje al score. Se detecta por
-// palabras clave en la razón social / nombre comercial mientras no
-// tengamos el CIIU real de otra fuente.
-// Sectores que COMPRAN empaque industrial (burbupack, stretch film, zunchos,
-// esquineros, etc.): empresas que mueven, paletizan o protegen carga. Cada
-// patrón aporta un "sector legible" y un bono de encaje al score. El orden
-// importa: gana la primera coincidencia, así que van primero los de mayor fit.
 const SECTORES_OBJETIVO = [
   { patron: AGRO_SECTOR, sector: 'Agroexportación', bono: 16 },
   { patron: /\b(LOGISTIC|ALMACEN|OPERADOR LOG|CENTRO DE DISTRIBU|WAREHOUSE|FULFILL)/i, sector: 'Logística / Almacenes', bono: 15 },
@@ -72,9 +43,6 @@ const SECTORES_OBJETIVO = [
   { patron: /\b(FERRETER|FERRETERIA INDUSTRIAL|SUMINISTRO)/i, sector: 'Ferretería / Suministros', bono: 8 },
 ];
 
-// Mapeo CIIU (Rev.4) → sector objetivo. La actividad económica de SUNAT es MUCHO
-// más fiable que adivinar por el nombre: se prioriza siempre que exista. La clave
-// es la "división" (2 primeros dígitos del CIIU). El orden fija la prioridad.
 const CIIU_SECTOR = [
   { div: ['01', '02'], sector: 'Agroexportación', bono: 16 },
   { div: ['03'], sector: 'Pesca / Congelados', bono: 12 },
@@ -90,10 +58,6 @@ const CIIU_SECTOR = [
   { div: ['17', '18', '19', '22', '24', '25', '28', '29', '30', '32', '33'], sector: 'Industria / Manufactura', bono: 9 },
 ];
 
-/**
- * Detecta el sector objetivo a partir del/los CIIU (array de {codigo,...} o de
- * strings). Devuelve { sector, bono, codigo } del primer CIIU que encaje, o null.
- */
 export function sectorPorCiiu(ciiu) {
   if (!ciiu) return null;
   const lista = Array.isArray(ciiu) ? ciiu : [ciiu];
@@ -108,26 +72,15 @@ export function sectorPorCiiu(ciiu) {
   return null;
 }
 
-// CIIU (Rev.4) que SÍ son comercio/cultivo de fruta y verdura fresca (compran
-// empaque). Se comparan por prefijo del código: 011/012 = cultivo de plantas
-// (hortalizas y frutas), 0163 = actividades post-cosecha (empaque de fruta),
-// 4630 = venta al por mayor de alimentos y bebidas. Ajustable si se quiere
-// acotar más (p.ej. excluir cereales 0111).
 const CIIU_FRUTA_VERDURA = ['011', '012', '0163', '4630'];
 
-/**
- * Clasifica un prospecto por su CIIU REAL de SUNAT (autoritativo, mucho más
- * fiable que el nombre).
- * @param {Array<{codigo?:string,descripcion?:string}>|string} ciiu
- * @returns {{objetivo:true} | {objetivo:false, motivo:string} | null}
- */
 export function clasificarCiiuFrutaVerdura(ciiu) {
   if (!ciiu) return null;
   const lista = Array.isArray(ciiu) ? ciiu : [ciiu];
   const items = lista
     .map((it) => ({ codigo: String(it?.codigo ?? it ?? '').replace(/\D/g, ''), descripcion: it?.descripcion || null }))
     .filter((it) => it.codigo.length >= 3);
-  if (!items.length) return null; // sin CIIU verificable
+  if (!items.length) return null;
 
   for (const it of items) {
     if (CIIU_FRUTA_VERDURA.some((p) => it.codigo.startsWith(p))) return { objetivo: true };
@@ -137,92 +90,49 @@ export function clasificarCiiuFrutaVerdura(ciiu) {
   return { objetivo: false, motivo: `Actividad no es comercio de fruta/verdura (${desc})` };
 }
 
-// Anti-sectores: empresas de SERVICIOS que NO compran empaque industrial, pero
-// cuyo nombre puede contener una palabra de sector objetivo (ej. "ecommerce" en
-// una agencia de diseño web). Si el nombre calza con esto, no se asigna sector
-// afín ni bono. Se usan términos específicos de servicios a propósito: NO se
-// filtra "agencia" a secas para no excluir prospectos válidos (ej. "agencia de
-// carga" sí es logística).
-const ANTISECTORES = /(AGENCIA\s+(DE\s+)?(MARKETING|PUBLICIDAD|VIAJES|SEGUROS|ADUANA|EMPLEO|DIGITAL)|\bMARKETING\b|PUBLICIDAD|COMMUNITY\s+MANAGER|\bSEO\b|DIGITAL\s+LEADER|DISE[NÑ]O\s+(WEB|GR[AÁ]FICO)|DESARROLLO\s+(WEB|DE\s+SOFTWARE|DE\s+APP|DE\s+APLICACIONES)|P[AÁ]GINAS?\s+WEB|SITIOS?\s+WEB|TIENDAS?\s+VIRTUALES?|\bSOFTWARE\b|APLICACIONES\s+M[OÓ]VILES|INTELIGENCIA\s+ARTIFICIAL|AUTOMATIZACIONES?|CONSULTOR[IÍ]A|CONSULTORA|ESTUDIO\s+(CONTABLE|JUR[IÍ]DICO|DE\s+ABOGADOS)|ABOGADOS|NOTAR[IÍ]A|CONTABILIDAD|INMOBILIARIA|CORREDORA\s+DE|C[AÁ]MARA\s+(DE\s+COMERCIO|PERUANA)|GREMIO)/i;
+const ANTISECTORES =/(AGENCIA\s+(DE\s+)?(MARKETING|PUBLICIDAD|VIAJES|SEGUROS|ADUANA|EMPLEO|DIGITAL)|\bMARKETING\b|PUBLICIDAD|COMMUNITY\s+MANAGER|\bSEO\b|DIGITAL\s+LEADER|DISE[NÑ]O\s+(WEB|GR[AÁ]FICO)|DESARROLLO\s+(WEB|DE\s+SOFTWARE|DE\s+APP|DE\s+APLICACIONES)|P[AÁ]GINAS?\s+WEB|SITIOS?\s+WEB|TIENDAS?\s+VIRTUALES?|\bSOFTWARE\b|APLICACIONES\s+M[OÓ]VILES|INTELIGENCIA\s+ARTIFICIAL|AUTOMATIZACIONES?|CONSULTOR[IÍ]A|CONSULTORA|ESTUDIO\s+(CONTABLE|JUR[IÍ]DICO|DE\s+ABOGADOS)|ABOGADOS|NOTAR[IÍ]A|CONTABILIDAD|INMOBILIARIA|CORREDORA\s+DE|C[AÁ]MARA\s+(DE\s+COMERCIO|PERUANA)|GREMIO)/i;
 
-/** Deja solo dígitos de un teléfono (para comparar/deduplicar). */
 export function normalizarTelefono(valor) {
   if (!valor) return '';
   const digitos = String(valor).replace(/\D/g, '');
-  // Quita prefijo país 51 si el número queda con largo de móvil/fijo peruano.
   if (digitos.length > 9 && digitos.startsWith('51')) {
     return digitos.slice(2);
   }
   return digitos;
 }
 
-/** Normaliza un email a minúsculas sin espacios. */
 export function normalizarEmail(valor) {
   if (!valor) return '';
   return String(valor).trim().toLowerCase();
 }
 
-/** Deja solo dígitos de un documento (RUC/DNI). */
 export function normalizarDocumento(valor) {
   if (!valor) return '';
   return String(valor).replace(/\D/g, '');
 }
 
-/**
- * ¿El nombre corresponde a una empresa de SERVICIOS (agencia digital,
- * consultora, estudio, notaría…) que no compra empaque industrial? Se usa para
- * descartarlas en el descubrimiento automático antes de gastar cuota de Places.
- */
 export function esEmpresaServicios(nombre) {
   return ANTISECTORES.test(normalizarNombreSector(nombre));
 }
 
-/**
- * Detecta el sector objetivo a partir del nombre de la empresa.
- * Devuelve { sector, bono } o null si no calza con ninguno.
- */
 export function detectarSector(nombre) {
   if (!nombre) return null;
   const n = normalizarNombreSector(nombre);
-  // Empresa de servicios (agencia digital, consultora, estudio…): sin encaje.
   if (ANTISECTORES.test(n)) return null;
   for (const s of SECTORES_OBJETIVO) {
     if (!s.patron.test(n)) continue;
-    // Agroexportación = SOLO comercio de fruta/verdura. La agroindustria de
-    // insumos (insecticidas, fertilizantes, veterinaria) NO va en este bucket:
-    // se salta y puede caer en otro sector afín más abajo (p.ej. Química). Los
-    // demás sectores no se ven afectados por la lista negra.
     if (s.sector === 'Agroexportación' && INSUMOS_AGRICOLAS.test(n)) continue;
     return { sector: s.sector, bono: s.bono };
   }
   return null;
 }
 
-/**
- * Scoring heurístico (0..100). No usa IA: puntúa señales concretas y
- * explica el "por qué" con plantillas. Recibe un objeto plano con lo
- * que se haya podido recolectar del prospecto.
- *
- * @param {Object} p
- * @param {string} [p.segmento]        'Formal' | 'Pequeno' | 'Informal'
- * @param {boolean} [p.es_activo]      RUC activo en SUNAT
- * @param {boolean} [p.es_habido]      Condición HABIDO en SUNAT
- * @param {string} [p.razon_social]
- * @param {string} [p.sector]          sector ya conocido (opcional)
- * @param {boolean} [p.tiene_telefono]
- * @param {boolean} [p.tiene_email]
- * @param {boolean} [p.tiene_web]
- * @param {boolean} [p.tiene_direccion]
- * @param {boolean} [p.ya_cliente]     ya existe en la BD
- * @returns {{score:number, sector:(string|null), señales:string[], por_que_contactar:string}}
- */
 export function calcularScore(p = {}) {
   const señales = [];
-  let score = 25; // base
+  let score = 25;
 
   const esInformal = p.segmento === 'Pequeno' || p.segmento === 'Informal';
 
-  // --- Vigencia SUNAT (peso alto en formales) ---
   if (p.es_activo) {
     score += 25;
     señales.push('RUC activo en SUNAT');
@@ -238,9 +148,6 @@ export function calcularScore(p = {}) {
     señales.push('Condición NO HABIDO');
   }
 
-  // --- Encaje de sector ---
-  // 1º el CIIU real de SUNAT (fiable); si no hay, se cae al nombre (heurístico),
-  // descartando empresas de servicios que no compran empaque.
   let sectorDetectado = p.sector || null;
   const porCiiu = sectorPorCiiu(p.ciiu);
   if (porCiiu) {
@@ -248,9 +155,6 @@ export function calcularScore(p = {}) {
     score += porCiiu.bono;
     señales.push(`Sector afín (CIIU ${porCiiu.codigo}): ${sectorDetectado}`);
   } else if (ANTISECTORES.test(p.razon_social || '')) {
-    // Empresa de servicios: no compra empaque físico. Se descarta el sector
-    // afín aunque su nombre contenga una palabra de sector objetivo
-    // (ej. "ecommerce" en una agencia web) o venga uno guardado de antes.
     sectorDetectado = null;
     señales.push('Empresa de servicios (no compra empaque): sin encaje de sector');
   } else {
@@ -262,19 +166,16 @@ export function calcularScore(p = {}) {
     }
   }
 
-  // --- Accionabilidad del contacto ---
   if (p.tiene_telefono) { score += 10; señales.push('Tiene teléfono de contacto'); }
   if (p.tiene_email)    { score += 10; señales.push('Tiene correo de contacto'); }
   if (p.tiene_web)      { score += 5;  señales.push('Tiene sitio web'); }
   if (p.tiene_direccion){ score += 5;  señales.push('Dirección registrada'); }
 
-  // Un negocio pequeño con local y contacto es igual de valioso: sube el piso.
   if (esInformal && (p.tiene_telefono || p.tiene_direccion)) {
     score += 5;
     señales.push('Negocio pequeño con contacto directo (venta libre)');
   }
 
-  // Ya es cliente: no es un lead nuevo, pero conservamos el cálculo.
   if (p.ya_cliente) {
     señales.push('Ya registrado como cliente');
   }
@@ -289,7 +190,6 @@ export function calcularScore(p = {}) {
   };
 }
 
-/** Arma el párrafo de "por qué contactar" con plantillas según señales. */
 function construirPorQue(p) {
   const nombre = p.razon_social || 'La empresa';
   const partes = [];
@@ -310,18 +210,10 @@ function construirPorQue(p) {
   if (partes.length === 0) {
     return `${nombre} es un prospecto por evaluar; falta enriquecer datos de contacto y sector para priorizarlo.`;
   }
-  // Bandas del semáforo de potencial (alineadas con el frontend): 🟢≥75 🟡≥45 🔴<45.
   const prioridad = p.score >= 75 ? 'Prioridad alta' : p.score >= 45 ? 'Prioridad media' : 'Prioridad baja';
   return `${prioridad}. ${partes.join(' ')}`;
 }
 
-/**
- * Busca si un prospecto ya existe como cliente. Ancla fuerte: documento
- * (RUC/DNI) contra clientes.ruc. Débil: teléfono normalizado (pocos
- * clientes lo tienen, se marca como "posible duplicado").
- *
- * @returns {Promise<{flag:'Ninguno'|'Ya_cliente'|'Posible_duplicado', id_cliente:(number|null), cliente:(object|null)}>}
- */
 export async function detectarDuplicadoCliente({ documento, telefono }) {
   const doc = normalizarDocumento(documento);
   if (doc) {
@@ -348,11 +240,6 @@ export async function detectarDuplicadoCliente({ documento, telefono }) {
   return { flag: 'Ninguno', id_cliente: null, cliente: null };
 }
 
-/**
- * Detecta si ya existe un prospecto con el mismo documento (evita
- * capturar la misma empresa dos veces).
- * @returns {Promise<number|null>} id_prospecto existente o null.
- */
 export async function buscarProspectoPorDocumento(documento) {
   const doc = normalizarDocumento(documento);
   if (!doc) return null;
@@ -363,11 +250,6 @@ export async function buscarProspectoPorDocumento(documento) {
   return r.success && r.data.length > 0 ? r.data[0].id_prospecto : null;
 }
 
-/**
- * Dedup para el segmento informal (sin RUC): busca un prospecto con el
- * mismo teléfono normalizado entre sus contactos.
- * @returns {Promise<number|null>} id_prospecto existente o null.
- */
 export async function buscarProspectoPorTelefono(telefono) {
   const tel = normalizarTelefono(telefono);
   if (!tel || tel.length < 6) return null;
@@ -379,26 +261,15 @@ export async function buscarProspectoPorTelefono(telefono) {
   return r.success && r.data.length > 0 ? r.data[0].id_prospecto : null;
 }
 
-/** Dedup por el ID único de Google Places (idempotencia del descubrimiento). */
 export async function buscarProspectoPorPlaceId(placeId) {
   if (!placeId) return null;
   const r = await executeQuery('SELECT id_prospecto FROM prospectos WHERE place_id = ? LIMIT 1', [placeId]);
   return r.success && r.data.length > 0 ? r.data[0].id_prospecto : null;
 }
 
-/**
- * Inserta un prospecto ya armado con sus contactos y su fuente, aplicando
- * dedup contra clientes y scoring. Reutilizado por el controller (manual /
- * ingesta SUNAT) y por el worker de scraping.
- *
- * @returns {Promise<{success:boolean, id_prospecto?:number, flag?:string,
- *   score?:number, duplicado_prospecto?:number, error?:string}>}
- */
 export async function crearProspectoDesdeDatos(datos, idEmpleado) {
   const doc = normalizarDocumento(datos.documento);
 
-  // Anti-duplicado entre prospectos: por place_id (Google), documento
-  // (formal) o teléfono (informal). Cualquiera que coincida = ya existe.
   if (datos.place_id) {
     const existe = await buscarProspectoPorPlaceId(datos.place_id);
     if (existe) return { success: true, duplicado_prospecto: existe };
@@ -484,11 +355,6 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
   return { success: true, id_prospecto: idProspecto, flag: dup.flag, score: scoring.score };
 }
 
-/**
- * Recalcula el score de un prospecto tras enriquecerlo (nuevos contactos,
- * web, etc.). Lee el estado actual + sus contactos y actualiza score y
- * score_detalle.
- */
 export async function recalcularScore(idProspecto, sunat = {}, opciones = {}) {
   const pr = await executeQuery('SELECT * FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
   if (!pr.success || pr.data.length === 0) return null;
@@ -508,17 +374,10 @@ export async function recalcularScore(idProspecto, sunat = {}, opciones = {}) {
     tiene_web: !!p.web || tipos.includes('Web'),
     tiene_direccion: !!p.direccion,
     ya_cliente: p.flag_duplicado === 'Ya_cliente',
-    // Vigencia SUNAT: si el enriquecido validó el RUC, la pasamos aquí; si no,
-    // se preserva la del alta (los ingresados por SUNAT se asumen activos).
     es_activo: sunat.es_activo !== undefined ? sunat.es_activo : (p.origen === 'sunat' ? true : undefined),
     es_habido: sunat.es_habido,
   });
 
-  // Guardia no-decreciente: enriquecer solo AGREGA señales, así que el score
-  // nunca debe bajar por recalcular. Cubre el caso borde de un prospecto SUNAT
-  // que tenía bono de "HABIDO" en el alta y aquí no se re-pasa la vigencia.
-  // Excepción: al RE-DESCUBRIR se purgan contactos dudosos, así que el score
-  // debe poder BAJAR para reflejar el estado real (opciones.permitirBajar).
   const nuevoScore = opciones.permitirBajar
     ? scoring.score
     : Math.max(Number(p.score) || 0, scoring.score);

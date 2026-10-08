@@ -38,9 +38,7 @@ export const PermisosProvider = ({ children }) => {
         setRol(data.data.rol);
       }
     } catch (error) {
-      console.error('❌ Error al cargar permisos:', error);
-      // Se conservan los últimos permisos ante fallos temporales. El interceptor
-      // central se ocupa del vencimiento real de la sesión.
+      console.error('Error al cargar permisos:', error);
     } finally {
       setCargando(false);
     }

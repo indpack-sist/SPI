@@ -49,8 +49,6 @@ import sunatRoutes from './routes/sunat.routes.js';
 import { registrarCronReintentos } from './jobs/sunat-reintentos.job.js';
 dotenv.config();
 
-// Orígenes permitidos para CORS (HTTP + WebSocket). Se define una sola vez
-// para no tener que actualizar la lista en varios lugares.
 const allowedOrigins = [
   process.env.CORS_ORIGIN || 'http://localhost:5173',
   'https://spi.indpackperu.com',
@@ -76,12 +74,6 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3000;
 
-// Cabeceras de seguridad. La API solo devuelve JSON/archivos (el HTML del
-// frontend lo sirve Vercel, donde va la CSP real), así que aquí se desactiva la
-// CSP de helmet y se deja el resto: oculta X-Powered-By, fuerza HSTS, nosniff,
-// Referrer-Policy, etc. crossOriginResourcePolicy en 'cross-origin' es
-// imprescindible para que el frontend (otro dominio) siga cargando las imágenes
-// servidas por /api/archivos y /api/prospectos-media vía <img>.
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -90,7 +82,7 @@ app.use(helmet({
 app.use(compression());
 app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // ✅ agregado PATCH
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   exposedHeaders: ['Content-Disposition'],
@@ -98,7 +90,6 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// Una factura UBL firmada puede superar fácilmente el límite predeterminado de 100 KB.
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -173,7 +164,6 @@ app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), emplead
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
-// Medios de prospección (imágenes): token acotado por query para <img>, como /api/archivos.
 app.use('/api/prospectos-media', verificarTokenMedia, verificarPermiso('prospectos'), prospectosMediaRoutes);
 app.use('/api/prospectos', verificarToken, verificarPermiso('prospectos'), prospectosRoutes);
 app.use('/api/solicitudes-credito', verificarToken, verificarPermiso('solicitudesCredito'), solicitudesCreditoRoutes);
@@ -293,13 +283,10 @@ httpServer.listen(PORT, () => {
   testConnection().then(connected => {
     if (connected) {
       console.log('✓ BASE DE DATOS: CONECTADA CORRECTAMENTE');
-      // Worker de prospección (cola scraping_jobs). Requiere la BD lista.
       startWorker(io);
-      // Fase 15: cron de reintentos SUNAT en proceso (solo si SUNAT_CRON_ENABLED=true; si no, se
-      // usa el endpoint POST /api/sunat/jobs/tick desde un scheduler externo).
       registrarCronReintentos(io);
     } else {
-      console.error('⚠️ ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
+      console.error('ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
     }
   });
 });

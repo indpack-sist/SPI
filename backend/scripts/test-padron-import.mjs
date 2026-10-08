@@ -7,7 +7,6 @@ const check = (nombre, cond, extra = '') => {
   else { fail++; console.log(`  ✗ ${nombre} ${extra}`); }
 };
 
-// Cabecera (debe ignorarse) y líneas de muestra del padrón reducido.
 const HEADER = 'RUC|NOMBRE|ESTADO DEL CONTRIBUYENTE|CONDICION DE DOMICILIO|UBIGEO|TIPO DE VIA|NOMBRE DE VIA|COD ZONA|TIPO ZONA|NUMERO|INTERIOR|LOTE|DPTO|MANZANA|KM';
 const LOGISTICA = '20512345678|ALFA PACK LOGISTICA SAC|ACTIVO|HABIDO|150122|AV|LOS PROCERES|-|-|605|102|-|-|-|-';
 const AGROEXP   = '20487654321|AGROEXPORTADORA DEL SUR S.A.C.|ACTIVO|HABIDO|040101|CAL|LOS OLIVOS|-|-|123|-|-|-|-|-';
@@ -15,8 +14,6 @@ const SERVICIOS = '20600000001|AGENCIA DE MARKETING DIGITAL SAC|ACTIVO|HABIDO|15
 const PERSONA   = '10456789012|JUAN PEREZ DISTRIBUIDORA|ACTIVO|HABIDO|150101|-|-|-|-|-|-|-|-|-|-';
 const BAJA      = '20999999999|DISTRIBUIDORA MAYORISTA BAJA SAC|BAJA DE OFICIO|NO HABIDO|150101|-|-|-|-|-|-|-|-|-|-';
 
-// Muestra REAL separada por TAB (formato del padrón que trajo el usuario), con
-// cabecera en español y acentos (archivo latin1).
 const HEADER_TAB = 'RUC\tNOMBRE O RAZÓN SOCIAL\tESTADO DEL CONTRIBUYENTE\tCONDICIÓN DE DOMICILIO\tUBIGEO\tTIPO DE VÍA\tNOMBRE DE VÍA\tCÓDIGO DE ZONA\tTIPO DE ZONA\tNÚMERO\tINTERIOR\tLOTE\tDEPARTAMENTO\tMANZANA\tKILÓMETRO';
 const LOGISTICA_TAB = '20512345678\tALFA PACK LOGISTICA SAC\tACTIVO\tHABIDO\t150122\tAV\tLOS PROCERES\t-\t-\t605\t102\t-\t-\t-\t-';
 
@@ -30,7 +27,6 @@ check('estado', p?.estado === 'ACTIVO');
 check('ubigeo', p?.ubigeo === '150122', `→ ${p?.ubigeo}`);
 check('direccion', /AV LOS PROCERES NRO 605 INT 102/.test(p?.direccion || ''), `→ ${p?.direccion}`);
 
-// Mismo registro pero separado por TAB → debe parsear idéntico.
 const pt = parsearLineaPadron(LOGISTICA_TAB);
 check('TAB ruc', pt?.ruc === '20512345678', `→ ${pt?.ruc}`);
 check('TAB razon_social', pt?.razon_social === 'ALFA PACK LOGISTICA SAC', `→ ${pt?.razon_social}`);
@@ -44,8 +40,6 @@ check('servicios (marketing) → descartado', clasificarObjetivo(parsearLineaPad
 check('persona natural (RUC 10) → descartado', clasificarObjetivo(parsearLineaPadron(PERSONA)) === null);
 check('estado BAJA → descartado', clasificarObjetivo(parsearLineaPadron(BAJA)) === null);
 
-// Insumo agrícola con nombre AGRO pero sin señal fruta/verdura → NO entra como
-// Agroexportación (queda fuera del bucket agro; otros sectores intactos).
 const INSUMO = '20611111111\tAGROABONOS ORGANICOS S.A.C.\tACTIVO\tHABIDO\t150131\tAV\tLOS ABONOS\t-\t-\t50\t-\t-\t-\t-\t-';
 check('insumo (abonos) → NO Agroexportación', clasificarObjetivo(parsearLineaPadron(INSUMO))?.sector !== 'Agroexportación');
 

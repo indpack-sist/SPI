@@ -9,10 +9,6 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { ordenesVentaAPI } from '../../config/api';
 
-/**
- * Detalle de SOLO seguimiento (rol Calidad): cantidades pedidas, despachadas
- * y pendientes por producto, más el historial de despachos. Sin precios.
- */
 function SeguimientoVentaDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -171,7 +167,6 @@ function SeguimientoVentaDetalle() {
 
       {orden && (
         <>
-          {/* Cabecera */}
           <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
             <div className="card-body p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -194,7 +189,6 @@ function SeguimientoVentaDetalle() {
                   </div>
                 </div>
 
-                {/* Resumen de cantidades (sin precios) */}
                 <div className="flex gap-3">
                   <div className="text-center px-4 py-2 bg-carbon border border-steel/40 rounded-lg">
                     <div className="text-[0.5rem] font-black text-wire uppercase tracking-widest">Pedido</div>
@@ -213,7 +207,6 @@ function SeguimientoVentaDetalle() {
             </div>
           </div>
 
-          {/* Productos */}
           <div className="card shadow-2xl mb-4">
             <div className="card-header flex items-center gap-2 border-b border-steel/20">
               <Package size={18} className="text-primary" />
@@ -230,7 +223,6 @@ function SeguimientoVentaDetalle() {
             </div>
           </div>
 
-          {/* Despachos */}
           <div className="card shadow-2xl">
             <div className="card-header flex items-center gap-2 border-b border-steel/20">
               <Truck size={18} className="text-primary" />
@@ -247,7 +239,6 @@ function SeguimientoVentaDetalle() {
                     const productos = d.productos || [];
                     return (
                       <div key={d.id_salida} className="bg-carbon-mid border border-steel/30 rounded-lg overflow-hidden">
-                        {/* Cabecera del despacho */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-steel/20 bg-carbon/40">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-primary/10 rounded-lg"><Truck size={18} className="text-primary" /></div>
@@ -268,7 +259,6 @@ function SeguimientoVentaDetalle() {
                           </div>
                         </div>
 
-                        {/* Productos y cantidades despachadas en este despacho */}
                         {productos.length === 0 ? (
                           <div className="px-4 py-3 text-xs text-wire">Sin detalle de productos para este despacho.</div>
                         ) : (

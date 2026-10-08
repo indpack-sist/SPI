@@ -5,7 +5,6 @@ import { usePermisos } from '../../context/PermisosContext';
 import { menuConfig } from '../../config/menuConfig';
 import './AppLauncher.css';
 
-// Variantes de animación (solo opacity/transform → GPU, sin reflow).
 const periodicVariants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.05 } },
@@ -30,15 +29,11 @@ const cardVariants = {
   show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } },
 };
 
-// Columnas que ocupa un bloque según su nº de módulos: pocos → bloque pequeño,
-// muchos → se reparte en una malla ~cuadrada (nada de tiles estirados).
 const columnasBloque = (n) => (n <= 3 ? n : Math.ceil(Math.sqrt(n)));
 
 const AppLauncher = () => {
   const { rol, tienePermiso } = usePermisos();
 
-  // Agrupamos por área (igual que el sidebar), replicando su filtrado por rol/permiso.
-  // Cada sección visible se convierte en un "bloque" de la tabla periódica.
   const secciones = menuConfig
     .map(section => ({
       title: section.title,
@@ -50,17 +45,14 @@ const AppLauncher = () => {
     }))
     .filter(section => section.items.length > 0);
 
-  // Numeración atómica continua a través de todas las áreas.
   let numeroAtomico = 0;
 
   return (
     <div className="launcher-container">
 
-      {/* Capas de atmósfera del fondo (halo + viñeta + grano) */}
       <div className="launcher-atmosphere" aria-hidden="true"></div>
       <div className="launcher-grain" aria-hidden="true"></div>
 
-      {/* Partículas de fondo */}
       <ul className="background-shapes">
         <li></li><li></li><li></li><li></li><li></li>
         <li></li><li></li><li></li><li></li><li></li>
@@ -68,7 +60,6 @@ const AppLauncher = () => {
 
       <div className="launcher-content">
 
-        {/* Header — solo título centrado */}
         <div className="launcher-header">
           <div className="launcher-brand">
             <div className="launcher-brand-name">Sistema de Gestión</div>
@@ -76,7 +67,6 @@ const AppLauncher = () => {
           </div>
         </div>
 
-        {/* Tabla periódica de módulos: un bloque por área */}
         <LazyMotion features={domAnimation}>
           <MotionConfig reducedMotion="user">
             <m.div
@@ -101,7 +91,6 @@ const AppLauncher = () => {
                     {section.items.map((app) => {
                       const Icon = app.icon;
                       numeroAtomico += 1;
-                      // Si el app tiene subItems, linkeamos al primero
                       const targetPath = app.subItems && app.subItems.length > 0 ? app.subItems[0].path : app.path;
 
                       return (

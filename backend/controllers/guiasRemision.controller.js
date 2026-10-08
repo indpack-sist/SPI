@@ -3,22 +3,13 @@ import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat
 import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 
-// Fecha en zona horaria de Lima (evita el desfase +5h del pool vs. la sesión UTC de Railway
-// al escribir TIMESTAMP/DATETIME). Espeja el helper homónimo de ordenesVenta.controller.js.
 function getFechaPeru() {
   const now = new Date();
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
 }
 
-// Arma la dirección completa de la empresa a partir de los campos de empresa_config:
-// "AV. ... URBANIZACION DEPARTAMENTO - PROVINCIA - DISTRITO".
-// Fuente única en services/sunat/util.service.js, compartida con la emisión de GRE para que
-// el alta y la re-sincronización de origen/llegada guarden EXACTAMENTE el mismo texto.
 const armarDireccionCompleta = armarDireccionEmpresa;
 
-// Alta/actualización de transportista deduplicada por RUC. Devuelve el id_transportista
-// (o null si el RUC no es válido). Se usa desde el endpoint de alta rápida y desde el wiring
-// OV→GRE (cuando la orden se entrega por tercero, su RUC se materializa en el maestro).
 async function upsertTransportista(ruc, razon_social, numero_mtc) {
   const rucLimpio = String(ruc || '').trim();
   if (!/^\d{11}$/.test(rucLimpio) || !razon_social || !String(razon_social).trim()) return null;
@@ -216,8 +207,6 @@ export async function getGuiaRemisionById(req, res) {
     guia.xml_url = extraerUrl(guia.xml_url);
     guia.cdr_url = extraerUrl(guia.cdr_url);
     guia.url_pdf = extraerUrl(guia.url_pdf);
-    // Observación sugerida para el panel de emisión: prellenado editable = texto libre + OC de la OV.
-    // Lo que el usuario deje en ese campo es lo que viaja a SUNAT como cbc:Note.
     guia.observacion_sugerida = componerObservacion(guia.observaciones, guia.orden_compra_cliente);
 
     const detalleResult = await executeQuery(`
@@ -254,10 +243,6 @@ export async function getGuiaRemisionById(req, res) {
       }));
     }
 
-    // Historial de emisiones SUNAT (append-only): cada intento (incluido el rechazado que se
-    // sobrescribió en la cabecera al reemitir) con su estado, motivo y documentos. Alimenta el
-    // historial del panel + el PDF por intento (con marca RECHAZADO). Best-effort: si la tabla aún
-    // no existe (sin el DDL nuevo) simplemente no hay historial.
     try {
       const emisionesResult = await executeQuery(
         `SELECT id_emision, serie_sunat, numero_sunat, sunat_estado, sunat_response_code,
@@ -273,9 +258,6 @@ export async function getGuiaRemisionById(req, res) {
       }));
     } catch { guia.emisiones = []; }
 
-    // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
-    // Se devuelven siempre (arrays vacíos en guías domésticas) para que el front pueda mostrar/editar
-    // una guía comex ya creada. El orden de inserción == el del XML emitido (ver gre-emision.service.js).
     if (Number(guia.es_comercio_exterior) === 1) {
       const docsRelResult = await executeQuery(
         `SELECT tipo_cod, tipo_desc, serie, numero
@@ -290,8 +272,6 @@ export async function getGuiaRemisionById(req, res) {
       guia.contenedores = [];
     }
 
-    // Venta doméstica: facturas relacionadas ya guardadas + facturas SEE ACEPTADAS de la OV
-    // (sugeridas para pre-marcar en el wizard). Comex/compra no aplican → arrays vacíos.
     if (guia.tipo_origen !== 'Compra' && Number(guia.es_comercio_exterior) !== 1) {
       const relacionadasResult = await executeQuery(
         `SELECT tipo_cod, tipo_desc, serie, numero, id_factura
@@ -364,29 +344,25 @@ export async function createGuiaRemision(req, res) {
       id_vehiculo,
       id_transportista,
       motivo_traslado_cod,
-      motivo_descripcion,   // "Especifique" cuando el motivo es Otros (cat.20 = 13), ej. MUESTRAS
+      motivo_descripcion,
       detalle,
-      // Comercio exterior (exportación). Solo se persisten si la OV es export (esComex).
       destinatario_ruc,
       destinatario_razon,
       puerto_codigo,
       traslado_total_dam,
-      docs_relacionados,   // [{ tipo_cod, tipo_desc, serie, numero }]
-      contenedores         // [{ numero_contenedor, numero_precinto }]
+      docs_relacionados,
+      contenedores
     } = req.body;
 
-    // Catálogo 20 (SUNAT): derivar el código de motivo desde el motivo de negocio si no viene explícito.
-    // Requerido para emitir la GRE electrónica (gre-emision valida motivo_traslado_cod).
     const MOTIVO_TRASLADO_COD = {
       'Venta': '01',
       'Traslado entre Almacenes': '04',
-      'Devolución': '13', // 13 = Otros
-      'Otros': '13',      // 13 = Otros (muestras) → descripción libre en motivo_descripcion
-      'Exportación': '09', // Comercio exterior (cat.20)
+      'Devolución': '13',
+      'Otros': '13',
+      'Exportación': '09',
       'Importación': '08'
     };
     let motivoCod = motivo_traslado_cod || MOTIVO_TRASLADO_COD[motivo_traslado] || '01';
-    // "Especifique" del motivo Otros (cat.20 = 13): texto libre que viaja como HandlingInstructions.
     const motivoDescripcion = motivoCod === '13' ? (String(motivo_descripcion || '').trim() || null) : null;
     
     if (!id_orden_venta) {
@@ -410,8 +386,6 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // Obtener información de la orden (incluye el transporte asignado a nivel de OV
-    // para que la guía lo herede si el request no envía conductor/vehículo).
     const ordenResult = await executeQuery(`
       SELECT
         ov.id_cliente,
@@ -447,9 +421,6 @@ export async function createGuiaRemision(req, res) {
     }
 
     const orden = ordenResult.data[0];
-    // La selección explícita (por ejemplo, un puerto de exportación) tiene prioridad. Para una
-    // venta nacional, si el formulario no lo envía, se reutiliza el ubigeo del domicilio elegido
-    // en la OV. Así el backend también funciona correctamente sin depender del autocompletado UI.
     const ubigeoLlegadaFinal = String(ubigeo_llegada || orden.ubigeo_cliente || '').trim();
     if (!/^\d{6}$/.test(ubigeoLlegadaFinal)) {
       return res.status(400).json({
@@ -458,11 +429,6 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // Comercio exterior: se hereda del checkbox "Factura de exportación" de la OV
-    // (ordenes_venta.es_exportacion). Es la fuente única que responde a "¿Es una
-    // operación de comercio exterior?" en la guía. Si la OV es exportación, la GRE
-    // nace con motivo Exportación (cat.20 = 09) y es_comercio_exterior = 1, sin
-    // depender de que el usuario lo marque a mano al emitir. Ver GRE_EXPORT_EG07-273.xml.
     const esComex = Number(orden.es_exportacion) === 1;
     let motivoTexto = motivo_traslado || 'Venta';
     if (esComex) {
@@ -470,9 +436,6 @@ export async function createGuiaRemision(req, res) {
       motivoCod = '09';
     }
 
-    // Una guía de remisión es un documento de despacho: se permite en cualquier
-    // estado activo de la OV, bloqueando solo las órdenes canceladas o ya entregadas
-    // (mismo criterio que registrarDespacho en ordenesVenta.controller.js).
     if (orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return res.status(400).json({
         success: false,
@@ -480,10 +443,6 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // Entregas parciales: una OV puede tener VARIAS guías vigentes, cada una por una parte del
-    // pedido (ya no se bloquea por "una guía activa por orden"). El tope por línea (más abajo)
-    // garantiza que la suma de cantidades en guías NO anuladas nunca supere lo pedido, incluso
-    // antes de despachar. Aquí se precomputa lo ya comprometido en guías vigentes, por línea.
     const enGuiasResult = await executeQuery(
       `SELECT dgr.id_detalle_orden AS id_detalle, COALESCE(SUM(dgr.cantidad), 0) AS en_guias
          FROM detalle_guia_remision dgr
@@ -497,18 +456,12 @@ export async function createGuiaRemision(req, res) {
     );
     const EPS_GUIA = 0.0001;
 
-    // Transporte público (tercero transportista) vs privado (conductor+vehículo propios).
-    // Fuente del transportista, en orden de prioridad:
-    //   1) el que venga explícito en el request (id_transportista);
-    //   2) el que la OV declaró como entrega por tercero ('Transporte Privado' + RUC): se
-    //      materializa en el maestro (upsert por RUC) para emitir la GRE pública.
     let idTransportistaFinal = id_transportista || null;
     if (!idTransportistaFinal && orden.tipo_entrega === 'Transporte Privado' && orden.transporte_ruc) {
       idTransportistaFinal = await upsertTransportista(
         orden.transporte_ruc, orden.transporte_nombre, orden.transporte_mtc
       );
     }
-    // La OV es por tercero pero no tiene RUC: no se puede emitir GRE pública sin él.
     if (orden.tipo_entrega === 'Transporte Privado' && !idTransportistaFinal && !orden.transporte_ruc) {
       return res.status(400).json({
         success: false,
@@ -516,26 +469,16 @@ export async function createGuiaRemision(req, res) {
       });
     }
 
-    // La presencia de un transportista define la modalidad pública: en ese caso NO se hereda
-    // el conductor/vehículo de la OV (evita datos que harían derivar modalidad privada al emitir).
     const esPublico = !!idTransportistaFinal;
-    // Carro particular del cliente (sin RUC): modalidad 02 privada con conductor/placa de TEXTO LIBRE
-    // heredados de la OV. No usa flota ni transportista.
     const esParticular = orden.tipo_entrega === 'Vehiculo Particular';
-    // Herencia de transporte: si el request no especifica conductor/vehículo, usar el
-    // asignado en la orden de venta (la OV ya los captura a su nivel).
     const idConductorFinal = (esPublico || esParticular) ? null : (id_conductor || orden.id_conductor || null);
     const idVehiculoFinal = (esPublico || esParticular) ? null : (id_vehiculo || orden.id_vehiculo || null);
-    // Datos de transporte de texto libre para la guía (solo modo particular).
     const modoGuia = esPublico ? 'tercero' : (esParticular ? 'particular' : 'flota');
     const guiaTransportePlaca = esParticular ? (orden.transporte_placa || null) : null;
     const guiaTransporteConductor = esParticular ? (orden.transporte_conductor || null) : null;
     const guiaTransporteDni = esParticular ? (orden.transporte_dni || null) : null;
     const guiaTransporteLicencia = esParticular ? (orden.transporte_licencia || null) : null;
 
-    // En guías de venta el punto de partida es autoritativamente el domicilio fiscal configurado.
-    // No se aceptan valores del navegador: así una manipulación o estado viejo del formulario no
-    // puede enviar a SUNAT un origen distinto de empresa_config.
     const empresaResult = await executeQuery('SELECT direccion, ubigeo, urbanizacion, departamento, provincia, distrito FROM empresa_config WHERE id = 1');
     const empresaCfg = (empresaResult.success && empresaResult.data[0]) || {};
     const direccionPartidaFinal = armarDireccionCompleta(empresaCfg) || String(empresaCfg.direccion || '').trim();
@@ -553,10 +496,7 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
-    // Validar cada producto del detalle
     for (const item of detalle) {
-      // Validar detalle de orden. LEFT JOIN productos: los ítems de muestra pueden ser de texto
-      // libre (id_producto NULL, sin fila en productos) y deben pasar la validación igual.
       const detalleOrdenResult = await executeQuery(`
         SELECT
           dov.cantidad,
@@ -585,33 +525,26 @@ export async function createGuiaRemision(req, res) {
       const nombreItem = detalleOrden.nombre || detalleOrden.descripcion_libre || 'Ítem';
       const codigoItem = detalleOrden.codigo || 'libre';
       const cantidadOrden = parseFloat(detalleOrden.cantidad);
-      // Pendiente = pedido − lo ya comprometido en guías vigentes (no anuladas) de esta OV. Así, al
-      // crear guías parciales sucesivas, la suma nunca supera lo pedido (aunque aún no se despachen).
       const yaEnGuias = mapaEnGuias.get(Number(item.id_detalle_orden)) || 0;
       const cantidadDisponibleOrden = cantidadOrden - yaEnGuias;
       const cantidadSolicitada = parseFloat(item.cantidad);
 
-      // Validar que no exceda lo pendiente de la orden (considerando otras guías vigentes)
       if (cantidadSolicitada > cantidadDisponibleOrden + EPS_GUIA) {
         return res.status(400).json({
           success: false,
           error: `${nombreItem} (${codigoItem}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${Math.max(0, cantidadDisponibleOrden).toFixed(4)})`
         });
       }
-      // Reserva local: si el detalle repite la misma línea, acumula para no exceder al sumar.
       mapaEnGuias.set(Number(item.id_detalle_orden), yaEnGuias + cantidadSolicitada);
 
-      // Ítem libre (muestra sin producto de catálogo): no hay stock ni id_producto que validar.
       if (!esLibre) {
         const stockActual = parseFloat(detalleOrden.stock_actual);
-        // Validar stock disponible
         if (cantidadSolicitada > stockActual) {
           return res.status(400).json({
             success: false,
             error: `${nombreItem} (${codigoItem}): Stock insuficiente. Disponible: ${stockActual.toFixed(4)}, Requerido: ${cantidadSolicitada.toFixed(4)}`
           });
         }
-        // Validar que el id_producto coincida
         if (item.id_producto !== detalleOrden.id_producto) {
           return res.status(400).json({
             success: false,
@@ -620,7 +553,6 @@ export async function createGuiaRemision(req, res) {
         }
       }
 
-      // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
       if (item.codigo_bien && !codigoBienValido(item.codigo_bien)) {
         return res.status(400).json({
           success: false,
@@ -630,14 +562,9 @@ export async function createGuiaRemision(req, res) {
     }
     
     
-    // Generar número de guía con correlativo atómico dedicado (fila 'GR'/'T001' en
-    // series_correlativos). Reemplaza el antiguo MAX(id_guia)+regex, que era frágil:
-    // colisionaba con el UNIQUE si el último numero_guia no terminaba en dígitos y no
-    // tenía lock de secuencia (carrera bajo concurrencia).
     const numeroSecuencia = await obtenerCorrelativoAtomico('GR', 'T001');
     const numeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
     
-    // Crear la guía
     const result = await executeQuery(`
       INSERT INTO guias_remision (
         numero_guia,
@@ -720,7 +647,6 @@ export async function createGuiaRemision(req, res) {
     
     const idGuia = result.data.insertId;
     
-    // Insertar detalle de la guía
     for (const item of detalle) {
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
       
@@ -753,7 +679,6 @@ export async function createGuiaRemision(req, res) {
       ]);
     }
 
-    // Comercio exterior: documentos relacionados (DAM) + contenedores/precintos (tablas repetibles).
     if (esComex) {
       for (const doc of (Array.isArray(docs_relacionados) ? docs_relacionados : [])) {
         if (!doc?.tipo_cod || !doc?.numero) continue;
@@ -789,11 +714,6 @@ export async function createGuiaRemision(req, res) {
   }
 }
 
-// ── GUÍA DE REMISIÓN DE COMPRA (motivo 02) ───────────────────────────────────────────────────
-// Función DEDICADA (no toca createGuiaRemision de venta): SPI recoge su mercadería con flota propia
-// y emite la GRE con motivo "02 Compra". Crea la guía (tipo_origen='Compra', ligada a la orden de
-// compra y al proveedor, destinatario = la propia empresa al emitir) e INGRESA el stock en la misma
-// transacción (entrada por tipo_inventario). La emisión a SUNAT es un paso posterior (emitirGuiaGre).
 export async function createGuiaCompra(req, res) {
   const fail = (status, msg) => { const e = new Error(msg); e.status = status; return e; };
   try {
@@ -813,8 +733,6 @@ export async function createGuiaCompra(req, res) {
     if (!id_conductor || !id_vehiculo) throw fail(400, 'Debe seleccionar el conductor y el vehículo de la flota que realiza el traslado');
     if (!(parseFloat(peso_bruto_kg) > 0)) throw fail(422, 'El peso bruto (kg) debe ser mayor a 0');
 
-    // Llegada = tu almacén y su fuente autoritativa es empresa_config. No se acepta el valor del
-    // request: evita que una UI antigua o un cliente API emita una GRE de compra hacia otro punto.
     const empRes = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo FROM empresa_config WHERE id = 1');
     if (!empRes.success) throw fail(500, 'No se pudo leer la configuración de la empresa');
     const empCfg = empRes.data[0] || {};
@@ -856,7 +774,6 @@ export async function createGuiaCompra(req, res) {
         throw fail(422, 'El vehículo seleccionado no tiene una placa válida registrada');
       }
 
-      // Precio + tipo de inventario por producto salen de la COMPRA (no de la guía).
       const [lineasCompra] = await conn.query(
         `SELECT doc.id_detalle, doc.id_producto, doc.cantidad AS cantidad_comprada,
                 doc.precio_unitario, doc.descuento_porcentaje,
@@ -866,9 +783,6 @@ export async function createGuiaCompra(req, res) {
           WHERE doc.id_orden_compra = ?`, [id_orden_compra]);
       const mapaCompra = new Map(lineasCompra.map((l) => [Number(l.id_detalle), l]));
 
-      // Cuánto se ha despachado ya por línea en guías previas de esta MISMA compra (las anuladas
-      // liberan su cantidad). La OC está bloqueada con FOR UPDATE arriba → dos guías concurrentes de
-      // la misma compra se serializan y esta suma es consistente. Sirve para no despachar de más.
       const [despachadoRows] = await conn.query(
         `SELECT dgr.id_detalle_compra AS id_detalle, COALESCE(SUM(dgr.cantidad), 0) AS despachado
            FROM detalle_guia_remision dgr
@@ -889,8 +803,6 @@ export async function createGuiaCompra(req, res) {
                 const cantidad = parseFloat(it.cantidad);
         if (!(cantidad > 0)) throw fail(400, `Cantidad recibida inválida para "${base.nombre}"`);
 
-        // Tope por línea: lo despachado en guías + esta cantidad NUNCA puede superar lo comprado.
-        // Evita emitir más de lo que dice la factura (sobre-despacho / doble emisión).
         const cantidadComprada = parseFloat(base.cantidad_comprada) || 0;
         const yaDespachado = mapaDespachado.get(idDetalleCompra) || 0;
         if (yaDespachado + cantidad > cantidadComprada + EPS) {
@@ -899,11 +811,8 @@ export async function createGuiaCompra(req, res) {
           throw fail(422, `"${nombreItem}": intentas despachar ${cantidad} pero solo quedan ${pendiente} por despachar `
             + `(comprado ${cantidadComprada}, ya en guías ${yaDespachado}).`);
         }
-        // Reserva local para el resto de líneas del MISMO producto dentro de esta guía (si el
-        // detalle trae la línea repetida) y para no exceder al acumular.
         mapaDespachado.set(idDetalleCompra, yaDespachado + cantidad);
 
-        // Código de Bien (GTIN-13): opcional, decidido por el usuario en el modal.
         if (it.codigo_bien && !codigoBienValido(it.codigo_bien)) {
           throw fail(400, `Código de bien inválido para "${base.nombre}" (debe tener 13 dígitos)`);
         }
@@ -939,7 +848,6 @@ export async function createGuiaCompra(req, res) {
         });
       }
 
-      // Correlativo interno de guía (atómico dentro de la TX; no lo quema si algo falla).
       const numeroSecuencia = await obtenerCorrelativo(conn, 'GR', 'T001');
       const numeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
       const hoy = new Date().toISOString().split('T')[0];
@@ -974,15 +882,11 @@ export async function createGuiaCompra(req, res) {
             it.descripcion || '', it.codigo_documento || null, it.peso_unitario_kg || 0, pesoTotal, it.codigo_bien]);
       }
 
-      // ¿La compra YA ingresó su mercadería en la recepción (Total/Parcial)? Entonces la guía es
-      // SOLO documento (no vuelve a sumar stock) → evita el doble conteo. Señal limpia:
-      // detalle_orden_compra.cantidad_recibida > 0 (lo pone createCompra en su recepción; la guía no).
       const [[rec]] = await conn.query(
         'SELECT COALESCE(SUM(cantidad_recibida), 0) AS recibido FROM detalle_orden_compra WHERE id_orden_compra = ?',
         [id_orden_compra]);
       const yaRecibio = parseFloat(rec.recibido || 0) > 0.0001;
 
-      // Ingreso de stock (entrada por tipo_inventario) en la MISMA transacción — solo si no se ingresó ya.
       let idsEntrada = [];
       if (!yaRecibio) {
         const docSoporte = (oc.serie_documento && oc.numero_documento)
@@ -1007,8 +911,6 @@ export async function createGuiaCompra(req, res) {
   }
 }
 
-// Datos del remitente (empresa) para prellenar los puntos de partida/llegada en los wizards de guía.
-// En la guía de compra, la LLEGADA es tu almacén → el wizard la prellena con esto (editable).
 export async function getEmpresaRemitente(req, res) {
   try {
     const r = await executeQuery('SELECT razon_social, ruc, direccion, ubigeo, urbanizacion, departamento, provincia, distrito FROM empresa_config WHERE id = 1');
@@ -1034,7 +936,6 @@ export async function despacharGuiaRemision(req, res) {
     const { fecha_despacho } = req.body;
     const id_usuario = req.user?.id_empleado || null;
     
-    // Obtener información de la guía
     const guiaResult = await executeQuery(`
       SELECT
         gr.*,
@@ -1056,9 +957,6 @@ export async function despacharGuiaRemision(req, res) {
     }
     
     const guia = guiaResult.data[0];
-    // Rótulo del despacho: preferir el comprobante SUNAT (serie-número, p.ej. TE01-6) cuando la guía
-    // ya está emitida; si no, el correlativo interno (T001-…). Evita confundir el nº interno con la
-    // serie SUNAT (y con un intento rechazado previo).
     const refGuia = (guia.serie_sunat && guia.numero_sunat)
       ? `${guia.serie_sunat}-${guia.numero_sunat}`
       : guia.numero_guia;
@@ -1070,7 +968,6 @@ export async function despacharGuiaRemision(req, res) {
       });
     }
     
-    // Obtener detalle de la guía con información completa del producto
     const detalleResult = await executeQuery(`
       SELECT
         dgr.*,
@@ -1096,11 +993,8 @@ export async function despacharGuiaRemision(req, res) {
     }
     
     const detalle = detalleResult.data;
-    // Los ítems de MUESTRA de texto libre (id_producto NULL) no tienen stock ni costo: no generan
-    // línea de salida ni descuento de inventario. Solo los productos reales mueven stock.
     const detalleReal = detalle.filter((it) => it.id_producto != null);
 
-    // Validar stock actual antes de despachar (solo productos reales)
     for (const item of detalleReal) {
       const stockActual = parseFloat(item.stock_actual);
       const cantidadDespachar = parseFloat(item.cantidad);
@@ -1113,11 +1007,9 @@ export async function despacharGuiaRemision(req, res) {
       }
     }
 
-    // Tipo de inventario del primer producto real (todos deberían ser del mismo tipo en una guía).
     const primerReal = detalleReal[0];
     const id_tipo_inventario = primerReal ? primerReal.id_tipo_inventario : 3;
 
-    // Calcular totales (solo productos reales)
     let totalCosto = 0;
     let totalPrecio = 0;
 
@@ -1130,10 +1022,6 @@ export async function despacharGuiaRemision(req, res) {
       totalPrecio += cantidad * precioUnitario;
     }
 
-    // Crear la salida de inventario solo si hay productos reales que descontar (una muestra con
-    // exclusivamente ítems libres no mueve stock). Se vincula a la OV por FK (id_orden_venta) igual
-    // que "Registrar Despacho", para que aparezca en el "Historial de Despachos" de la orden y pueda
-    // cruzarse con facturas por id_salida. La fecha va en hora de Lima (getFechaPeru).
     let id_salida = null;
     if (detalleReal.length > 0) {
       const salidaResult = await executeQuery(`
@@ -1175,7 +1063,6 @@ export async function despacharGuiaRemision(req, res) {
 
       id_salida = salidaResult.data.insertId;
 
-      // Línea de salida + descuento de stock por cada producto real
       for (const item of detalleReal) {
         const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
         const precioUnitario = parseFloat(item.precio_orden || 0);
@@ -1213,8 +1100,6 @@ export async function despacharGuiaRemision(req, res) {
       }
     }
 
-    // Actualizar cantidad despachada en la orden para TODAS las líneas (reales y libres), para que
-    // el estado de la OV pueda llegar a 'Despachada' aunque haya ítems de muestra sin stock.
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad);
       const updateOrdenResult = await executeQuery(`
@@ -1231,16 +1116,12 @@ export async function despacharGuiaRemision(req, res) {
       }
     }
     
-    // Actualizar estado de la guía
     await executeQuery(`
       UPDATE guias_remision
       SET estado = 'En Tránsito'
       WHERE id_guia = ?
     `, [id]);
     
-    // Estado de la orden según lo despachado en TODAS sus líneas: 'Despachada' solo si cada línea
-    // está completa; si aún queda saldo (entrega parcial con varias guías), 'Despacho Parcial'.
-    // Antes se forzaba 'Despachada' siempre, lo que marcaba mal la OV al despachar una guía parcial.
     const resumenDespachoResult = await executeQuery(`
       SELECT COUNT(*) AS total_items,
              SUM(CASE WHEN cantidad_despachada >= cantidad THEN 1 ELSE 0 END) AS items_completos
@@ -1250,15 +1131,12 @@ export async function despacharGuiaRemision(req, res) {
     const estadoOrdenDespacho = (Number(resDesp.total_items) > 0 && Number(resDesp.items_completos) >= Number(resDesp.total_items))
       ? 'Despachada'
       : 'Despacho Parcial';
-    // Apunta al último despacho (id_salida) para el cruce factura↔despacho y el historial.
     await executeQuery(`
       UPDATE ordenes_venta
       SET estado = ?, id_salida = ?
       WHERE id_orden_venta = ?
     `, [estadoOrdenDespacho, id_salida, guia.id_orden_venta]);
 
-    // Reflejar el despacho en la cotización de origen, igual que "Registrar Despacho" desde la OV.
-    // Sin esto, la cotización quedaba estancada en su estado previo al despachar desde la guía.
     if (guia.id_cotizacion) {
       const estadoCotizacion = estadoOrdenDespacho === 'Despachada'
         ? 'Despachado desde OV'
@@ -1321,7 +1199,6 @@ export async function marcarEntregadaGuiaRemision(req, res) {
       WHERE id_guia = ?
     `, [id]);
     
-    // Verificar si todas las guías de la orden están entregadas
     if (guia.id_orden_venta) {
       const pendientesResult = await executeQuery(`
         SELECT COUNT(*) as pendientes
@@ -1382,8 +1259,6 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     const guiaActual = guiaResult.data[0];
     const estadoActual = guiaActual.estado;
 
-    // Una GRE aceptada no puede desaparecer mediante el cambio de estado local. Su baja oficial
-    // se realiza en SOL y se confirma desde el panel SUNAT, que además escribe la auditoría.
     if (estado === 'Anulada' && guiaActual.sunat_estado === 'ACEPTADO') {
       return res.status(422).json({
         success: false,
@@ -1395,7 +1270,6 @@ export async function actualizarEstadoGuiaRemision(req, res) {
       return res.json({ success: true, message: `La guía ya se encuentra en estado ${estado}` });
     }
 
-    // Una baja SUNAT confirmada es final: el endpoint genérico no puede volver a activar la guía.
     if (Number(guiaActual.baja_sunat_confirmada) === 1 && estado !== 'Anulada') {
       return res.status(409).json({
         success: false,
@@ -1555,10 +1429,6 @@ export async function descargarPDFGuiaRemision(req, res) {
   }
 }
 
-// ── Maestro de transportistas (terceros para GRE en transporte público) ──────
-// Reutilizable: se registra una vez cada transportista y se elige por su id en la guía.
-// El nº de registro MTC se guarda solo como referencia interna (SUNAT no lo exige en la
-// GRE del remitente en modalidad pública: solo RUC + razón social viajan en el XML).
 
 export async function getTransportistas(req, res) {
   try {
@@ -1600,8 +1470,6 @@ export async function createTransportista(req, res) {
 
     const rucLimpio = String(ruc).trim();
 
-    // Idempotente por RUC (ver upsertTransportista): si ya existe se actualiza en vez de
-    // fallar por el UNIQUE. Así el alta rápida nunca se rompe al reingresar un RUC ya registrado.
     const idT = await upsertTransportista(rucLimpio, razon_social, numero_mtc);
     if (!idT) {
       return res.status(500).json({ success: false, error: 'No se pudo registrar el transportista' });
@@ -1618,10 +1486,6 @@ export async function createTransportista(req, res) {
   }
 }
 
-// ── Catálogo de destinatarios comex (operadores de puerto / depósito temporal) ──────────────
-// El destinatario de una GRE de exportación NO es el cliente extranjero de la OV (ese va en la
-// factura), sino el operador local de puerto/depósito. codigo_establecimiento = anexo del
-// destinatario que va en DeliveryAddress/AddressTypeCode (ver gre-comex-spec).
 export async function getDestinatariosComex(req, res) {
   try {
     const result = await executeQuery(`
@@ -1649,7 +1513,6 @@ export async function createDestinatarioComex(req, res) {
     }
     const rucLimpio = String(ruc).trim();
     const estab = String(codigo_establecimiento ?? '0').trim() || '0';
-    // Idempotente por RUC: si ya existe se actualiza (mismo criterio que transportistas).
     const result = await executeQuery(
       `INSERT INTO comex_destinatarios (ruc, razon_social, codigo_establecimiento)
        VALUES (?, ?, ?)

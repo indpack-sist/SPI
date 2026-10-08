@@ -5,10 +5,6 @@ import Alert from '../UI/Alert';
 import UbigeoSelector from '../common/UbigeoSelector';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
 
-// Wizard de Guía de Remisión de COMPRA (motivo 02): SPI recoge su mercadería con flota propia.
-// Partida = dirección del proveedor (texto libre; el maestro de proveedores no guarda dirección).
-// Llegada = almacén de SPI. Al crear, el backend ingresa el stock (una entrada por tipo de inventario)
-// y deja la guía lista para emitir la GRE a SUNAT desde su detalle.
 export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) {
   const [error, setError] = useState(null);
   const [okMsg, setOkMsg] = useState(null);
@@ -26,7 +22,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
     peso_bruto_kg: '', numero_bultos: '',
     id_conductor: '', id_vehiculo: '',
   });
-  // Solo ítems de catálogo (id_producto). Los manuales de la compra no ingresan a inventario.
   const [items, setItems] = useState([]);
 
   useEffect(() => {
@@ -53,7 +48,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
           cantidad_comprada: comprada,
           cantidad_despachada: despachada,
           pendiente,
-          // Por defecto se propone lo que FALTA por despachar (parcial); nunca más que eso.
           cantidad: pendiente,
         };
       }));
@@ -63,7 +57,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         setVehiculos(v.data?.data || v.data || []);
       })
       .catch(() => {});
-    // Llegada = tu almacén: empresa_config es la fuente autoritativa (solo lectura).
     guiasRemisionAPI.getEmpresaRemitente()
       .then((r) => {
         const e = r.data?.data || {};
@@ -78,7 +71,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (campo, val) => setForm((f) => ({ ...f, [campo]: val }));
-  // La cantidad a despachar se limita a lo pendiente: nunca se puede colocar de más.
   const setItem = (i, val) => setItems((prev) => prev.map((it, idx) => {
     if (idx !== i) return it;
     if (val === '') return { ...it, cantidad: '' };
@@ -185,7 +177,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
 
       <div className={paso === 1 ? 'hidden' : ''}>
 
-      {/* Transporte */}
       <div className="mb-4">
         <h3 className="font-semibold flex items-center gap-2 mb-2"><Truck size={16} /> Transporte (flota propia)</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -219,7 +210,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         </div>
       </div>
 
-      {/* Puntos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <h3 className="font-semibold flex items-center gap-2 mb-2"><MapPin size={16} /> Partida (proveedor)</h3>
@@ -249,7 +239,6 @@ export default function ModalGuiaCompra({ isOpen, onClose, compra, onCreated }) 
         </div>
       </div>
 
-      {/* Ítems recibidos */}
       <div className="mb-4">
         <h3 className="font-semibold flex items-center gap-2 mb-2"><Package size={16} /> Cantidad a despachar</h3>
         <p className="text-muted text-sm mb-2">Puedes emitir guías parciales; la cantidad se limita a lo <b>pendiente</b> (nunca más que lo comprado). Por defecto se propone todo lo que falta.</p>

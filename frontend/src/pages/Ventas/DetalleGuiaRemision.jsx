@@ -284,7 +284,6 @@ function DetalleGuiaRemision() {
   const estadoConfig = getEstadoConfig(guia.estado);
   const IconoEstado = estadoConfig.icono;
   const puedeEditar = guia.estado !== 'Anulada' && guia.estado !== 'Entregada';
-  // Guía de COMPRA (motivo 02): el "cliente"/OV se reemplazan por proveedor/compra + factura.
   const esCompra = guia.tipo_origen === 'Compra';
   const facturaRel = (esCompra && guia.oc_serie_documento && guia.oc_numero_documento)
     ? `${guia.oc_serie_documento}-${guia.oc_numero_documento}` : null;
@@ -354,9 +353,6 @@ function DetalleGuiaRemision() {
           
           {puedeEditar && (
             <>
-              {/* Acción principal cuando la guía aún no ha salido: ponerla En Tránsito (despacho).
-                  Botón primario destacado que lleva directo al despacho, en vez de esconderlo
-                  dentro del modal genérico de "Estado". */}
               {estadoConfig.siguientes.includes('En Tránsito') && (
                 <button className="btn btn-primary btn-lg" onClick={() => handleCambiarEstado('En Tránsito')}>
                   <Truck size={20} /> Poner En Tránsito
@@ -380,7 +376,6 @@ function DetalleGuiaRemision() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Guía de Remisión Electrónica (SEE · GRE 09) — Fase 14. Coexiste con el flujo manual. */}
       {(tienePermiso('facturacion') || tienePermiso('facturacionConsulta')) && (
         <PanelGuiaRemisionSee guia={guia} onRefresh={() => cargarDatos(true)} soloLectura={!tienePermiso('facturacion')} />
       )}
@@ -706,7 +701,7 @@ function DetalleGuiaRemision() {
                   <li>✓ Se descontará el stock de cada producto</li>
                   <li>✓ La guía cambiará a estado "En Tránsito"</li>
                   <li>✓ La orden de venta se marcará como "Despachada"</li>
-                  <li>⚠️ Esta acción no se puede deshacer</li>
+                  <li>⚠ Esta acción no se puede deshacer</li>
                 </ul>
               </div>
             </div>

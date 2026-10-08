@@ -53,7 +53,6 @@ function NuevaCotizacion() {
   const { id } = useParams();
   const location = useLocation();
   const { user } = useAuth();
-  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
   const esAdmin = user?.rol === 'Administrador';
     
   const modoDuplicar = location.pathname.endsWith('/duplicar') || location.state?.duplicar === true;
@@ -82,7 +81,6 @@ function NuevaCotizacion() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
     
   const [tabCliente, setTabCliente] = useState('lista');
-  // Restriccion de cartera de clientes (roles Comercial / Ventas)
   const [restringidoCartera, setRestringidoCartera] = useState(false);
   const [idsAsignados, setIdsAsignados] = useState([]);
   const [vistaCartera, setVistaCartera] = useState('asignados');
@@ -534,7 +532,6 @@ setFormCabecera(prev => ({
       if (response.data.success) {
         const clienteCreado = response.data.data;
         setClientes(prev => [...prev, clienteCreado]);
-        // Si el usuario esta restringido, el backend auto-asigna el cliente nuevo a su cartera.
         if (restringidoCartera && !idsAsignados.includes(clienteCreado.id_cliente)) {
           setIdsAsignados(prev => [...prev, clienteCreado.id_cliente]);
         }
@@ -679,8 +676,6 @@ setFormCabecera(prev => ({
 
   const calcularTotales = () => {
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
-    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
-    // para que la vista previa coincida con lo que se guarda al crear la cotización.
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
     let impuesto = 0;
@@ -779,7 +774,7 @@ setFormCabecera(prev => ({
   es_producto_libre: item.es_producto_libre || false,
   codigo_producto_libre: item.es_producto_libre ? item.codigo_producto_libre?.trim() : null,
   nombre_producto_libre: item.es_producto_libre ? item.nombre_producto_libre?.trim() : null,
-  unidad_medida: item.unidad_medida || null,   // <- agregar esto
+  unidad_medida: item.unidad_medida || null,
   cantidad: parseFloat(item.cantidad),
   precio_base: precioBase,
   precio_venta: precioVenta,
@@ -803,9 +798,7 @@ setFormCabecera(prev => ({
           setSuccess(`Cotizacion creada: ${response.data.data.numero_cotizacion}`);
           setTimeout(() => navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`), 1500);
         }
-        // Éxito: se mantiene el bloqueo mientras se redirige. No reactivar el botón.
       } else {
-        // Respuesta sin éxito: liberar para permitir reintento.
         submitCooldown.current = false;
         setCooldownActivo(false);
       }
@@ -1250,9 +1243,6 @@ setFormCabecera(prev => ({
               />
             </div>
 
-            {/* Las muestras ya NO se registran como cotización: ahora son "Orden de Muestra" (genera
-                guía de remisión y salida de stock). El bloque de muestra solo se mantiene visible al
-                abrir cotizaciones de muestra históricas (esMuestra viene marcado desde la BD). */}
             {esMuestra && (
               <div className="form-group mt-2">
                 <div className="px-4 py-3 rounded-lg border-2 border-amber-300 bg-amber-50 text-sm text-amber-800">
@@ -1863,7 +1853,7 @@ setFormCabecera(prev => ({
                     <div className="text-xs text-muted font-bold uppercase">{producto.unidad_medida}</div>
                     {parseFloat(producto.peso_unitario || 0) > 0 && (
                       <div className="text-xs text-muted mt-1">
-                        ⚖ {formatearPeso(parseFloat(producto.peso_unitario))} /u
+                        {formatearPeso(parseFloat(producto.peso_unitario))} /u
                       </div>
                     )}
                   </div>

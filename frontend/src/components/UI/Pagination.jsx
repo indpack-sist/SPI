@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-/**
- * Controles de paginación con el mismo diseño/comportamiento que OrdenesVenta.jsx.
- * Solo se renderiza si totalItems > itemsPerPage.
- *
- * Props:
- *  - currentPage, totalPages, totalItems, itemsPerPage
- *  - setCurrentPage (u onPageChange) : (n:number) => void
- * Es compatible con el objeto que devuelve usePagination() usando spread: <Pagination {...pag} />
- */
 function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, setCurrentPage, onPageChange }) {
   const cambiarPagina = setCurrentPage || onPageChange || (() => {});
   const [inputPage, setInputPage] = useState(String(currentPage));

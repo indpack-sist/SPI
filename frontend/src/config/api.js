@@ -4,11 +4,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
-  // Sin timeout, si el backend acepta la conexión pero no responde (p. ej. el pool
-  // de MySQL se cuelga esperando una conexión rancia), la promesa nunca se resuelve
-  // y la app se queda para siempre en "Verificando sesión...". Con timeout, ese caso
-  // se convierte en un error de red que el flujo de auth sí puede manejar (conserva
-  // la sesión cacheada). 30 s da margen para un cold start del backend.
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -43,7 +38,6 @@ api.interceptors.response.use(
 
     const { status, data } = error.response;
 
-    // Si el error es un Blob (común en descargas de PDF), intentamos leerlo
     if (data instanceof Blob && data.type.startsWith('application/json')) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -64,12 +58,7 @@ api.interceptors.response.use(
         reader.readAsText(data);
       });
     }
-    
-    // Solo cerramos automáticamente por expiración confirmada o cuenta desactivada.
-    // Un 401 por otra causa (por ejemplo, credenciales de login incorrectas) no debe
-    // borrar una sesión vigente. Los fallos de BD/red tampoco cierran la sesión.
-    // La duración la determina el `exp` del JWT validado por el backend (24 h).
-    // Otros 401, respuestas inválidas o fallos temporales no deben destruir la sesión.
+
     const esTokenExpirado = status === 401 && data?.code === 'TOKEN_EXPIRED';
     const esUsuarioInactivo = status === 401 && data?.code === 'USER_INACTIVE';
     const esSesionInvalida = esTokenExpirado || esUsuarioInactivo;
@@ -191,7 +180,6 @@ export const prospectosAPI = {
   liberar: (id) => api.patch(`/prospectos/${id}/liberar`),
   excluir: (id, excluido) => api.patch(`/prospectos/${id}/excluir`, { excluido }),
   delete: (id) => api.delete(`/prospectos/${id}`),
-  // Descubrimiento por Padrón SUNAT (reemplaza Google Places)
   padronStats: () => api.get('/prospectos/padron/stats'),
   descubrirPadron: (data) => api.post('/prospectos/descubrir-padron', data),
   enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
@@ -202,9 +190,6 @@ export const prospectosAPI = {
   getJobs: () => api.get('/prospectos/jobs'),
   getLotesActivos: () => api.get('/prospectos/lotes-activos'),
 
-  // Exporta a Excel en el servidor y dispara la descarga (diálogo de guardado
-  // nativo). `params` lleva los filtros del listado y, opcionalmente,
-  // desde_pagina / hasta_pagina (50 registros por hoja). Sin rango = todo.
   exportarExcel: async (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -225,7 +210,6 @@ export const prospectosAPI = {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    // Usa el nombre que sugiere el backend (Content-Disposition) si está.
     const cd = response.headers.get('Content-Disposition') || '';
     const match = cd.match(/filename="?([^"]+)"?/);
     link.download = match ? match[1] : `prospectos-${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -772,7 +756,6 @@ export const incidenciasAPI = {
   getPorProducto: (idProducto) => api.get(`/calidad/incidencias/producto/${idProducto}`),
   getTipos: () => api.get('/calidad/incidencias/auxiliar/tipos'),
 
-  // Adjuntos (mismo patrón que órdenes de producción + Cloudinary)
   subirAdjunto: (id, formData) => api.post(`/calidad/incidencias/${id}/adjuntos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getAdjuntos: (id) => api.get(`/calidad/incidencias/${id}/adjuntos`),
   eliminarAdjunto: (idAdjunto) => api.delete(`/calidad/incidencias/adjuntos/${idAdjunto}`)
@@ -992,16 +975,12 @@ export const guiasRemisionAPI = {
 
   getById: (id) => api.get(`/guias-remision/${id}`),
   create: (data) => api.post('/guias-remision', data),
-  // Guía de remisión de COMPRA (motivo 02): crea la guía e ingresa el stock. SPI recoge con flota propia.
   createCompra: (data) => api.post('/guias-remision/compra', data),
-  // Datos de la empresa remitente (dirección/ubigeo) para prellenar los puntos de la guía.
   getEmpresaRemitente: () => api.get('/guias-remision/empresa-remitente'),
 
-  // Maestro de transportistas (terceros, para GRE en transporte público).
   getTransportistas: () => api.get('/guias-remision/transportistas'),
   createTransportista: (data) => api.post('/guias-remision/transportistas', data),
 
-  // Catálogo de destinatarios comex (operadores de puerto/depósito, para GRE de exportación).
   getDestinatariosComex: () => api.get('/guias-remision/destinatarios-comex'),
   createDestinatarioComex: (data) => api.post('/guias-remision/destinatarios-comex', data),
 
@@ -1094,7 +1073,6 @@ export const comprasAPI = {
   getAll: (params) => api.get('/compras', { params }),
   getById: (id) => api.get(`/compras/${id}`),
   create: (data) => api.post('/compras', data),
-  // Parseo del XML de la factura del proveedor (solo lectura) → prellena la conciliación.
   parseXml: (xml) => api.post('/compras/parse-xml', { xml }),
   update: (id, data) => api.put(`/compras/${id}`, data),
   
@@ -1133,8 +1111,7 @@ export const comprasAPI = {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      
-      // Intentar obtener el nombre del archivo del header content-disposition
+
       const contentDisposition = response.headers['content-disposition'];
       let fileName = `OC-${id}.pdf`;
       if (contentDisposition) {
@@ -1240,23 +1217,17 @@ export const reportesAPI = {
 export const archivosAPI = {
   getProxyUrl: (urlCloudinary) => {
     const token = localStorage.getItem('tokenMedia') || localStorage.getItem('token');
-    // Aseguramos que apunte a /archivos/pdf-proxy que es lo que definimos en server.js
     const baseUrl = `${API_URL}/archivos/pdf-proxy`;
 
     const params = new URLSearchParams({
       url: urlCloudinary,
-      token: token || '' // Token acotado (scope media) para que verificarTokenMedia no nos bloquee
+      token: token || ''
     });
 
     return `${baseUrl}?${params.toString()}`;
   }
 };
 
-// ── SUNAT (SEE nativo) — Fase 14 ──────────────────────────────────────────────
-// Emisión electrónica nativa: facturas (01), notas (07/08), baja (RA) y GRE Remitente (09).
-// Requiere permiso 'facturacion'. Coexiste con el flujo manual existente hasta el corte a PROD.
-
-// Dispara la descarga de un blob con un nombre de archivo dado (patrón de cotizaciones).
 const dispararDescarga = (blob, nombre) => {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -1268,21 +1239,17 @@ const dispararDescarga = (blob, nombre) => {
   setTimeout(() => window.URL.revokeObjectURL(url), 60000);
 };
 
-// Descarga el PDF (blob) del backend con el nombre SUNAT (Content-Disposition), enviando el token.
-// Descarga directa (sin abrir pestaña), igual que las cotizaciones.
 const descargarPdfSunat = async (path) => {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    // Cada descarga debe obtener el documento vigente y su Content-Disposition real.
     cache: 'no-store'
   });
   if (!response.ok) {
     let msg = 'No se pudo generar el PDF';
-    try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
+    try { msg = (await response.json())?.error || msg; } catch {}
     throw new Error(msg);
   }
-  // Nombre del backend (Content-Disposition) → nombre SUNAT (RUC-01-FE01-1.pdf) en vez del UUID.
   const disp = response.headers.get('Content-Disposition') || '';
   const nombre = decodeURIComponent(
     (disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] || 'documento.pdf').trim()
@@ -1291,8 +1258,6 @@ const descargarPdfSunat = async (path) => {
   dispararDescarga(new File([blob], nombre, { type: 'application/pdf' }), nombre);
 };
 
-// Descarga autenticada y servida por el backend (XML/CDR de GRE). Al pasar por el mismo origen
-// evitamos que una política CORS del almacenamiento bloquee la descarga en producción.
 const descargarArchivoSunat = async (path, nombreFallback) => {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'GET',
@@ -1300,7 +1265,7 @@ const descargarArchivoSunat = async (path, nombreFallback) => {
   });
   if (!response.ok) {
     let msg = 'No se pudo descargar el archivo';
-    try { msg = (await response.json())?.error || msg; } catch { /* respuesta no-JSON */ }
+    try { msg = (await response.json())?.error || msg; } catch {}
     throw new Error(msg);
   }
   const disp = response.headers.get('Content-Disposition') || '';
@@ -1310,9 +1275,6 @@ const descargarArchivoSunat = async (path, nombreFallback) => {
   dispararDescarga(await response.blob(), nombre);
 };
 
-// Descarga un archivo público (Cloudinary: XML firmado / CDR .zip) forzando el nombre correcto,
-// en vez de abrirlo en una pestaña. El nombre por defecto sale del último segmento de la URL,
-// que ya es el nombre SUNAT (p. ej. RUC-01-FE01-1.xml, R-RUC-01-FE01-1.zip).
 const descargarUrlComoArchivo = async (url, nombreSugerido) => {
   if (!url) throw new Error('No hay archivo para descargar');
   const response = await fetch(url);
@@ -1323,14 +1285,7 @@ const descargarUrlComoArchivo = async (url, nombreSugerido) => {
 };
 
 export const sunatAPI = {
-  // Vista previa de emisión (solo lectura): totales/desglose calculados por el backend (fuente única).
   previewComprobante: (id_orden_venta) => api.post('/sunat/comprobantes/preview', { id_orden_venta }),
-  // Comprobantes: factura (01), notas de crédito/débito (07/08) y comunicación de baja (RA).
-  // Opciones (todas opcionales):
-  //   fecha_emision ('YYYY-MM-DD'): retro-fecha dentro del plazo SUNAT (≤ 3 días).
-  //   observaciones: texto LIBRE del cbc:Note que SUNAT muestra como "Observaciones".
-  //   orden_compra_cliente: OC del cliente → cac:OrderReference (campo propio, ya no en observaciones).
-  //   guias: [{ tipo_documento:'09'|'31', serie, numero }] → cac:DespatchDocumentReference (buscador).
   emitirFactura: (id_orden_venta, { fecha_emision, observaciones, orden_compra_cliente, guias } = {}) =>
     api.post('/sunat/comprobantes/emitir', {
       id_orden_venta,
@@ -1339,8 +1294,6 @@ export const sunatAPI = {
       ...(orden_compra_cliente !== undefined ? { orden_compra_cliente } : {}),
       ...(Array.isArray(guias) ? { guias } : {})
     }),
-  // Vista previa de una nota (07/08): preliminar estilo SUNAT (empresa, doc afectado, cliente,
-  // desglose de totales, información del crédito) calculado por el backend con la MISMA lógica.
   previewNota: ({ id_factura_ref, tipo, motivo_codigo, modo, items, monto_global, solo_catalogo }) =>
     api.post('/sunat/comprobantes/notas/preview', {
       id_factura_ref, tipo, motivo_codigo,
@@ -1349,7 +1302,6 @@ export const sunatAPI = {
       ...(monto_global !== undefined ? { monto_global } : {}),
       ...(solo_catalogo ? { solo_catalogo: true } : {})
     }),
-  // sustento: texto libre del usuario → cbc:Description (Motivo o Sustento). fecha_emision: retro-fecha ≤2 días.
   emitirNota: ({ id_factura_ref, tipo, motivo_codigo, modo, items, monto_global, sustento, fecha_emision }) =>
     api.post('/sunat/comprobantes/notas/emitir', {
       id_factura_ref, tipo, motivo_codigo,
@@ -1362,11 +1314,8 @@ export const sunatAPI = {
   darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),
   estadoComprobante: (id) => api.get(`/sunat/comprobantes/${id}/estado`),
   verPdfComprobante: (id) => descargarPdfSunat(`/sunat/comprobantes/${id}/pdf`),
-  // Descarga directa (blob) del XML firmado / CDR desde su URL pública, con nombre SUNAT.
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),
 
-  // Descarga masiva: obtiene el blob del PDF (representación impresa) sin dispararlo al navegador.
-  // noupload=1 → el backend NO re-sube el PDF a Cloudinary en cada llamada (aligera el lote/Render).
   obtenerBlobPdfComprobante: async (id) => {
     const response = await fetch(`${API_URL}/sunat/comprobantes/${id}/pdf?noupload=1`, {
       method: 'GET',
@@ -1375,12 +1324,11 @@ export const sunatAPI = {
     });
     if (!response.ok) {
       let msg = 'No se pudo generar el PDF';
-      try { msg = (await response.json())?.error || msg; } catch { /* no-JSON */ }
+      try { msg = (await response.json())?.error || msg; } catch {}
       throw new Error(msg);
     }
     return response.blob();
   },
-  // Descarga masiva: obtiene el blob de un archivo público (XML firmado / CDR .zip en Cloudinary).
   obtenerBlobDesdeUrl: async (url) => {
     if (!url) throw new Error('Sin archivo');
     const response = await fetch(url);
@@ -1388,26 +1336,17 @@ export const sunatAPI = {
     return response.blob();
   },
 
-  // Guías de remisión (GRE Remitente 09). La baja se completa primero en SUNAT SOL y luego se
-  // confirma aquí para sincronizar el estado y conservar su auditoría en SPI.
-  // payload del wizard de emisión: { observaciones, direccion_llegada, ubigeo_llegada, ciudad_llegada,
-  // peso_bruto_kg, motivo_traslado_cod, es_comercio_exterior, transporte:{ modo, placa, dni, conductor, licencia, id_conductor, id_vehiculo } }
   emitirGuia: (id, payload = {}) => api.post(`/sunat/guias/${id}/emitir`, payload || {}),
-  // Validación previa (read-only): errores/observaciones antes de emitir la GRE (no numera).
   validarGuia: (id) => api.get(`/sunat/guias/${id}/validar`),
   estadoGuia: (id) => api.get(`/sunat/guias/${id}/estado`),
   confirmarBajaGuia: (id, datos) => api.post(`/sunat/guias/${id}/baja/confirmar`, datos),
   verPdfGuia: (id) => descargarPdfSunat(`/sunat/guias/${id}/pdf`),
-  // PDF de un intento histórico de emisión (típicamente RECHAZADO), con su marca de agua y motivo.
   verPdfGuiaEmision: (id, idEmision) => descargarPdfSunat(`/sunat/guias/${id}/pdf?emision=${idEmision}`),
   descargarXmlGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/xml`, 'guia.xml'),
   descargarCdrGuia: (id) => descargarArchivoSunat(`/sunat/guias/${id}/archivos/cdr`, 'cdr.zip'),
 
-  // Monitor SUNAT (Fase 15): conteo por estado, tickets abiertos, rechazos y errores del log.
   monitor: () => api.get('/sunat/monitor'),
 
-  // Trazabilidad SEE (solo lectura): listados detallados con filtros.
-  // filtros comprobantes: { tipo, estado, desde, hasta, q }; guías: { estado, desde, hasta, q }.
   trazabilidadComprobantes: (filtros = {}) => {
     const params = new URLSearchParams();
     Object.entries(filtros).forEach(([k, v]) => { if (v) params.append(k, v); });
@@ -1419,6 +1358,5 @@ export const sunatAPI = {
     return api.get(`/sunat/trazabilidad/guias?${params.toString()}`);
   },
 
-  // Estado del módulo (BETA/PROD).
   ping: () => api.get('/sunat/ping'),
 };

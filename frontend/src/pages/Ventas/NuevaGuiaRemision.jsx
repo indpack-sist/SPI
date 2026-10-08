@@ -11,9 +11,6 @@ import { resolverUbigeoDesdeDireccion } from '../../utils/ubigeo';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
 import puertos from '../../data/puertos.json';
 
-// Tipos de documento relacionado comex (catálogo 61). MVP: DAM (código 50 confirmado vs molde
-// EG07-273). Otros tipos (DS, Constancia IVAP/Detracción, Otros) requieren confirmar su código
-// cat.61 en las Reglas de Validación antes de habilitarlos.
 const DOC_TIPOS_COMEX = [
   { cod: '50', desc: 'Declaración Aduanera de Mercancías (DAM)' },
 ];
@@ -29,29 +26,22 @@ function NuevaGuiaRemision() {
   const [ubigeoDetectado, setUbigeoDetectado] = useState(null);
   
   const [orden, setOrden] = useState(null);
-  // Guías vigentes ya existentes de esta OV (entregas parciales): se muestran como referencia para
-  // que el usuario vea que parte del pedido ya está en guías y solo despache el saldo.
   const [guiasPreviasOV, setGuiasPreviasOV] = useState([]);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   const [validacionProductos, setValidacionProductos] = useState({});
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   const [transportistas, setTransportistas] = useState([]);
-  // Comercio exterior (exportación): catálogo de destinatarios + listas repetibles.
   const [destinatariosComex, setDestinatariosComex] = useState([]);
   const [docsRelacionados, setDocsRelacionados] = useState([
     { tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: '', numero: '' }
   ]);
   const [contenedores, setContenedores] = useState([{ numero_contenedor: '', numero_precinto: '' }]);
-  // Transportista heredado de la OV cuando la entrega es por tercero (modalidad pública).
   const [ovTransportista, setOvTransportista] = useState(null);
-  // Datos del carro particular del cliente (sin RUC) heredados de la OV (modalidad 02 privada, texto libre).
   const [ovParticular, setOvParticular] = useState(null);
-  // Alta rápida de transportista (modalidad pública) sin salir del form.
   const [showNuevoTransportista, setShowNuevoTransportista] = useState(false);
   const [nuevoTransportista, setNuevoTransportista] = useState({ ruc: '', razon_social: '', numero_mtc: '' });
   const [guardandoTransportista, setGuardandoTransportista] = useState(false);
-  // Alta rápida de destinatario comex (operador de puerto/depósito) sin salir del form.
   const [showNuevoDestinatario, setShowNuevoDestinatario] = useState(false);
   const [nuevoDestinatario, setNuevoDestinatario] = useState({ ruc: '', razon_social: '', codigo_establecimiento: '0' });
   const [guardandoDestinatario, setGuardandoDestinatario] = useState(false);
@@ -62,7 +52,7 @@ function NuevaGuiaRemision() {
     fecha_traslado: new Date().toISOString().split('T')[0],
     tipo_traslado: 'Privado',
     motivo_traslado: 'Venta',
-    motivo_descripcion: 'MUESTRAS', // "Especifique" cuando el motivo es Otros (cat.20 = 13)
+    motivo_descripcion: 'MUESTRAS',
     modalidad_transporte: 'Transporte Privado',
     direccion_partida: '',
     ubigeo_partida: '',
@@ -75,22 +65,18 @@ function NuevaGuiaRemision() {
     id_conductor: '',
     id_vehiculo: '',
     id_transportista: '',
-    // Comercio exterior (exportación)
     destinatario_ruc: '',
     destinatario_razon: '',
     puerto_codigo: '',
     traslado_total_dam: 1
   });
 
-  // La OV de exportación (checkbox "Factura de exportación") activa toda la captura comex.
   const esExportacion = Number(orden?.es_exportacion) === 1;
 
-  // Modalidad pública = transporte por un tercero transportista (RUC + razón social).
   const esPublico = String(formData.modalidad_transporte)
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .includes('publico');
-  // Carro particular del cliente (sin RUC): modalidad 02 privada con datos manuales heredados de la OV.
   const esParticular = orden?.tipo_entrega === 'Vehiculo Particular';
   
   const [detalle, setDetalle] = useState([]);
@@ -101,7 +87,6 @@ function NuevaGuiaRemision() {
     }
   }, [idOrden]);
 
-  // Catálogos para la GRE electrónica (transporte privado): conductor + vehículo de la flota.
   useEffect(() => {
     (async () => {
       try {
@@ -113,8 +98,6 @@ function NuevaGuiaRemision() {
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
         if (rt.data?.success) setTransportistas(rt.data.data || []);
-        // Punto de partida = domicilio fiscal de la empresa (empresa_config). Es informativo y el
-        // backend lo vuelve a tomar de esta configuración para que no pueda alterarse en el request.
         try {
           const re = await guiasRemisionAPI.getEmpresaRemitente();
           const emp = re.data?.data;
@@ -128,8 +111,6 @@ function NuevaGuiaRemision() {
         } catch (e) {
           console.warn('No se pudo cargar el punto de partida de la empresa:', e.message);
         }
-        // Catálogo comex aparte: un fallo (endpoint nuevo aún no desplegado) NO debe romper los
-        // catálogos de transporte de las guías normales.
         try {
           const rd = await guiasRemisionAPI.getDestinatariosComex();
           if (rd.data?.success) setDestinatariosComex(rd.data.data || []);
@@ -157,25 +138,18 @@ function NuevaGuiaRemision() {
         const ordenData = response.data.data;
         setOrden(ordenData);
 
-        // Guías vigentes ya emitidas/creadas para esta OV (entregas parciales previas).
         try {
           const gr = await guiasRemisionAPI.getAll({ id_orden_venta: id });
           const previas = (gr.data?.success ? (gr.data.data || []) : []).filter((g) => g.estado !== 'Anulada');
           setGuiasPreviasOV(previas);
-        } catch { /* no crítico: solo es referencia visual */ }
+        } catch { }
 
-        // Una guía es un documento de despacho: se permite en cualquier estado activo
-        // de la OV, bloqueando solo canceladas o ya entregadas (alineado con el backend).
         if (ordenData.estado === 'Cancelada' || ordenData.estado === 'Entregada') {
           setError(`No se pueden crear guías para órdenes en estado "${ordenData.estado}".`);
           return;
         }
         
-        // Mapear productos con toda la información necesaria
         const productosConDisponibilidad = ordenData.detalle.map(item => {
-          // Entregas parciales: el saldo real descuenta lo ya comprometido en guías vigentes
-          // (cantidad_en_guias), no solo lo ya despachado. Así, tras crear una guía parcial, la
-          // siguiente solo ofrece el resto. Fallback a cantidad_despachada si el backend no lo trae.
           const comprometido = item.cantidad_en_guias != null
             ? parseFloat(item.cantidad_en_guias || 0)
             : parseFloat(item.cantidad_despachada || 0);
@@ -192,9 +166,6 @@ function NuevaGuiaRemision() {
             cantidad_en_guias: parseFloat(item.cantidad_en_guias || 0),
             cantidad_disponible: cantidadDisponible,
             stock_actual: parseFloat(item.stock_disponible || 0),
-            // Peso por unidad heredado de la OV (el detalle de la orden lo devuelve como
-            // `peso_unitario`, del maestro de productos). Se traspasa como valor inicial y queda
-            // editable en el form; si viene vacío/0, el usuario puede completarlo a mano.
             peso_unitario_kg: parseFloat(item.peso_unitario_kg ?? item.peso_unitario ?? 0) || 0
           };
         }).filter(item => item.cantidad_disponible > 0);
@@ -205,8 +176,7 @@ function NuevaGuiaRemision() {
         }
         
         setProductosDisponibles(productosConDisponibilidad);
-        
-        // Inicializar detalle con cantidades disponibles
+
         const detalleInicial = productosConDisponibilidad.map((p, i) => ({
           id_detalle_orden: p.id_detalle,
           id_producto: p.id_producto,
@@ -217,16 +187,12 @@ function NuevaGuiaRemision() {
           cantidad: p.cantidad_disponible,
           peso_unitario_kg: p.peso_unitario_kg,
           descripcion: p.producto,
-          // Comex: subpartida nacional (7020) y nº de serie en la DAM (7023). Serie default = orden del ítem.
           subpartida_nacional: '',
           dam_serie: String(i + 1)
         }));
         
         setDetalle(detalleInicial);
-        
-        // Transporte por tercero en la OV ('Transporte Privado') = modalidad pública SUNAT.
-        // Se hereda el transportista declarado en la orden (RUC + razón social); el backend lo
-        // materializa en el maestro al crear la guía, así no hay que re-seleccionarlo aquí.
+
         const ovEsTercero = ordenData.tipo_entrega === 'Transporte Privado';
         setOvTransportista(ovEsTercero ? {
           ruc: ordenData.transporte_ruc || '',
@@ -234,7 +200,6 @@ function NuevaGuiaRemision() {
           mtc: ordenData.transporte_mtc || ''
         } : null);
 
-        // Carro particular del cliente (sin RUC): se hereda conductor/placa a la guía como texto libre.
         const ovEsParticular = ordenData.tipo_entrega === 'Vehiculo Particular';
         setOvParticular(ovEsParticular ? {
           placa: ordenData.transporte_placa || '',
@@ -244,8 +209,6 @@ function NuevaGuiaRemision() {
         } : null);
 
         const esComexOV = Number(ordenData.es_exportacion) === 1;
-        // En exportación la llegada y su ubigeo proceden del puerto seleccionado, no de la
-        // dirección doméstica que pudiera conservar la OV.
         const ubicacionOV = esComexOV
           ? null
           : resolverUbigeoDesdeDireccion(ordenData.direccion_entrega);
@@ -255,21 +218,14 @@ function NuevaGuiaRemision() {
         setFormData(prev => ({
           ...prev,
           id_orden_venta: id,
-          // Comercio exterior: si la OV está marcada como exportación (checkbox
-          // "Factura de exportación"), la guía nace con motivo Exportación (cat.20 = 09).
-          // El backend igual lo fuerza desde ordenes_venta.es_exportacion (fuente única).
           motivo_traslado: Number(ordenData.es_exportacion) === 1
             ? 'Exportación'
             : (Number(ordenData.es_muestra) === 1 ? 'Otros' : prev.motivo_traslado),
           direccion_llegada: ordenData.direccion_entrega || '',
           ciudad_llegada: ordenData.ciudad_entrega || ubicacionOV?.distrito || '',
-          // Ubigeo: si la OV no lo trae, se intenta derivar de la cola de la dirección de entrega
-          // ("..., DISTRITO, PROVINCIA, DEPARTAMENTO"). El usuario siempre puede corregirlo en el selector.
           ubigeo_llegada: ubigeoInicial,
-          // Si la OV es por tercero, la guía nace en modalidad pública.
           modalidad_transporte: ovEsTercero ? 'Transporte Público' : prev.modalidad_transporte,
           tipo_traslado: ovEsTercero ? 'Público' : prev.tipo_traslado,
-          // Heredar el transporte propio asignado en la OV (editable como override en los selects).
           id_conductor: ordenData.id_conductor ? String(ordenData.id_conductor) : '',
           id_vehiculo: ordenData.id_vehiculo ? String(ordenData.id_vehiculo) : ''
         }));
@@ -285,12 +241,10 @@ function NuevaGuiaRemision() {
     }
   };
 
-  // Nueva función: Validar productos
   const validarProductos = () => {
     const validaciones = {};
-    
+
     detalle.forEach(item => {
-      // Ítem de muestra de texto libre: no tiene producto/stock que validar (siempre válido).
       if (item.es_producto_libre) return;
       const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
       if (!producto) return;
@@ -298,23 +252,19 @@ function NuevaGuiaRemision() {
       const cantidadSolicitada = parseFloat(item.cantidad || 0);
       const errores = [];
       const warnings = [];
-      
-      // Validar cantidad vs disponible en orden
+
       if (cantidadSolicitada > producto.cantidad_disponible) {
         errores.push(`Excede lo disponible en orden: ${producto.cantidad_disponible.toFixed(4)}`);
       }
-      
-      // Validar cantidad vs stock actual
+
       if (cantidadSolicitada > producto.stock_actual) {
         errores.push(`Stock insuficiente. Disponible: ${producto.stock_actual.toFixed(4)}`);
       }
-      
-      // Warning si la cantidad es 0
+
       if (cantidadSolicitada === 0) {
         warnings.push('Este producto no se incluirá en la guía');
       }
-      
-      // Warning si está cerca del límite de stock
+
       if (cantidadSolicitada > 0 && cantidadSolicitada === producto.stock_actual && producto.stock_actual < producto.cantidad_disponible) {
         warnings.push('Usando todo el stock disponible');
       }
@@ -332,12 +282,10 @@ function NuevaGuiaRemision() {
   const handleCantidadChange = (index, cantidad) => {
     const newDetalle = [...detalle];
     const cantidadNum = parseFloat(cantidad) || 0;
-    
-    // Permitir el cambio pero validar después
+
     newDetalle[index].cantidad = cantidadNum;
     setDetalle(newDetalle);
-    
-    // Limpiar error general si existe
+
     setError(null);
   };
 
@@ -365,19 +313,15 @@ function NuevaGuiaRemision() {
     setUbigeoDetectado(ubicacion);
   };
 
-  // ── Comercio exterior (exportación): handlers ──────────────────────────────────────────────
-  // Subpartida nacional / nº serie DAM por ítem.
   const handleComexDetalle = (index, field, value) => {
     const nd = [...detalle];
     nd[index][field] = value;
     setDetalle(nd);
   };
-  // Destinatario elegido del catálogo → snapshot RUC + razón + puerto (para AddressTypeCode en backend).
   const handleDestinatario = (ruc) => {
     const d = destinatariosComex.find((x) => x.ruc === ruc);
     setFormData((prev) => ({ ...prev, destinatario_ruc: ruc, destinatario_razon: d?.razon_social || '' }));
   };
-  // Puerto de llegada → arma dirección + ubigeo de llegada desde el catálogo estático.
   const handlePuerto = (codigo) => {
     const p = puertos.find((x) => x.codigo === codigo);
     setUbigeoDetectado(null);
@@ -389,7 +333,6 @@ function NuevaGuiaRemision() {
       ciudad_llegada: p?.nombre || prev.ciudad_llegada,
     }));
   };
-  // Documentos relacionados (lista repetible).
   const setDoc = (i, field, value) => setDocsRelacionados((prev) => prev.map((d, j) => {
     if (j !== i) return d;
     const nd = { ...d, [field]: value };
@@ -398,12 +341,10 @@ function NuevaGuiaRemision() {
   }));
   const addDoc = () => setDocsRelacionados((prev) => [...prev, { tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: '', numero: '' }]);
   const removeDoc = (i) => setDocsRelacionados((prev) => prev.filter((_, j) => j !== i));
-  // Contenedores (lista repetible).
   const setCont = (i, field, value) => setContenedores((prev) => prev.map((c, j) => (j === i ? { ...c, [field]: value } : c)));
   const addCont = () => setContenedores((prev) => [...prev, { numero_contenedor: '', numero_precinto: '' }]);
   const removeCont = (i) => setContenedores((prev) => prev.filter((_, j) => j !== i));
 
-  // Alta rápida de transportista: lo registra en el maestro y lo deja seleccionado en la guía.
   const guardarTransportista = async () => {
     setError(null);
     const { ruc, razon_social } = nuevoTransportista;
@@ -427,7 +368,6 @@ function NuevaGuiaRemision() {
         return;
       }
       const nuevo = resp.data.data;
-      // Refrescar el maestro y dejar el nuevo seleccionado.
       const lista = await guiasRemisionAPI.getTransportistas();
       if (lista.data?.success) setTransportistas(lista.data.data || []);
       setFormData(prev => ({ ...prev, id_transportista: String(nuevo.id_transportista) }));
@@ -441,9 +381,6 @@ function NuevaGuiaRemision() {
     }
   };
 
-  // Alta rápida de destinatario comex: lo registra en el catálogo y lo deja seleccionado en la guía.
-  // El código de establecimiento (anexo del destinatario) alimenta DeliveryAddress/AddressTypeCode
-  // en la emisión (default '0' = matriz). Idempotente por RUC en el backend.
   const guardarDestinatario = async () => {
     setError(null);
     const { ruc, razon_social } = nuevoDestinatario;
@@ -466,7 +403,6 @@ function NuevaGuiaRemision() {
         setError(resp.data?.error || 'No se pudo registrar el destinatario');
         return;
       }
-      // Refrescar el catálogo y dejar el nuevo seleccionado.
       const lista = await guiasRemisionAPI.getDestinatariosComex();
       if (lista.data?.success) setDestinatariosComex(lista.data.data || []);
       setFormData(prev => ({ ...prev, destinatario_ruc: ruc.trim(), destinatario_razon: razon_social.trim() }));
@@ -491,9 +427,7 @@ function NuevaGuiaRemision() {
     }));
   };
 
-  // Validar antes de enviar
   const validarFormulario = () => {
-    // Verificar que haya productos válidos
     const detalleValido = detalle.filter(item => {
       const cantidad = parseFloat(item.cantidad || 0);
       const validacion = validacionProductos[item.id_producto];
@@ -504,8 +438,7 @@ function NuevaGuiaRemision() {
       setError('No hay productos válidos para despachar. Verifique las cantidades y el stock disponible.');
       return false;
     }
-    
-    // Verificar si hay errores en algún producto
+
     const hayErrores = Object.values(validacionProductos).some(v => v.errores && v.errores.length > 0);
     if (hayErrores) {
       setError('Hay productos con errores. Corrija las cantidades antes de continuar.');
@@ -540,7 +473,6 @@ function NuevaGuiaRemision() {
       return;
     }
 
-    // Validación de comercio exterior (exportación): destinatario, DAM, contenedor y subpartidas.
     if (esExportacion) {
       if (!/^\d{11}$/.test(String(formData.destinatario_ruc || ''))) {
         setError('Exportación: selecciona el destinatario (operador de puerto/depósito) del catálogo.');
@@ -562,11 +494,7 @@ function NuevaGuiaRemision() {
       }
     }
 
-    // Requisitos según modalidad para que la GRE sea emitible (se emite en un solo paso):
-    //  · Público  → transportista tercero (RUC + razón social).
-    //  · Privado  → conductor + vehículo (placa de la flota).
     if (esPublico) {
-      // Válido si la OV ya trae el transportista (con RUC) o si se eligió uno del maestro.
       const tieneOvTransportista = ovTransportista && ovTransportista.ruc;
       if (!tieneOvTransportista && !formData.id_transportista) {
         setError(ovTransportista
@@ -578,10 +506,7 @@ function NuevaGuiaRemision() {
       setError('Para emitir la GRE en transporte privado debes seleccionar conductor y vehículo (placa).');
       return;
     }
-    // Carro particular del cliente: los datos (conductor/placa) se heredan de la OV y se pueden
-    // completar/editar en el wizard de emisión, así que aquí no se bloquea la creación.
 
-    // Validar formulario
     if (!validarFormulario()) {
       return;
     }
@@ -597,7 +522,6 @@ function NuevaGuiaRemision() {
         fecha_traslado: formData.fecha_traslado,
         tipo_traslado: formData.tipo_traslado,
         motivo_traslado: formData.motivo_traslado,
-        // "Especifique" del motivo Otros (cat.20 = 13) → HandlingInstructions/representación (ej. MUESTRAS).
         motivo_descripcion: formData.motivo_traslado === 'Otros' ? formData.motivo_descripcion : undefined,
         modalidad_transporte: formData.modalidad_transporte,
         direccion_llegada: formData.direccion_llegada,
@@ -606,7 +530,6 @@ function NuevaGuiaRemision() {
         peso_bruto_kg: parseFloat(formData.peso_bruto_kg),
         numero_bultos: parseInt(formData.numero_bultos) || 0,
         observaciones: formData.observaciones,
-        // En público el transporte lo hace el tercero: no se envían conductor/vehículo propios.
         id_conductor: esPublico ? null : (formData.id_conductor ? parseInt(formData.id_conductor) : null),
         id_vehiculo: esPublico ? null : (formData.id_vehiculo ? parseInt(formData.id_vehiculo) : null),
         id_transportista: esPublico && formData.id_transportista ? parseInt(formData.id_transportista) : null,
@@ -617,13 +540,11 @@ function NuevaGuiaRemision() {
           unidad_medida: item.unidad_medida,
           descripcion: item.descripcion || item.producto,
           peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0,
-          // Comex: subpartida (7020) + serie DAM (7023) por ítem.
           subpartida_nacional: esExportacion ? (item.subpartida_nacional || '').trim() : undefined,
           dam_serie: esExportacion ? (item.dam_serie || '').trim() : undefined
         }))
       };
 
-      // Datos de comercio exterior (solo si la OV es exportación).
       if (esExportacion) {
         payload.destinatario_ruc = formData.destinatario_ruc;
         payload.destinatario_razon = formData.destinatario_razon;
@@ -646,9 +567,6 @@ function NuevaGuiaRemision() {
 
       const { numero_guia } = response.data.data;
 
-      // La emisión a SUNAT se hace desde la card SEE del detalle de la orden (igual que la
-      // factura): al volver a la OV aparece "Guía de Remisión Electrónica" con el botón
-      // "Emitir GRE" → confirmación → estado y PDF. Aquí solo se crea la guía.
       setSuccess(`Guía ${numero_guia} creada. Emítela a SUNAT desde el detalle de la orden.`);
       setTimeout(() => {
         navigate(`/ventas/ordenes/${formData.id_orden_venta}`);
@@ -656,7 +574,6 @@ function NuevaGuiaRemision() {
 
     } catch (err) {
       console.error('Error al crear guía:', err);
-      // El backend ahora devuelve mensajes de error más específicos
       setError(err.response?.data?.error || 'Error al crear guía de remisión');
     } finally {
       setLoading(false);
@@ -840,20 +757,17 @@ function NuevaGuiaRemision() {
                 <div className="form-group col-span-2">
                   <label className="form-label">Transportista (tercero) *</label>
                   {ovTransportista && ovTransportista.ruc ? (
-                    // Heredado de la orden: se emite con estos datos (el backend lo registra en el maestro).
                     <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm">
                       <p className="font-medium text-green-900">{ovTransportista.razon || '(sin razón social)'}</p>
                       <p className="text-green-700">RUC {ovTransportista.ruc}{ovTransportista.mtc ? ` · MTC ${ovTransportista.mtc}` : ''}</p>
                       <p className="text-xs text-muted mt-1">Tomado de "Transporte y Logística" de la orden.</p>
                     </div>
                   ) : ovTransportista ? (
-                    // Orden por tercero pero sin RUC: no se puede emitir la GRE pública.
                     <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
                       La orden se entrega por tercero pero <b>no tiene el RUC del transportista</b>.
                       Complétalo en "Transporte y Logística" de la orden antes de crear la guía.
                     </div>
                   ) : (
-                    // Público elegido manualmente (sin datos en la OV): elegir del maestro.
                     <div className="flex gap-2">
                       <select
                         className="form-select flex-1"
@@ -985,7 +899,6 @@ function NuevaGuiaRemision() {
             <div className="card-body">
               {esExportacion ? (
                 <>
-                  {/* Exportación: el punto de llegada es el PUERTO (catálogo estático con ubigeo fijo). */}
                   <div className="form-group">
                     <label className="form-label">Puerto de embarque *</label>
                     <select
@@ -1045,7 +958,6 @@ function NuevaGuiaRemision() {
                       setFormData((prev) => ({
                         ...prev,
                         ubigeo_llegada: codigo,
-                        // La ciudad se deriva del distrito seleccionado (referencial para el PDF).
                         ciudad_llegada: meta?.distrito || '',
                       }));
                     }}
@@ -1065,7 +977,6 @@ function NuevaGuiaRemision() {
               </h2>
             </div>
             <div className="card-body space-y-5">
-              {/* Destinatario (operador de puerto/depósito) */}
               <div className="form-group">
                 <label className="form-label">Destinatario (operador de puerto/depósito) *</label>
                 <div className="flex gap-2">
@@ -1096,7 +1007,6 @@ function NuevaGuiaRemision() {
                 </small>
               </div>
 
-              {/* Documentos relacionados (DAM) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="form-label mb-0">Documentos Relacionados *</label>
@@ -1124,7 +1034,6 @@ function NuevaGuiaRemision() {
                 <small className="text-gray-500">Régimen DAM = 40 (exportación). El número no debe iniciar con cero.</small>
               </div>
 
-              {/* Traslado total de la DAM/DS (alcance actual: Sí) */}
               <div className="form-group">
                 <label className="form-label">¿Traslado por el total de los bienes de la DAM/DS?</label>
                 <div className="text-sm">
@@ -1133,7 +1042,6 @@ function NuevaGuiaRemision() {
                 </div>
               </div>
 
-              {/* Contenedores + precintos */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="form-label mb-0">Contenedores *</label>

@@ -4,10 +4,6 @@ import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft, PackagePlus, Lin
 import Alert from '../../components/UI/Alert';
 import { comprasAPI, proveedoresAPI, productosAPI } from '../../config/api';
 
-// Registrar Compra desde el XML de la factura del proveedor.
-// Flujo: subo el .xml → el backend lo parsea (POST /compras/parse-xml) → concilio (mapear/crear
-// productos y elegir su inventario) → "Registrar Compra" (POST /compras).
-// La compra se crea SIN mover stock (tipo_recepcion 'Ninguna'); el inventario entra luego con la guía.
 export default function RegistrarCompraXml() {
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -18,9 +14,9 @@ export default function RegistrarCompraXml() {
   const [submitting, setSubmitting] = useState(false);
 
   const [tiposInv, setTiposInv] = useState([]);
-  const [proveedor, setProveedor] = useState(null);   // { ruc, razon_social, id_proveedor|null }
-  const [cabecera, setCabecera] = useState(null);      // { tipo, serie, numero, fecha, moneda, porcentaje_igv }
-  const [lineas, setLineas] = useState([]);            // filas conciliables
+  const [proveedor, setProveedor] = useState(null);
+  const [cabecera, setCabecera] = useState(null);
+  const [lineas, setLineas] = useState([]);
   const [tipoCompra, setTipoCompra] = useState('Contado');
   const [tipoCambio, setTipoCambio] = useState('1.00');
 
@@ -36,8 +32,6 @@ export default function RegistrarCompraXml() {
     setError(null); setSuccess(null);
     try {
       const bytes = await f.arrayBuffer();
-      // FileReader usa UTF-8 por defecto e ignora la declaración del XML. Detectarla evita
-      // corromper razones sociales o descripciones en comprobantes ISO-8859-1/Windows-1252.
       const cabeceraXml = new TextDecoder('ascii').decode(bytes.slice(0, 200));
       const encodingDeclarado = cabeceraXml.match(/<\?xml[^>]*encoding=["']([^"']+)["']/i)?.[1] || 'utf-8';
       const xml = new TextDecoder(encodingDeclarado).decode(bytes);
@@ -58,7 +52,6 @@ export default function RegistrarCompraXml() {
       setCabecera(d.comprobante);
       setLineas((d.lineas || []).map((l) => ({
         ...l,
-        // Nuevo (sin match): requiere elegir inventario. Vinculado: usa el id_producto del match.
         id_tipo_inventario: '',
       })));
       setTipoCompra(d.comprobante?.forma_pago || 'Contado');
@@ -88,7 +81,6 @@ export default function RegistrarCompraXml() {
 
     setSubmitting(true);
     try {
-      // Proveedor: si no existe en el catálogo, se crea con los datos del XML.
       let idProveedor = proveedor?.id_proveedor;
       if (!idProveedor) {
         if (!proveedor?.ruc) throw new Error('El XML no trae el RUC del proveedor.');
@@ -106,8 +98,6 @@ export default function RegistrarCompraXml() {
           cantidad: parseFloat(l.cantidad) || 0,
           precio_unitario: parseFloat(l.precio_unitario) || 0,
           descuento_porcentaje: 0,
-          // Trazabilidad documental: estos valores pertenecen al comprobante del
-          // proveedor y no deben sustituirse por el nombre/código del catálogo SPI.
           codigo_documento: l.codigo_xml || null,
           descripcion_documento: l.descripcion,
           unidad_documento_sunat: l.unidad_sunat || 'NIU',
@@ -132,8 +122,8 @@ export default function RegistrarCompraXml() {
         moneda: cabecera.moneda || 'PEN',
         tipo_compra: tipoCompra,
         forma_pago_detalle: tipoCompra,
-        accion_pago: 'diferido',            // no registra pago ahora
-        tipo_recepcion: 'Ninguna',          // NO mueve stock: el inventario entra con la guía
+        accion_pago: 'diferido',
+        tipo_recepcion: 'Ninguna',
         tipo_documento: 'Factura',
         serie_documento: cabecera.serie,
         numero_documento: cabecera.numero,
@@ -195,7 +185,6 @@ export default function RegistrarCompraXml() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Paso 1: cargar XML */}
       <div className="card mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={onFile} />
@@ -212,7 +201,6 @@ export default function RegistrarCompraXml() {
 
       {proveedor && (
         <>
-          {/* Proveedor + condiciones */}
           <div className="card mb-4">
             <h2 className="font-semibold mb-3">Proveedor y condiciones</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -246,7 +234,6 @@ export default function RegistrarCompraXml() {
             </div>
           </div>
 
-          {/* Paso 2: conciliación de líneas */}
           <div className="card mb-4">
             <h2 className="font-semibold mb-1">Conciliación de productos</h2>
             <p className="text-muted text-sm mb-3">Los productos que ya existen se vinculan; los nuevos se crearán (elige su inventario). Cantidades y precios provienen del XML.</p>

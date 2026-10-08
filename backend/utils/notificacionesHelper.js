@@ -263,7 +263,6 @@ export async function notificarComercialDefinirComprobante(idOrden, numeroOrden,
 
 export async function notificarNuevaOP(idOrden, numeroOP, origenInfo, rolesDestino, io) {
   try {
-    // Buscar empleados activos con los roles especificados (Supervisor, Jefe de Planta, etc.)
     const destinatariosResult = await executeQuery(`
       SELECT id_empleado 
       FROM empleados 

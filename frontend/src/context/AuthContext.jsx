@@ -27,11 +27,11 @@ export function AuthProvider({ children }) {
       if (response.data.success && response.data.data) {
         const usuario = response.data.data.usuario;
         
-        console.log('✅ Usuario verificado desde backend:', usuario);
-        console.log('✅ Rol del usuario verificado:', usuario.rol);
+        console.log('Usuario verificado desde backend:', usuario);
+        console.log('Rol del usuario verificado:', usuario.rol);
         
         if (!usuario.rol) {
-          console.error('❌ Usuario sin rol recibido del backend');
+          console.error('Usuario sin rol recibido del backend');
           limpiarSesion();
           return;
         }
@@ -46,30 +46,25 @@ export function AuthProvider({ children }) {
           restringir_clientes: Number(usuario.restringir_clientes) === 1
         };
 
-        console.log('✅ Usuario guardado en estado:', userData);
+        console.log('Usuario guardado en estado:', userData);
         
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
       }
     } catch (error) {
-      console.error('❌ Error al verificar autenticación:', error);
+      console.error('Error al verificar autenticación:', error);
 
-      // El interceptor marca únicamente una expiración confirmada o una cuenta
-      // desactivada. Solo en esos casos limpiamos y redirigimos a login.
       if (error?.sessionExpired) {
-        console.log('🔒 Sesión inválida/expirada - redirigiendo a login');
+        console.log('Sesión inválida/expirada - redirigiendo a login');
         limpiarSesion();
         navigate('/login', { replace: true });
       } else {
-        // Error temporal (BD/red/backend "despertando"): NO cerramos sesión.
-        // Conservamos el token y restauramos el usuario cacheado si existe.
-        console.warn('⚠️ Error temporal al verificar sesión - se conserva la sesión');
+        console.warn('Error temporal al verificar sesión - se conserva la sesión');
         const cachedUser = localStorage.getItem('user');
         if (cachedUser) {
           try {
             setUser(JSON.parse(cachedUser));
           } catch {
-            // usuario cacheado corrupto: se ignora, se conserva el token
           }
         }
       }
@@ -98,12 +93,12 @@ export function AuthProvider({ children }) {
       
       const { token, tokenMedia, usuario } = data.data;
       
-      console.log('📦 Respuesta completa del backend:', data.data);
-      console.log('👤 Usuario del backend:', usuario);
-      console.log('🎭 Rol del usuario:', usuario.rol);
+      console.log('Respuesta completa del backend:', data.data);
+      console.log('Usuario del backend:', usuario);
+      console.log('Rol del usuario:', usuario.rol);
       
       if (!usuario.rol) {
-        console.error('❌ Usuario sin rol - login rechazado');
+        console.error('Usuario sin rol - login rechazado');
         return {
           success: false,
           error: 'Usuario sin rol asignado. Contacte al administrador.'
@@ -123,19 +118,19 @@ export function AuthProvider({ children }) {
         restringir_clientes: Number(usuario.restringir_clientes) === 1
       };
 
-      console.log('💾 Guardando usuario en estado:', userData);
-      console.log('💾 Rol que se guardará:', userData.rol);
+      console.log('Guardando usuario en estado:', userData);
+      console.log('Rol que se guardará:', userData.rol);
       
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
       
-      console.log('✅ Usuario final guardado:', userData);
-      console.log('✅ Estado de user después de setUser:', userData);
+      console.log('Usuario final guardado:', userData);
+      console.log('Estado de user después de setUser:', userData);
       
       return { success: true };
       
     } catch (error) {
-      console.error('❌ Error en login:', error);
+      console.error('Error en login:', error);
       return { 
         success: false, 
         error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
@@ -145,7 +140,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     try {
-      console.log('🚪 Cerrando sesión...');
+      console.log('Cerrando sesión...');
       limpiarSesion();
       navigate('/login', { replace: true });
       
@@ -153,7 +148,7 @@ export function AuthProvider({ children }) {
         window.location.href = '/login';
       }, 100);
     } catch (error) {
-      console.error('❌ Error en logout:', error);
+      console.error('Error en logout:', error);
       limpiarSesion();
       window.location.href = '/login';
     }

@@ -36,8 +36,6 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
-// Muestra cantidades de unidades/millares respetando decimales (ej: 12.5),
-// pero sin ".00" innecesario para enteros (ej: 12).
 const fmtUnid = (valor) => String(parseFloat(parseFloat(valor || 0).toFixed(2)));
 
 function OrdenesProduccion() {
@@ -160,8 +158,7 @@ function OrdenesProduccion() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    
-    // Si la fecha incluye hora (formato ISO o YYYY-MM-DD HH:mm:ss)
+
     if (fecha.includes('T') || (fecha.includes(' ') && fecha.includes(':'))) {
       return new Date(fecha).toLocaleString('es-PE', {
         day: '2-digit',
@@ -172,8 +169,7 @@ function OrdenesProduccion() {
         hour12: true
       });
     }
-    
-    // Si es solo fecha YYYY-MM-DD
+
     const partes = fecha.split(' ')[0].split('-');
     if (partes.length === 3) {
       const [year, month, day] = partes;
@@ -216,7 +212,6 @@ function OrdenesProduccion() {
     if (!observaciones || !observaciones.includes('[VERIFICACIÓN CALIDAD]')) return null;
     
     try {
-      // Regex flexible para capturar Nombre y Fecha
       const regex = /Verificado por:\s*(.*?)\s*el\s*(.*)/i;
       const match = observaciones.match(regex);
       
@@ -226,8 +221,7 @@ function OrdenesProduccion() {
           fecha: match[2] ? match[2].trim() : '' 
         };
       }
-      
-      // Fallback si el regex falla pero el tag existe
+
       return { nombre: 'Verificado', fecha: '' };
     } catch (e) {
       return { nombre: 'Verificado', fecha: '' };
@@ -330,14 +324,12 @@ function OrdenesProduccion() {
       align: 'left',
       width: '240px',
       render: (value, row) => {
-        // --- CÁLCULO KILOS ---
         const metaKg = parseFloat(row.cantidad_planificada || 0);
         const realKg = parseFloat(row.cantidad_producida || 0);
         let pctKg = 0;
         if (metaKg > 0) pctKg = (realKg / metaKg) * 100;
-        else if (realKg > 0) pctKg = 100; // Si no hay meta pero hay real, llenar al 100%
+        else if (realKg > 0) pctKg = 100;
 
-        // --- CÁLCULO UNIDADES ---
         const metaUnd = parseFloat(row.cantidad_unidades || 0);
         const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
         let pctUnd = 0;
@@ -348,8 +340,7 @@ function OrdenesProduccion() {
 
         return (
           <div className="w-full flex flex-col gap-3 py-2">
-            
-            {/* === SECCIÓN KILOS (Masa) === */}
+
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-end leading-none">
                 <span className="text-[10px] uppercase font-bold text-gray-500">Kilos (Kg)</span>
@@ -361,22 +352,20 @@ function OrdenesProduccion() {
                   <span className="text-gray-600 font-semibold">{metaKg.toFixed(2)}</span>
                 </div>
               </div>
-              
-              {/* Barra Kilos: Estilos en línea para forzar visualización */}
+
               <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    width: `${Math.min(pctKg, 100)}%`, 
-                    height: '100%', 
-                    backgroundColor: pctKg > 100 ? '#f97316' : '#10b981', // Naranja si se pasa, Verde normal
-                    transition: 'width 0.5s ease' 
+                <div
+                  style={{
+                    width: `${Math.min(pctKg, 100)}%`,
+                    height: '100%',
+                    backgroundColor: pctKg > 100 ? '#f97316' : '#10b981',
+                    transition: 'width 0.5s ease'
                   }}
                   title={`Avance Kilos: ${pctKg.toFixed(1)}%`}
                 />
               </div>
             </div>
 
-            {/* === SECCIÓN UNIDADES (Cantidad) === */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-end leading-none">
                 <span className="text-[10px] uppercase font-bold text-blue-500 truncate max-w-[80px]" title={unidadLabel}>
@@ -391,14 +380,13 @@ function OrdenesProduccion() {
                 </div>
               </div>
 
-              {/* Barra Unidades: Estilos en línea para forzar visualización */}
               <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    width: `${Math.min(pctUnd, 100)}%`, 
-                    height: '100%', 
-                    backgroundColor: pctUnd > 100 ? '#6366f1' : '#3b82f6', // Indigo si se pasa, Azul normal
-                    transition: 'width 0.5s ease' 
+                <div
+                  style={{
+                    width: `${Math.min(pctUnd, 100)}%`,
+                    height: '100%',
+                    backgroundColor: pctUnd > 100 ? '#6366f1' : '#3b82f6',
+                    transition: 'width 0.5s ease'
                   }}
                   title={`Avance Unidades: ${pctUnd.toFixed(1)}%`}
                 />

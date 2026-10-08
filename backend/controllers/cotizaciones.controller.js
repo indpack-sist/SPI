@@ -110,7 +110,6 @@ export async function getAllCotizaciones(req, res) {
       sql += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
     }
 
-    // Al solo cambiar de página, el conteo y el resumen no cambian: se omiten
     const incluirMeta = paginated && req.query.solo_datos !== '1';
 
     const dataParams = params;
@@ -247,7 +246,6 @@ export async function createCotizacion(req, res) {
 
     const esMuestra = es_muestra ? 1 : 0;
 
-    // Ajustes automáticos para Muestras para evitar errores de validación
     let plazoPagoFinal = plazo_pago;
     let tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let validezDiasFinal = parseInt(validez_dias) || 7;
@@ -284,7 +282,6 @@ export async function createCotizacion(req, res) {
       }
     }
 
-    // Solo validar plazo_pago si NO es muestra o si sigue vacío después del ajuste
     if (!plazoPagoFinal || plazoPagoFinal.trim() === '') {
       return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
     }
@@ -368,8 +365,6 @@ if (moneda !== 'PEN') {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica),
-    // para que la cotización cuadre con la OV que se genera al convertirla.
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
     let igv = 0;
@@ -589,7 +584,6 @@ if (moneda !== 'PEN') {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    // Totales con redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica).
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotal = 0;
     let igv = 0;
@@ -1091,7 +1085,6 @@ export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
 
-    // 1. Obtener Cabecera
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -1112,9 +1105,8 @@ export async function descargarPDFCotizacion(req, res) {
       return res.status(404).json({ success: false, error: 'Cotización no encontrada' });
     }
 
-    // Actualizar estado a Enviada si estaba en borrador
     await executeQuery(`
-        UPDATE cotizaciones 
+        UPDATE cotizaciones
         SET estado = 'Enviada' 
         WHERE id_cotizacion = ? 
         AND estado IN ('Borrador', 'Pendiente')
@@ -1122,11 +1114,8 @@ export async function descargarPDFCotizacion(req, res) {
 
     const cotizacion = cotizacionResult.data[0];
 
-    // 2. Obtener Detalle con CÁLCULO FORZADO
-    // AQUI ESTA LA MAGIA: No seleccionamos 'dc.valor_venta' de la BD.
-    // Lo calculamos: cantidad * precio_unitario * descuento
     const detalleResult = await executeQuery(`
-  SELECT 
+  SELECT
     dc.id_detalle,
     dc.cantidad,
     dc.precio_unitario,
@@ -1153,10 +1142,6 @@ export async function descargarPDFCotizacion(req, res) {
 
     cotizacion.detalle = detalleResult.data;
 
-    // 3. RECALCULAR CABECERAS (Subtotal, IGV, Total)
-    // Si los items estaban mal en BD, la cabecera también estará mal. 
-    // La recalculamos en base a los items corregidos para que todo cuadre.
-    // Definir porcentaje impuesto
     let porcentaje = 18.00;
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes((cotizacion.tipo_impuesto || 'IGV').toUpperCase())) {
         porcentaje = 0.00;
@@ -1164,7 +1149,6 @@ export async function descargarPDFCotizacion(req, res) {
         porcentaje = parseFloat(cotizacion.porcentaje_impuesto || 18);
     }
 
-    // Redondeo POR LÍNEA (igual que la orden de venta y la factura electrónica).
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
     let subtotalRecalculado = 0;
     let igvRecalculado = 0;
@@ -1179,12 +1163,10 @@ export async function descargarPDFCotizacion(req, res) {
     igvRecalculado = round2(igvRecalculado);
     const totalRecalculado = round2(subtotalRecalculado + igvRecalculado);
 
-    // Sobreescribimos los valores de la cabecera con los matemáticamente correctos
     cotizacion.subtotal = subtotalRecalculado;
     cotizacion.igv = igvRecalculado;
     cotizacion.total = totalRecalculado;
 
-    // 4. Generar PDF
     const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
 

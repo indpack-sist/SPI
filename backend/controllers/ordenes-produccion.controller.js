@@ -838,8 +838,6 @@ export async function createOrden(req, res) {
     
     const idOrden = ordenResult.data.insertId;
 
-    // Consumo previsto: insumos por receta (porcentaje) + rollos seleccionados para láminas.
-    // Los rollos se guardan con cantidad 0 porque la cantidad real se registra en producción.
     const provisionales = recetaCalculada.map(item => ({
       id_insumo: item.id_insumo,
       cantidad_requerida: item.cantidad_requerida
@@ -1416,8 +1414,6 @@ export const generarPDFOrdenController = async (req, res) => {
 
     const orden = ordenResult.data[0];
 
-    // Productos consumidos. Si la orden ya está en curso/finalizada usamos el consumo
-    // real registrado; si sigue en planificación tomamos la receta (o receta provisional).
     let consumo = [];
     const esPlanificacion = ['Pendiente', 'Pendiente Asignación'].includes(orden.estado);
 
@@ -2015,7 +2011,6 @@ export async function verificarCalidad(req, res) {
       hour: '2-digit', minute: '2-digit'
     });
 
-    // Marca de texto para mantener compatibilidad con la vista de listado existente
     const marca = `\n\n[VERIFICACIÓN CALIDAD] Resultado: ${resultado}. Verificado por: ${nombreVerificador} el ${fechaLegible}`;
     const nuevasObservaciones = (orden.observaciones || '') + marca;
 
@@ -2030,7 +2025,6 @@ export async function verificarCalidad(req, res) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }
 
-    // Si NO se aprobó, generamos automáticamente una incidencia ligada a la O.P.
     let incidenciaGenerada = null;
     if (resultado === 'Rechazado' || resultado === 'Observado') {
       const ultimaInc = await executeQuery('SELECT codigo FROM incidencias_calidad ORDER BY id_incidencia DESC LIMIT 1');
@@ -2673,8 +2667,6 @@ export async function anularOrden(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
-
-// ─── ADJUNTOS ────────────────────────────────────────────────────────────────
 
 export { uploadMiddleware };
 

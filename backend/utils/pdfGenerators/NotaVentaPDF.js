@@ -156,10 +156,10 @@ export async function generarNotaVentaPDF(orden) {
       leftH += Math.max(15, alturaUbicacion + 5);
       leftH += Math.max(15, alturaContacto + 5);
 
-      let rightH = 15; // Moneda
-      rightH += 15; // Plazo
-      rightH += 15; // Forma
-      rightH += 15; // O/C
+      let rightH = 15;
+      rightH += 15;
+      rightH += 15;
+      rightH += 15;
 
       const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
       
@@ -231,7 +231,6 @@ export async function generarNotaVentaPDF(orden) {
       const mostrarVencimiento = orden.fecha_vencimiento && (esCredito || tieneVencimientoDiferente);
 
       if (mostrarVencimiento) {
-        // Layout de 3 columnas
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('Fecha de Emisión:', 33, yPosRecuadroFechas + 10, { align: 'center', width: 176 });
         doc.font('Helvetica');
@@ -250,7 +249,6 @@ export async function generarNotaVentaPDF(orden) {
         const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
         doc.text(fechaEntrega, 385, yPosRecuadroFechas + 25, { align: 'center', width: 177 });
       } else {
-        // Layout original de 2 columnas
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
         doc.font('Helvetica');
@@ -283,7 +281,6 @@ export async function generarNotaVentaPDF(orden) {
       orden.detalle.forEach((item, idx) => {
         const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
         const totalLinea = (item.cantidad * item.precio_unitario);
         const valorVenta = parseFloat(totalLinea).toFixed(2);
         const descripcion = item.producto;
@@ -343,7 +340,6 @@ export async function generarNotaVentaPDF(orden) {
         etiquetaImpuesto = `${orden.tipo_impuesto || 'IGV'} (${porc}%)`;
       }
 
-      // -- LADO DERECHO: CUADROS DE TOTALES --
       let footerRightY = footerStartY;
       doc.roundedRect(385, footerRightY, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -376,7 +372,6 @@ export async function generarNotaVentaPDF(orden) {
         doc.fillColor('#000000');
       }
 
-      // -- LADO IZQUIERDO: OBSERVACIONES Y VENDEDOR --
       let footerLeftY = footerStartY;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, footerLeftY);
@@ -397,7 +392,6 @@ export async function generarNotaVentaPDF(orden) {
         footerLeftY += 15;
       }
 
-      // El total en letras se dibuja debajo de todo
       yPos = Math.max(footerLeftY, footerRightY) + 5;
 
       doc.fontSize(8).font('Helvetica');

@@ -4,10 +4,10 @@ import {
   Tags, ShoppingCart, FileCheck, ShoppingBag, 
   CreditCard, Banknote, FileInput, ArrowDownToLine,
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
-  TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
-  ShieldAlert, PackageSearch, // <--- Módulo Calidad
-  Radar, // <--- Módulo Prospección
-  Receipt, Activity // <--- Facturación Electrónica (SEE)
+  TrendingUp,
+  ShieldAlert, PackageSearch,
+  Radar,
+  Receipt, Activity
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -51,12 +51,10 @@ export const menuConfig = [
   {
     title: 'Ventas',
     items: [
-      // Prospección / captación de leads. Disponible para Administrador y Comercial.
       { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', color: '#E8B84B', rolesIncluidos: ['Administrador', 'Comercial'] },
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
-      // Vista de solo seguimiento (sin precios) para Calidad: pedido/despachado/pendiente.
       { path: '/ventas/seguimiento', icon: Truck, label: 'Seguimiento', modulo: 'seguimientoVentas', color: '#2980B9' },
       { 
         label: 'Reportes', 
@@ -78,10 +76,8 @@ export const menuConfig = [
     ]
   },
   {
-    // Solo la ven roles con permiso 'facturacion' (Administrador / Administrativo).
     title: 'Facturación Electrónica',
     items: [
-      // iconImg: logo SUNAT (public/logo-sunat.png); icon lucide = respaldo si la imagen no carga.
       { path: '/facturacion/trazabilidad', icon: Receipt, iconImg: '/logo-sunat.png', label: 'Trazabilidad SEE', modulo: 'facturacion', color: '#6366F1' },
       { path: '/reportes/monitor-sunat', icon: Activity, iconImg: '/logo-sunat.png', label: 'Monitor SUNAT', modulo: 'facturacion', color: '#16A085' }
     ]
@@ -98,18 +94,9 @@ export const menuConfig = [
   {
     title: 'Inventario',
     items: [
-      // Visible solo para Administrador y Calidad (seguimiento de despachos).
       { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', color: '#C0392B', rolesIncluidos: ['Administrador', 'Calidad'] },
       { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9', rolesIncluidos: ['Administrador'] },
-      // Valorización + reportes PDF (Kardex y Reporte por Producto). Muestra costos: solo Administrador.
       { path: '/inventario/stock', icon: FileSpreadsheet, label: 'Valorización y Reportes', modulo: 'salidas', color: '#16A085', rolesIncluidos: ['Administrador'] }
-      // { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias', color: '#F39C12' }
     ]
-  },
-  // {
-  //   title: 'Reportes', 
-  //   items: [
-  //     { path: '/reportes/sire', icon: FileSpreadsheet, label: 'SIRE', modulo: 'reportes', color: '#16A085' }
-  //   ]
-  // }
+  }
 ];

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileText, Download, Filter, Search } from 'lucide-react';
-import * as XLSX from 'xlsx'; // Necesitas instalar: npm install xlsx
+import * as XLSX from 'xlsx';
 import { api } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
@@ -8,7 +8,7 @@ import Alert from '../../components/UI/Alert';
 function ReportesSIRE() {
   const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [anio, setAnio] = useState(new Date().getFullYear());
-  const [tipoReporte, setTipoReporte] = useState('ventas'); // 'ventas' o 'compras'
+  const [tipoReporte, setTipoReporte] = useState('ventas');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

@@ -9,22 +9,15 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 
-// Extrae las medidas numéricas de un nombre de producto.
-// Ej: "LÁMINA BURBUPACK 0.36 X 0.56 MTS" -> [0.36, 0.56]
-//     "ROLLO BURBUPACK 0.36 X 200 MTS"   -> [0.36, 200]
 const extraerMedidas = (nombre) => {
   if (!nombre) return [];
   const matches = nombre.toUpperCase().match(/\d+(?:[.,]\d+)?/g);
   return matches ? matches.map(m => parseFloat(m.replace(',', '.'))) : [];
 };
 
-// Un rollo coincide con la lámina si su ANCHO (la medida más pequeña del rollo,
-// ya que el largo suele ser 200 MTS) es una de las medidas de la lámina.
-// Ej: LÁMINA 0.36 X 0.56 -> aceptan ROLLO 0.36 X 200 y ROLLO 0.56 X 200.
 const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
   const medidasLamina = extraerMedidas(nombreLamina);
   const medidasRollo = extraerMedidas(nombreRollo);
-  // Si no podemos interpretar medidas, no filtramos (mostramos el rollo).
   if (medidasLamina.length === 0 || medidasRollo.length === 0) return true;
   const anchoRollo = Math.min(...medidasRollo);
   return medidasLamina.some(m => Math.abs(m - anchoRollo) < 0.001);
@@ -52,7 +45,6 @@ function CrearOrden() {
   const [listaInsumos, setListaInsumos] = useState([]);
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
 
-  // Rollos seleccionados para láminas (solo selección; la cantidad se registra en producción)
   const [listaRollos, setListaRollos] = useState([]);
   const [modalAgregarRollo, setModalAgregarRollo] = useState(false);
   const [rolloSeleccionado, setRolloSeleccionado] = useState('');
@@ -105,13 +97,10 @@ function CrearOrden() {
     const nombreInsumo = insumo.nombre.toUpperCase();
     const tipoInsumo = (insumo.tipo_inventario || '').toUpperCase();
 
-    // Las láminas se obtienen convirtiendo rollos burbupack
     if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
       return tipoInsumo.includes('BURBUPACK');
     }
 
-    // El producto a fabricar determina el Tipo de Inventario de insumos permitido.
-    // De esta forma aparecen TODOS los insumos del tipo, sin depender de su nombre.
     if (nombreProd.includes('ESQUINERO')) {
       return tipoInsumo.includes('ESQUINERO');
     }
@@ -146,7 +135,6 @@ function CrearOrden() {
     return insumo.id_tipo_inventario === 2;
   });
 
-  // Rollos disponibles para la lámina seleccionada, filtrados por medidas.
   const productoLaminaSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
   const rollosFiltrados = (esProductoLamina && productoLaminaSeleccionado)
     ? insumosDisponibles.filter(insumo => {
@@ -360,8 +348,6 @@ function CrearOrden() {
         }));
       }
 
-      // Para láminas: se envían los rollos seleccionados como consumo previsto.
-      // La cantidad real de consumo se registra durante la producción.
       if (esProductoLamina && listaRollos.length > 0) {
         payload.rollos = listaRollos.map(r => ({ id_insumo: r.id_insumo }));
       }

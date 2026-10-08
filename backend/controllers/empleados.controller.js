@@ -373,20 +373,6 @@ export async function deleteEmpleado(req, res) {
 }
 const ROLES_CARTERA = ['Comercial', 'Ventas'];
 
-/**
- * Reemplaza a un empleado que se retira por una persona nueva SIN alterar el
- * historial del saliente.
- *
- * Los registros históricos (órdenes, cotizaciones, movimientos, etc.) guardan el
- * id_empleado y muestran el nombre por JOIN, por lo que editar la misma fila
- * reescribiría el nombre en todo el historial. En su lugar, este flujo:
- *   1) Desactiva al saliente y libera su email (lo renombra), conservando su
- *      nombre y por tanto su historial intacto.
- *   2) Crea una fila nueva (nuevo id_empleado) para la persona que ingresa,
- *      reutilizando el mismo correo de acceso.
- *   3) Opcionalmente transfiere la cartera de clientes del saliente al nuevo.
- * Todo dentro de una transacción.
- */
 export async function reemplazarEmpleado(req, res) {
   try {
     if (req.user?.rol !== 'Administrador') {
@@ -414,7 +400,6 @@ export async function reemplazarEmpleado(req, res) {
     }
     const saliente = salienteResult.data[0];
 
-    // El nuevo empleado reutiliza el correo del saliente salvo que se indique otro.
     const nuevoEmail = (email && email.trim()) ? email.trim() : saliente.email;
     if (!nuevoEmail) {
       return res.status(400).json({ error: 'Debe indicar un email para el nuevo empleado' });
@@ -425,7 +410,6 @@ export async function reemplazarEmpleado(req, res) {
       return res.status(400).json({ error: 'Formato de email inválido' });
     }
 
-    // El correo no puede pertenecer a OTRO empleado distinto del saliente.
     const emailConflict = await executeQuery(
       'SELECT nombre_completo FROM empleados WHERE email = ? AND id_empleado != ?',
       [nuevoEmail, id]
@@ -452,8 +436,6 @@ export async function reemplazarEmpleado(req, res) {
     const passwordHash = await hashPassword(password);
 
     const nuevoId = await withTransaction(async (conn) => {
-      // 1) Liberar el email y desactivar al saliente. Se renombra el correo para
-      //    esquivar el UNIQUE KEY; el login ya filtra por estado='Activo'.
       const emailArchivado = saliente.email
         ? `BAJA${saliente.id_empleado}_${saliente.email}`.slice(0, 100)
         : null;
@@ -462,14 +444,12 @@ export async function reemplazarEmpleado(req, res) {
         [emailArchivado, saliente.id_empleado]
       );
 
-      // 2) Crear la fila del empleado entrante.
       const [ins] = await conn.execute(
         'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, "Activo")',
         [dni || null, nombre_completo, nuevoEmail, passwordHash, cargo || rol, rol]
       );
       const idNuevo = ins.insertId;
 
-      // 3) Transferir la cartera de clientes del saliente (si se solicitó).
       if (transferir_cartera) {
         const [asignados] = await conn.execute(
           'SELECT id_cliente FROM empleado_clientes_asignados WHERE id_empleado = ?',

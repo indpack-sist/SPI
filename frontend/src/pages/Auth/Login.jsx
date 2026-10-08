@@ -23,7 +23,7 @@ function Login() {
     if (result.success) {
       navigate('/');
     } else {
-      alert('❌ ' + result.error);
+      alert(result.error);
     }
 
     setLoading(false);
@@ -32,7 +32,6 @@ function Login() {
   return (
     <div className="login-container">
 
-      {/* Panel izquierdo decorativo */}
       <div className="login-left-panel">
         <div className="login-brand-mark">
           <div className="login-logo-wrap">
@@ -67,7 +66,6 @@ function Login() {
         </div>
       </div>
 
-      {/* Panel derecho — formulario */}
       <div className="login-wrapper">
         <span className="login-sys-label">Sistema de Gestión</span>
 

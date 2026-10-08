@@ -31,8 +31,6 @@ function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   return Math.ceil(heightOfString);
 }
 
-// Mide el ancho real de un texto con una fuente/tamaño dados,
-// sin alterar el estado de fuente actual del documento.
 function medirAnchoTexto(doc, texto, font, fontSize) {
   const prevFont = doc._font ? doc._font.name : 'Helvetica';
   const prevSize = doc._fontSize || 12;
@@ -42,15 +40,6 @@ function medirAnchoTexto(doc, texto, font, fontSize) {
   return ancho;
 }
 
-/**
- * Dibuja (o mide) un campo "Etiqueta: Valor" en línea, DENTRO de los límites
- * de una columna. El valor arranca justo después de la etiqueta y, si es
- * extenso, hace salto de línea (wrap) — pero siempre respetando el ancho de
- * la columna (colX + colWidth), nunca invade la columna vecina.
- *
- * @param {boolean} dibujar - si es false, solo calcula la altura (para medir antes de dibujar el recuadro).
- * @returns {number} altura ocupada por la fila.
- */
 function campoInline(doc, colX, y, colWidth, label, value, fontSize = 8, dibujar = true) {
   const anchoLabel = medirAnchoTexto(doc, label, 'Helvetica-Bold', fontSize);
   const gap = 4;
@@ -176,10 +165,8 @@ export async function generarFacturaPDF(orden) {
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
-      // --- INICIO DEL REEMPLAZO (Recuadro Cliente/Emisor Dinámico) ---
       const esExportacion = Number(orden.es_exportacion) === 1;
 
-      // 1. Datos Dinámicos (Exportación vs Nacional)
       const clienteTexto = orden.cliente || '';
       const rucTexto = esExportacion ? 'SIN DOCUMENTO (-)' : (orden.ruc_cliente || '');
 
@@ -192,18 +179,13 @@ export async function generarFacturaPDF(orden) {
       const ubicacionTexto = esExportacion ? '' : ([orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ') || 'Lima - Perú');
       const contactoTexto = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ') || '-';
 
-      // 2. Dos columnas de ANCHO IGUAL dentro del recuadro (33 a 562, con
-      //    padding interno de 7pt a cada lado y un gap de 20pt entre columnas).
       const padding = 7;
       const gapColumnas = 20;
-      const anchoUtil = 529 - padding * 2; // 515
-      const colWidth = (anchoUtil - gapColumnas) / 2; // ~247.5
-      const colXIzq = 33 + padding;               // 40
-      const colXDer = colXIzq + colWidth + gapColumnas; // ~307.5
+      const anchoUtil = 529 - padding * 2;
+      const colWidth = (anchoUtil - gapColumnas) / 2;
+      const colXIzq = 33 + padding;
+      const colXDer = colXIzq + colWidth + gapColumnas;
 
-      // 3. Campos de cada columna (label, value). El valor va AL LADO de la
-      //    etiqueta y, si es extenso, hace wrap — pero nunca sale del ancho
-      //    de su columna (colWidth), así que jamás choca con la otra columna.
       const camposIzquierda = [
         ['Cliente:', clienteTexto],
         [esExportacion ? 'Tipo de Documento:' : 'RUC:', rucTexto],
@@ -219,31 +201,26 @@ export async function generarFacturaPDF(orden) {
         ['O/C Cliente:', orden.orden_compra_cliente || '-'],
       ];
 
-      // 4. Medir alturas (sin dibujar) para calcular el alto total del recuadro
       const alturaColumna = (campos, colX) =>
         campos.reduce((acc, [label, value]) => acc + campoInline(doc, colX, 0, colWidth, label, value, 8, false), 0);
 
       const leftH = alturaColumna(camposIzquierda, colXIzq);
       const rightH = alturaColumna(camposDerecha, colXDer);
 
-      // 5. Dibujo del recuadro
       const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
 
-      // 6. Renderizado columna izquierda
       let cursorYIzq = 203;
       for (const [label, value] of camposIzquierda) {
         const altura = campoInline(doc, colXIzq, cursorYIzq, colWidth, label, value, 8, true);
         cursorYIzq += altura;
       }
 
-      // 7. Renderizado columna derecha
       let cursorYDer = 203;
       for (const [label, value] of camposDerecha) {
         const altura = campoInline(doc, colXDer, cursorYDer, colWidth, label, value, 8, true);
         cursorYDer += altura;
       }
-      // --- FIN DEL REEMPLAZO ---
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
 
@@ -280,7 +257,6 @@ export async function generarFacturaPDF(orden) {
       orden.detalle.forEach((item, idx) => {
         const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        // descuento_porcentaje = MARGEN informativo en ventas; precio_unitario ya es el final.
         const totalLinea = (item.cantidad * item.precio_unitario);
         const valorVenta = parseFloat(totalLinea).toFixed(2);
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
@@ -321,7 +297,6 @@ export async function generarFacturaPDF(orden) {
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
       const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
 
-      // -- LADO DERECHO: CUADROS DE TOTALES --
       let footerRightY = footerStartY;
       doc.roundedRect(385, footerRightY, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -354,7 +329,6 @@ export async function generarFacturaPDF(orden) {
         doc.fillColor('#000000');
       }
 
-      // -- LADO IZQUIERDO: OBSERVACIONES Y VENDEDOR --
       let footerLeftY = footerStartY;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, footerLeftY);
@@ -375,7 +349,6 @@ export async function generarFacturaPDF(orden) {
         footerLeftY += 15;
       }
 
-      // El total en letras se dibuja debajo de todo
       yPos = Math.max(footerLeftY, footerRightY) + 5;
 
       doc.fontSize(8).font('Helvetica');

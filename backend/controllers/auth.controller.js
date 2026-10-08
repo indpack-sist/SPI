@@ -44,7 +44,7 @@ export const login = async (req, res) => {
           [hash, empleado.id_empleado]
         );
       } catch (rehashError) {
-        console.error('⚠️ No se pudo re-hashear la contraseña (acceso permitido):', rehashError);
+        console.error('No se pudo re-hashear la contraseña (acceso permitido):', rehashError);
       }
     }
 
@@ -96,7 +96,7 @@ export const login = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error en login:', error);
+    console.error('Error en login:', error);
     res.status(500).json({
       success: false,
       error: 'Error en el servidor'
@@ -116,7 +116,6 @@ export const verificarToken = async (req, res) => {
       });
     }
 
-    // 1) Verificación del token (errores de token => 401 genuino, cierra sesión)
     let decoded;
     try {
       decoded = jwt.verify(token, JWT_SECRET);
@@ -129,14 +128,13 @@ export const verificarToken = async (req, res) => {
       });
     }
 
-    // 2) Consulta a BD. Un fallo de BD NO debe cerrar la sesión => 500 (reintentable)
     const result = await executeQuery(
       'SELECT id_empleado, nombre_completo, email, rol, cargo, dni, restringir_clientes FROM empleados WHERE id_empleado = ? AND estado = "Activo"',
       [decoded.id_empleado]
     );
 
     if (!result.success) {
-      console.error('⚠️ Error de BD al verificar token (no se cierra sesión):', result.error);
+      console.error('Error de BD al verificar token (no se cierra sesión):', result.error);
       return res.status(500).json({
         success: false,
         error: 'Error temporal al verificar la sesión. Intente nuevamente.',
@@ -161,9 +159,7 @@ export const verificarToken = async (req, res) => {
       }
     });
   } catch (error) {
-    // Aquí solo llegan errores inesperados (BD, red, etc.), NO de token.
-    // No se cierra la sesión: se responde 500 para permitir reintento.
-    console.error('❌ Error inesperado al verificar sesión:', error);
+    console.error('Error inesperado al verificar sesión:', error);
     res.status(500).json({
       success: false,
       error: 'Error temporal al verificar la sesión. Intente nuevamente.',

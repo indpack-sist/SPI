@@ -19,8 +19,6 @@ const fmtNum = (num) => {
   });
 };
 
-// El precio unitario puede tener hasta 6 decimales; se muestra completo
-// para que P. Unit. × Cantidad reconcilie con el subtotal (precisión completa).
 const fmtPrecio = (num) => {
   return Number(num).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -51,8 +49,6 @@ async function descargarImagen(url) {
 export async function generarOrdenVentaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
-      // Una OV de muestra (es_muestra = 1, sin comprobante) no tiene valor comercial:
-      // se imprime como GUÍA DE MUESTRA, sin precios ni totales. Ver createOrdenVenta.
       const esMuestra = Number(orden.es_muestra) === 1;
       const doc = new PDFDocument({
         size: 'A4',
@@ -130,10 +126,10 @@ export async function generarOrdenVentaPDF(orden) {
       const ocCliente = orden.orden_compra_cliente || '-';
       const alturaOC = calcularAlturaTexto(doc, ocCliente, 140, 8);
 
-      let rightH = 14; // Fecha
-      rightH += 14; // Moneda
-      rightH += 14; // Estado
-      rightH += 14; // Prioridad
+      let rightH = 14;
+      rightH += 14;
+      rightH += 14;
+      rightH += 14;
       rightH += Math.max(14, alturaPlazoForma + 4);
       rightH += Math.max(14, alturaOC + 4);
       if (orden.fecha_entrega_estimada) rightH += 14;
@@ -222,8 +218,6 @@ export async function generarOrdenVentaPDF(orden) {
             yTable = 40;
           }
 
-          // En ventas, descuento_porcentaje es el MARGEN (informativo), NO un descuento:
-          // precio_unitario ya es el precio final. Ver DetalleOrdenVenta / ubl.service.js.
           const precioUnitario = parseFloat(item.precio_unitario || 0);
           const cantidad = parseFloat(item.cantidad || 0);
           const precioFinal = precioUnitario;
@@ -317,7 +311,6 @@ export async function generarOrdenVentaPDF(orden) {
       doc.font('Helvetica').text(orden.observaciones || 'Sin observaciones.', 30, yFooter + 10, { width: 330 });
 
       if (esMuestra) {
-        // Sin valor comercial: no hay importe en letras; banner en su lugar.
         const yBanner = Math.max(yTotales, yFooter + 45);
         doc.fillColor('#b45309').fontSize(14).font('Helvetica-Bold');
         doc.text('MUESTRA SIN VALOR COMERCIAL', 30, yBanner, { align: 'center', width: 535 });

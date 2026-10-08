@@ -1,11 +1,3 @@
-// services/sunat/gre-anulacion.service.js — baja y sincronización de GRE Remitente.
-//
-// Reglas SUNAT (GRE 2.0): la baja de una GRE se realiza en SUNAT Operaciones en Línea (SOL),
-// no mediante el API REST usado para emitir/consultar tickets. Por eso:
-//  - anularGuiaRemision registra en SPI una baja que el usuario confirma haber completado en SOL;
-//    nunca debe presentarse como una llamada automática de SPI a SUNAT.
-// Sincronización de estado: al confirmar la baja se marca sunat_estado='ANULADA' y el estado de
-// negocio='Anulada', conservando los archivos y la fila para el historial de la OV.
 import { withTransaction } from '../../config/database.js';
 import { registrarSunatLog } from './log.service.js';
 import { ahoraLima } from './fecha.service.js';
@@ -23,18 +15,6 @@ function esFechaISOValida(value) {
     && date.getUTCDate() === day;
 }
 
-/**
- * Registra y audita en SPI una baja de GRE completada previamente en SUNAT SOL.
- * @param {number} idGuia
- * @param {object} opts
- * @param {string} opts.motivo       obligatorio
- * @param {number|null} opts.idEmpleado  auditoría (anulado_por)
- * @param {boolean} opts.confirmacionSol confirmación expresa de que la baja ya se ejecutó en SOL
- * @param {string} opts.causal       TRASLADO_NO_INICIADO | CAMBIO_DESTINATARIO
- * @param {string|null} opts.fechaBajaSunat YYYY-MM-DD, fecha informada por el usuario
- * @param {string|null} opts.evidenciaUrl URL opcional de la constancia/captura
- * @returns {Promise<object>} resumen de la anulación
- */
 export async function anularGuiaRemision(idGuia, {
   motivo,
   idEmpleado = null,
@@ -81,13 +61,11 @@ export async function anularGuiaRemision(idGuia, {
       'FROM guias_remision WHERE id_guia = ? FOR UPDATE', [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
 
-    // Una fila ANULADA por el flujo antiguo puede todavía confirmarse/migrarse como baja SOL.
     if (g.sunat_estado === 'ANULADA' && Number(g.baja_sunat_confirmada) === 1) {
       throw new AppError('La baja SUNAT de esta guía ya fue confirmada en SPI', 409);
     }
     if (g.sunat_estado === 'REEMPLAZADA') throw new AppError('La guía ya fue reemplazada; no aplica dejar sin efecto', 409);
 
-    // Solo una GRE aceptada (o una anulada por el flujo local anterior) puede sincronizarse.
     if (!['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)) {
       throw new AppError(`Solo se puede dejar sin efecto una guía ACEPTADA por SUNAT (estado actual: ${g.sunat_estado})`, 422);
     }
@@ -140,10 +118,6 @@ export async function anularGuiaRemision(idGuia, {
   return resultado;
 }
 
-/**
- * Compatibilidad para llamadas internas antiguas. Emitir una nueva GRE no causa por sí solo la
- * baja de la anterior en SUNAT, por lo que este flujo queda cerrado para evitar estados ficticios.
- */
 export async function reemplazarGuiaRemision() {
   throw new AppError(
     'El reemplazo automático de GRE está deshabilitado. Da de baja la original en SUNAT SOL, sincronízala en SPI y emite luego una nueva guía.',

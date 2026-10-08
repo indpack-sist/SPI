@@ -1,28 +1,14 @@
 import axios from 'axios';
 
-// ============================================================
-// Integración con Google Places (API oficial). Descubre empresas
-// que COMPRAN empaque industrial, por rubro + zona. Se activa
-// definiendo GOOGLE_PLACES_API_KEY en el .env del backend.
-//
-// Separa la búsqueda (Text Search, barata) del detalle (Place
-// Details, costoso) para que el worker pueda saltar duplicados por
-// place_id ANTES de gastar cuota en el detalle.
-// ============================================================
-
 const KEY = process.env.GOOGLE_PLACES_API_KEY;
 const TIMEOUT = 12000;
 const TEXTSEARCH = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
 const DETAILS = 'https://maps.googleapis.com/maps/api/place/details/json';
 
-/** ¿Está configurada la API key? */
 export function placesDisponible() {
   return !!KEY;
 }
 
-// Rubros objetivo para el modo "Descubrir todo", ordenados por afinidad
-// con el producto (prioridad 1 = mayor cliente potencial). El worker
-// procesa por prioridad ascendente, así que los mejores salen primero.
 export const RUBROS_OBJETIVO = [
   { q: 'empresa agroexportadora', prioridad: 1 },
   { q: 'operador logistico almacen', prioridad: 1 },
@@ -42,7 +28,6 @@ export const RUBROS_OBJETIVO = [
   { q: 'ferreteria industrial', prioridad: 4 },
 ];
 
-/** Intenta separar distrito/provincia de una dirección formateada de Google. */
 function partirDireccion(addr) {
   if (!addr) return { distrito: null, provincia: null };
   const partes = addr.split(',').map((s) => s.trim()).filter(Boolean);
@@ -52,13 +37,6 @@ function partirDireccion(addr) {
   return { distrito: distrito || null, provincia: provincia || null };
 }
 
-/**
- * Búsqueda BÁSICA por término + zona (solo Text Search, sin detalles).
- * Barata: no consume Place Details. Devuelve place_id, nombre, dirección
- * aproximada y foto para poder deduplicar antes de pedir el detalle.
- *
- * @returns {Promise<{ok:boolean, resultados:Array, error?:string}>}
- */
 export async function buscarBasico(query, opts = {}) {
   if (!KEY) return { ok: false, error: 'GOOGLE_PLACES_API_KEY no configurada', resultados: [] };
 
@@ -83,7 +61,7 @@ export async function buscarBasico(query, opts = {}) {
       crudos = crudos.concat(data.results || []);
       pageToken = data.next_page_token;
       if (!pageToken) break;
-      await new Promise((r) => setTimeout(r, 2200)); // el token tarda en activarse
+      await new Promise((r) => setTimeout(r, 2200));
     }
   } catch (e) {
     return { ok: false, error: e.message, resultados: [] };
@@ -109,20 +87,11 @@ function normalizar(crudos) {
   });
 }
 
-/**
- * DETALLE de un negocio (Place Details): teléfono, web, dirección exacta.
- * Costoso — llamarlo solo para los que NO son duplicados.
- * @returns {Promise<Object|null>}
- */
 export async function detallar(placeId) {
   if (!KEY || !placeId) return null;
   try {
     const res = await axios.get(DETAILS, {
       timeout: TIMEOUT,
-      // Solo pedimos lo accionable (nombre, dirección, teléfono y web). Omitimos
-      // rating/user_ratings_total (SKU "Atmosphere", el más caro): ya vienen
-      // gratis en el Text Search. Así cada detalle cuesta menos y rinden más
-      // búsquedas con la misma cuota. La web basta para sacar correos y RUC.
       params: {
         place_id: placeId,
         key: KEY,

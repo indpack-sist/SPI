@@ -1,5 +1,3 @@
-// Representación impresa de la GRE Remitente (09).
-// El contenido sigue las secciones de SUNAT y usa la identidad visual de IndPack.
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -65,16 +63,12 @@ const fechaConPeriodo = (value) => {
 const limpioMultilinea = (value, fallback = '—') => {
   if (value == null || value === '') return fallback;
   return String(value)
-    .replace(/\r\n/g, '\n')           // normaliza CRLF a LF
+    .replace(/\r\n/g, '\n')
     .split('\n')
     .map((linea) => linea.replace(/\s+/g, ' ').trim())
     .join('\n')
     .trim() || fallback;
 };
-/**
- * Genera el PDF de una Guía de Remisión Electrónica aceptada por SUNAT.
- * Las columnas SUNAT que no forman parte del maestro actual de productos se imprimen como “—”.
- */
 export async function generarGuiaRemisionSunatPDF({
   guia: g,
   emisor,
@@ -144,7 +138,7 @@ export async function generarGuiaRemisionSunatPDF({
       const drawMainHeader = () => {
         const logo = logoBuffer();
         if (logo) {
-          try { doc.image(logo, X, 30, { fit: [195, 53], align: 'left', valign: 'center' }); } catch { /* logo opcional */ }
+          try { doc.image(logo, X, 30, { fit: [195, 53], align: 'left', valign: 'center' }); } catch {}
         } else {
           doc.font('Helvetica-Bold').fontSize(20).fillColor(COLOR.ink).text('IndPack', X, 40);
         }
@@ -208,8 +202,6 @@ export async function generarGuiaRemisionSunatPDF({
         resetText();
       };
 
-      // Los anchos configurados son topes para etiquetas largas, no espacios fijos.
-      // Así el valor comienza inmediatamente después del rótulo cuando este es corto.
       const effectiveLabelWidth = (label, width, options = {}) => {
         const maxLabelWidth = Math.min(options.labelWidth || 105, width - 24);
         doc.font('Helvetica-Bold').fontSize(6.5);
@@ -279,7 +271,6 @@ export async function generarGuiaRemisionSunatPDF({
 
       drawMainHeader();
 
-      // Banda de estado (rojo): deja constancia impresa de un intento RECHAZADO por SUNAT + su motivo.
       if (g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR') {
         const motivoRechazo = limpio(g.motivo_estado, 'Guía rechazada por SUNAT.');
         doc.font('Helvetica').fontSize(7.3);
@@ -294,7 +285,6 @@ export async function generarGuiaRemisionSunatPDF({
         resetText();
       }
 
-      // Datos principales: mismo contenido de la representación SUNAT, con mayor jerarquía visual.
       const routeRows = [
         [
           ['Fecha y hora de emisión:', fechaConPeriodo(g.fecha_emision),  { labelWidth: 126, boldValue: true }],
@@ -302,8 +292,6 @@ export async function generarGuiaRemisionSunatPDF({
         ],
         [
           ['Motivo de traslado:', MOTIVOS_TRASLADO[String(g.motivo_traslado_cod)] || 'TRASLADO', { labelWidth: 104 }],
-          // Motivo "Otros" (cat.20 = 13): se imprime la descripción libre (ej. MUESTRAS), igual que la
-          // representación del portal ("Descripción de motivo de traslado 'otros'").
           (String(g.motivo_traslado_cod) === '13' && g.motivo_descripcion)
             ? ['Descripción de motivo:', String(g.motivo_descripcion), { labelWidth: 120 }]
             : null
@@ -413,7 +401,6 @@ export async function generarGuiaRemisionSunatPDF({
           y += 25;
         };
 
-        // Reserva título + cabecera + al menos una fila, para no dejar una cabecera huérfana.
         ensureSpace(84);
         top = sectionStart('Bienes por transportar', `${detalle.length} ${detalle.length === 1 ? 'ítem' : 'ítems'}`);
         tableHeader();
@@ -480,8 +467,6 @@ export async function generarGuiaRemisionSunatPDF({
 
       const esTercero = !!transportista?.ruc;
       const modalidadTexto = (modalidad === '01' || esTercero) ? 'PÚBLICO' : 'PRIVADO';
-      // La modalidad va como fila propia arriba (antes del transportista). Los indicadores quedan en
-      // grilla después. El indicador "registrar veh/cond" solo aplica en público (tercero).
       const indicadorRows = [
         [
           ['Indicador de transbordo programado:', siNo(indicadores.transbordo), { labelWidth: 174, boldValue: true }],
@@ -499,7 +484,6 @@ export async function generarGuiaRemisionSunatPDF({
       const transportistaText = transportista?.ruc
         ? `${limpio(transportista.razon)} · RUC ${limpio(transportista.ruc)}${transportista.mtc ? ` · Registro MTC ${transportista.mtc}` : ''}`
         : '';
-      // Orden pedido: Modalidad → Empresa transportista → Fecha entrega → grilla de indicadores.
       let trasladoBodyHeight = fullWidthHeight('Modalidad de traslado:', modalidadTexto, { labelWidth: 116 });
       if (transportista?.ruc) trasladoBodyHeight += fullWidthHeight('Empresa transportista:', transportistaText, { labelWidth: 125 });
       if (fechaEntrega) trasladoBodyHeight += fullWidthHeight('Fecha entrega al transportista:', fechaEntrega, { labelWidth: 150 });
@@ -567,13 +551,11 @@ export async function generarGuiaRemisionSunatPDF({
         sectionEnd(top, 2, { borderless: true });
       }
 
-      // Pie legal completo. Si no cabe dentro del área imprimible (≈813 en A4 con margen inferior),
-      // pasa a una página limpia en lugar de superponerse al detalle o salirse de la hoja.
       if (y + 73 > 814) newPage();
       const footerY = Math.max(y + 3, 700);
       doc.roundedRect(X, footerY, W, 70, 6).fillAndStroke(COLOR.panel, COLOR.line);
       if (qrBuffer) {
-        try { doc.image(qrBuffer, X + 13, footerY + 6, { width: 58, height: 58 }); } catch { /* QR opcional */ }
+        try { doc.image(qrBuffer, X + 13, footerY + 6, { width: 58, height: 58 }); } catch {}
       }
       const legalX = X + 91;
       doc.font('Helvetica-Bold').fontSize(8.3).fillColor(COLOR.ink)
@@ -582,7 +564,6 @@ export async function generarGuiaRemisionSunatPDF({
         .text('Esta es una representación impresa sin valor tributario de la Guía de Remisión Electrónica generada en el sistema de la SUNAT. Puede verificarla utilizando su clave SOL.', legalX, footerY + 22, { width: 417, lineGap: 1.2 });
       doc.font('Helvetica-Bold').fontSize(6.3).fillColor(COLOR.muted)
         .text('El código QR contiene la información de consulta y verificación del documento electrónico.', legalX, footerY + 53, { width: 417 });
-      // Marca de agua para guías invalidadas o rechazadas.
       const rechazado = g.sunat_estado === 'RECHAZADO' || g.sunat_estado === 'ERROR';
       const watermark = g.sunat_estado === 'ANULADA' ? 'SIN EFECTO'
         : g.sunat_estado === 'REEMPLAZADA' ? 'REEMPLAZADA'

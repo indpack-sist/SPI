@@ -19,15 +19,12 @@ const fmtNum = (num) => {
   });
 };
 
-// El precio unitario puede tener hasta 6 decimales; se muestra completo
-// para que V. Unit. × Cant. reconcilie con el V. Venta (precisión completa).
 const fmtPrecio = (num) => {
   return Number(num).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 6
   });
 };
-// Reduce un nombre completo (Nombres + Apellidos) a "Primer Nombre + Primer Apellido"
 function obtenerNombreCorto(nombreCompleto) {
   if (!nombreCompleto || typeof nombreCompleto !== 'string') return '';
 
@@ -312,7 +309,6 @@ export async function generarCotizacionPDF(cotizacion) {
 
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
-      // RECALCULO DE TOTALES (Corrección del problema de totales en cero)
       const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
       let subtotalCalculado = 0;
 
@@ -320,7 +316,6 @@ export async function generarCotizacionPDF(cotizacion) {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioUnitario = parseFloat(item.precio_unitario || 0);
 
-        // Si tienes descuento por ítem, úsalo aquí
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const valorVentaItem = round2(cantidad * precioUnitario);
 
@@ -360,7 +355,6 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
       yPos += 10;
       const footerStartY = yPos;
 
-      // Lógica de Impuestos
       const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
       let porcentajeImpuesto = 18;
       
@@ -370,14 +364,12 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         porcentajeImpuesto = parseFloat(cotizacion.porcentaje_impuesto);
       }
 
-      // Redondeo a 2 decimales para que el PDF cuadre con el detalle de la cotización
       subtotalCalculado = round2(subtotalCalculado);
       const montoImpuesto = round2(subtotalCalculado * (porcentajeImpuesto / 100));
       const totalCalculado = round2(subtotalCalculado + montoImpuesto);
       
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || `IGV (${porcentajeImpuesto}%)`;
 
-      // -- LADO DERECHO: CUADROS DE TOTALES (O MUESTRA) --
       let rightY = footerStartY;
       if (!cotizacion.es_muestra) {
         doc.roundedRect(385, rightY, 85, 15, 3).fill('#CCCCCC');
@@ -411,7 +403,6 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         rightY += 25;
       }
 
-      // -- LADO IZQUIERDO: OBSERVACIONES --
       let leftY = footerStartY;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, leftY);
@@ -424,7 +415,6 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
       }
       leftY += 10;
 
-      // Unificar YPos tomando el mayor
       yPos = Math.max(leftY, rightY) + 5;
 
       if (cotizacion.es_muestra) {
@@ -457,7 +447,6 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         yPos += 25;
       }
 
-      // Pie de página
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });
       doc.end();

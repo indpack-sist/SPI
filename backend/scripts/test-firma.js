@@ -1,18 +1,9 @@
-// scripts/test-firma.js
-// Prueba LOCAL de la firma XML-DSig (Fase 5). NO envía nada a SUNAT.
-// Firma un XML UBL de prueba con el certificado real de las variables de entorno,
-// imprime el digestValue y verifica que la firma quedó dentro de ext:ExtensionContent.
-//
-// Uso:  node scripts/test-firma.js      (requiere backend/.env con SUNAT_CERT_B64/SUNAT_KEY_B64)
-//   o:  npm run test:firma
 import { DOMParser } from 'xmldom';
 import xpath from 'xpath';
 import { firmarXml, FIRMA_ALGOS } from '../services/sunat/firma.service.js';
 import { getCredencialesFirma } from '../services/sunat/certificado.service.js';
 import { SignedXml } from 'xml-crypto';
 
-// XML UBL mínimo de prueba, con el <ext:ExtensionContent/> reservado para la firma.
-// (No se declara xmlns:ds en la raíz: la firma inserta su propio prefijo ds.)
 const XML_PRUEBA = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -31,8 +22,8 @@ const XML_PRUEBA = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
   <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
 </Invoice>`;
 
-function ok(msg) { console.log(`  ✅ ${msg}`); }
-function fail(msg) { console.error(`  ❌ ${msg}`); }
+function ok(msg) { console.log(`  ✓ ${msg}`); }
+function fail(msg) { console.error(`  ✗ ${msg}`); }
 
 function verificarCriptografico(xmlFirmado, certPem) {
   const doc = new DOMParser().parseFromString(xmlFirmado);
@@ -56,47 +47,41 @@ async function main() {
 
   let errores = 0;
 
-  // 1) digestValue no vacío
   if (digestValue) ok(`digestValue: ${digestValue}`);
   else { fail('digestValue vacío'); errores++; }
 
-  // 2) La firma quedó DENTRO de ext:ExtensionContent
   const m = /<ext:ExtensionContent>([\s\S]*?)<\/ext:ExtensionContent>/.exec(xmlFirmado);
   if (m && /<ds:Signature[\s>]/.test(m[1])) ok('ds:Signature insertada dentro de ext:ExtensionContent');
   else { fail('La firma NO está dentro de ext:ExtensionContent'); errores++; }
 
-  // 3) Elementos de firma presentes
   for (const tag of ['ds:SignedInfo', 'ds:SignatureValue']) {
     if (xmlFirmado.includes(`<${tag}`)) ok(`presente ${tag}`);
     else { fail(`falta ${tag}`); errores++; }
   }
-  // Certificado en KeyInfo (debe ir prefijado en el namespace ds)
   if (/<ds:X509Certificate>/.test(xmlFirmado)) ok('presente ds:X509Certificate (namespaced)');
   else { fail('falta ds:X509Certificate namespaced en KeyInfo'); errores++; }
 
-  // 4) Verificación criptográfica con el certificado público
   try {
     const { valido } = verificarCriptografico(xmlFirmado, certPem);
     if (valido) ok('verificación criptográfica de la firma: VÁLIDA');
     else { fail('verificación criptográfica: INVÁLIDA'); errores++; }
   } catch (e) {
-    console.warn(`  ⚠️  verificación criptográfica no concluyente: ${e.message}`);
+    console.warn(`  verificación criptográfica no concluyente: ${e.message}`);
   }
 
-  // Volcar el XML firmado para inspección manual (no versionado; sunat-output está en .gitignore).
   try {
     const { writeFileSync, mkdirSync } = await import('fs');
     mkdirSync('sunat-output', { recursive: true });
     writeFileSync('sunat-output/test-firma.xml', xmlFirmado, 'utf8');
     console.log('\nXML firmado escrito en backend/sunat-output/test-firma.xml');
-  } catch { /* no crítico */ }
+  } catch {}
 
-  console.log(errores === 0 ? '\n✅ FIRMA OK — fase validable localmente' : `\n❌ ${errores} problema(s) en la firma`);
+  console.log(errores === 0 ? '\n✓ FIRMA OK — fase validable localmente' : `\n✗ ${errores} problema(s) en la firma`);
   process.exit(errores === 0 ? 0 : 1);
 }
 
 main().catch((e) => {
-  console.error('\n❌ Error ejecutando la prueba de firma:', e.message);
+  console.error('\n✗ Error ejecutando la prueba de firma:', e.message);
   console.error('   (¿Están SUNAT_CERT_B64 y SUNAT_KEY_B64 en backend/.env?)');
   process.exit(1);
 });

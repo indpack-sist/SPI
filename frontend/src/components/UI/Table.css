@@ -92,7 +92,6 @@
   }
 }
 
-/* ── Mobile cards view ─────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .table-mobile thead {
     display: none;
@@ -129,13 +128,10 @@
     border-bottom: none;
   }
 
-  /* En modo tarjeta la tabla ocupa el ancho disponible: sin scroll horizontal */
   .table-mobile,
   .table-mobile tbody { display: block; width: 100%; }
   .table-container:has(> .table-mobile) { overflow-x: hidden; }
 
-  /* El valor de cada celda: ocupa el espacio restante, alineado a la derecha,
-     y envuelve por líneas (no por caracteres) para no desbordar la tarjeta */
   .table-mobile tbody td > * {
     min-width: 0;
     margin-left: auto;
@@ -143,13 +139,11 @@
     overflow-wrap: break-word;
   }
 
-  /* Filas flex internas (badge + código) se envuelven en vez de generar scroll */
   .table-mobile tbody td .flex {
     flex-wrap: wrap;
     justify-content: flex-end;
   }
 
-  /* Códigos, números y badges no se parten carácter por carácter */
   .table-mobile tbody td .font-mono,
   .table-mobile tbody td .badge {
     white-space: nowrap;
@@ -170,7 +164,6 @@
     white-space: nowrap;
   }
 
-  /* Celdas de acciones: sin etiqueta, botones a la derecha con wrap */
   .table-mobile tbody td[data-label="Acciones"],
   .table-mobile tbody td[data-label=""],
   .table-mobile tbody td[data-label="Opciones"] {

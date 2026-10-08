@@ -10,13 +10,6 @@ import { useDescargaMasiva, soportaDescargaCarpetas } from '../../context/Descar
 import ModalDescargaMasiva from '../../components/Descargas/ModalDescargaMasiva';
 import './TrazabilidadSee.css';
 
-/* --------------------------------------------------------------------------
- * Trazabilidad SEE — vista administrativa de solo lectura de toda la emisión
- * electrónica: comprobantes (facturas + notas de crédito/débito) y guías de
- * remisión, con todos sus estados y motivos. Diseño con tokens de tema
- * (claro/oscuro) — sin colores fijos de fondo/texto.
- * ------------------------------------------------------------------------ */
-
 const ESTADOS_META = {
   ACEPTADO:  { label: 'Aceptado',  color: '#22c55e' },
   OBSERVADO: { label: 'Observado', color: '#38bdf8' },
@@ -37,7 +30,6 @@ const CLASES = {
   GUIA:         { label: 'Guía de Remisión', sigla: 'GRE', color: '#14b8a6' },
 };
 
-// Catálogo 09 (motivos de nota de crédito).
 const MOTIVOS_NC = {
   '01': 'Anulación de la operación', '02': 'Anulación por error en el RUC',
   '03': 'Corrección por error en la descripción', '04': 'Descuento global',
@@ -45,12 +37,10 @@ const MOTIVOS_NC = {
   '08': 'Bonificación', '09': 'Disminución en el valor', '10': 'Otros conceptos',
   '11': 'Ajustes de operaciones de exportación', '12': 'Ajustes afectos al SPOT', '13': 'Ajuste - montos y/o fechas de pago',
 };
-// Catálogo 10 (motivos de nota de débito).
 const MOTIVOS_ND = {
   '01': 'Intereses por mora', '02': 'Aumento en el valor', '03': 'Penalidades / otros conceptos',
   '11': 'Ajustes de operaciones de exportación',
 };
-// Catálogo 20 (motivo de traslado de la guía).
 const MOTIVOS_TRASLADO = {
   '01': 'Venta', '02': 'Compra', '04': 'Traslado entre establecimientos de la misma empresa',
   '08': 'Importación', '09': 'Exportación', '13': 'Otros', '14': 'Venta sujeta a confirmación',
@@ -89,7 +79,6 @@ function IconBtn({ icon: Icon, label, onClick, disabled }) {
   );
 }
 
-/* ----------------------------- Drawer de orden ---------------------------- */
 function OrdenDrawer({ idOrden, onClose }) {
   const navigate = useNavigate();
   const [estado, setEstado] = useState({ loading: true, error: null, orden: null, facturas: [], guias: [] });
@@ -203,7 +192,6 @@ function OrdenDrawer({ idOrden, onClose }) {
   );
 }
 
-/* ------------------------------ Página principal -------------------------- */
 const TABS = [
   { id: 'comprobantes', label: 'Comprobantes', icon: FileText },
   { id: 'guias', label: 'Guías de Remisión', icon: Truck },
@@ -224,15 +212,11 @@ export default function TrazabilidadSee() {
   const [aviso, setAviso] = useState(null);
   const reqId = useRef(0);
 
-  // Debounce del buscador → filtros.q.
   useEffect(() => {
     const t = setTimeout(() => setFiltros((f) => ({ ...f, q: busqueda.trim() })), 350);
     return () => clearTimeout(t);
   }, [busqueda]);
 
-  // El servidor filtra por tipo/fecha/texto; el estado se resuelve en cliente sobre `estado_final`
-  // (que reconoce ANULADA por NC, BAJA y facturas manuales aceptadas), y así los chips de estado
-  // muestran siempre la distribución completa sin recargar.
   const cargar = useCallback(async () => {
     const id = ++reqId.current;
     setLoading(true); setError(null);
@@ -243,7 +227,7 @@ export default function TrazabilidadSee() {
       const res = tab === 'comprobantes'
         ? await sunatAPI.trazabilidadComprobantes(payload)
         : await sunatAPI.trazabilidadGuias(payload);
-      if (id !== reqId.current) return; // respuesta obsoleta
+      if (id !== reqId.current) return;
       setData(res.data?.data || []);
       setResumen(res.data?.resumen || { total: 0, porEstado: {}, porClase: {} });
     } catch (e) {
@@ -389,7 +373,6 @@ export default function TrazabilidadSee() {
   );
 }
 
-/* ----------------------------- Tabla comprobantes ------------------------- */
 function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar }) {
   return (
     <table className="tz-table">
@@ -482,7 +465,6 @@ function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar
   );
 }
 
-/* -------------------------------- Tabla guías ----------------------------- */
 function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
   return (
     <table className="tz-table">
@@ -502,8 +484,6 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
       </thead>
       <tbody>
         {data.map((r) => {
-          // Un intento reemitido (es_emision) comparte id_guia con su cabecera; se le da una clave
-          // propia para no colisionar al expandir ni en la key de React.
           const rowId = r.es_emision ? `e${r.id_emision}` : `g${r.id_guia}`;
           const abierto = expandido === rowId;
           const traslado = MOTIVOS_TRASLADO[r.motivo_traslado_cod] || (r.motivo_traslado_cod ? `Cód. ${r.motivo_traslado_cod}` : '—');
@@ -532,8 +512,6 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
                 <td className="tz-motivo"><span className="tz-motivo-desc">{respuesta}</span></td>
                 <td className="tz-col-acc" onClick={(e) => e.stopPropagation()}>
                   <div className="tz-acc">
-                    {/* Un intento reemitido descarga desde su propio snapshot/URL archivada; la
-                        cabecera descarga por id de guía (su estado final). */}
                     <IconBtn icon={FileText} label="PDF" disabled={r.es_emision && !r.tiene_snapshot}
                       onClick={() => onDescargar(
                         () => r.es_emision ? sunatAPI.verPdfGuiaEmision(r.id_guia, r.id_emision) : sunatAPI.verPdfGuia(r.id_guia),
@@ -579,7 +557,6 @@ function TablaGuias({ data, expandido, setExpandido, onOrden, onDescargar }) {
   );
 }
 
-/* ------------------------- Pestaña: descarga masiva ----------------------- */
 function PanelDescargaMasiva({ onDescargarUno }) {
   const { estado: estadoDescarga, iniciarDescarga } = useDescargaMasiva();
   const [rango, setRango] = useState({ desde: '', hasta: '' });
@@ -629,7 +606,6 @@ function PanelDescargaMasiva({ onDescargarUno }) {
 
   return (
     <div className="tz-descarga">
-      {/* Paso 1 — consulta por rango de fechas */}
       <div className="tz-dm-consulta">
         <div className="tz-dm-consulta-lead">
           <span className="tz-eyebrow"><CalendarDays size={13} /> Rango de emisión</span>
@@ -658,7 +634,6 @@ function PanelDescargaMasiva({ onDescargarUno }) {
         </div>
       )}
 
-      {/* Paso 2 — barra de acción: selección + descarga */}
       {hayResultados && (
         <div className={`tz-dm-actionbar ${sel.size ? 'has-sel' : ''}`}>
           <div className="tz-dm-count">
@@ -675,7 +650,6 @@ function PanelDescargaMasiva({ onDescargarUno }) {
         </div>
       )}
 
-      {/* Paso 3 — estados / tabla */}
       {error ? (
         <div className="tz-state"><XCircle size={26} /><strong>No se pudo consultar</strong><span>{error}</span></div>
       ) : loading ? (

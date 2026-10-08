@@ -46,7 +46,6 @@ export async function getAllClientes(req, res) {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    // atenciones es un alias calculado; se filtra con HAVING (MySQL lo aplica por fila).
     if (atencion === 'con') {
       sql += ' HAVING atenciones > 0';
     } else if (atencion === 'sin') {
@@ -337,9 +336,6 @@ export async function createCliente(req, res) {
       );
     }
 
-    // Auto-asignacion: un Comercial/Ventas queda como dueño de todo cliente que registra
-    // (primer contacto), este o no restringido. Asi, al activar la restriccion luego, sus
-    // clientes ya estan en su cartera. El vinculo es inofensivo mientras no este restringido.
     const idRegistrador = req.user?.id_empleado;
     if (idRegistrador && ['Comercial', 'Ventas'].includes(req.user?.rol)) {
       await executeQuery(

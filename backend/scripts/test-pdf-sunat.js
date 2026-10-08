@@ -1,6 +1,3 @@
-// scripts/test-pdf-sunat.js  —  Smoke test OFFLINE de la Fase 13 (representación impresa).
-// Renderiza factura (01), nota de crédito (07) y GRE (09) a PDF real y valida el buffer.
-// No toca BD: prueba los generadores + el QR PNG. Escribe a sunat-output/ (gitignored).
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -10,7 +7,6 @@ import { generarQrGre, qrPng } from '../services/sunat/qr.service.js';
 import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 
-// Extrae el texto de un PDF (para asertar rótulos impresos).
 const textoDe = async (buf) => (await new PDFParse({ data: buf }).getText()).text;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,19 +23,12 @@ const detalle = [
   { codigo: 'PROD-002', nombre: 'CINTA DE EMBALAJE TRANSPARENTE 48mm', cantidad: 20, precio_unitario: 3.50, unidad: 'NIU', descuento_porcentaje: 10 }
 ];
 
-// ── Origen del hash (valor resumen) ──────────────────────────────────────────
-// El hash REAL de una factura vive en facturas_venta.sunat_digest_value (lo escribe firmarXml
-// en la emisión). Este script es OFFLINE y no tiene cert ni BD, así que NO puede firmar ni leer
-// el valor aceptado en Beta. Prioridad:
-//   1) REAL_DIGEST=<valor>  → usa el digest real que pegues (p.ej. el de FE01-1 aceptada).
-//   2) sin él → SHA-512 base64 de contenido local, ETIQUETADO como SIMULADO (no de factura aceptada).
-// Nunca se usa un placeholder decodificable a texto.
 const DIGEST_REAL = process.env.REAL_DIGEST || null;
 const digestSimulado = (semilla) => crypto.createHash('sha512').update(String(semilla)).digest('base64');
 const digestPara = (semilla) => DIGEST_REAL || digestSimulado(semilla);
 
 let pass = 0, fail = 0;
-const check = (n, cond, extra = '') => { const ok = !!cond; ok ? pass++ : fail++; console.log(`  ${ok ? '✅' : '❌'} ${n}${extra ? '  —  ' + extra : ''}`); };
+const check = (n, cond, extra = '') => { const ok = !!cond; ok ? pass++ : fail++; console.log(`  ${ok ? '✓' : '✗'} ${n}${extra ? '  —  ' + extra : ''}`); };
 const esPdf = (buf) => Buffer.isBuffer(buf) && buf.slice(0, 5).toString() === '%PDF-';
 const paginasDe = (buf) => (buf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
 
@@ -48,10 +37,9 @@ async function main() {
   console.log('\n=== FASE 13 — Smoke test de representación impresa (offline) ===\n');
   console.log(DIGEST_REAL
     ? `  Hash impreso: REAL (provisto por REAL_DIGEST, ${DIGEST_REAL.length} chars)\n`
-    : '  ⚠️  Hash impreso: SIMULADO (SHA-512 local) — NO es de una factura aceptada.\n' +
+    : '  Hash impreso: SIMULADO (SHA-512 local) — NO es de una factura aceptada.\n' +
       '     Para el hash real: REAL_DIGEST=<sunat_digest_value> npm run test:pdf\n');
 
-  // 1) Factura 01 ACEPTADA
   const qrFactura = await qrPng('20550932297|01|FE01|1|25.20|165.20|2026-08-24|6|20562860984|');
   const pdfFactura = await generarComprobanteSunatPDF({
     comprobante: {
@@ -67,7 +55,6 @@ async function main() {
   check('Factura (01) genera PDF válido', esPdf(pdfFactura), `${pdfFactura.length} bytes`);
   await fs.writeFile(path.join(outDir, 'test-FE01-1.pdf'), pdfFactura);
 
-  // 2) Nota de Crédito 07 con documento afectado + motivo
   const qrNota = await qrPng('20550932297|07|FC01|1|9.00|59.00|2026-08-24|6|20562860984|');
   const pdfNota = await generarComprobanteSunatPDF({
     comprobante: {
@@ -85,7 +72,6 @@ async function main() {
     txtNota.includes('Observación') && txtNota.includes('DEVOLUCION POR ITEM'));
   await fs.writeFile(path.join(outDir, 'test-FC01-1.pdf'), pdfNota);
 
-  // 3) Factura BAJA → marca de agua ANULADO
   const pdfBaja = await generarComprobanteSunatPDF({
     comprobante: {
       codigo_tipo_sunat: '01', serie: 'FE01', numero: 3, fecha_emision: '24/08/2026',
@@ -96,7 +82,6 @@ async function main() {
   check('Factura BAJA genera PDF válido (marca ANULADO)', esPdf(pdfBaja), `${pdfBaja.length} bytes`);
   await fs.writeFile(path.join(outDir, 'test-FE01-3-anulado.pdf'), pdfBaja);
 
-  // 4) GRE 09 con QR-URL de SUNAT
   const qrGre = await qrPng('https://ww1.sunat.gob.pe/ol-ti-itconsultaunificadalibre/consultaUnificadaLibre/consulta?...');
   const clienteRipley = {
     razon_social: 'TIENDAS POR DEPARTAMENTO RIPLEY S.A.C.',
@@ -145,7 +130,6 @@ async function main() {
     txtGre.includes('Teléfono: 01-312 7858') && txtGre.includes('E-mail: informes@indpackperu.com'));
   await fs.writeFile(path.join(outDir, 'test-TE01-1.pdf'), pdfGre);
 
-  // GRE de venta con factura(s) relacionada(s) → cuadro "Datos del destinatario"
   const pdfGreFact = await generarGuiaRemisionSunatPDF({
     guia: {
       serie_sunat: 'TE01', numero_sunat: 2, fecha_emision: '18/09/2026 10:59:00', fecha_traslado: '18/09/2026',
@@ -170,7 +154,6 @@ async function main() {
     txtGreFact.includes('Documento relacionado') && txtGreFact.includes('FE01-44') && txtGreFact.includes('FE01-45'));
   await fs.writeFile(path.join(outDir, 'test-TE01-2-factura.pdf'), pdfGreFact);
 
-  // 4b) GRE Caso 1 (tercero público SIN registrar veh/cond) — solo transportista (espeja EG07-81).
   const pdfGreC1 = await generarGuiaRemisionSunatPDF({
     guia: {
       serie_sunat: 'TE01', numero_sunat: 81, fecha_emision: '16/02/2026', fecha_traslado: '17/02/2026',
@@ -191,7 +174,6 @@ async function main() {
     txtC1.includes('registrar veh') && !txtC1.includes('Conductor principal'));
   await fs.writeFile(path.join(outDir, 'test-TE01-C1.pdf'), pdfGreC1);
 
-  // 4c) GRE Caso 3 (tercero CON registrar) — 2 vehículos con permisos + 2 conductores (espeja EG07-325).
   const pdfGreC3 = await generarGuiaRemisionSunatPDF({
     guia: {
       serie_sunat: 'TE01', numero_sunat: 325, fecha_emision: '27/08/2026', fecha_traslado: '27/08/2026',
@@ -223,8 +205,6 @@ async function main() {
     txtC3.includes('Fecha entrega al transportista') && txtC3.includes('27/08/2026'));
   await fs.writeFile(path.join(outDir, 'test-TE01-C3.pdf'), pdfGreC3);
 
-  // 4d) Estrés de paginación: direcciones y observación largas, 45 productos, 2 placas y 1 chofer.
-  // Debe conservar el último producto y colocar Observaciones después de toda la tabla.
   const detalleStress = Array.from({ length: 45 }, (_, index) => ({
     codigo: `STRESS-${String(index + 1).padStart(3, '0')}`,
     nombre: `PRODUCTO EXTENSO ${index + 1} CON DESCRIPCIÓN PARA VALIDAR EL AJUSTE AUTOMÁTICO DE ALTURA Y EL SALTO DE PÁGINA`,
@@ -258,9 +238,6 @@ async function main() {
     txtStress.indexOf('STRESS-045') >= 0 && txtStress.indexOf('OBSERVACIONES') > txtStress.indexOf('STRESS-045'));
   await fs.writeFile(path.join(outDir, 'test-TE01-stress.pdf'), pdfGreStress);
 
-  // 4d-bis) Caso pesado en una sola hoja (espeja TE01-9 reportado): 6 ítems + público con
-  //   transportista/fecha/indicadores + 2 vehículos + 1 conductor + observaciones + banda RECHAZADO.
-  //   Es el contenido máximo realista de una GRE doméstica; debe caber en 1 página A4.
   const pdfGreDenso = await generarGuiaRemisionSunatPDF({
     guia: {
       serie_sunat: 'TE01', numero_sunat: 9, fecha_emision: '25/09/2026 12:39:00', fecha_traslado: '25/09/2026',
@@ -295,9 +272,6 @@ async function main() {
     txtDenso.includes('REPRESENTACIÓN IMPRESA') && txtDenso.includes('BUX704') && txtDenso.includes('A9Q986'));
   await fs.writeFile(path.join(outDir, 'test-TE01-9-denso.pdf'), pdfGreDenso);
 
-  // 4e) GRE de EXPORTACIÓN (comex) — espeja el molde real aceptado EG07-273 (INDPACK→VILLAS OQUENDO,
-  //     DAM 118-2026-40-70727). Valida las secciones comex, el destinatario del catálogo (no el
-  //     cliente de la OV) y que NO se imprime la tabla de ítems (traslado total de la DAM).
   const pdfGreExp = await generarGuiaRemisionSunatPDF({
     guia: {
       serie_sunat: 'EG07', numero_sunat: 273, fecha_emision: '16/07/2026 12:57 PM', fecha_traslado: '16/07/2026',
@@ -306,7 +280,7 @@ async function main() {
       ubigeo_llegada: '070101', direccion_llegada: 'CAL. G NRO. S/N (PARCELA 1) - CALLAO', sunat_estado: 'ACEPTADO',
       observaciones: 'CONTENEDOR: MRSU4280077 | PRECINTO NAVIERA: ML-PE0153521 | PRECINTO AGENCIA: 004VA380282'
     },
-    emisor, cliente,   // cliente = OCULAB (de la OV); el destinatario impreso debe ser VILLAS OQUENDO
+    emisor, cliente,
     detalle: [{ codigo: 'LBT60G019', nombre: 'LAMINA BURBUPACK EXPORTACION', cantidad: 500, codigo_unidad_sunat: 'MIL' }],
     transportista: { razon: 'CORPORACION DE TRANSPORTE LOGISTICO S.A.C.', ruc: '20600579755', mtc: '1560506CNG' },
     registrar: true, modalidad: '01', fechaEntrega: '16/07/2026',
@@ -339,8 +313,6 @@ async function main() {
     !txtExp.includes('CÓDIGO') && !txtExp.includes('LAMINA BURBUPACK EXPORTACION'));
   await fs.writeFile(path.join(outDir, 'test-EG07-273-comex.pdf'), pdfGreExp);
 
-  // 4f) GRE de COMPRA — mismo caso del XML SUNAT aceptado EG07-333. Cubre el QR pipe de GRE,
-  //     destinatario = empresa, proveedor y factura relacionada en la representación impresa.
   const digestCompra = digestPara('EG07-333-compra');
   const qrDataCompra = generarQrGre({
     ruc: emisor.ruc, tipo: '09', serie: 'EG07', numero: 333,
@@ -375,9 +347,6 @@ async function main() {
     txtCompra.includes('20100064490') && txtCompra.includes('F001-115256'));
   await fs.writeFile(path.join(outDir, 'test-EG07-333-compra.pdf'), pdfGreCompra);
 
-  // 5) Rótulo de operación por afectación (catálogo 07) — impreso en la línea "Tipo de operación".
-  //    Gravada: el IGV del bloque de totales es != 0 (180.00); exonerada/inafecta/exportación: IGV 0.
-  //    El bloque de totales usa el formato SUNAT (Sub Total Ventas / Valor Venta / Importe Total).
   const detalleAfect = [{ codigo: 'P1', nombre: 'PRODUCTO', cantidad: 10, precio_unitario: 100, unidad: 'NIU', descuento_porcentaje: 0 }];
   const casosAfect = [
     { afect: '10', label: 'OP. GRAVADA',      igv: 180, gravado: true  },

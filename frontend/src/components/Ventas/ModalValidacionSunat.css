@@ -61,7 +61,7 @@
 
 .sunat-panel-derecho {
     flex: 1;
-    padding: 0; /* Removemos padding para que el PDF ocupe todo */
+    padding: 0;
     background-color: var(--bg-tertiary);
     display: flex;
     flex-direction: column;

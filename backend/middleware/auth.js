@@ -141,8 +141,6 @@ const PERMISOS_POR_ROL = {
       listasPrecios: true,
       reportes: false,
       verFinanzasVentas: true,
-      // Vista de solo lectura de la Facturación Electrónica (SEE): ver/descargar
-      // PDF, XML y CDR de comprobantes/guías ya emitidos. NO emite ni da de baja.
       facturacionConsulta: true
     },
     api: {
@@ -662,9 +660,6 @@ export const verificarTokenMedia = async (req, res, next) => {
   }
 };
 
-// Acepta uno o varios módulos: el acceso se concede si el rol tiene CUALQUIERA
-// de ellos (útil para endpoints que sirven tanto al permiso pleno como al de
-// solo lectura, p. ej. 'facturacion' o 'facturacionConsulta').
 export const verificarPermiso = (...modulos) => {
   return (req, res, next) => {
     try {

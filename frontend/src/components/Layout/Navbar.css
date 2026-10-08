@@ -1,5 +1,3 @@
-/* Navbar.css */
-
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -14,7 +12,6 @@
   z-index: 100;
 }
 
-/* Línea de acento inferior */
 .navbar::after {
   content: '';
   position: absolute;
@@ -44,10 +41,6 @@
   gap: 0.5rem;
 }
 
-/* =====================================================
-   BOTONES DE ÍCONO
-   ===================================================== */
-
 .navbar-toggle,
 .navbar-icon-btn {
   display: flex;
@@ -71,10 +64,6 @@
   color: var(--white);
 }
 
-/* =====================================================
-   TÍTULO
-   ===================================================== */
-
 .navbar-title {
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 0.85rem;
@@ -85,10 +74,6 @@
   margin: 0;
   white-space: nowrap;
 }
-
-/* =====================================================
-   NOTIFICACIONES — BOTÓN
-   ===================================================== */
 
 .navbar-notifications-container {
   position: relative;
@@ -109,10 +94,6 @@
   text-align: center;
   line-height: 1.2;
 }
-
-/* =====================================================
-   NOTIFICACIONES — PANEL
-   ===================================================== */
 
 .navbar-notifications-panel {
   position: absolute;
@@ -176,7 +157,6 @@
   color: var(--white);
 }
 
-/* "Marcar todo leído" link */
 .text-xs.text-blue-600 {
   font-size: 0.7rem;
   color: var(--accent) !important;
@@ -208,10 +188,6 @@
   align-items: center;
   gap: 1rem;
 }
-
-/* =====================================================
-   NOTIFICACIONES — ITEMS
-   ===================================================== */
 
 .navbar-notification-item {
   padding: 0.875rem 1rem;
@@ -298,10 +274,6 @@
   display: block;
 }
 
-/* =====================================================
-   USUARIO
-   ===================================================== */
-
 .navbar-user {
   display: flex;
   align-items: center;
@@ -335,10 +307,6 @@
   color: var(--accent);
 }
 
-/* =====================================================
-   LOGOUT
-   ===================================================== */
-
 .navbar-logout {
   color: #e74c3c !important;
 }
@@ -348,10 +316,6 @@
   border-color: rgba(231, 76, 60, 0.3) !important;
   color: #e74c3c !important;
 }
-
-/* =====================================================
-   TOASTS
-   ===================================================== */
 
 .notification-toast-container {
   position: fixed;
@@ -440,10 +404,6 @@
 }
 
 .toast-close-btn:hover { color: var(--white); }
-
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
 
 @media (max-width: 1023px) {
   .navbar {

@@ -3,7 +3,6 @@ import { CheckCircle, FileText, ChevronLeft, ChevronRight, ShieldCheck, SkipForw
 import Modal from '../UI/Modal';
 import { archivosAPI } from '../../config/api';
 
-// Extrae la cadena de URL de un archivo persistido ({ url / ruta / path / secure_url / src }).
 function extraerUrl(obj) {
   if (!obj || typeof obj !== 'object') return '';
   return obj.url || obj.ruta || obj.path || obj.secure_url || obj.src || '';
@@ -11,14 +10,11 @@ function extraerUrl(obj) {
 
 function resolverUrl(archivo) {
   if (!archivo) return '';
-  // Archivo local recién seleccionado (File/Blob) → vista previa en memoria.
   if (archivo instanceof Blob) return URL.createObjectURL(archivo);
-  // Archivo persistido como objeto: usar su campo de URL.
   if (typeof archivo === 'object') {
     const u = extraerUrl(archivo);
     return u ? resolverUrl(u) : '';
   }
-  // Cadena: ruta o URL.
   if (typeof archivo === 'string') {
     if (archivo.startsWith('http')) return archivosAPI.getProxyUrl(archivo);
     return archivo;
@@ -59,7 +55,6 @@ export default function ModalVerificacionOC({
       title="Verificación de Orden de Compra"
       size="2xl"
     >
-      {/* Cabecera de instrucción */}
       <div className="flex items-center gap-2 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
         <ShieldCheck size={16} className="text-amber-600 shrink-0" />
         <p className="text-xs text-amber-800">
@@ -67,12 +62,9 @@ export default function ModalVerificacionOC({
         </p>
       </div>
 
-      {/* Layout dos columnas */}
       <div className="flex gap-4" style={{ minHeight: '70vh' }}>
 
-        {/* Columna izquierda: visor de archivo */}
         <div className="flex flex-col flex-1 min-w-0">
-          {/* Navegación entre archivos */}
           {totalArchivos > 0 && (
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
@@ -113,7 +105,6 @@ export default function ModalVerificacionOC({
             </div>
           )}
 
-          {/* Visor */}
           <div className="flex-1 bg-gray-100 rounded-lg overflow-hidden" style={{ minHeight: '65vh' }}>
             {totalArchivos === 0 ? (
               <div className="flex items-center justify-center h-full text-sm text-gray-400">
@@ -138,7 +129,6 @@ export default function ModalVerificacionOC({
           </div>
         </div>
 
-        {/* Columna derecha: detalle OV */}
         <div className="flex flex-col w-80 shrink-0">
           <p className="text-xs font-semibold text-gray-600 mb-2">Detalle de la Orden</p>
 
@@ -171,7 +161,6 @@ export default function ModalVerificacionOC({
             </table>
           </div>
 
-          {/* Totales */}
           <div className="border rounded-lg mt-2 p-3 bg-gray-50 space-y-1.5">
             <div className="flex justify-between text-xs text-gray-600">
               <span>Subtotal</span>
@@ -189,7 +178,6 @@ export default function ModalVerificacionOC({
         </div>
       </div>
 
-      {/* Botones de acción */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t">
         {onOmitir != null ? (
           <button

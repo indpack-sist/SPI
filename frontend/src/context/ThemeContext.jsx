@@ -7,7 +7,6 @@ function getTemaInicial() {
     const guardado = localStorage.getItem('theme');
     if (guardado === 'light' || guardado === 'dark') return guardado;
   } catch (e) {
-    // localStorage no disponible
   }
   return 'dark';
 }
@@ -20,7 +19,6 @@ export function ThemeProvider({ children }) {
     try {
       localStorage.setItem('theme', theme);
     } catch (e) {
-      // ignorar
     }
   }, [theme]);
 

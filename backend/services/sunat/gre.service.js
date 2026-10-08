@@ -1,6 +1,3 @@
-// services/sunat/gre.service.js  —  API REST GRE (OAuth2): token + envío/consulta. FASE 10.
-// El token OAuth2 es REAL en cualquier modo (mismo servidor de seguridad). El envío/consulta
-// se MOCKEAN en BETA porque SUNAT no publica un ambiente Beta del API REST de GRE.
 import axios from 'axios';
 import crypto from 'crypto';
 import { sunatConfig } from '../../config/sunat.js';
@@ -8,7 +5,6 @@ import { pool } from '../../config/database.js';
 
 const esBeta = () => sunatConfig.mode !== 'PROD';
 
-/** Token OAuth2 GRE (grant_type=password), cacheado en sunat_gre_token (id=1). */
 export async function obtenerTokenGre() {
   const [[t]] = await pool.query(
     'SELECT access_token FROM sunat_gre_token WHERE id = 1 AND expira_en > DATE_ADD(NOW(), INTERVAL 2 MINUTE)');
@@ -18,8 +14,6 @@ export async function obtenerTokenGre() {
     const err = new Error('Faltan credenciales GRE (SUNAT_GRE_CLIENT_ID/SECRET) para obtener el token');
     err.statusCode = 422; err.isOperational = true; throw err;
   }
-  // Trim defensivo: un espacio/salto invisible en las credenciales de Render rompe el OAuth
-  // con un 400 opaco (mismo tipo de problema que el fault 1036 con el RUC).
   const clientId = String(sunatConfig.greClientId).trim();
   const clientSecret = String(sunatConfig.greClientSecret).trim();
   const url = sunatConfig.urls.GRE_TOKEN.replace('{client_id}', clientId);
@@ -37,7 +31,6 @@ export async function obtenerTokenGre() {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000
     }));
   } catch (e) {
-    // Propaga el BODY real de SUNAT (trae error/error_description específico), no el genérico de axios.
     const status = e.response?.status;
     const cuerpo = e.response?.data;
     const detalle = typeof cuerpo === 'object' ? JSON.stringify(cuerpo) : String(cuerpo ?? e.message);
@@ -55,9 +48,8 @@ export async function obtenerTokenGre() {
   return data.access_token;
 }
 
-/** Envía el ZIP de la guía. nombreDoc = RUC-09-TE01-1 (sin extensión). Devuelve numTicket. */
 export async function enviarGuia(nombreDoc, zipBuffer) {
-  if (esBeta()) return 'MOCKGRE' + Date.now(); // sin Beta oficial del API GRE
+  if (esBeta()) return 'MOCKGRE' + Date.now();
   const token = await obtenerTokenGre();
   const hashZip = crypto.createHash('sha256').update(zipBuffer).digest('hex');
   const { data } = await axios.post(
@@ -67,10 +59,8 @@ export async function enviarGuia(nombreDoc, zipBuffer) {
   return data.numTicket;
 }
 
-/** Consulta el ticket. codRespuesta: '0' aceptado, '98' en proceso, '99' con errores. */
 export async function consultarGuia(numTicket) {
   if (esBeta()) {
-    // MOCK: aceptación simulada. Sin CDR/QR reales (solo existen en PROD).
     return { codRespuesta: '0', cdrZip: null, indCdrGenerado: '0', error: null, mock: true };
   }
   const token = await obtenerTokenGre();

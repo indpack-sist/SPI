@@ -45,7 +45,7 @@ function IncidenciaDetalle() {
   const [guardandoTrat, setGuardandoTrat] = useState(false);
   const [tratamiento, setTratamiento] = useState({ disposicion: '', decision_final: 'Ninguna', accion_correctiva: '', accion_preventiva: '', costo_estimado: '' });
 
-  const [modalEstado, setModalEstado] = useState(null); // estado destino
+  const [modalEstado, setModalEstado] = useState(null);
   const [comentarioEstado, setComentarioEstado] = useState('');
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
 
@@ -169,7 +169,6 @@ function IncidenciaDetalle() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Encabezado */}
       <div className="card mb-4">
         <div className="card-body flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -187,9 +186,7 @@ function IncidenciaDetalle() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Columna izquierda: info + tratamiento + adjuntos */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          {/* Trazabilidad */}
           <div className="card">
             <div className="card-header"><h2 className="card-title flex items-center gap-2"><Package size={18} /> Trazabilidad</h2></div>
             <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -219,7 +216,6 @@ function IncidenciaDetalle() {
               </div>
               <div><p className="text-xs text-muted flex items-center gap-1"><Factory size={12} /> Orden de Producción</p><p className="font-medium">{incidencia.numero_op || '-'}</p></div>
               <div><p className="text-xs text-muted flex items-center gap-1"><ShoppingCart size={12} /> Orden de Venta</p><p className="font-medium">{incidencia.numero_ov || '-'}</p></div>
-              {/* Datos de OV permitidos (SIN precios) */}
               {incidencia.numero_ov && (
                 <>
                   <div><p className="text-xs text-muted flex items-center gap-1"><User size={12} /> Cliente</p><p className="font-medium">{incidencia.cliente || '-'}</p></div>
@@ -230,7 +226,6 @@ function IncidenciaDetalle() {
             </div>
           </div>
 
-          {/* Descripción */}
           <div className="card">
             <div className="card-header"><h2 className="card-title flex items-center gap-2"><AlertTriangle size={18} /> Descripción del problema</h2></div>
             <div className="card-body">
@@ -242,7 +237,6 @@ function IncidenciaDetalle() {
             </div>
           </div>
 
-          {/* Tratamiento */}
           <div className="card">
             <div className="card-header"><h2 className="card-title flex items-center gap-2"><ClipboardCheck size={18} /> Tratamiento y acciones</h2></div>
             <div className="card-body grid grid-cols-1 gap-4">
@@ -287,7 +281,6 @@ function IncidenciaDetalle() {
             </div>
           </div>
 
-          {/* Evidencias y documentos, agrupados por categoría */}
           <div className="card">
             <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -358,7 +351,6 @@ function IncidenciaDetalle() {
           </div>
         </div>
 
-        {/* Columna derecha: workflow + historial */}
         <div className="flex flex-col gap-4">
           <div className="card">
             <div className="card-header"><h2 className="card-title">Cambiar estado</h2></div>
@@ -400,7 +392,6 @@ function IncidenciaDetalle() {
         </div>
       </div>
 
-      {/* Modal cambio de estado */}
       <Modal
         isOpen={!!modalEstado}
         onClose={() => setModalEstado(null)}
@@ -421,7 +412,6 @@ function IncidenciaDetalle() {
         </div>
       </Modal>
 
-      {/* Visor de imagen */}
       {adjuntoVisor && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setAdjuntoVisor(null)}>
           <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>

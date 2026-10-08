@@ -8,28 +8,18 @@ const SEVERIDADES = ['Crítica', 'Mayor', 'Menor'];
 const FASES = ['Recepción', 'Proceso', 'Producto Terminado', 'Despacho', 'Cliente'];
 const DISPOSICIONES = ['Pendiente', 'Reproceso', 'Descarte', 'Aceptar con desviación', 'Devolución'];
 
-/**
- * Modal reutilizable para registrar una incidencia.
- * prefill: { id_orden, id_orden_venta, id_producto, producto_nombre, unidad_medida }
- *   Si llega id_producto en prefill, el producto queda fijo (no editable).
- * prefill desde una SALIDA: { id_salida, id_orden_venta, numero_ov, cliente }
- *   Se cargan los productos de esa salida y Calidad marca uno o varios (1 incidencia por producto).
- */
 function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
   const [tipos, setTipos] = useState([]);
   const [productos, setProductos] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
 
-  // Buscador de producto
   const [prodBusqueda, setProdBusqueda] = useState('');
   const [prodSeleccionado, setProdSeleccionado] = useState(null);
 
-  // Modo "desde salida": lista de productos del despacho + selección múltiple
   const esDesdeSalida = !!prefill.id_salida;
   const [salidaProductos, setSalidaProductos] = useState([]);
   const [cargandoSalida, setCargandoSalida] = useState(false);
-  // Map { [id_producto]: { checked, cantidad, unidad, nombre } }
   const [seleccionSalida, setSeleccionSalida] = useState({});
 
   const productoFijo = !!prefill.id_producto;
@@ -54,7 +44,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
       id_producto: prefill.id_producto || '',
       id_tipo: '',
       severidad: 'Menor',
-      // Una queja que llega desde un despacho normalmente se detecta en Cliente.
       fase_deteccion: prefill.fase_deteccion || (esDesdeSalida ? 'Cliente' : 'Proceso'),
       descripcion: '',
       cantidad_afectada: '',
@@ -62,7 +51,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
       disposicion: 'Pendiente'
     });
 
-    // Modo salida: cargamos los productos del despacho para el checklist.
     setSalidaProductos([]);
     setSeleccionSalida({});
     if (esDesdeSalida) {
@@ -71,7 +59,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
         .then(res => {
           const detalles = res.data?.data?.detalles || [];
           setSalidaProductos(detalles);
-          // Precargamos el mapa de selección (todos desmarcados).
           const mapa = {};
           detalles.forEach(d => {
             mapa[d.id_producto] = {
@@ -89,7 +76,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
 
     incidenciasAPI.getTipos()
       .then(res => {
-        // Deduplicamos por nombre (defensa ante filas repetidas en el catálogo)
         const vistos = new Set();
         const unicos = (res.data.data || []).filter(t => {
           const clave = (t.nombre || '').trim().toLowerCase();
@@ -101,8 +87,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
       })
       .catch(() => setTipos([]));
 
-    // Solo cargamos catálogo de productos si no viene uno fijo ni proviene de una salida;
-    // solo los que requieren receta (BOM)
     if (!prefill.id_producto && !esDesdeSalida) {
       productosAPI.getAll({ estado: 'Activo', requiere_receta: 'true' })
         .then(res => setProductos(res.data.data || []))
@@ -155,7 +139,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
         setError('Selecciona al menos un producto de la salida afectado por la queja.');
         return;
       }
-      // La cantidad afectada no puede superar lo despachado de ese producto.
       for (const p of productosPayload) {
         const det = salidaProductos.find(d => String(d.id_producto) === String(p.id_producto));
         if (det && p.cantidad_afectada != null && p.cantidad_afectada > parseFloat(det.cantidad)) {
@@ -177,7 +160,6 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
       };
       if (esDesdeSalida) {
         payload.productos = productosPayload;
-        // En modo salida el producto/cantidad/unidad van por cada producto marcado.
         delete payload.id_producto;
         delete payload.cantidad_afectada;
         delete payload.unidad_medida;

@@ -368,7 +368,6 @@ const ReporteVentas = () => {
   });
 
   const abrirVisorSunat = (item) => {
-    // El modal espera campos específicos que ahora el backend ya provee:
     const ordenMapeada = {
       ...item,
       id_orden_venta: item.id,
@@ -653,7 +652,6 @@ const ReporteVentas = () => {
   useEffect(() => {
     aplicarFiltrosLocales();
   }, [filtros.estadosOrden, filtros.estadosPago, dataReporte.detalle]);
-  // Reduce un nombre completo (Nombres + Apellidos) a "Primer Nombre + Primer Apellido"
 const obtenerNombreCorto = (nombreCompleto) => {
   if (!nombreCompleto || typeof nombreCompleto !== 'string') return '';
   const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
@@ -924,9 +922,7 @@ const obtenerNombreCorto = (nombreCompleto) => {
 
       crearHojaResumen(datosSoles, 'Resumen Soles', false);
       crearHojaResumen(datosUSD, 'Resumen USD', true);
-      
-      // Solo crear resumen unificado si hay datos en ambas monedas en el resultado
-      // o si la orden fue explícita y se involucran ambas (por si acaso).
+
       if (dataSoles.length > 0 && dataUSD.length > 0) {
         crearHojaResumen(datosUnificados, 'Resumen Unificado', true);
       }
@@ -1084,13 +1080,12 @@ const obtenerNombreCorto = (nombreCompleto) => {
       if (datosAOA.length > 0) {
         const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
         wsProductos['!merges'] = merges;
-        
-        // Calcular wch basado en el máximo número de columnas posibles (que es cuando isUSD es true)
+
         wsProductos['!cols'] = [
-          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, // 0-3
-          { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, // 4-8
-          { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, // 9-14 (Vendedor y USD extras)
-          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 } // 15-19
+          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 },
+          { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 35 },
+          { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 },
+          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }
         ];
 
         const borderStyle = {
@@ -1135,7 +1130,6 @@ const obtenerNombreCorto = (nombreCompleto) => {
         XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
       }
 
-      // NUEVA HOJA: RESUMEN POR FECHA (Dinámico)
       const fechasAgrupadas = {};
       
       let tituloResumen = 'FECHA';
@@ -1196,7 +1190,7 @@ const obtenerNombreCorto = (nombreCompleto) => {
       const fechasArray = Object.values(fechasAgrupadas).sort((a, b) => {
         if (a.fecha === 'Pendiente') return 1;
         if (b.fecha === 'Pendiente') return -1;
-        return a.rawDate - b.rawDate; // Ascendente: más antiguo arriba, más reciente abajo
+        return a.rawDate - b.rawDate;
       });
 
       const datosFechasAOA = [];
@@ -1216,7 +1210,6 @@ const obtenerNombreCorto = (nombreCompleto) => {
 
           if (nItems === 0) return;
 
-          // Sub-agrupación por orden dentro de la fecha
           let currentOrden = null;
           let ordenStartRow = -1;
           let ordenItemCount = 0;
@@ -1225,10 +1218,9 @@ const obtenerNombreCorto = (nombreCompleto) => {
             const isNewOrden = item.orden !== currentOrden;
             const isUSD = item.moneda === 'USD';
 
-            // Si cambia la orden y ya teníamos una, aplicamos el merge de la orden anterior
             if (isNewOrden && ordenStartRow !== -1 && ordenItemCount > 1) {
               const ordenEndRow = datosFechasAOA.length - 1;
-              [1, 2, 3, 4, 5, 6, 17].forEach(c => { // Orden, Comprobante, Fecha Emisión, Fecha SUNAT, Fecha Despacho, Cliente
+              [1, 2, 3, 4, 5, 6, 17].forEach(c => {
                 mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
               });
             }
@@ -1241,7 +1233,6 @@ const obtenerNombreCorto = (nombreCompleto) => {
               ordenItemCount++;
             }
 
-            // Para la primera fila de la FECHA (idx === 0)
             const isFirstInDate = idx === 0;
 
             let rowData = [
@@ -1265,7 +1256,6 @@ const obtenerNombreCorto = (nombreCompleto) => {
             datosFechasAOA.push(rowData);
           });
 
-          // Asegurarse de aplicar el merge para la última orden de la fecha si tuvo más de 1 ítem
           if (ordenStartRow !== -1 && ordenItemCount > 1) {
             const ordenEndRow = datosFechasAOA.length - 1;
             [1, 2, 3, 4, 5, 6, 17].forEach(c => {
@@ -1273,7 +1263,6 @@ const obtenerNombreCorto = (nombreCompleto) => {
             });
           }
 
-          // Merge para la columna de Fecha
           if (nItems > 1) {
             const endRowIndexDate = startRowIndexDate + nItems - 1;
             mergesFechas.push({ s: { r: startRowIndexDate, c: 0 }, e: { r: endRowIndexDate, c: 0 } });
@@ -1297,11 +1286,10 @@ const obtenerNombreCorto = (nombreCompleto) => {
             right: { style: "thin", color: { rgb: "000000" } }
           };
 
-          // Determinar qué columna de fecha se debe pintar de amarillo según el filtro
           let colFiltroIndex = -1;
 if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 3;
-else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 4; // <-- Ahora Despacho es la columna 4
-else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y SUNAT es la columna 5
+else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 4;
+else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
 
           for (let R = 0; R < datosFechasAOA.length; R++) {
             if (datosFechasAOA[R].length === 1 && datosFechasAOA[R][0] && datosFechasAOA[R][0].toString().startsWith('===')) {
@@ -1330,13 +1318,11 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y 
                     if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
                     wsFechas[cellRef].s.alignment = { vertical: "center" };
                     wsFechas[cellRef].s.border = borderStyle;
-                    
-                    // Pintar celdas de USD de verde
+
                     if (isUSD && (C === 10 || (C >= 14 && C <= 15))) {
                       wsFechas[cellRef].s.fill = { fgColor: { rgb: "E6F4EA" } };
                     }
-                    
-                    // Pintar celda de fecha filtrada de amarillo
+
                     if (C === colFiltroIndex) {
                        wsFechas[cellRef].s.fill = { fgColor: { rgb: "FFF2CC" } };
                     }
@@ -2453,7 +2439,6 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y 
                             <span className="text-muted">OC Cliente:</span>
                             <span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente || '—'}</span>
                           </div>
-                          {/* Badge verificación OC */}
                           <div className="flex justify-between items-center">
                             <span className="text-muted">Verificación OC:</span>
                             {ordenSeleccionada.estado_verificacion_oc === 'Verificado' ? (
@@ -2475,7 +2460,6 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y 
                               <span className="text-xs text-gray-400 italic">—</span>
                             )}
                           </div>
-                          {/* Archivos OC */}
                           {ordenSeleccionada.orden_compra_url && (() => {
                             let urls = [];
                             try {
@@ -2524,7 +2508,6 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y 
                 </div>
               )}
 
-              {/* Historial de facturas anuladas */}
               {historialFacturasAnuladas.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <h4 className="font-semibold text-red-800 mb-3 flex items-center gap-2"><FileCheck size={16} className="text-red-600" /> Historial de Facturas Anuladas ({historialFacturasAnuladas.length})</h4>
@@ -2548,7 +2531,6 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;    // <-- Y 
                 </div>
               )}
 
-              {/* Documentos adicionales */}
               {documentosAdicionales.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-blue-600" /> Documentos Adicionales</h4>

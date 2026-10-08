@@ -1,5 +1,3 @@
-// Prueba de regresión del único caso de factura de exportación de INDPACK.
-// No usa BD, certificado ni red: valida el UBL previo a firma contra el molde E001-1997.
 import assert from 'node:assert/strict';
 import { XMLParser } from 'fast-xml-parser';
 import { PDFParse } from 'pdf-parse';

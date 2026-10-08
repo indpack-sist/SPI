@@ -1,17 +1,3 @@
-// scripts/test-gre-xml.js  —  Punto de Control Fase 10 (ítems 2 y 3), reproducible y OFFLINE.
-//
-// Qué cubre:
-//   (2) Validación ESTRUCTURAL del XML DespatchAdvice (GRE Remitente 09): buen-formado
-//       (fast-xml-parser) + invariantes obligatorias que SUNAT verifica (cbc:ID == core del
-//       nombre de archivo, orden/ presencia de nodos, ubigeos, unidades, firmabilidad).
-//       ⚠️ NO es una validación XSD de conformidad total (no hay esquemas .xsd en el repo);
-//       la conformidad XSD real la da recién la aceptación del API GRE en PROD (Fase 16).
-//   (3) Flujo MOCK de punta a punta a nivel de servicio (sin BD ni certificado): construir
-//       XML → zip → enviarGuia(mock) → consultarGuia(mock) → decisión de estado ==> ACEPTADO.
-//
-// Uso:  node backend/scripts/test-gre-xml.js     (o  npm run test:gre  desde backend/)
-// Espeja el fixture real guias_remision id_guia=2 (TE01-1, OCULAB, conductor MAX, VES→Lima).
-
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -24,7 +10,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RUC = '20550932297';
 
-// ── Fixture que espeja guias_remision id_guia=2 ──────────────────────────────
 const datos = {
   tipo: '09', serie: 'TE01', numero: 1,
   empresa: { ruc: RUC, razon_social: 'INDPACK S.A.C.' },
@@ -39,33 +24,29 @@ const datos = {
   ],
   fecha: { emision: '2026-08-24', hora: '10:00:00' },
   fechaTraslado: '2026-08-24',
-  modalidad: '02', // vehículo propio (privado)
+  modalidad: '02',
   conductor: { dni: '75336849', nombre: 'MAX ALEX SANANCINO', licencia: 'Q75336849' },
-  vehiculos: [{ placa: 'XXX000', tuce: null, autorizacion: null }], // placeholder BETA (ya normalizado)
-  observacion: 'Entrega en almacen central | OC: 260610043' // texto libre + OC → cbc:Note
+  vehiculos: [{ placa: 'XXX000', tuce: null, autorizacion: null }],
+  observacion: 'Entrega en almacen central | OC: 260610043'
 };
 
-const nombre = `${RUC}-${datos.tipo}-${datos.serie}-${datos.numero}`; // core del filename == cbc:ID sin serie
-const cbcIdEsperado = `${datos.serie}-${datos.numero}`;               // TE01-1
+const nombre = `${RUC}-${datos.tipo}-${datos.serie}-${datos.numero}`;
+const cbcIdEsperado = `${datos.serie}-${datos.numero}`;
 
 let pass = 0, fail = 0;
 const check = (nombreCheck, cond, detalle = '') => {
   const ok = !!cond;
   ok ? pass++ : fail++;
-  console.log(`  ${ok ? '✅' : '❌'} ${nombreCheck}${detalle ? '  —  ' + detalle : ''}`);
+  console.log(`  ${ok ? '✓' : '✗'} ${nombreCheck}${detalle ? '  —  ' + detalle : ''}`);
 };
 
 console.log('\n=== FASE 10 · ítem 2 — Validación estructural del DespatchAdvice (GRE 09) ===\n');
 
 const { xml } = construirDespatchAdviceXML(datos);
 
-// 2.a — buen-formado
 const wf = XMLValidator.validate(xml);
 check('XML bien-formado (fast-xml-parser)', wf === true, wf === true ? '' : JSON.stringify(wf));
 
-// Parse con atributos y sin prefijos ns para inspeccionar nodos.
-// parseTagValue/parseAttributeValue en false: los códigos SUNAT ("09","2.0","01","02") son
-// STRINGS con ceros a la izquierda; sin esto el parser los coacciona a número y falsea el check.
 const parser = new XMLParser({
   ignoreAttributes: false, attributeNamePrefix: '@', removeNSPrefix: true,
   parseTagValue: false, parseAttributeValue: false
@@ -96,22 +77,18 @@ check('Ubigeo de llegada presente', String(ship?.Delivery?.DeliveryAddress?.ID?.
 check('Ubigeo de partida presente',
   String(ship?.Delivery?.Despatch?.DespatchAddress?.ID?.['#text']) === '150142');
 
-// Modalidad privada (02): conductor con DNI+licencia y placa del vehículo.
 const driver = ship?.ShipmentStage?.DriverPerson;
 check('DriverPerson con DNI (schemeID=1)', String(driver?.ID?.['#text']) === '75336849');
 check('DriverPerson con licencia', String(driver?.IdentityDocumentReference?.ID) === 'Q75336849');
 check('TransportHandlingUnit con placa', String(ship?.TransportHandlingUnit?.TransportEquipment?.ID) === 'XXX000');
 
-// Observación (texto libre + OC) → cbc:Note, que SUNAT refleja como "Observaciones".
 check('cbc:Note con observación + OC', String(da?.Note || '').includes('OC: 260610043'), `Note=${da?.Note}`);
 
-// Líneas
 const lineas = Array.isArray(da?.DespatchLine) ? da.DespatchLine : [da?.DespatchLine];
 check('DespatchLine: cantidad de líneas == detalle', lineas.length === datos.detalle.length);
 check('DeliveredQuantity con unitCode', lineas[0]?.DeliveredQuantity?.['@unitCode'] === 'NIU',
   `unitCode=${lineas[0]?.DeliveredQuantity?.['@unitCode']}`);
 
-// ── Escenario TERCERO (público 01, 2 vehículos): espeja la GRE real aceptada EG07-325 ──────
 console.log('\n=== Escenario TERCERO (público 01) — CarrierParty+MTC + fecha entrega + 2 vehículos (TUCE+autorización) ===\n');
 const datosTercero = {
   ...datos,
@@ -130,8 +107,6 @@ const dt = parser.parse(xmlT).DespatchAdvice;
 const shipT = dt?.Shipment;
 const stageT = shipT?.ShipmentStage;
 check('TransportModeCode = 01 (público)', String(stageT?.TransportModeCode?.['#text']) === '01');
-// El builder es PURO: sin el flag ind.registrarTransp no emite el indicador. El servicio de emisión
-// SÍ lo activa en público+registrar (ver test positivo abajo) — es obligatorio en modalidad pública.
 check('builder sin flag → sin IndicadorVehiculoConductoresTransp',
   !String(shipT?.SpecialInstructions || '').includes('IndicadorVehiculoConductoresTransp'));
 check('LoadingTransportEvent (fecha entrega al transportista)',
@@ -153,14 +128,11 @@ check('Veh. secundario autorización',
 check('AdditionalItemProperty bien regulado (cat55 7022)',
   String((Array.isArray(dt?.DespatchLine) ? dt.DespatchLine[0] : dt?.DespatchLine)?.Item?.AdditionalItemProperty?.NameCode?.['#text']) === '7022');
 
-// Regresión rechazo 3355: TUCE/autorización copiados de la consulta de placa arrastran
-// espacios / espacios duros / anchos cero. Deben salir SANEADOS en RegistrationNationalityID
-// (antes se insertaban con cdata() sin trim → SUNAT rechazaba "no cumple con el formato").
 const datosSucio = {
   ...datosTercero,
   vehiculos: [
     { placa: 'T7U937', tuce: ' 151716963 ', autorizacion: '15M25063308E' },
-    { placa: 'A9Q986 ', tuce: '151741259 ', autorizacion: '​15M25063309E ' } // caso real reportado
+    { placa: 'A9Q986 ', tuce: '151741259 ', autorizacion: '​15M25063309E ' }
   ]
 };
 const { xml: xmlSucio } = construirDespatchAdviceXML(datosSucio);
@@ -171,15 +143,9 @@ check('TUCE secundario saneado (sin espacio duro U+00A0)',
   String(teqS?.AttachedTransportEquipment?.ApplicableTransportMeans?.RegistrationNationalityID) === '151741259');
 check('Autorización secundaria saneada (sin ancho cero ni espacio)',
   String(teqS?.AttachedTransportEquipment?.ShipmentDocumentReference?.ID?.['#text']) === '15M25063309E');
-// El valor parseado sale limpio con CDATA (SUNAT acepta CDATA: verificado con GRE real, el
-// certificado 15M…E del vehículo principal fue aceptado dentro de CDATA). El 3355 depende del
-// FORMATO del valor, no de la serialización.
 check('placa secundaria saneada (sin espacio final)',
   String(teqS?.AttachedTransportEquipment?.ID) === 'A9Q986');
 
-// Público + registrar veh/cond CON el flag que activa el servicio (esTercero && registrar): el XML
-// DEBE llevar SUNAT_Envio_IndicadorVehiculoConductoresTransp. Calcado de EG07-325/EG07-318 (domésticos
-// aceptados). Sin este indicador SUNAT rechaza con 3354 "no debe ingresar información de vehículo principal".
 const datosTerceroReg = { ...datosTercero, indicadores: { registrarTransp: true } };
 const { xml: xmlTR } = construirDespatchAdviceXML(datosTerceroReg);
 check('XML tercero+registrar bien-formado', XMLValidator.validate(xmlTR) === true);
@@ -188,9 +154,6 @@ const siTRArr = Array.isArray(siTR) ? siTR : [siTR];
 check('[Público+registrar] emite IndicadorVehiculoConductoresTransp (fix 3354)',
   siTRArr.some((s) => String(s).includes('SUNAT_Envio_IndicadorVehiculoConductoresTransp')));
 
-// ── Escenario CASO 1 (tercero 01, registrar=OFF): SOLO CarrierParty (espeja EG07-81) ─────────
-// Interruptor "registrar vehículos y conductores del transportista" DESACTIVADO: la GRE del
-// remitente declara únicamente al transportista; será el transportista quien emita su GRE 31.
 console.log('\n=== Escenario CASO 1 (tercero 01, registrar=OFF) — solo transportista, sin veh/cond ===\n');
 const datosCaso1 = { ...datosTercero, registrarTransportista: false };
 const { xml: xml1 } = construirDespatchAdviceXML(datosCaso1);
@@ -204,7 +167,6 @@ check('[C1] SIN SpecialInstructions (registrar=OFF)', ship1?.SpecialInstructions
 check('[C1] SIN DriverPerson', stage1?.DriverPerson === undefined);
 check('[C1] TransportEquipment vacío (sin placa)', ship1?.TransportHandlingUnit?.TransportEquipment?.ID === undefined);
 
-// ── Escenario multi-conductor: 2 cac:DriverPerson (Principal + Secundario) ───────────────────
 console.log('\n=== Escenario multi-conductor (Principal + Secundario) ===\n');
 const datosMulti = {
   ...datosTercero,
@@ -222,27 +184,20 @@ check('Conductor 1 = Principal', String(driversM?.[0]?.JobTitle) === 'Principal'
 check('Conductor 2 = Secundario', String(driversM?.[1]?.JobTitle) === 'Secundario');
 check('Conductor 2 DNI = 80257817', String(driversM?.[1]?.ID?.['#text']) === '80257817');
 
-// ── Indicadores opcionales (SpecialInstructions múltiples) ───────────────────────────────────
 console.log('\n=== Indicadores opcionales (transbordo / M1-L / retorno vacíos) ===\n');
 const datosInd = { ...datosTercero, indicadores: { transbordo: true, m1l: true, retornoVacio: true } };
 const { xml: xmlI } = construirDespatchAdviceXML(datosInd);
 check('XML indicadores bien-formado', XMLValidator.validate(xmlI) === true);
 const siList = parser.parse(xmlI).DespatchAdvice?.Shipment?.SpecialInstructions;
 const siArr = Array.isArray(siList) ? siList : [siList];
-// Aquí no se pasa registrarTransp, así que solo van los 3 indicadores opcionales explícitos.
 check('3 SpecialInstructions (solo indicadores explícitos)', siArr.length === 3, `n=${siArr.length}`);
 check('SIN indicador vehículos/conductores (flag no pasado)', !siArr.some((s) => String(s).includes('IndicadorVehiculoConductoresTransp')));
 check('Incluye transbordo', siArr.some((s) => String(s).includes('Transbordo')));
 check('Incluye M1L', siArr.some((s) => String(s).includes('VehiculoM1L')));
 check('Incluye retorno vacíos', siArr.some((s) => String(s).includes('RetornoVehiculoEnvaseVacio')));
 
-// ── Escenario PARTICULAR (privado 02) — carro común del cliente SIN RUC: espeja EG07-256 ─────
-// El cliente traslada con su propio auto/camioneta. Estructura IDÉNTICA al vehículo propio de
-// flota (DriverPerson + TransportEquipment, sin CarrierParty): solo cambia el ORIGEN del dato
-// (texto libre vs desplegable de flota). Se contrasta contra el XML real aceptado por SUNAT.
 console.log('\n=== Escenario PARTICULAR (privado 02) — carro del cliente sin RUC (espeja EG07-256) ===\n');
 
-// Normalización de placa: el usuario puede escribir "B2Q-671" y debe llegar a SUNAT como "B2Q671".
 check('placaValida acepta "B2Q-671" y "B2Q671"', placaValida('B2Q-671') && placaValida('B2Q671'));
 check('normalizarPlaca("B2Q-671") == "B2Q671"', normalizarPlaca('B2Q-671') === 'B2Q671', normalizarPlaca('B2Q-671'));
 check('placaValida rechaza vacío / con longitud inválida', !placaValida('') && !placaValida('B2Q'));
@@ -255,10 +210,9 @@ const datosParticular = {
     ubigeo_partida: '150142', direccion_partida: 'AV. EL SOL MZ. LL-1 LOTE. 4 B - VILLA EL SALVADOR',
     ubigeo_llegada: '150131', direccion_llegada: '---- JUAN PEZET NRO. 543 DPTO. 401 - SAN ISIDRO'
   },
-  modalidad: '02',            // privado — igual que la flota
-  transportista: null,        // ← sin empresa de transporte (no hay RUC tercero)
+  modalidad: '02',
+  transportista: null,
   fechaEntregaTransportista: null,
-  // Conductor + placa de TEXTO LIBRE (el backend ya aplicó normalizarPlaca antes de llegar aquí).
   conductor: { dni: '07471043', nombre: 'CHAVEZ GUERRA CHARLES JORGE', licencia: 'Q07471043' },
   vehiculos: [{ placa: normalizarPlaca('B2Q-671'), tuce: null, autorizacion: null }]
 };
@@ -280,8 +234,6 @@ check('Veh. principal SIN TUCE ni AttachedTransportEquipment',
   shipP?.TransportHandlingUnit?.TransportEquipment?.ApplicableTransportMeans === undefined &&
   shipP?.TransportHandlingUnit?.TransportEquipment?.AttachedTransportEquipment === undefined);
 
-// Contraste directo contra el XML REAL aceptado por SUNAT (docs/20550932297-09-EG07-256.xml):
-// misma modalidad, mismo conductor/placa y misma AUSENCIA de bloques de tercero.
 try {
   const refXml = readFileSync(join(__dirname, '..', '..', 'docs', '20550932297-09-EG07-256.xml'), 'utf8');
   const ref = parser.parse(refXml).DespatchAdvice;
@@ -297,20 +249,16 @@ try {
   check('XML de referencia EG07-256 legible en docs/', false, e.message);
 }
 
-// Prueba de EQUIVALENCIA: mismo caso emitido "como flota" (mismos datos) produce el MISMO XML
-// que "como particular". Confirma que para SUNAT no cambia NADA: ambos son privado 02.
 const { xml: xmlComoFlota } = construirDespatchAdviceXML({ ...datosParticular });
 check('Particular y flota generan XML idéntico (misma estructura privada 02)', xmlComoFlota === xmlP);
 
 console.log('\n=== FASE 10 · ítem 3 — Flujo MOCK de punta a punta (sin BD/cert) ===\n');
 
-// Espeja gre.service.js en BETA: enviarGuia -> MOCKGRE+ts ; consultarGuia -> codRespuesta 0.
 const esBeta = true;
 const enviarGuiaMock = () => (esBeta ? 'MOCKGRE' + Date.now() : null);
 const consultarGuiaMock = () => (esBeta
   ? { codRespuesta: '0', cdrZip: null, indCdrGenerado: '0', error: null, mock: true }
   : null);
-// Espeja cerrarTicketGre: codRespuesta '0' -> ACEPTADO ; '99' -> RECHAZADO ; resto -> ENVIADO.
 const decidirEstado = (st) => st.codRespuesta === '0' ? 'ACEPTADO' : (st.codRespuesta === '99' ? 'RECHAZADO' : 'ENVIADO');
 
 const zipBuf = zipXml(`${nombre}.xml`, xml);
@@ -328,7 +276,6 @@ const estadoFinal = decidirEstado(st);
 check('Decisión de estado == ACEPTADO', estadoFinal === 'ACEPTADO', `estadoFinal=${estadoFinal}`);
 check('CDR simulado: aceptación sin CDR-zip real (null en BETA)', st.cdrZip === null);
 
-// ── Escenario COMEX / EXPORTACIÓN (09): espeja la GRE real aceptada EG07-273 ────────────────
 console.log('\n=== FASE 16 · EXPORTACIÓN — GRE comex espeja el molde real EG07-273 ===\n');
 
 const datosComex = {
@@ -353,7 +300,7 @@ const datosComex = {
     docsRelacionados: [{ tipo_cod: '50', tipo_desc: 'Declaración Aduanera de Mercancías (DAM)', serie: null, numero: '118-2026-40-70727' }],
     contenedores: [{ numero_contenedor: 'MRSU4280077', numero_precinto: 'MLPE0153521' }],
     damNumero: '118-2026-40-70727',
-    deliveryEstablishmentCode: '2', // cód. establecimiento anexo del destinatario (VILLAS OQUENDO puerto)
+    deliveryEstablishmentCode: '2',
   },
 };
 
@@ -362,20 +309,17 @@ check('COMEX: XML bien-formado', XMLValidator.validate(xmlCx) === true);
 const dcx = parser.parse(xmlCx).DespatchAdvice;
 const shipCx = dcx?.Shipment;
 
-// Documento relacionado DAM (cat.61 cód.50) tras el Note.
 const docRel = dcx?.AdditionalDocumentReference;
 check('COMEX: AdditionalDocumentReference DAM presente', !!docRel);
 check('COMEX: DAM ID = nº DAM', String(docRel?.ID) === '118-2026-40-70727', `ID=${docRel?.ID}`);
 check('COMEX: DAM DocumentTypeCode = 50 (cat.61)', String(docRel?.DocumentTypeCode?.['#text']) === '50');
 check('COMEX: DAM DocumentType descriptivo', String(docRel?.DocumentType || '').includes('DAM'));
 
-// SpecialInstructions: traslado total PRIMERO, luego VehiculoConductoresTransp.
 const si = Array.isArray(shipCx?.SpecialInstructions) ? shipCx.SpecialInstructions : [shipCx?.SpecialInstructions];
 check('COMEX: SpecialInstructions traslado total de la DAM/DS', si.includes('SUNAT_Envio_IndicadorTrasladoTotalDAMoDS'));
 check('COMEX: traslado total va PRIMERO', String(si[0]) === 'SUNAT_Envio_IndicadorTrasladoTotalDAMoDS', `si[0]=${si[0]}`);
 check('COMEX: IndicadorVehiculoConductoresTransp presente (export lo emite)', si.includes('SUNAT_Envio_IndicadorVehiculoConductoresTransp'));
 
-// HandlingCode 09 + destinatario = operador de puerto.
 check('COMEX: HandlingCode = 09 (Exportación)', String(shipCx?.HandlingCode?.['#text']) === '09');
 check('COMEX: destinatario = operador de puerto (no cliente OV)',
   String(dcx?.DeliveryCustomerParty?.Party?.PartyIdentification?.ID?.['#text']) === '20508782013');
@@ -383,14 +327,12 @@ check('COMEX: DeliveryAddress AddressTypeCode = cód. establecimiento destinatar
   String(shipCx?.Delivery?.DeliveryAddress?.AddressTypeCode?.['#text']) === '2',
   `AddressTypeCode=${shipCx?.Delivery?.DeliveryAddress?.AddressTypeCode?.['#text']}`);
 
-// cac:Package (contenedor + precinto) dentro del TransportHandlingUnit, tras el vehículo.
 const thuCx = shipCx?.TransportHandlingUnit;
 check('COMEX: Package (contenedor) presente', String(thuCx?.Package?.ID) === 'MRSU4280077', `ID=${thuCx?.Package?.ID}`);
 check('COMEX: Package TraceID = precinto', String(thuCx?.Package?.TraceID) === 'MLPE0153521', `TraceID=${thuCx?.Package?.TraceID}`);
 check('COMEX: 2 vehículos (principal + AttachedTransportEquipment)',
   String(thuCx?.TransportEquipment?.ID) === 'C5M782' && String(thuCx?.TransportEquipment?.AttachedTransportEquipment?.ID) === 'BPO993');
 
-// Item: 7020 subpartida / 7021 nº DAM / 7023 serie DAM (además del 7022).
 const itemCx = (Array.isArray(dcx?.DespatchLine) ? dcx.DespatchLine[0] : dcx?.DespatchLine)?.Item;
 const props = Array.isArray(itemCx?.AdditionalItemProperty) ? itemCx.AdditionalItemProperty : [itemCx?.AdditionalItemProperty];
 const byCode = (c) => props.find((p) => String(p?.NameCode?.['#text']) === c);
@@ -402,17 +344,13 @@ check('COMEX: orden de propiedades = 7020, 7022, 7021, 7023',
   props.map((p) => String(p?.NameCode?.['#text'])).join(',') === '7020,7022,7021,7023',
   props.map((p) => String(p?.NameCode?.['#text'])).join(','));
 
-// ── Escenario COMPRA (GRE 09, motivo 02) — SPI recoge su mercadería: espeja EG07-333 ─────────
-// Diferencias vs venta: destinatario = la propia empresa; se agrega cac:SellerSupplierParty con el
-// proveedor; la factura del proveedor va como AdditionalDocumentReference con IssuerParty (RUC
-// proveedor); y el establecimiento de partida (listID) es el del proveedor. Contrasta con el XML real.
 console.log('\n=== COMPRA (GRE 09 motivo 02) — SPI recoge con flota propia (espeja EG07-333) ===\n');
 
 const PROV_RUC = '20100064490';
 const datosCompra = {
   tipo: '09', serie: 'EG07', numero: '333',
   empresa: { ruc: RUC, razon_social: 'INDPACK S.A.C.' },
-  cliente: { ruc: RUC, razon_social: 'INDPACK S.A.C.', tipo_documento: 'RUC' }, // destinatario = la propia empresa
+  cliente: { ruc: RUC, razon_social: 'INDPACK S.A.C.', tipo_documento: 'RUC' },
   proveedor: { ruc: PROV_RUC, razon_social: 'DISPERCOL S A' },
   guia: {
     motivo_traslado_cod: '02', motivo_traslado: 'COMPRA', peso_bruto_kg: 1000,
@@ -445,7 +383,6 @@ check('COMPRA: SellerSupplierParty = proveedor',
 check('COMPRA: SellerSupplierParty razón social',
   String(dc?.SellerSupplierParty?.Party?.PartyLegalEntity?.RegistrationName) === 'DISPERCOL S A');
 
-// AdditionalDocumentReference = factura del proveedor (forma completa cat.61 + IssuerParty).
 const docRelC = dc?.AdditionalDocumentReference;
 check('COMPRA: AdditionalDocumentReference ID = factura proveedor', String(docRelC?.ID) === 'F001-115256');
 check('COMPRA: DocumentTypeCode = 01 (cat.61)', String(docRelC?.DocumentTypeCode?.['#text']) === '01');
@@ -453,7 +390,6 @@ check('COMPRA: DocumentType = Factura', String(docRelC?.DocumentType) === 'Factu
 check('COMPRA: IssuerParty = RUC del proveedor emisor',
   String(docRelC?.IssuerParty?.PartyIdentification?.ID?.['#text']) === PROV_RUC);
 
-// Establecimientos: partida = proveedor, llegada = SPI.
 check('COMPRA: partida (DespatchAddress) listID = RUC proveedor',
   String(shipC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']) === PROV_RUC,
   `listID=${shipC?.Delivery?.Despatch?.DespatchAddress?.AddressTypeCode?.['@listID']}`);
@@ -471,12 +407,10 @@ check('COMPRA: conserva cantidad y unidad documentales',
   Number(lineasCompraXml[1]?.DeliveredQuantity?.['#text']) === 500
   && lineasCompraXml[1]?.DeliveredQuantity?.['@unitCode'] === 'KGM');
 
-// Regresión: la GRE de VENTA (sin proveedor) NO emite SellerSupplierParty ni IssuerParty.
 check('COMPRA: VENTA no regresiona (sin SellerSupplierParty)', da?.SellerSupplierParty === undefined);
 check('COMPRA: VENTA no regresiona (docRel simple sin IssuerParty)',
   da?.AdditionalDocumentReference === undefined || da?.AdditionalDocumentReference?.IssuerParty === undefined);
 
-// Contraste directo contra el XML REAL aceptado por SUNAT (docs/20550932297-09-EG07-333.xml).
 try {
   const refXml = readFileSync(join(__dirname, '..', '..', 'docs', '20550932297-09-EG07-333.xml'), 'utf8');
   const refC = parser.parse(refXml).DespatchAdvice;
@@ -494,9 +428,6 @@ try {
   check('XML de referencia EG07-333 legible en docs/', false, e.message);
 }
 
-// ── Documentos relacionados de VENTA (factura → guía) — molde EG07-358 ────────
-// Cuando se factura ANTES de emitir la guía, la GRE de venta declara la(s) factura(s) con
-// cac:AdditionalDocumentReference + IssuerParty = RUC de la propia empresa (SPI es el emisor).
 console.log('\n=== VENTA: factura(s) relacionada(s) (AdditionalDocumentReference) ===\n');
 const datosConFactura = {
   ...datos,

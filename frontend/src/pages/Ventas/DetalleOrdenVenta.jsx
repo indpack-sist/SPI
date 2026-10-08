@@ -25,12 +25,9 @@ function DetalleOrdenVenta() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { tienePermiso, rol } = usePermisos();
-  // El Margen % expone costo/utilidad: solo Administrador lo ve (evita confusión a comerciales).
   const esAdmin = rol === 'Administrador';
-  // Calidad/Supervisor: acceso de solo lectura sin datos financieros.
   const verFinanzas = tienePermiso('verFinanzasVentas');
   const soloLectura = !verFinanzas;
-  // Facturación Electrónica (SEE): permiso pleno o de solo consulta (Comercial/Ventas).
   const puedeVerSee = tienePermiso('facturacion') || tienePermiso('facturacionConsulta');
   const seeSoloLectura = !tienePermiso('facturacion');
   
@@ -64,12 +61,7 @@ function DetalleOrdenVenta() {
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [guiasRemision, setGuiasRemision] = useState([]);
-  // Detalle completo de las GRE vigentes de la orden (para las cards SEE embebidas). Con entregas
-  // parciales pueden coexistir varias guías por OV, cada una por una parte del pedido.
   const [guiasDetalleSee, setGuiasDetalleSee] = useState([]);
-  // Historial de intentos (emisiones) por guía, para las que caen en el "Historial de Guías"
-  // compacto (anuladas/rechazadas): así los intentos RECHAZADOS que se sobrescribieron al reemitir
-  // siguen visibles aunque la baja ya esté confirmada y la guía ya no tenga card SEE. { [id_guia]: [] }
   const [emisionesHistorial, setEmisionesHistorial] = useState({});
 
   const [loading, setLoading] = useState(true);
@@ -111,8 +103,6 @@ function DetalleOrdenVenta() {
   const [facturaAEliminar, setFacturaAEliminar] = useState(null);
   const [fileSunat, setFileSunat] = useState(null);
   const [facturas, setFacturas] = useState([]);
-  // Comprobantes electrónicos (SEE) para el panel: TODOS los que tienen sunat_estado, incluidas las
-  // facturas anuladas por NC y las rechazadas → trazabilidad total (nada desaparece al refacturar).
   const [facturasSee, setFacturasSee] = useState([]);
   const [resumenFacturacion, setResumenFacturacion] = useState(null);
   const [facturaTabActiva, setFacturaTabActiva] = useState(0);
@@ -121,7 +111,6 @@ function DetalleOrdenVenta() {
   const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
   const [modalTransitoOpen, setModalTransitoOpen] = useState(false);
   const [fechaDespachoTransito, setFechaDespachoTransito] = useState('');
-  // Vincular factura / documento a un despacho concreto (id_salida)
   const [salidaParaFactura, setSalidaParaFactura] = useState(null);
   const [salidaFacturaInfo, setSalidaFacturaInfo] = useState({ valor: 0, facturado: 0 });
   const [modalDocDespacho, setModalDocDespacho] = useState(false);
@@ -187,13 +176,10 @@ function DetalleOrdenVenta() {
     transporte_tuc2: '',
     transporte_autorizacion2: '',
     transporte_fecha_entrega: '',
-    // Interruptor "registrar vehículos y conductores del transportista" (Caso 1 ↔ 2/3). Default Sí.
     transporte_registrar: true,
-    // Conductor secundario (opcional).
     transporte_dni2: '',
     transporte_conductor2: '',
     transporte_licencia2: '',
-    // Indicadores SUNAT (opcionales).
     transporte_ind_transbordo: false,
     transporte_ind_m1l: false,
     transporte_ind_retorno_vacio: false,
@@ -211,8 +197,6 @@ function DetalleOrdenVenta() {
     }).format(valor);
   };
 
-  // Los importes/totales se muestran SIEMPRE con 2 decimales (los precios unitarios
-  // usan formatearMonedaPrecio, con hasta 6 decimales).
   const formatearTotal2 = (valor) => {
     return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
@@ -227,8 +211,6 @@ function DetalleOrdenVenta() {
     return `${simbolo} ${formatearTotal2(parseFloat(valor || 0))}`;
   };
 
-  // El precio unitario puede tener hasta 6 decimales; se muestra completo
-  // para que P. Final × Pedido reconcilie con el Subtotal (que usa precisión completa).
   const formatearNumeroPrecio = (valor) => {
     return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
@@ -243,8 +225,6 @@ function DetalleOrdenVenta() {
     return `${simbolo} ${formatearNumeroPrecio(parseFloat(valor || 0))}`;
   };
 
-  // Lleva un valor neto (sin IGV, como salidas.total_precio) a bruto con IGV,
-  // para poder cruzarlo con el total de una factura (que sí incluye IGV).
   const calcularValorConIgv = (valorNeto) => {
     const neto = parseFloat(valorNeto || 0);
     const pct = parseFloat(orden?.porcentaje_impuesto || 0);
@@ -269,7 +249,6 @@ function DetalleOrdenVenta() {
   const abrirVisor = (url, titulo) => {
     if (!url) return;
 
-    // Archivo local (File object) — vista previa antes de subir
     if (url instanceof File) {
       const objectUrl = URL.createObjectURL(url);
       setVisorArchivo({
@@ -282,7 +261,6 @@ function DetalleOrdenVenta() {
       return;
     }
 
-    // Defensa contra arrays u objetos que lleguen a este punto
     let cleanUrl = url;
     if (Array.isArray(cleanUrl)) cleanUrl = cleanUrl[0];
     if (typeof cleanUrl !== 'string') {
@@ -395,7 +373,6 @@ function DetalleOrdenVenta() {
                  total: idsFiltrados.length
                });
             } else {
-               // Fallback: Si el ID no está en la lista filtrada, reseteamos la info
                setNavInfo({ prev: null, next: null, current: 0, total: 0 });
             }
         } else {
@@ -429,9 +406,7 @@ function DetalleOrdenVenta() {
     try {
       setLoading(true);
       setError(null);
-      
-      // Fallback neutro para roles de solo lectura (Calidad/Supervisor) o si algún
-      // endpoint financiero responde 403; así la página no se rompe.
+
       const vacio = (data) => Promise.resolve({ data: { success: true, data } });
 
       const ordenRes = await ordenesVentaAPI.getById(id);
@@ -466,29 +441,19 @@ function DetalleOrdenVenta() {
       if (facturasAnuladasRes?.data?.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
       if (documentosRes?.data?.success) setDocumentosAdicionales(documentosRes.data.data || []);
 
-      // Guías de la orden + detalle completo de la activa (para la card SEE embebida).
       const guiasData = guiasRes?.data?.success ? (guiasRes.data.data || []) : [];
       setGuiasRemision(guiasData);
-      // Entregas parciales: pueden coexistir varias GRE vigentes por OV. Se carga el detalle
-      // completo de cada una (para su card SEE). Se incluye también una guía anulada solo
-      // localmente que aún requiera sincronizar/confirmar su baja hecha en SUNAT SOL.
       const vigentes = guiasData.filter(g => g.estado !== 'Anulada');
       const anuladasPorSincronizar = guiasData.filter(g =>
         g.estado === 'Anulada'
         && ['ACEPTADO', 'ANULADA'].includes(g.sunat_estado)
         && Number(g.baja_sunat_confirmada) !== 1
       );
-      // Orden cronológico (1ª entrega primero) para entregas parciales: se ordena por id_guia
-      // ascendente, así las cards se leen en el orden en que se despachó el pedido.
       const paraDetalle = [...vigentes, ...anuladasPorSincronizar]
         .sort((a, b) => (Number(a.id_guia) || 0) - (Number(b.id_guia) || 0));
-      // Guías del "Historial de Guías" compacto (anuladas/rechazadas/reemplazadas). Su detalle
-      // completo (getById → incluye `emisiones`) trae los intentos RECHAZADOS que se sobrescribieron
-      // al reemitir, para poder mostrarlos aunque la baja ya esté confirmada.
       const paraHistorial = guiasData.filter(g =>
         g.estado === 'Anulada' || ['ANULADA', 'REEMPLAZADA', 'RECHAZADO'].includes(g.sunat_estado)
       );
-      // Detalle una sola vez por guía (unión de las que tendrán card SEE + las del historial).
       const idsDetalle = [...new Set([...paraDetalle, ...paraHistorial].map(g => g.id_guia))];
       const detallePorId = new Map();
       if (idsDetalle.length > 0) {
@@ -509,15 +474,11 @@ function DetalleOrdenVenta() {
       if (facturasRes?.data?.success) {
         const fData = facturasRes.data.data || {};
         const todas = fData.facturas || [];
-        // "Ver facturas" (conteo/pestañas legacy) = SOLO facturas VÁLIDAS y vigentes: no notas (07/08),
-        // no rechazadas, no anuladas. Así el contador refleja la factura realmente válida, no el historial.
         const facturaValida = (f) =>
           f.estado === 'Emitida' &&
           f.codigo_tipo_sunat !== '07' && f.codigo_tipo_sunat !== '08' &&
           (!f.sunat_estado || f.sunat_estado === 'ACEPTADO');
         setFacturas(todas.filter(facturaValida));
-        // El panel SEE recibe TODOS los comprobantes electrónicos (válidas + Anuladas por NC +
-        // Rechazadas + notas): así FE01-7 anulada sigue visible junto a su NC y a las reemisiones.
         setFacturasSee(todas.filter(f => f.sunat_estado));
         setResumenFacturacion(fData.resumen || null);
         setFacturaTabActiva(0);
@@ -563,8 +524,6 @@ function DetalleOrdenVenta() {
     
     const index = nuevosDetalles.findIndex(item => item.id_producto === idProducto);
     if (index !== -1) {
-        // Se permite despachar por encima de lo pendiente (venta con excedente),
-        // pero se advierte al usuario en el propio panel (ver render del modal).
         nuevosDetalles[index].cantidad_a_despachar = val;
         setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
     }
@@ -611,8 +570,6 @@ function DetalleOrdenVenta() {
     }
   };
 
-  // Abre el modal de anulación. Si la salida proviene de una guía de remisión (su observación
-  // lleva "Despacho Guía ..."), el modal ofrece anular también la guía.
   const handleAnularDespacho = (idSalida, row) => {
     const guiaMatch = /Despacho Gu[ií]a\s+(\S+)/i.exec(row?.observaciones || '');
     const esGuia = !!guiaMatch;
@@ -1300,10 +1257,8 @@ function DetalleOrdenVenta() {
       const link = document.createElement('a');
       link.href = url;
       
-      // Formatear el número de salida (ej. SAL-000123) por si viene el dato
       const numeroSalidaFormat = numeroSalida ? `SAL-${String(numeroSalida).padStart(6, '0')}` : idSalida;
-      
-      // Se asigna el nombre con ambos correlativos
+
       link.setAttribute('download', `ConstanciaSalida-${orden.numero_orden}-${numeroSalidaFormat}.pdf`);
       
       document.body.appendChild(link);
@@ -1364,8 +1319,6 @@ function DetalleOrdenVenta() {
   const handleVerPDFSalida = async (idSalida, numeroSalida) => {
     try {
       setDescargandoPDF(`ver-${idSalida}`);
-      // Vista en pantalla: variante valorizada (con precios) solo para roles con acceso
-      // financiero; Calidad/Supervisor ven la guía sin precios.
       const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida, verFinanzas);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -1668,7 +1621,6 @@ function DetalleOrdenVenta() {
   const handleSubirFacturaDespacho = (row) => {
     const facturado = row.factura ? parseFloat(row.factura.total || 0) : 0;
     setSalidaParaFactura(row.id_salida);
-    // El objetivo del modal es el valor del despacho CON IGV (comparable a la factura).
     setSalidaFacturaInfo({ valor: calcularValorConIgv(row.total_precio), facturado });
     const input = document.getElementById('facturaSunatDespachoInput');
     if (input) input.click();
@@ -1743,17 +1695,12 @@ function DetalleOrdenVenta() {
 
   const puedeDespachar = () => {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') return false;
-    // La orden de muestra también pasa por verificación administrativa antes de despachar/emitir GRE.
     if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
     const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
     return pendientes;
   };
 
-  // Con entregas parciales pueden coexistir varias GRE vigentes por OV. `guiaActiva` es la más
-  // reciente vigente (para acciones legacy a nivel de OV, p.ej. "Poner en Tránsito").
   const guiaActiva = guiasRemision.find(g => g.estado !== 'Anulada') || null;
-  // Saldo pendiente de despachar en guías (por línea: pedido − lo ya comprometido en guías
-  // vigentes). > 0 habilita crear la siguiente guía parcial, hasta cubrir el total (nunca de más).
   const pendienteGuias = (orden?.detalle || []).reduce((acc, it) => {
     const enGuias = it.cantidad_en_guias != null
       ? parseFloat(it.cantidad_en_guias || 0)
@@ -1783,7 +1730,6 @@ function DetalleOrdenVenta() {
     } finally { setProcesando(false); }
   };
 
-  // PDF de un intento archivado (reimprime desde su snapshot inmutable, con marca de estado/motivo).
   const descargarPdfEmisionHistorial = async (guia, idEmision) => {
     try {
       setProcesando(true); setError(null);
@@ -1793,7 +1739,6 @@ function DetalleOrdenVenta() {
     } finally { setProcesando(false); }
   };
 
-  // XML/CDR de un intento archivado, directo desde su URL almacenada.
   const descargarUrlEmisionHistorial = async (url, nombre) => {
     try {
       setProcesando(true); setError(null);
@@ -1803,9 +1748,6 @@ function DetalleOrdenVenta() {
     } finally { setProcesando(false); }
   };
 
-  // La GRE Remitente (09) aplica tanto en transporte privado (Vehículo Empresa: conductor +
-  // placa propios) como en transporte público (Transporte Privado/Tercero: un transportista con
-  // RUC). Solo se excluye "Recojo en Tienda" (el cliente recoge, sin traslado del remitente).
   const esGREAplicable = orden?.tipo_entrega === 'Vehiculo Empresa' || orden?.tipo_entrega === 'Transporte Privado';
 
   const puedeReservarStock = () => {
@@ -1837,9 +1779,6 @@ function DetalleOrdenVenta() {
   }
   const esUSD = orden.moneda === 'USD';
   const tcVenta = tipoCambio?.venta || null;
-  // Totales con redondeo POR LÍNEA (mismo criterio que la factura electrónica y el backend de
-  // la OV; ver ubl.service.js calcularComprobante): el IGV se calcula y redondea por cada línea
-  // y luego se suma, para que el detalle cuadre con el comprobante que se emite a SUNAT.
   const round2OV = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
   const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
@@ -1848,7 +1787,7 @@ function DetalleOrdenVenta() {
   for (const item of orden.detalle) {
     const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
     if (isNaN(val)) continue;
-    const lineBase = round2OV(val);                 // base de la línea (2 dec)
+    const lineBase = round2OV(val);
     subtotalReal += lineBase;
     if (!esSinImpuesto) impuestoReal += round2OV(lineBase * (porcentajeImpuesto / 100));
   }
@@ -1870,8 +1809,6 @@ function DetalleOrdenVenta() {
   const IconoVerificacion = estadoVerifConfig.icono;
 
   const sinComprobanteAsignado = !orden.numero_comprobante;
-  // Orden de muestra: sin valor comercial → no se factura. Se oculta toda la UI de comprobante /
-  // facturación (solo GRE). Ver createOrdenVenta (tipo_comprobante NULL, es_muestra = 1).
   const esMuestra = Number(orden.es_muestra) === 1;
 
   const columns = [
@@ -2140,7 +2077,6 @@ function DetalleOrdenVenta() {
     }
   ];
 
-  // Calidad/Supervisor: sin precio unitario, margen, subtotal ni acciones (mutaciones).
   const columnasProductoFinancieras = ['precio_unitario', 'descuento_porcentaje', 'valor_venta', 'id_producto'];
   const columnsDetalleVisibles = (verFinanzas
     ? columns
@@ -2373,11 +2309,11 @@ function DetalleOrdenVenta() {
                   onChange={(e) => {
                     const file = e.target.files[0];
                     if (file) {
-                      setSalidaParaFactura(null); // factura a nivel orden
+                      setSalidaParaFactura(null);
                       setFileSunat(file);
                       setModalSunatOpen(true);
                     }
-                    e.target.value = null; // Reset input
+                    e.target.value = null;
                   }}
                 />
                 <label
@@ -2390,10 +2326,6 @@ function DetalleOrdenVenta() {
               </div>
             )
           )}
-
-          {/* Botón "Reservar Stock" retirado de la cabecera por decisión del usuario (2026-08-27):
-              el despacho se registra al crear la guía de remisión. El modal de reserva y sus
-              handlers se conservan por si se reactiva. */}
 
           {puedeDespachar() && (
              <button
@@ -2497,7 +2429,6 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Alerta de Tipo de Cambio 1 en USD */}
       {verFinanzas && orden.moneda === 'USD' && parseFloat(orden.tipo_cambio) === 1 && (
         <div className="alert alert-error mb-6 border-2 border-red-500 bg-red-50 animate-pulse shadow-lg">
           <div className="flex items-center gap-4">
@@ -2852,7 +2783,6 @@ function DetalleOrdenVenta() {
                                 <label className="text-sm font-medium text-muted">O/C Cliente:</label>
                                 <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
                             </div>
-                            {/* Badge de verificación OC */}
                             {orden.estado_verificacion_oc === 'Verificado' && (
                                 <span className="flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded-full">
                                     <ShieldCheck size={12} /> Verificada
@@ -2871,7 +2801,6 @@ function DetalleOrdenVenta() {
                         </div>
 
                         <div className="space-y-2">
-                            {/* Previews en miniatura de los archivos OC */}
                             {orden.orden_compra_url && (() => {
                                 let urls = [];
                                 try {
@@ -2931,7 +2860,6 @@ function DetalleOrdenVenta() {
                                                                 style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
                                                             />
                                                         )}
-                                                        {/* Botón flotante para abrir en pantalla completa */}
                                                         <button
                                                             onClick={() => abrirVisor(url, titulo)}
                                                             title="Abrir en pantalla completa"
@@ -2963,7 +2891,6 @@ function DetalleOrdenVenta() {
                                 );
                             })()}
 
-                            {/* Botón verificar OC */}
                             {orden.orden_compra_url && orden.estado !== 'Cancelada' && (
                                 <div className="flex">
                                     <button
@@ -3094,7 +3021,6 @@ function DetalleOrdenVenta() {
                     </p>
                     {facturas.length > 0 ? (
                         <div className="space-y-3">
-                            {/* Resumen de saldo facturado */}
                             {resumenFacturacion && (
                                 <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-xs space-y-1">
                                     <div className="flex justify-between">
@@ -3119,7 +3045,6 @@ function DetalleOrdenVenta() {
                                 </div>
                             )}
 
-                            {/* Pestañas de facturas */}
                             {facturas.length > 1 && (
                                 <div className="flex flex-wrap gap-1.5 border-b pb-2.5 mb-1">
                                     {facturas.map((f, idx) => (
@@ -3138,7 +3063,6 @@ function DetalleOrdenVenta() {
                                 </div>
                             )}
 
-                            {/* Detalle + visor de la factura activa */}
                             {facturas[facturaTabActiva] && (
                                 <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-2">
                                     <div className="flex items-center justify-between">
@@ -3206,7 +3130,6 @@ function DetalleOrdenVenta() {
                         </div>
                     )}
 
-                    {/* Historial de Facturas Anuladas */}
                     {facturasAnuladas.length > 0 && (
                         <div className="mt-4">
                             <p className="text-xs font-bold uppercase text-red-600 mb-2 flex items-center gap-1">
@@ -3242,17 +3165,10 @@ function DetalleOrdenVenta() {
         </div>
         )}
 
-        {/* Facturación Electrónica (SEE) nativa — Fase 14. Coexiste con el panel manual de arriba.
-            Solo para órdenes de tipo Factura: las Notas de Venta (inafecto) NO se emiten a SUNAT
-            (mismo criterio que el gating manual, ver tipo_comprobante === 'Factura' arriba). */}
         {puedeVerSee && orden.tipo_comprobante === 'Factura' && (
             <PanelFacturacionSee orden={orden} facturas={facturasSee} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
         )}
 
-        {/* Guías de Remisión Electrónicas (SEE · GRE 09) — misma experiencia que la factura,
-            embebidas en el detalle de la OV. Con entregas parciales pueden coexistir VARIAS guías,
-            cada una por una parte del pedido; se muestra una card por cada guía vigente y se ofrece
-            crear la siguiente mientras quede saldo por despachar (nunca más del total). */}
         {puedeVerSee && esGREAplicable && (
             <>
                 {guiasDetalleSee.map((g) => (
@@ -3333,8 +3249,6 @@ function DetalleOrdenVenta() {
                   {g.baja_sunat_evidencia_url && (
                     <a href={g.baja_sunat_evidencia_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs underline text-red-700">Ver evidencia de la baja ↗</a>
                   )}
-                  {/* Historial de intentos SUNAT de esta guía: incluye los RECHAZADOS que se
-                      sobrescribieron al reemitir con el siguiente correlativo. */}
                   {(emisionesHistorial[g.id_guia] || []).length > 0 && (
                     <div className="mt-2 border-t border-red-200 pt-2 space-y-1.5">
                       <div className="text-[10px] font-semibold uppercase text-red-700/70">Historial de emisiones SUNAT</div>
@@ -3376,7 +3290,6 @@ function DetalleOrdenVenta() {
           </div>
         )}
 
-        {/* Documentos Adicionales */}
         {verFinanzas && (
         <div className="card h-full">
             <div className="card-header">
@@ -3384,7 +3297,6 @@ function DetalleOrdenVenta() {
             </div>
             <div className="card-body space-y-3">
 
-                {/* Formulario agregar */}
                 {!soloLectura && orden.estado !== 'Cancelada' && (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
                         <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Agregar documento</p>
@@ -3432,7 +3344,6 @@ function DetalleOrdenVenta() {
                             </button>
                         </div>
 
-                        {/* Vista previa de archivos seleccionados (antes de subir) */}
                         {formDocumento.archivos.length > 0 && (
                             <div className="flex gap-1.5 flex-wrap pt-1">
                                 {formDocumento.archivos.map((file, i) => (
@@ -3461,7 +3372,6 @@ function DetalleOrdenVenta() {
                     </div>
                 )}
 
-                {/* Lista de documentos activos */}
                 {(() => {
                     const activos   = documentosAdicionales.filter(d => !d.deleted_at);
                     const eliminados = documentosAdicionales.filter(d =>  d.deleted_at);
@@ -3530,7 +3440,6 @@ function DetalleOrdenVenta() {
                                 </div>
                             )}
 
-                            {/* Historial de eliminados */}
                             {eliminados.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-gray-100">
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1 mb-2">
@@ -3752,7 +3661,6 @@ function DetalleOrdenVenta() {
                                                             style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
                                                         />
                                                     )}
-                                                    {/* Botón flotante para abrir en pantalla completa */}
                                                     <button
                                                         onClick={() => abrirVisor(url, titulo)}
                                                         title="Abrir en pantalla completa"
@@ -3895,9 +3803,6 @@ function DetalleOrdenVenta() {
                          {
                            header: 'Observaciones',
                            accessor: 'observaciones',
-                           // Resuelve el nº interno de guía (T001-xxxxxxxx) al comprobante SUNAT
-                           // (p.ej. TE01-6) cuando la guía ya está emitida. Corrige despachos previos
-                           // cuya observación se guardó con el correlativo interno.
                            render: (obs) => {
                              if (!obs) return obs;
                              return String(obs).replace(/T\d{3}-\d{4,}/g, (match) => {
@@ -3914,7 +3819,6 @@ function DetalleOrdenVenta() {
                            width: '180px',
                            align: 'center',
                            render: (factura, row) => {
-                             // Valor del despacho CON IGV para cruzar contra el total de la factura.
                              const valorDespacho = calcularValorConIgv(row.total_precio);
                              const puedeFacturar = orden.tipo_comprobante === 'Factura' && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada';
 
@@ -5009,8 +4913,6 @@ function DetalleOrdenVenta() {
                     className="form-select"
                     value={transporteForm.id_conductor}
                     onChange={(e) => {
-                      // Al elegir un conductor de la flota se autocompleta su Nº de licencia desde
-                      // la ficha del empleado (empleados.licencia_conducir). Queda editable.
                       const sel = conductores.find(c => String(c.id_empleado) === String(e.target.value));
                       setTransporteForm({
                         ...transporteForm,
@@ -5148,7 +5050,6 @@ function DetalleOrdenVenta() {
                   />
                 </div>
 
-                {/* Interruptor: registrar vehículos y conductores del transportista (Caso 1 ↔ 2/3) */}
                 <div className="rounded-md border border-gray-200 p-2">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
@@ -5312,7 +5213,6 @@ function DetalleOrdenVenta() {
                   </div>
                 )}
 
-                {/* Indicadores SUNAT (opcionales) */}
                 <div className="rounded-md border border-gray-200 p-2 space-y-1">
                   <p className="text-xs font-semibold text-gray-600">Indicadores (opcional)</p>
                   <label className="flex items-center gap-2 text-sm">
@@ -5723,7 +5623,6 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      {/* Input oculto: factura vinculada a un despacho concreto */}
       <input
         type="file"
         id="facturaSunatDespachoInput"
@@ -5739,7 +5638,6 @@ function DetalleOrdenVenta() {
         }}
       />
 
-      {/* Modal: adjuntar documento (guía, etc.) a un despacho */}
       <Modal
         isOpen={modalDocDespacho}
         onClose={() => { setModalDocDespacho(false); setSalidaParaDoc(null); }}

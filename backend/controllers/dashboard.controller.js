@@ -24,7 +24,7 @@ export const obtenerTipoCambioActual = async (req, res) => {
 
 export const actualizarTipoCambioManual = async (req, res) => {
   try {
-    console.log('🔴 CONSUMIENDO API DE TIPO DE CAMBIO - ACCIÓN MANUAL');
+    console.log('CONSUMIENDO API DE TIPO DE CAMBIO - ACCIÓN MANUAL');
     
     const { currency = 'USD', date = null } = req.query;
     
@@ -69,7 +69,6 @@ export const obtenerResumenGeneral = async (req, res) => {
       paramsDate = [fecha_inicio, fecha_fin];
     }
 
-    // KPIs DE VENTAS REALES EN EL PERIODO (No valorización de stock)
     const ventasPeriodoResult = await executeQuery(
       `SELECT 
         SUM(CASE WHEN moneda = 'PEN' THEN total ELSE 0 END) AS ventas_pen,
@@ -80,7 +79,6 @@ export const obtenerResumenGeneral = async (req, res) => {
       paramsDate
     );
 
-    // COSTOS DE SALIDAS (COSTO DE VENTAS/CONSUMO) EN EL PERIODO
     const costosPeriodoResult = await executeQuery(
       `SELECT 
         SUM(CASE WHEN moneda = 'PEN' THEN total_precio ELSE 0 END) AS costos_pen,
@@ -114,7 +112,6 @@ export const obtenerResumenGeneral = async (req, res) => {
        AND stock_actual <= stock_minimo`
     );
 
-    // TOP 10 PRODUCTOS MAS VENDIDOS/SALIDOS
     const topProductosResult = await executeQuery(
       `SELECT 
         p.id_producto,
@@ -135,7 +132,6 @@ export const obtenerResumenGeneral = async (req, res) => {
       paramsDate
     );
 
-    // TOP 10 CLIENTES
     const topClientesResult = await executeQuery(
       `SELECT 
         c.id_cliente,
@@ -169,8 +165,7 @@ export const obtenerResumenGeneral = async (req, res) => {
     res.json({
       success: true,
       periodo: { inicio: fecha_inicio, fin: fecha_fin },
-      
-      // KPIs Resumen Periodo
+
       resumen_ventas: {
         pen: parseFloat(ventasPeriodoResult.data?.[0]?.ventas_pen || 0),
         usd: parseFloat(ventasPeriodoResult.data?.[0]?.ventas_usd || 0),
@@ -181,13 +176,11 @@ export const obtenerResumenGeneral = async (req, res) => {
         usd: parseFloat(costosPeriodoResult.data?.[0]?.costos_usd || 0)
       },
 
-      // Stats Generales
       total_productos: productosActivosResult.data?.[0]?.total_productos || 0,
       total_empleados: empleadosResult.data?.[0]?.total_empleados || 0,
       ordenes_activas: ordenesResult.data?.[0]?.ordenes_activas || 0,
       productos_stock_bajo: stockBajoResult.data?.[0]?.productos_stock_bajo || 0,
-      
-      // Rankings
+
       top_productos: (topProductosResult.data || []).map(p => ({
         ...p,
         total_cantidad: parseFloat(p.total_cantidad || 0),
@@ -201,7 +194,6 @@ export const obtenerResumenGeneral = async (req, res) => {
         monto_usd: parseFloat(c.monto_usd || 0)
       })),
 
-      // Valorización Actual (Independiente del periodo de tiempo)
       valoracion_stock: (valoracionPorTipoResult.data || []).map(tipo => ({
         ...tipo,
         stock_total: parseFloat(tipo.stock_total || 0),
@@ -584,9 +576,8 @@ export const obtenerProduccionFinalizada = async (req, res) => {
       params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin];
     }
 
-    // Query simplificada SIN el JOIN a empleados (que falla por id_supervisor)
     const query = `
-      SELECT 
+      SELECT
         p.nombre as producto,
         p.codigo,
         COUNT(op.id_orden) as total_ordenes,
@@ -602,7 +593,7 @@ export const obtenerProduccionFinalizada = async (req, res) => {
 
     const result = await executeQuery(query, params);
 
-    console.log('Producción result:', JSON.stringify(result)); // 👈 agrega esto temporalmente
+    console.log('Producción result:', JSON.stringify(result));
 
     if (!result || !result.data || result.data.length === 0) {
       return res.json({ success: true, data: [] });

@@ -1146,7 +1146,7 @@ function ProductoDetalle() {
       <Modal
         isOpen={modalRecetaOpen}
         onClose={cerrarModalReceta}
-        title={editandoReceta ? '✏️ Editar Receta' : '➕ Nueva Receta'}
+        title={editandoReceta ? 'Editar Receta' : 'Nueva Receta'}
         size="md"
       >
         <form onSubmit={handleSubmitReceta}>
@@ -1219,7 +1219,7 @@ function ProductoDetalle() {
                 checked={formReceta.es_principal}
                 onChange={(e) => setFormReceta({ ...formReceta, es_principal: e.target.checked })}
               />
-              <span>⭐ Marcar como Receta Principal</span>
+              <span>Marcar como Receta Principal</span>
             </label>
             <small className="text-muted">La receta principal se usará por defecto en producción</small>
           </div>
@@ -1232,7 +1232,7 @@ function ProductoDetalle() {
                   checked={formReceta.es_activa}
                   onChange={(e) => setFormReceta({ ...formReceta, es_activa: e.target.checked })}
                 />
-                <span>✅ Receta Activa</span>
+                <span>Receta Activa</span>
               </label>
               <small className="text-muted">Solo las recetas activas se pueden usar en producción</small>
             </div>
@@ -1263,7 +1263,7 @@ function ProductoDetalle() {
       <Modal
         isOpen={modalInsumoOpen}
         onClose={cerrarModalInsumo}
-        title={editandoInsumo ? '✏️ Editar Insumo' : '➕ Agregar Insumo a Receta'}
+        title={editandoInsumo ? 'Editar Insumo' : 'Agregar Insumo a Receta'}
         size="md"
       >
         <form onSubmit={handleSubmitInsumo}>
@@ -1333,7 +1333,7 @@ function ProductoDetalle() {
                   checked={formInsumo.es_critico}
                   onChange={(e) => setFormInsumo({ ...formInsumo, es_critico: e.target.checked })}
                 />
-                <span>⚠️ Insumo Crítico</span>
+                <span>Insumo Crítico</span>
               </label>
             </div>
           </div>

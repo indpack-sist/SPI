@@ -81,15 +81,9 @@ export async function getResumenStockInventario(_req, res) {
   }
 }
 
-// Construye los datos del Kardex (filas + filtros) a partir de los parámetros de
-// consulta. Se comparte entre la exportación a PDF y a Excel.
-// Fuentes de movimiento: detalle_entradas (compras/producción/merma),
-// detalle_salidas (ventas/consumo/producción) y ajustes_inventario
-// (diferencia con signo: positiva = entrada, negativa = salida).
 async function construirDatosKardex(query) {
   const { fecha_inicio, fecha_fin, id_tipo_inventario } = query;
 
-  // Rango por defecto: desde el inicio de los tiempos hasta hoy.
   const desde = fecha_inicio || '1900-01-01';
   const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
 
@@ -100,8 +94,6 @@ async function construirDatosKardex(query) {
   }
 
   {
-    // Subconsultas de movimientos: se calculan por producto tanto antes del
-    // periodo (para el balance inicial) como dentro del periodo.
     const sql = `
       SELECT
         p.id_producto,
@@ -170,10 +162,10 @@ async function construirDatosKardex(query) {
     `;
 
     const params = [
-      desde, desde, desde,          // ..._antes
-      desde, hasta,                 // ent_periodo
-      desde, hasta,                 // sal_periodo
-      desde, hasta                  // aj_net_periodo
+      desde, desde, desde,
+      desde, hasta,
+      desde, hasta,
+      desde, hasta
     ];
     if (id_tipo_inventario) params.push(id_tipo_inventario);
 
@@ -185,30 +177,15 @@ async function construirDatosKardex(query) {
       throw err;
     }
 
-    // Consolidación: balance inicial, entradas y salidas del periodo (incluyendo
-    // ajustes), y stock resultante. Se descartan productos sin movimiento ni
-    // saldo en el periodo (no se pidió incluir stock cero).
     const filas = result.data
       .map(row => {
-        // Balance inicial = lo que había hasta el día anterior a "desde"
-        // (movimientos con fecha < desde). Se reconstruye del historial y puede
-        // quedar negativo cuando nunca se cargó el inventario inicial de un
-        // producto; en ese caso se fija en 0: no existen cantidades físicas
-        // negativas en almacén.
         const balance_inicial = Math.max(
           0,
           parseFloat(row.ent_antes) - parseFloat(row.sal_antes) + parseFloat(row.aj_antes)
         );
-        // Los ajustes del período se netean por producto: solo el saldo neto
-        // suma a ENTRADA (si es positivo) o a SALIDA (si es negativo). Así los
-        // pares de corrección que se cancelan (ej. subir a 800 y bajar a 0.80)
-        // no inflan ambas columnas; el escenario de ajustes todos positivos
-        // (0→2000 varias veces) se conserva porque el neto sigue siendo positivo.
         const ajNet = parseFloat(row.aj_net_periodo);
         const entrada = parseFloat(row.ent_periodo) + Math.max(0, ajNet);
         const salida = parseFloat(row.sal_periodo) + Math.max(0, -ajNet);
-        // Stock terminado = lo que quedó al cierre del período (BI + entradas −
-        // salidas). También se acota a 0 para no arrastrar negativos.
         const stock_terminado = Math.max(0, balance_inicial + entrada - salida);
         return {
           categoria: row.categoria,
@@ -221,12 +198,6 @@ async function construirDatosKardex(query) {
           stock_terminado
         };
       })
-      // Se excluye la categoría Mermas y solo se listan productos con movimiento
-      // en el período: si no hubo entrada ni salida (incluidos los ajustes ya
-      // sumados en cada columna), el producto no aparece aunque tenga balance o
-      // stock.
-      // TEMPORAL: también se excluye la categoría Burbupack (quitar esta línea
-      // para volver a incluirla).
       .filter(f =>
         !/^merma/i.test(f.categoria || '') &&
         !/^burbupack/i.test(f.categoria || '') &&
@@ -259,7 +230,6 @@ async function construirDatosKardex(query) {
   }
 }
 
-// Exportación del Kardex a PDF.
 export async function generarKardexPDF(req, res) {
   try {
     const { filas, filtros, desde, hasta } = await construirDatosKardex(req.query);
@@ -274,7 +244,6 @@ export async function generarKardexPDF(req, res) {
   }
 }
 
-// Exportación del Kardex a Excel (XLSX) con el mismo contenido que el PDF.
 export async function generarKardexXLSX(req, res) {
   try {
     const { filas, filtros, desde, hasta } = await construirDatosKardex(req.query);

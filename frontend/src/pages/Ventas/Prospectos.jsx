@@ -15,8 +15,6 @@ import './Prospectos.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-// Semáforo de potencial (0-100), unificado en todo el módulo:
-//   🔴 Frío 0-44 · 🟡 Tibio 45-74 · 🟢 Caliente 75-100
 const SCORE_CALIENTE = 75;
 const SCORE_TIBIO = 45;
 const colorScore = (s) => (s >= SCORE_CALIENTE ? '#2ecc71' : s >= SCORE_TIBIO ? '#e8b84b' : '#e74c3c');
@@ -24,33 +22,22 @@ const bandaScore = (s) => (s >= SCORE_CALIENTE ? 'Caliente' : s >= SCORE_TIBIO ?
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
 
-// Host legible (sin www) de una URL, para mostrar la fuente de un dato de un
-// vistazo. Si no es una URL válida, devuelve el texto tal cual.
 const hostFromUrl = (u) => { try { return new URL(u).host.replace(/^www\./i, ''); } catch { return u || ''; } };
 
-// Día del calendario (YYYY-MM-DD) de un timestamp EXPRESADO EN HORA DE PERÚ
-// (America/Lima). Acepta tanto ISO en UTC ("...T..Z", como lo serializa el
-// driver de MySQL) como "YYYY-MM-DD HH:mm:ss". Sin esto, recortar el ISO en UTC
-// desfasaba el día para capturas de la tarde/noche de Perú.
 const fechaPeruISO = (f) => {
   if (!f) return '';
   const d = new Date(String(f).replace(' ', 'T'));
   if (Number.isNaN(d.getTime())) return String(f).slice(0, 10);
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // en-CA → YYYY-MM-DD
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 };
 const hoyPeruISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 
-// Fecha de descubrimiento → DD/MM/YYYY en hora de Perú.
 const fechaCorta = (f) => {
   const iso = fechaPeruISO(f);
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   return d && m && y ? `${d}/${m}/${y}` : iso;
 };
-// Días DE CALENDARIO (Perú) transcurridos desde la captura, para resaltar lo
-// recién descubierto de forma congruente con la fecha mostrada: 0 = hoy, 1 = ayer.
-// (Antes se usaba una ventana móvil de 24 h, así que lo capturado ayer por la
-// tarde seguía marcado "Hoy" esta mañana.)
 const diasDesde = (f) => {
   const iso = fechaPeruISO(f);
   if (!iso) return Infinity;
@@ -58,8 +45,6 @@ const diasDesde = (f) => {
   const hoy = new Date(`${hoyPeruISO()}T00:00:00Z`).getTime();
   return Number.isNaN(cap) ? Infinity : Math.round((hoy - cap) / 86400000);
 };
-// Texto de recencia para el badge de la columna "Descubierto". Explícito para no
-// confundirse con el estado del workflow "Nuevo". Solo resalta la primera semana.
 const etiquetaRecencia = (f) => {
   const d = diasDesde(f);
   if (d <= 0) return 'Hoy';
@@ -68,17 +53,13 @@ const etiquetaRecencia = (f) => {
   return null;
 };
 
-// Etiqueta legible del origen técnico de un contacto (columna `fuente`).
 const FUENTE_LABEL = {
   web: 'sitio web', social: 'red social', google_places: 'Google Maps',
   sunat: 'SUNAT', manual: 'ingresado a mano',
 };
 
-// Prospectos por página en la tabla (tope acordado con el backend).
 const POR_PAGINA = 50;
 
-// Ventana de números de página con elipsis: siempre muestra la 1 y la última,
-// y un rango alrededor de la actual. Devuelve números y marcadores '…'.
 function construirPaginas(actual, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const paginas = new Set([1, total, actual, actual - 1, actual + 1]);
@@ -87,14 +68,12 @@ function construirPaginas(actual, total) {
   const ord = [...paginas].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
   const res = [];
   for (let i = 0; i < ord.length; i++) {
-    if (i > 0 && ord[i] - ord[i - 1] > 1) res.push(`…${i}`); // clave única
+    if (i > 0 && ord[i] - ord[i - 1] > 1) res.push(`…${i}`);
     res.push(ord[i]);
   }
   return res;
 }
 
-// Fuente de imagen del prospecto: logo de su web (directo) o foto de
-// Google Places (vía proxy del backend con token en la URL).
 const imgSrc = (p) => {
   if (p.logo_url) return p.logo_url;
   if (p.foto_referencia) {
@@ -116,8 +95,6 @@ function Thumb({ p, size = 34 }) {
   return <img className="pros-thumb" style={{ width: size, height: size }} src={src} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />;
 }
 
-// Etiqueta de la barra de progreso según la operación masiva en curso.
-// 'descubrir' se conserva solo para lotes antiguos (Google Places, retirado).
 const ACCION_LOTE = {
   descubrir:   { label: 'Procesando (histórico)' },
   enriquecer:  { label: 'Buscando web y contactos' },
@@ -165,59 +142,49 @@ export default function Prospectos() {
   const [fFlag, setFFlag] = useState('');
   const [fSector, setFSector] = useState('');
   const [fBusqueda, setFBusqueda] = useState('');
-  const [fMinScore, setFMinScore] = useState(''); // umbral de potencial mínimo
-  const [orden, setOrden] = useState('recientes'); // por defecto: lo recién descubierto primero
-  const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
+  const [fMinScore, setFMinScore] = useState('');
+  const [orden, setOrden] = useState('recientes');
+  const [vista, setVista] = useState('activos');
   const [facetas, setFacetas] = useState({ sectores: [], busquedas: [] });
 
-  // Paginación
   const [page, setPage] = useState(1);
   const [totalRegistros, setTotalRegistros] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  // Exportación a Excel (server-side): todo o un rango de hojas de 50.
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportModo, setExportModo] = useState('todo'); // 'todo' | 'rango'
+  const [exportModo, setExportModo] = useState('todo');
   const [exportDesde, setExportDesde] = useState(1);
   const [exportHasta, setExportHasta] = useState(1);
   const [exportLoading, setExportLoading] = useState(false);
 
-  // Ingesta
   const [ingestaOpen, setIngestaOpen] = useState(false);
   const [ingestaTexto, setIngestaTexto] = useState('');
   const [ingestaSegmento, setIngestaSegmento] = useState('Formal');
   const [ingestaLoading, setIngestaLoading] = useState(false);
   const [ingestaRes, setIngestaRes] = useState(null);
 
-  // Detalle
   const [detalle, setDetalle] = useState(null);
   const [detalleLoading, setDetalleLoading] = useState(false);
-  const [buscandoRuc, setBuscandoRuc] = useState(null); // id en búsqueda de RUC
+  const [buscandoRuc, setBuscandoRuc] = useState(null);
 
-  // Conversion
   const [convertOpen, setConvertOpen] = useState(false);
   const [convertData, setConvertData] = useState(null);
   const [convertLoading, setConvertLoading] = useState(false);
 
-  // Descubrimiento por Padrón SUNAT (por departamento + sector)
   const [descubrirOpen, setDescubrirOpen] = useState(false);
   const [descubrirLoading, setDescubrirLoading] = useState(false);
-  const [padron, setPadron] = useState(null); // stats del padrón (total, departamentos, sectores)
+  const [padron, setPadron] = useState(null);
   const [padronSel, setPadronSel] = useState({ departamentos: [], sectores: [], limite: 500 });
 
-  // Operaciones masivas de enriquecimiento / re-verificación
   const [enriqMasivoLoading, setEnriqMasivoLoading] = useState(false);
   const [redescMasivoLoading, setRedescMasivoLoading] = useState(false);
 
-  // Panel de actividad (jobs)
   const [jobs, setJobs] = useState([]);
   const [jobsOpen, setJobsOpen] = useState(false);
   const completadosRef = useRef(new Set());
 
-  // Progreso en vivo de operaciones masivas (barra de carga agregada por lote).
   const [lotesActivos, setLotesActivos] = useState([]);
 
-  // Actualización en vivo (WebSocket): refleja lo que otros hacen sin recargar.
   const [enVivo, setEnVivo] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -253,30 +220,26 @@ export default function Prospectos() {
     return () => clearTimeout(t);
   }, [cargar, search]);
 
-  // Al cambiar cualquier filtro/orden/vista, vuelve a la primera página.
   useEffect(() => {
     setPage(1);
   }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, fMinScore, orden, vista]);
 
-  // Navegación de páginas: acota al rango válido y sube al inicio de la tabla.
   const irAPagina = (n) => {
     const destino = Math.min(Math.max(1, n), totalPaginas);
     if (destino !== page) setPage(destino);
   };
 
-  // Facetas (sectores y búsquedas) para poblar los desplegables de filtro.
   const cargarFacetas = useCallback(async () => {
     try {
       const res = await prospectosAPI.getFacetas();
       setFacetas(res.data.data || { sectores: [], busquedas: [] });
-    } catch { /* silencioso: si falla, los selects quedan vacíos */ }
+    } catch { /* noop */ }
   }, []);
 
   useEffect(() => { cargarFacetas(); }, [cargarFacetas]);
 
   const notify = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3500); };
 
-  // Polling de jobs: refresca la cola y, cuando un job termina, recarga la lista.
   const refreshJobs = useCallback(async () => {
     try {
       const res = await prospectosAPI.getJobs();
@@ -297,9 +260,6 @@ export default function Prospectos() {
   useEffect(() => {
     refreshJobs();
     const hayActivos = jobs.some((j) => j.estado === 'pendiente' || j.estado === 'procesando');
-    // El socket (scraping:update) es el canal en vivo; este poll es respaldo. Intervalos
-    // relajados (antes 4s/12s) para bajar las consultas a la BD de Railway cuando la pestaña
-    // queda abierta, sin perder reactividad porque el socket empuja cada transición de job.
     const cada = hayActivos || jobsOpen ? 8000 : 30000;
     const t = setInterval(refreshJobs, cada);
     return () => clearInterval(t);
@@ -307,27 +267,20 @@ export default function Prospectos() {
 
   const jobsActivos = jobs.filter((j) => j.estado === 'pendiente' || j.estado === 'procesando').length;
 
-  // Progreso de lotes masivos: se refresca por socket (en vivo) y con un poll de
-  // respaldo mientras haya alguno activo. Barato: una sola consulta agregada.
   const cargarLotes = useCallback(async () => {
     try {
       const res = await prospectosAPI.getLotesActivos();
       setLotesActivos(res.data.data || []);
-    } catch { /* silencioso: si falla, la barra simplemente no se muestra */ }
+    } catch { /* noop */ }
   }, []);
 
   useEffect(() => {
     cargarLotes();
     const hay = lotesActivos.length > 0;
-    // Respaldo del socket (que mueve la barra en vivo). Relajado (antes 2.5s/9s) para no
-    // martillear la BD de Railway mientras la pestaña está abierta.
     const t = setInterval(cargarLotes, hay ? 5000 : 20000);
     return () => clearInterval(t);
   }, [cargarLotes, lotesActivos.length]);
 
-  // --- Actualización en vivo por WebSocket ---
-  // Refs a lo último (callbacks/estado) para que el socket se suscriba UNA vez y
-  // no se reconecte en cada cambio de filtro/página.
   const cargarRef = useRef(cargar);
   const cargarFacetasRef = useRef(cargarFacetas);
   const cargarLotesRef = useRef(cargarLotes);
@@ -337,13 +290,11 @@ export default function Prospectos() {
   useEffect(() => { cargarLotesRef.current = cargarLotes; }, [cargarLotes]);
   useEffect(() => { detalleIdRef.current = detalle?.id_prospecto || null; }, [detalle]);
 
-  // Recarga el detalle abierto sin el parpadeo de "cargando" (solo si sigue
-  // siendo el mismo prospecto), para refrescar su historial en vivo.
   const recargarDetalleSilencioso = useCallback(async (id) => {
     try {
       const res = await prospectosAPI.getById(id);
       setDetalle((prev) => (prev && prev.id_prospecto === id ? res.data.data : prev));
-    } catch { /* silencioso */ }
+    } catch { /* noop */ }
   }, []);
 
   useEffect(() => {
@@ -358,7 +309,6 @@ export default function Prospectos() {
       reconnectionDelay: 1000,
     });
 
-    // Coalesce ráfagas de cambios en un solo refresco de la lista.
     let debounce = null;
     const onCambio = (data) => {
       clearTimeout(debounce);
@@ -366,14 +316,12 @@ export default function Prospectos() {
         cargarRef.current?.();
         cargarFacetasRef.current?.();
       }, 600);
-      // Si el detalle abierto es el afectado (o el cambio es genérico), refresca su historial.
       const abierto = detalleIdRef.current;
       if (abierto && (!data?.id_prospecto || Number(data.id_prospecto) === Number(abierto))) {
         recargarDetalleSilencioso(abierto);
       }
     };
 
-    // Cada transición de job (inicio/fin) mueve la barra de progreso EN VIVO.
     let loteDebounce = null;
     const onScraping = () => {
       clearTimeout(loteDebounce);
@@ -396,7 +344,6 @@ export default function Prospectos() {
     };
   }, [user?.id, recargarDetalleSilencioso]);
 
-  // Abre el modal de descubrimiento y carga qué hay disponible en el padrón.
   const abrirDescubrir = async () => {
     setDescubrirOpen(true);
     try {
@@ -412,7 +359,6 @@ export default function Prospectos() {
     [campo]: s[campo].includes(valor) ? s[campo].filter((x) => x !== valor) : [...s[campo], valor],
   }));
 
-  // Crea prospectos desde el padrón SUNAT para los departamentos/sectores elegidos.
   const hacerDescubrir = async () => {
     if (!padronSel.departamentos.length) { setError('Elige al menos un departamento'); return; }
     try {
@@ -436,7 +382,6 @@ export default function Prospectos() {
     }
   };
 
-  // Filtros actuales (sin paginación) para reusarlos en la exportación.
   const filtrosActuales = () => {
     const params = { orden };
     if (search) params.search = search;
@@ -450,7 +395,6 @@ export default function Prospectos() {
     return params;
   };
 
-  // Abre el modal de exportación con el rango por defecto = todas las hojas.
   const abrirExport = () => {
     if (totalRegistros === 0) { setError('No hay prospectos para exportar'); return; }
     setExportModo('todo');
@@ -459,8 +403,6 @@ export default function Prospectos() {
     setExportOpen(true);
   };
 
-  // Ejecuta la exportación en el servidor (una sola descarga). Respeta los
-  // filtros actuales; en modo "rango" manda desde/hasta hoja (50 registros c/u).
   const exportarExcel = async () => {
     const base = filtrosActuales();
     const params = { ...base };
@@ -497,9 +439,6 @@ export default function Prospectos() {
     }
   };
 
-  // Re-descubrir: búsqueda NUEVA (sin caché). Purga lo recolectado
-  // automáticamente y re-verifica la web desde cero; conserva lo manual. Sirve
-  // para corregir un prospecto con datos de otra empresa (web mal atribuida).
   const redescubrir = async (id) => {
     if (!window.confirm(
       'Se hará una búsqueda NUEVA (no en caché) de la web y los contactos de esta empresa.\n\n' +
@@ -518,9 +457,6 @@ export default function Prospectos() {
     }
   };
 
-  // Enriquecimiento MASIVO: busca web + contactos para todas las empresas que
-  // aún no tienen contacto. No borra nada (solo agrega). La web se busca anclada
-  // al RUC y solo se aceptan datos de páginas que publican ese RUC.
   const enriquecerTodo = async () => {
     if (!window.confirm(
       'Se buscarán web y contactos para las empresas SIN contacto que aún están sin trabajar.\n\n' +
@@ -528,13 +464,11 @@ export default function Prospectos() {
       '• Se SALTAN los que ya se buscaron y no tienen web (no se re-gasta crédito de la API en ellos); sí se reintentan los que quedaron pendientes por falta de crédito.\n' +
       '• Se procesan de mayor a menor potencial (score), en segundo plano.\n\n¿Continuar?'
     )) return;
-    // Tope opcional por corrida: útil para no exceder los créditos de la API de
-    // búsqueda (p.ej. 2400 por key). Vacío / 0 = sin tope (procesa todos).
     const limStr = window.prompt(
       '¿Cuántos procesar en esta corrida? (para no pasarte de los créditos de la API)\n\nDeja vacío o 0 para procesar TODOS.',
       '2400'
     );
-    if (limStr === null) return; // canceló
+    if (limStr === null) return;
     const limite = parseInt(limStr, 10);
     try {
       setEnriqMasivoLoading(true);
@@ -554,10 +488,6 @@ export default function Prospectos() {
     }
   };
 
-  // REBUSCAR TODO: re-busca desde cero (sin caché) los datos de TODOS los
-  // prospectos que no son clientes — incluye los En gestión / Contactado. Purga
-  // los datos AUTO (conserva lo manual), recupera el RUC faltante por nombre y
-  // re-trae web/contactos anclados al RUC. NO toca estado, gestor ni historial.
   const redescubrirTodo = async () => {
     if (!window.confirm(
       'Se RE-BUSCARÁN los datos de TODOS los prospectos (menos los que ya son clientes) desde cero.\n\n' +
@@ -569,7 +499,6 @@ export default function Prospectos() {
     )) return;
     try {
       setRedescMasivoLoading(true);
-      // solo_sin_fuente:false = re-busca TODOS (no solo los que no tenían fuente).
       const res = await prospectosAPI.redescubrirMasivo({ solo_sin_fuente: false });
       notify(res.data.message || `Se encolaron ${res.data.encolados} re-búsquedas.`);
       setJobsOpen(true);
@@ -582,7 +511,6 @@ export default function Prospectos() {
     }
   };
 
-  // Búsqueda de RUC por nombre en ruc.pe (bajo demanda, gratis, sin APISPeru).
   const buscarRuc = async (id) => {
     try {
       setBuscandoRuc(id);
@@ -643,7 +571,6 @@ export default function Prospectos() {
     }
   };
 
-  // Recarga el detalle abierto (para reflejar dueño/historial actualizados).
   const refrescarDetalle = async (id) => {
     try {
       const res = await prospectosAPI.getById(id);
@@ -718,7 +645,6 @@ export default function Prospectos() {
   const detalleSignals = detalle?.score_detalle?.señales || [];
   const detalleWhy = detalle?.score_detalle?.por_que_contactar;
 
-  // Bloqueo por gestor: si otro usuario lo gestiona, se bloquea la edición.
   const esAdmin = user?.rol === 'Administrador';
   const detalleDueno = detalle?.id_gestor || null;
   const bloqueado = !!detalleDueno && Number(detalleDueno) !== Number(user?.id);
@@ -730,7 +656,6 @@ export default function Prospectos() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Encabezado */}
       <div className="pros-head">
         <div>
           <div className="pros-title">
@@ -774,7 +699,6 @@ export default function Prospectos() {
         </div>
       </div>
 
-      {/* Estadísticas */}
       <div className="pros-stats">
         <div className="pros-stat">
           <div className="pros-stat-ico ico-total"><Users size={20} /></div>
@@ -798,7 +722,6 @@ export default function Prospectos() {
         </div>
       </div>
 
-      {/* Barra(s) de progreso en vivo de operaciones masivas */}
       {lotesActivos.length > 0 && (
         <div className="pros-lotes">
           {lotesActivos.map((l) => (
@@ -825,7 +748,6 @@ export default function Prospectos() {
         </div>
       )}
 
-      {/* Panel de actividad (jobs) */}
       {jobsOpen && (
         <div className="pros-jobs">
           <div className="pros-jobs-head">
@@ -869,7 +791,6 @@ export default function Prospectos() {
         </div>
       )}
 
-      {/* Filtros */}
       <div className="pros-toolbar">
         <div className="pros-search">
           <Search size={16} />
@@ -913,8 +834,8 @@ export default function Prospectos() {
         )}
         <select className="form-select" style={{ maxWidth: 170 }} value={fMinScore} onChange={(e) => setFMinScore(e.target.value)} title="Mostrar solo prospectos con este potencial o más">
           <option value="">Todo potencial</option>
-          <option value="75">🟢 Caliente · ≥ 75%</option>
-          <option value="45">🟡 Tibio · ≥ 45%</option>
+          <option value="75">Caliente · ≥ 75%</option>
+          <option value="45">Tibio · ≥ 45%</option>
         </select>
         <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
           <option value="recientes">Más recientes</option>
@@ -930,7 +851,6 @@ export default function Prospectos() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="pros-table-wrap">
         {loading ? (
           <div className="pros-empty"><Loader size={28} className="pros-spin" /><div>Cargando prospectos…</div></div>
@@ -1036,7 +956,6 @@ export default function Prospectos() {
         )}
       </div>
 
-      {/* Paginación */}
       {!loading && totalRegistros > 0 && (
         <div className="pros-pagination">
           <div className="pros-pag-info">
@@ -1066,7 +985,6 @@ export default function Prospectos() {
         </div>
       )}
 
-      {/* ---------- Panel de detalle ---------- */}
       {detalle && (
         <>
           <div className="pros-overlay" onClick={() => setDetalle(null)} />
@@ -1163,8 +1081,6 @@ export default function Prospectos() {
                     </div>
                   )}
 
-                  {/* Trazabilidad: todas las fuentes de las que se tomaron datos
-                      de este prospecto (SUNAT, su web, redes…), verificables. */}
                   {(detalle.fuentes || []).length > 0 && (
                     <div className="pros-field">
                       <div className="pros-field-lbl"><ShieldCheck size={12} style={{ verticalAlign: -2 }} /> Fuentes de datos</div>
@@ -1190,12 +1106,11 @@ export default function Prospectos() {
 
                   <div className="pros-section-title">Contactos</div>
                   {(() => {
-                    // Correos primero (canal prioritario), luego teléfonos y el resto.
                     const orden = { Email: 0, Telefono: 1, Celular: 1, Whatsapp: 1, Web: 2, RedSocial: 3 };
                     const esMovil = (c) => /^9\d{8}$/.test(c.valor_normalizado || '');
                     const cts = [...(detalle.contactos || [])].sort((a, b) => {
                       const d = (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9);
-                      return d !== 0 ? d : (esMovil(a) ? 0 : 1) - (esMovil(b) ? 0 : 1); // móvil primero
+                      return d !== 0 ? d : (esMovil(a) ? 0 : 1) - (esMovil(b) ? 0 : 1);
                     });
                     const tieneTel = cts.some((c) => ['Telefono', 'Celular', 'Whatsapp'].includes(c.tipo));
                     const tieneEmail = cts.some((c) => c.tipo === 'Email');
@@ -1229,7 +1144,6 @@ export default function Prospectos() {
                                 )}
                                 {c.area && <span className="pros-area-badge">{c.area}</span>}
                               </div>
-                              {/* Trazabilidad: de dónde salió exactamente este dato. */}
                               {c.fuente_url ? (
                                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }} title={c.fuente_url}>
                                   Fuente: {FUENTE_LABEL[c.fuente] || c.fuente} · {hostFromUrl(c.fuente_url)}
@@ -1334,7 +1248,6 @@ export default function Prospectos() {
         </>
       )}
 
-      {/* ---------- Modal ingesta ---------- */}
       <Modal isOpen={ingestaOpen} onClose={() => setIngestaOpen(false)} title="Ingresar empresas por RUC" size="md">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
           Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se consultan en <b>fuentes públicas de SUNAT</b> (razón social, estado, dirección, <b>actividad CIIU</b> y representantes) y <b>se buscan sus datos de contacto automáticamente</b> (web, correos, teléfonos y redes) anclados al RUC. Se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
@@ -1375,7 +1288,6 @@ export default function Prospectos() {
         </div>
       </Modal>
 
-      {/* ---------- Modal exportar a Excel ---------- */}
       <Modal isOpen={exportOpen} onClose={() => setExportOpen(false)} title="Exportar prospectos a Excel" size="sm">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
           Se exportan los prospectos con los <b>filtros actuales</b> ({totalRegistros.toLocaleString('es-PE')} registros · {totalPaginas.toLocaleString('es-PE')} hojas de 50). El archivo se genera en el servidor y se descarga directo.
@@ -1421,7 +1333,6 @@ export default function Prospectos() {
         </div>
       </Modal>
 
-      {/* ---------- Modal descubrir (Padrón SUNAT) ---------- */}
       <Modal isOpen={descubrirOpen} onClose={() => setDescubrirOpen(false)} title="Descubrir empresas por departamento y sector" size="md">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
           Trae empresas <b>reales del Padrón de SUNAT</b> (personas jurídicas activas) de los sectores que compran empaque, filtradas por departamento. Se crean como prospectos con razón social, estado y ubicación oficiales, y se les busca web/contactos anclados al RUC. <b>No duplica</b> lo que ya tienes ni toca a tus clientes.
@@ -1494,7 +1405,6 @@ export default function Prospectos() {
         </div>
       </Modal>
 
-      {/* ---------- Modal convertir ---------- */}
       <Modal isOpen={convertOpen} onClose={() => setConvertOpen(false)} title="Crear cliente desde prospecto" size="md">
         {convertData && (
           <>

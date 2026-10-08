@@ -1,28 +1,14 @@
 import axios from 'axios';
 import { rucChecksumValido } from './ruc-lookup.service.js';
 
-// ============================================================
-// Scraper de sitio web corporativo (dependency-free).
-// Extrae correos, teléfonos y enlaces de redes sociales del sitio
-// PROPIO de la empresa (dato público, bajo riesgo legal). No sigue
-// dominios externos ni raspa redes sociales directamente.
-// ============================================================
-
 const UA = 'Mozilla/5.0 (compatible; INDPACK-Prospector/1.0; +https://indpack.pe)';
 const TIMEOUT = 12000;
 
-// Rutas típicas donde vive el contacto, además de la home.
 const RUTAS_CONTACTO = ['', '/contacto', '/contacto.html', '/contactenos', '/nosotros', '/contact'];
 
 const RE_EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-// Teléfonos peruanos plausibles: móvil 9######### (con +51 opcional) o fijo con
-// código de área entre paréntesis o con 0 inicial. Estricto A PROPÓSITO para NO
-// capturar cifras sueltas de la web (fechas, precios, IDs, códigos) como teléfono.
 const RE_TEL = /(?:\+?51[\s.\-]?)?(?:9\d{2}[\s.\-]?\d{3}[\s.\-]?\d{3}|\(0\d{1,2}\)[\s.\-]?\d{6,7}|0\d{1,2}[\s.\-]\d{6,7})/g;
 
-// Áreas/roles a los que suele pertenecer un teléfono o correo. Se detectan
-// por la etiqueta que rodea al número en la web (ej. "Ventas: 999...") o por
-// el usuario del correo (ej. ventas@empresa.com). El orden fija la prioridad.
 const AREAS = [
   { re: /(venta|comercial|asesor|vendedor|cotiza|pedido)/i, area: 'Ventas' },
   { re: /(informe|informaci[oó]n|consulta|contacto|contact)/i, area: 'Informes' },
@@ -36,19 +22,16 @@ const AREAS = [
   { re: /(reclam|posventa|post.?venta|atenci[oó]n al cliente|servicio al cliente)/i, area: 'Atención al cliente' },
 ];
 
-// Quita etiquetas HTML/entidades para leer el texto que rodea a un contacto.
 function stripTags(s) {
   return String(s || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ');
 }
 
-// Detecta el área a partir del texto que rodea al contacto (ventana previa).
 function detectarArea(contexto) {
   const t = stripTags(contexto);
   for (const a of AREAS) if (a.re.test(t)) return a.area;
   return null;
 }
 
-// Área inferida del usuario del correo (ventas@, informes@, cobranzas@…).
 function areaDeEmail(email) {
   const local = String(email).split('@')[0] || '';
   for (const a of AREAS) if (a.re.test(local)) return a.area;
@@ -64,8 +47,7 @@ const REDES = {
   whatsapp: /https?:\/\/(?:wa\.me|api\.whatsapp\.com)\/[^\s"'<>)]+/i,
 };
 
-// Descarta correos basura frecuentes en plantillas/CDN.
-const EMAIL_BASURA = /(sentry|wixpress|example\.com|ejemplo\.|@2x|\.png|\.jpg|\.gif|\.svg|domain\.com|email\.com|tuempresa|tucorreo|correo@)/i;
+const EMAIL_BASURA =/(sentry|wixpress|example\.com|ejemplo\.|@2x|\.png|\.jpg|\.gif|\.svg|domain\.com|email\.com|tuempresa|tucorreo|correo@)/i;
 
 function normalizarUrl(url) {
   if (!url) return null;
@@ -79,22 +61,13 @@ function normalizarUrl(url) {
   }
 }
 
-/**
- * ¿El número (solo dígitos, ya normalizado) es un placeholder/relleno de ejemplo
- * y NO un teléfono real? Cubre los formatos que las webs ponen como muestra:
- *   - todos los dígitos iguales:            999999999, 000000000, 111111111
- *   - secuencia ascendente/descendente:     123456789, 987654321
- *   - un bloque de 3 repetido:              900900900, 123123123
- *   - rellenos notorios conocidos.
- * Se usa tanto en el scraper de web como en el de redes sociales.
- */
 export function esTelefonoPlaceholder(d) {
   const s = String(d || '');
   if (!s) return true;
-  if (/^(.)\1+$/.test(s)) return true;              // todos iguales
-  if (/^(\d{3})\1\1$/.test(s)) return true;         // bloque de 3 repetido (9 díg.)
-  if ('0123456789'.includes(s)) return true;        // ascendente (012345678, 123456789…)
-  if ('9876543210'.includes(s)) return true;        // descendente (987654321, 876543210…)
+  if (/^(.)\1+$/.test(s)) return true;
+  if (/^(\d{3})\1\1$/.test(s)) return true;
+  if ('0123456789'.includes(s)) return true;
+  if ('9876543210'.includes(s)) return true;
   const RELLENOS = new Set(['987654321', '912345678', '900000000', '999000000', '999888777', '900123456']);
   if (RELLENOS.has(s)) return true;
   return false;
@@ -102,13 +75,9 @@ export function esTelefonoPlaceholder(d) {
 
 function limpiarTelefono(t) {
   let d = String(t).replace(/\D/g, '');
-  if (d.length === 11 && d.startsWith('51')) d = d.slice(2); // quita prefijo país +51
-  // Rechaza placeholders/rellenos de ejemplo (999999999, 123456789, 900900900…).
+  if (d.length === 11 && d.startsWith('51')) d = d.slice(2);
   if (esTelefonoPlaceholder(d)) return null;
-  // Móvil peruano: 9 dígitos empezando en 9 (el preferido como principal).
   if (d.length === 9 && d.startsWith('9')) return d;
-  // Fijo con código de área: 0 + código válido (no "00") → 8-9 dígitos.
-  // Rechazamos secuencias sueltas de 6-8 dígitos: son la fuente de la basura.
   if ((d.length === 8 || d.length === 9) && d[0] === '0' && d[1] !== '0') return d;
   return null;
 }
@@ -120,7 +89,6 @@ async function fetchHtml(url) {
       maxRedirects: 3,
       headers: { 'User-Agent': UA, Accept: 'text/html' },
       responseType: 'text',
-      // Muchos sitios PE tienen certificados intermedios flojos.
       validateStatus: (s) => s >= 200 && s < 400,
     });
     return typeof res.data === 'string' ? res.data : '';
@@ -129,37 +97,26 @@ async function fetchHtml(url) {
   }
 }
 
-/**
- * Scrapea el sitio de una empresa y devuelve contactos públicos.
- * @param {string} website  dominio o URL de la empresa
- * @returns {Promise<{ok:boolean, base:(string|null), emails:string[],
- *   telefonos:string[], redes:Object, error?:string}>}
- */
 export async function scrapeWebsite(website) {
   const base = normalizarUrl(website);
   if (!base) return { ok: false, error: 'URL inválida', emails: [], telefonos: [], redes: {} };
 
-  // Mapas valor -> área (primera etiqueta encontrada gana). Priorizamos
-  // correos: son gratis de raspar y el canal preferido para prospectar.
   const emails = new Map();
   const telefonos = new Map();
   const redes = {};
   let logo = null;
   let titulo = null;
   let ruc = null;
-  const rucsSet = new Set(); // TODOS los RUCs válidos hallados en el sitio (para verificar pertenencia)
+  const rucsSet = new Set();
   let paginasLeidas = 0;
 
   for (const ruta of RUTAS_CONTACTO) {
-    if (paginasLeidas >= 3) break; // como mucho 3 páginas por sitio
-    const paginaUrl = base + ruta;          // URL EXACTA de esta página (para trazabilidad)
+    if (paginasLeidas >= 3) break;
+    const paginaUrl = base + ruta;
     const html = await fetchHtml(paginaUrl);
     if (!html) continue;
     paginasLeidas++;
 
-    // Emails (incluye los de enlaces mailto:). El área se infiere del texto
-    // alrededor y, si no, del usuario del correo (ventas@, informes@…). Se
-    // guarda la URL exacta donde apareció para poder verificar la fuente.
     for (const m of html.matchAll(RE_EMAIL)) {
       const e = m[0].toLowerCase();
       if (EMAIL_BASURA.test(e) || e.length >= 80) continue;
@@ -167,10 +124,8 @@ export async function scrapeWebsite(website) {
       const area = detectarArea(ctx) || areaDeEmail(e);
       const prev = emails.get(e);
       if (!prev) emails.set(e, { area: area || null, url: paginaUrl });
-      else if (area && !prev.area) prev.area = area; // conserva la primera URL, mejora el área
+      else if (area && !prev.area) prev.area = area;
     }
-    // Teléfonos: el área se infiere del texto que rodea al número; se guarda
-    // también la URL exacta de origen.
     for (const m of html.matchAll(RE_TEL)) {
       const t = limpiarTelefono(m[0]);
       if (!t) continue;
@@ -180,7 +135,6 @@ export async function scrapeWebsite(website) {
       if (!prev) telefonos.set(t, { area: area || null, url: paginaUrl });
       else if (area && !prev.area) prev.area = area;
     }
-    // Redes (solo la primera aparición de cada una).
     for (const [red, re] of Object.entries(REDES)) {
       if (!redes[red]) {
         const found = html.match(re);
@@ -188,8 +142,6 @@ export async function scrapeWebsite(website) {
       }
     }
 
-    // RUC: muchas empresas PE lo publican en el pie ("RUC: 20XXXXXXXXX").
-    // Buscamos la etiqueta "RUC" y tomamos los 11 dígitos que le siguen.
     if (!ruc) {
       const m = html.match(/R\.?\s?U\.?\s?C\.?\s*[:.\-N°#]*\s*([0-9\s.\-]{11,20})/i);
       if (m) {
@@ -198,15 +150,11 @@ export async function scrapeWebsite(website) {
       }
     }
 
-    // Todos los RUCs válidos del sitio (con o sin etiqueta), quitando separadores.
-    // Se usa para VERIFICAR que la web pertenece al prospecto: basta con que su
-    // RUC exacto aparezca aquí. El checksum filtra números que no son RUC.
     const sinSep = html.replace(/[.\-\s]/g, '');
     for (const mm of sinSep.matchAll(/\b((?:10|15|16|17|20)\d{9})\b/g)) {
       if (rucChecksumValido(mm[1])) rucsSet.add(mm[1]);
     }
 
-    // Logo / imagen representativa: og:image de la home.
     if (!logo) {
       const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
         || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
@@ -215,9 +163,6 @@ export async function scrapeWebsite(website) {
       }
     }
 
-    // Título / nombre del sitio: sirve para verificar que la web CORRESPONDE a
-    // la empresa (el nombre publicado en la web debe relacionarse con la razón
-    // social). og:site_name o og:title primero; si no, el <title>.
     if (!titulo) {
       const ogt = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i)
         || html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
@@ -229,7 +174,6 @@ export async function scrapeWebsite(website) {
     }
   }
 
-  // Contactos con su área y su URL de origen (correos primero: canal prioritario).
   const contactos = [
     ...[...emails].slice(0, 8).map(([valor, m]) => ({ tipo: 'Email', valor, area: m.area, fuente_url: m.url })),
     ...[...telefonos].slice(0, 6).map(([valor, m]) => ({ tipo: 'Telefono', valor, area: m.area, fuente_url: m.url })),

@@ -17,7 +17,6 @@ export const ProtectedRoute = ({ children, modulo, modulos, requiredRoles }) => 
     return <Navigate to="/login" replace />;
   }
 
-  // Verificación de Permiso de Módulo (si aplica)
   const modulosAVerificar = modulos || (modulo ? [modulo] : []);
   if (modulosAVerificar.length > 0 && !puedeAcceder(modulosAVerificar)) {
     return (
@@ -55,12 +54,10 @@ export const ProtectedRoute = ({ children, modulo, modulos, requiredRoles }) => 
     );
   }
 
-  // Verificación específica de Rol (si se pasa la prop requiredRoles)
   if (requiredRoles && requiredRoles.length > 0) {
     const userRoleLower = (rol || '').toLowerCase();
     const hasRole = requiredRoles.some(r => r.toLowerCase() === userRoleLower);
-    
-    // El Administrador siempre debería poder ver todo, así que lo incluimos por defecto
+
     const isOwnerOrAdmin = ['administrador', 'admin', 'gerencia', 'gerente'].includes(userRoleLower);
 
     if (!hasRole && !isOwnerOrAdmin) {

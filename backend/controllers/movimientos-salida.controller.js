@@ -3,21 +3,14 @@ import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { resolverGuiaSunatEnObservacion } from '../utils/observacionGuiaSunat.js';
 import { PERMISOS_POR_ROL } from '../middleware/auth.js';
 
-// Roles que NUNCA deben ver montos en el módulo de Salidas, sin importar su flag
-// global verPrecios (requerimiento explícito: seguimiento operativo/calidad sin precios).
 const ROLES_SIN_PRECIOS_SALIDAS = ['Calidad', 'Supervisor', 'Produccion'];
 
-// Determina si el rol autenticado puede ver montos (precios, costos, IGV, totales).
-// Fuente de verdad para el gating de información sensible en el backend.
 function puedeVerPrecios(req) {
     const rol = req.user?.rol;
     if (ROLES_SIN_PRECIOS_SALIDAS.includes(rol)) return false;
     return !!PERMISOS_POR_ROL[rol]?.ui?.verPrecios;
 }
 
-// Calcula subtotal (neto), IGV y total con impuesto de una salida a partir del
-// régimen de impuesto de su Orden de Venta origen. Replica la lógica de Detalle OV:
-// INAFECTO/EXONERADO o Nota de Venta => 0%, en otro caso porcentaje_impuesto (18% por defecto).
 function calcularImpuestosSalida(row) {
     const subtotal = parseFloat(row.total_precio || 0);
     const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
@@ -34,8 +27,6 @@ function calcularImpuestosSalida(row) {
     };
 }
 
-// Elimina cualquier campo monetario/costo de un objeto (cabecera o detalle) para
-// roles sin permiso de ver precios. Evita fugas por la API (no basta con ocultar en el front).
 function ocultarMontos(obj) {
     delete obj.total_precio;
     delete obj.total_costo;
@@ -180,8 +171,6 @@ export async function getSalidaById(req, res) {
             return res.status(404).json({ error: 'Salida no encontrado' });
         }
 
-        // Respeta el orden manual de la OV (si la salida proviene de una) para que la vista y
-        // el PDF de la salida muestren los ítems en el mismo orden; fallback al de inserción.
         const idOrdenSalida = cabeceraResult.data[0].id_orden_venta || null;
         const detallesSql = `
             SELECT
@@ -548,14 +537,12 @@ export async function getTiposMovimientoSalida(req, res) {
 }
 export const generarPDFSalidaController = async (req, res, next) => {
   try {
-    // El PDF de salida contiene costos/importes: solo roles con permiso de precios.
     if (!puedeVerPrecios(req)) {
       return res.status(403).json({ error: 'No tiene permiso para generar el PDF valorizado de la salida.' });
     }
 
     const { id } = req.params;
 
-    // MODIFICACIÓN: Agregamos los JOINs a ordenes_venta y cotizaciones
     const salidasResult = await executeQuery(`
       SELECT 
         s.*,
@@ -584,10 +571,6 @@ export const generarPDFSalidaController = async (req, res, next) => {
       return res.status(404).json({ error: 'Salida no encontrada' });
     }
     
-    // Orden del detalle: si la salida proviene de una orden de venta, se respeta el orden
-    // manual de la OV (misma clave que el detalle/nota de venta/guía interna); si no está
-    // ligada a una OV, se cae al orden de inserción (ds.id_detalle). Sin ORDER BY MySQL no
-    // garantiza el orden y el PDF podía salir por código.
     const idOrdenSalida = salidasResult.data[0].id_orden_venta || salidasResult.data[0].ov_id_orden_venta || null;
     const detallesResult = await executeQuery(`
       SELECT
@@ -607,8 +590,6 @@ export const generarPDFSalidaController = async (req, res, next) => {
       ...salidasResult.data[0],
       detalles: detallesResult.success ? detallesResult.data : []
     };
-    // Resuelve el nº interno de guía (T001-…) al comprobante SUNAT vigente (p. ej. TE01-6),
-    // igual que el detalle de OV en pantalla, para que el PDF no muestre el interno desfasado.
     salida.observaciones = await resolverGuiaSunatEnObservacion(salida.observaciones);
 
     const pdfBuffer = await generarPDFSalida(salida);

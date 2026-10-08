@@ -7,7 +7,6 @@ export default function ModalDescargaMasiva({ abierto, cantidad, onCerrar, onCon
 
   const ninguno = !opciones.pdf && !opciones.xml && !opciones.cdr;
 
-  // Teclado: Esc cierra, Enter confirma (si hay al menos un tipo marcado).
   useEffect(() => {
     if (!abierto) return undefined;
     const onKey = (e) => {

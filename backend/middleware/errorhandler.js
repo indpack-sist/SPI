@@ -11,7 +11,6 @@ export const errorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Ocurrió un error inesperado en el servidor.';
 
-  // Manejo de errores específicos de Base de Datos (MySQL/MariaDB)
   if (err.code === 'ER_DUP_ENTRY') {
     statusCode = 400;
     message = 'Ya existe un registro con estos datos (duplicado).';
@@ -26,7 +25,6 @@ export const errorHandler = (err, req, res, next) => {
     message = 'Su sesión ha expirado. Por favor, ingrese de nuevo.';
   }
 
-  // Si estamos en desarrollo, enviamos el stack para debug, en producción solo el mensaje limpio
   const response = {
     success: false,
     error: message
@@ -35,7 +33,7 @@ export const errorHandler = (err, req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     response.stack = err.stack;
     response.details = err;
-    console.error('❌ [Error Handler]:', err);
+    console.error('[Error Handler]:', err);
   }
 
   res.status(statusCode).json(response);

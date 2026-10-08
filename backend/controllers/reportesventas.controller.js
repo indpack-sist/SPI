@@ -79,14 +79,12 @@ export const getReporteVentas = async (req, res) => {
 
         const [ordenes] = await db.query(sql, params);
 
-        // EXTRAER FECHAS FACTURACION SUNAT Y OBTENER HISTORIAL TC
         let historialTCMap = {};
         if (ordenes.length > 0) {
             const fechasFacturacion = ordenes
                 .map(o => o.fecha_facturacion_sunat)
                 .filter(fecha => fecha !== null && fecha !== undefined);
-                
-            // Convert to format YYYY-MM-DD for querying safely
+
             const uniqueFechasStr = [...new Set(fechasFacturacion.map(f => new Date(f).toISOString().split('T')[0]))];
             
             if (uniqueFechasStr.length > 0) {
@@ -136,8 +134,7 @@ export const getReporteVentas = async (req, res) => {
             totalCreditoPEN: 0, totalCreditoUSD: 0,
             pedidosAtrasados: 0,
             totalComisionesPEN: 0, totalComisionesUSD: 0,
-            
-            // Desglose por tipo y moneda
+
             facturaPEN: 0, facturaUSD: 0,
             notaVentaPEN: 0, notaVentaUSD: 0,
             sinComprobantePEN: 0, sinComprobanteUSD: 0,
@@ -170,8 +167,7 @@ export const getReporteVentas = async (req, res) => {
 
             const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
             const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
-            
-            // Lógica Sincronizada con OrdenesVenta.jsx: Usar subtotal si no hay impuesto
+
             const montoOriginal = esSinImpuesto ? subtotalOriginal : (parseFloat(orden.total) || 0);
 
             const tipoComprobante = String(orden.tipo_comprobante || '').trim();
@@ -179,10 +175,8 @@ export const getReporteVentas = async (req, res) => {
             const esNotaVenta = tipoComprobante.includes('Nota de Venta');
             const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
-            // Clasificación Sincronizada:
             let categoria = 'sin_comprobante';
             if (esFacturaRaw) {
-                // Si es factura pero no tiene impuesto (y no es exportación aprobada), se cuenta como nota de venta
                 if (!esSinImpuesto || facturasExportacion.includes(orden.numero_orden)) {
                     categoria = 'factura';
                 } else {
@@ -200,7 +194,6 @@ export const getReporteVentas = async (req, res) => {
             const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;
             const pendientePEN = esDolar ? pendienteOriginal * tcOrden : pendienteOriginal;
 
-            // Bloque de Acumulación Restaurado
             if (esDolar) {
                 kpis.totalVentasUSD += montoOriginal;
                 kpis.totalPagadoUSD += pagadoOriginal;
@@ -235,7 +228,6 @@ export const getReporteVentas = async (req, res) => {
                 }
             }
 
-            // Acumular unificados (todo a PEN usando TC de la orden o Historico)
             let tcParaUnificar = tcOrden;
             if (tipo_unificacion === 'sunat') {
                 tcParaUnificar = tcDiaConsulta;
@@ -440,8 +432,7 @@ export const getReporteVentas = async (req, res) => {
                     contado_usd: parseFloat(kpis.totalContadoUSD.toFixed(2)),
                     credito_pen: parseFloat(kpis.totalCreditoPEN.toFixed(2)),
                     credito_usd: parseFloat(kpis.totalCreditoUSD.toFixed(2)),
-                    
-                    // Nuevos campos para los 6 cards
+
                     factura_pen: parseFloat(kpis.facturaPEN.toFixed(2)),
                     factura_usd: parseFloat(kpis.facturaUSD.toFixed(2)),
                     nota_venta_pen: parseFloat(kpis.notaVentaPEN.toFixed(2)),
@@ -632,7 +623,6 @@ export const getReporteDeudasClientes = async (req, res) => {
         const [resultadosRaw] = await db.query(sql, params);
         const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
-        // Sincronizar montos con lógica real de ventas
         const resultados = resultadosRaw.map(row => {
             const subtotal = parseFloat(row.subtotal) || 0;
             const montoPagado = parseFloat(row.monto_pagado) || 0;
@@ -642,7 +632,7 @@ export const getReporteDeudasClientes = async (req, res) => {
 
             let totalReal = 0;
             if (tipoDoc.includes('Nota de Venta')) {
-                totalReal = subtotal; // Notas de venta NO tienen IGV
+                totalReal = subtotal;
             } else if (tipoDoc.includes('Factura') || tipoDoc.includes('Boleta')) {
                 if (esSinImpuesto && !facturasExportacion.includes(row.numero_orden)) {
                     totalReal = subtotal;
@@ -691,11 +681,9 @@ export const getReporteDeudasClientes = async (req, res) => {
             const dias = parseInt(row.dias_vencidos) || 0;
             const moneda = row.moneda === 'USD' ? 'USD' : 'PEN';
             const tipo = String(row.tipo_comprobante || '').trim();
-            
-            // Misma segmentación que Reporte Producto
+
             let key = '';
             if (tipo.includes('Factura')) {
-                // Nota: ya calculamos total_real arriba, aquí solo clasificamos
                 key = `facturas${moneda}`;
             } else if (tipo.includes('Nota de Venta')) {
                 key = `notasVenta${moneda}`;

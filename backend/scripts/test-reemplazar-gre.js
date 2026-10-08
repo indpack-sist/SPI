@@ -1,9 +1,3 @@
-// scripts/test-reemplazar-gre.js — Prueba CONTROLADA end-to-end de reemplazo de GRE (Fase 12) en BETA.
-// Clona el fixture guia id=2 a guías DE PRUEBA (numero_guia 'TEST-...'), ejerce los dos caminos del
-// hook y LIMPIA todo al final (borra las guías de prueba + resetea el correlativo TE01).
-// SUNAT va mockeado (BETA): la guía nueva del reemplazo sale ACEPTADA por el mock.
-//
-// Uso:  node scripts/test-reemplazar-gre.js   (requiere backend/.env con la BD real)
 import 'dotenv/config';
 import { pool } from '../config/database.js';
 import { sunatConfig } from '../config/sunat.js';
@@ -11,13 +5,10 @@ import { reemplazarGuiaRemision } from '../services/sunat/gre-anulacion.service.
 import { cerrarTicketGre } from '../services/sunat/gre-emision.service.js';
 
 const TAG = 'TEST-' + Date.now();
-const creadas = []; // ids a limpiar
+const creadas = [];
 let pass = 0, fail = 0;
-const check = (n, ok, extra = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? '✅' : '❌'} ${n}${extra ? '  —  ' + extra : ''}`); };
+const check = (n, ok, extra = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? '✓' : '✗'} ${n}${extra ? '  —  ' + extra : ''}`); };
 
-// Clona el fixture id=2 a una guía nueva con estado controlado. Devuelve el id.
-// numeroGuia va en formato real 'T001-XXXXXXXX' y contiguo, porque reemplazarGuiaRemision deriva
-// el siguiente número de los dígitos finales del último numero_guia (lógica heredada de createGuia).
 async function clonarFixture({ numeroGuia, sunat_estado, estado, numero_sunat, sunat_qr_url = null, sunat_ticket = null }) {
   const [ins] = await pool.query(
     `INSERT INTO guias_remision
@@ -52,15 +43,12 @@ async function main() {
   console.log(`\n=== FASE 12 — Prueba controlada de reemplazo GRE (BETA mock) · ${TAG} ===\n`);
   const [[corr0]] = await pool.query("SELECT ultimo_numero FROM series_correlativos WHERE serie='TE01'");
   const correlativoInicial = corr0.ultimo_numero;
-  // Base de numeración contigua a partir del último numero_guia (igual que la app).
   const [[last]] = await pool.query('SELECT numero_guia FROM guias_remision ORDER BY id_guia DESC LIMIT 1');
   const mBase = last?.numero_guia?.match(/(\d+)$/);
   const base = mBase ? parseInt(mBase[1]) : 0;
   const num = (off) => `T001-${String(base + off).padStart(8, '0')}`;
   console.log(`  correlativo TE01 inicial: ${correlativoInicial} · base numero_guia: ${base}\n`);
 
-  // ── CAMINO 1: ACEPTADO (reemplazo real e2e) ──────────────────────────────
-  // A = base+1 ; reemplazar genera la nueva B = base+2 automáticamente.
   console.log('— Camino 1: guía nueva ACEPTADA → original REEMPLAZADA —');
   const idA = await clonarFixture({ numeroGuia: num(1), sunat_estado: 'ACEPTADO', estado: 'Emitida', numero_sunat: 9001, sunat_qr_url: 'https://sunat/test-A' });
   const r = await reemplazarGuiaRemision(idA, { correcciones: { observaciones: 'Corrección de prueba' }, idEmpleado: 2, esAdmin: true });
@@ -75,15 +63,12 @@ async function main() {
   check('original → fecha_anulacion sellada', !!A.fecha_anulacion, `${A.fecha_anulacion}`);
   check('resultado.estadoOriginal = REEMPLAZADA', r.body?.reemplazo?.estadoOriginal === 'REEMPLAZADA');
 
-  // ── CAMINO 2: RECHAZADO (aborto, sin reemplazo fantasma) ──────────────────
   console.log('\n— Camino 2: guía nueva RECHAZADA → original vuelve a VIGENTE (aborto) —');
   const idC = await clonarFixture({ numeroGuia: num(3), sunat_estado: 'ACEPTADO', estado: 'Emitida', numero_sunat: 9003, sunat_qr_url: 'https://sunat/test-C' });
   const idD = await clonarFixture({ numeroGuia: num(4), sunat_estado: 'ENVIADO', estado: 'Emitida', numero_sunat: 9004, sunat_ticket: 'TESTMOCK' });
-  // Simular la marca "reemplazo en curso" (como la deja reemplazarGuiaRemision en su TX).
   await pool.query(
     "UPDATE guias_remision SET id_guia_reemplazo = ?, anulado_por = 2, motivo_anulacion = 'Reemplazo en curso (prueba)' WHERE id_guia = ?",
     [idD, idC]);
-  // Cerrar el ticket de la nueva como RECHAZADO → dispara el hook de aborto sobre C.
   await cerrarTicketGre(idD, `${sunatConfig.ruc}-09-TE01-9004`, 'TESTMOCK',
     { codRespuesta: '99', cdrZip: null, error: { numError: '0999', desError: 'RECHAZO SIMULADO (prueba)' }, mock: true }, Date.now());
   const C = await estadoDe(idC);
@@ -96,7 +81,6 @@ async function main() {
   check('ABORTO: motivo_anulacion limpiado (NULL)', C.motivo_anulacion === null, `motivo_anulacion=${C.motivo_anulacion}`);
   check('ABORTO: fecha_anulacion limpiado (NULL)', C.fecha_anulacion === null, `fecha_anulacion=${C.fecha_anulacion}`);
 
-  // ── LIMPIEZA ─────────────────────────────────────────────────────────────
   console.log('\n— Limpieza —');
   for (const id of creadas) {
     await pool.query('DELETE FROM detalle_guia_remision WHERE id_guia = ?', [id]);
@@ -113,15 +97,14 @@ async function main() {
 }
 
 main().catch(async (e) => {
-  console.error('\n❌ ERROR en la prueba:', e.message);
-  // Intento de limpieza best-effort ante fallo.
+  console.error('\n✗ ERROR en la prueba:', e.message);
   try {
     for (const id of creadas) {
       await pool.query('DELETE FROM detalle_guia_remision WHERE id_guia = ?', [id]);
       await pool.query('DELETE FROM guias_remision WHERE id_guia = ?', [id]);
     }
     console.error(`  (limpieza best-effort de [${creadas.join(', ')}] intentada)`);
-  } catch { /* noop */ }
-  try { await pool.end(); } catch { /* noop */ }
+  } catch {}
+  try { await pool.end(); } catch {}
   process.exit(1);
 });

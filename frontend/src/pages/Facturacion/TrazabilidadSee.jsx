@@ -196,6 +196,7 @@ const TABS = [
   { id: 'comprobantes', label: 'Comprobantes', icon: FileText },
   { id: 'guias', label: 'Guías de Remisión', icon: Truck },
   { id: 'descarga', label: 'Descarga masiva', icon: DownloadCloud },
+  { id: 'compras', label: 'Compras (SUNAT)', icon: Package },
 ];
 const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE'];
 
@@ -289,7 +290,7 @@ export default function TrazabilidadSee() {
         })}
       </div>
 
-      {tab !== 'descarga' && (<>
+      {tab !== 'descarga' && tab !== 'compras' && (<>
       <section className="tz-toolbar">
         <div className="tz-search">
           <Search size={15} />
@@ -367,6 +368,8 @@ export default function TrazabilidadSee() {
       {tab === 'descarga' && (
         <PanelDescargaMasiva onDescargarUno={descargar} />
       )}
+
+      {tab === 'compras' && <PanelComprasSunat />}
 
       {drawerOrden && <OrdenDrawer idOrden={drawerOrden} onClose={() => setDrawerOrden(null)} />}
     </main>
@@ -707,6 +710,126 @@ function PanelDescargaMasiva({ onDescargarUno }) {
       )}
 
       <ModalDescargaMasiva abierto={modal} cantidad={sel.size} onCerrar={() => setModal(false)} onConfirmar={confirmar} />
+    </div>
+  );
+}
+
+const TIPO_CP = {
+  '01': 'Factura', '03': 'Boleta', '07': 'N/C', '08': 'N/D',
+  '12': 'Ticket', '14': 'Serv. públicos', '53': 'Imp. DUA/DSI',
+};
+const tipoCpLabel = (c) => TIPO_CP[c] || (c ? `Cód. ${c}` : '—');
+
+function PanelComprasSunat() {
+  const hoy = new Date();
+  const [periodo, setPeriodo] = useState(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [error, setError] = useState(null);
+  const [consultado, setConsultado] = useState(false);
+  const [aviso, setAviso] = useState(null);
+
+  const periodoSunat = periodo.replace('-', '');
+
+  const consultar = useCallback(async () => {
+    setLoading(true); setError(null); setAviso(null);
+    try {
+      const res = await sunatAPI.listarComprasSunat(periodoSunat);
+      setRows(res.data?.data || []);
+      setConsultado(true);
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message || 'No se pudo consultar.');
+      setRows([]);
+    } finally { setLoading(false); }
+  }, [periodoSunat]);
+
+  const exportar = useCallback(async () => {
+    setExportando(true); setAviso(null);
+    try { await sunatAPI.descargarComprasExcel(periodoSunat); }
+    catch (e) { setAviso(e?.message || 'No se pudo exportar el Excel.'); }
+    finally { setExportando(false); }
+  }, [periodoSunat]);
+
+  const totalPEN = useMemo(
+    () => rows.filter((r) => r.moneda === 'PEN').reduce((s, r) => s + (Number(r.total) || 0), 0),
+    [rows]
+  );
+  const totalUSD = useMemo(
+    () => rows.filter((r) => r.moneda === 'USD').reduce((s, r) => s + (Number(r.total) || 0), 0),
+    [rows]
+  );
+  const hayResultados = consultado && !loading && !error && rows.length > 0;
+
+  return (
+    <div className="tz-descarga">
+      <div className="tz-dm-consulta">
+        <div className="tz-dm-consulta-lead">
+          <span className="tz-eyebrow"><Package size={13} /> Compras del periodo (SUNAT · SIRE)</span>
+          <p>Trae del Registro de Compras Electrónico todo lo que te facturaron, incluidos comprobantes de SEE y proveedores externos. Exporta a Excel con el formato de la propuesta SIRE.</p>
+        </div>
+        <div className="tz-dm-consulta-form">
+          <label className="tz-field tz-field-date">
+            <CalendarDays size={13} />
+            <input type="month" value={periodo} onChange={(e) => setPeriodo(e.target.value)} title="Periodo" />
+          </label>
+          <button className="tz-btn tz-btn-primary" onClick={consultar} disabled={loading}>
+            {loading ? <Loader2 className="tz-spin" size={15} /> : <Search size={15} />} Consultar
+          </button>
+        </div>
+      </div>
+
+      {aviso && <div className="tz-toast" onClick={() => setAviso(null)}><XCircle size={15} /> {aviso}</div>}
+
+      {hayResultados && (
+        <div className="tz-dm-actionbar has-sel">
+          <div className="tz-dm-count">
+            <b>{rows.length}</b> comprobante(s)
+            {totalPEN > 0 && <> · Total {fmtMoneda(totalPEN, 'PEN')}</>}
+            {totalUSD > 0 && <> · {fmtMoneda(totalUSD, 'USD')}</>}
+          </div>
+          <button className="tz-btn tz-btn-download" onClick={exportar} disabled={exportando}>
+            {exportando ? <Loader2 className="tz-spin" size={15} /> : <DownloadCloud size={15} />} Exportar a Excel
+          </button>
+        </div>
+      )}
+
+      {error ? (
+        <div className="tz-state"><XCircle size={26} /><strong>No se pudo consultar</strong><span>{error}</span></div>
+      ) : loading ? (
+        <div className="tz-state"><Loader2 className="tz-spin" size={26} /><strong>Consultando SUNAT…</strong><span>SUNAT genera la propuesta por ticket; puede tardar un momento.</span></div>
+      ) : !consultado ? (
+        <div className="tz-state"><CalendarDays size={26} /><strong>Elige un periodo</strong><span>Selecciona el mes y pulsa Consultar.</span></div>
+      ) : !rows.length ? (
+        <div className="tz-state"><FileCheck2 size={26} /><strong>Sin comprobantes</strong><span>SUNAT no reporta compras en ese periodo, o el mes en curso aún se consolida.</span></div>
+      ) : (
+        <div className="tz-table-wrap">
+          <table className="tz-table tz-table-descarga">
+            <thead>
+              <tr>
+                <th>Fecha emisión</th>
+                <th>Comprobante</th>
+                <th>Proveedor</th>
+                <th className="tz-num">IGV</th>
+                <th className="tz-num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.rucProveedor}-${r.tipoCP}-${r.documento}-${i}`} className="tz-dm-row" style={{ '--i': Math.min(i, 24) }}>
+                  <td className="tz-nowrap">{r.fechaEmision || '—'}</td>
+                  <td>
+                    <div className="tz-doc"><span className="tz-tipo" style={{ '--c': '#6366f1' }}>{tipoCpLabel(r.tipoCP)}</span><b>{r.documento}</b></div>
+                  </td>
+                  <td><div className="tz-cli"><b>{r.razonSocial || '—'}</b><small>{r.rucProveedor || ''}</small></div></td>
+                  <td className="tz-num tz-nowrap">{fmtMoneda(r.igv, r.moneda)}</td>
+                  <td className="tz-num tz-nowrap">{fmtMoneda(r.total, r.moneda)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

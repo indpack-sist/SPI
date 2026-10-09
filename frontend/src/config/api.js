@@ -1358,5 +1358,28 @@ export const sunatAPI = {
     return api.get(`/sunat/trazabilidad/guias?${params.toString()}`);
   },
 
+  listarComprasSunat: (periodo) => api.get(`/sunat/compras/periodo?periodo=${encodeURIComponent(periodo)}`),
+  descargarComprasExcel: async (periodo) => {
+    const response = await fetch(`${API_URL}/sunat/compras/periodo/excel?periodo=${encodeURIComponent(periodo)}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      let msg = 'No se pudo generar el Excel';
+      try { msg = (await response.json())?.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `compras-sunat-${periodo}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
+    return { success: true };
+  },
+
   ping: () => api.get('/sunat/ping'),
 };

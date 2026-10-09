@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verificarToken, verificarPermiso } from '../middleware/auth.js';
 import * as c from '../controllers/sunat.controller.js';
 import * as traza from '../controllers/trazabilidad-see.controller.js';
+import * as compras from '../controllers/sire-compras.controller.js';
 
 const router = Router();
 
@@ -48,5 +49,8 @@ router.get('/monitor', verificarToken, verificarPermiso('facturacion'), c.monito
 
 router.get('/trazabilidad/comprobantes', verificarToken, verificarPermiso('facturacion'), traza.listarComprobantes);
 router.get('/trazabilidad/guias', verificarToken, verificarPermiso('facturacion'), traza.listarGuias);
+
+router.get('/compras/periodo', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.listar);
+router.get('/compras/periodo/excel', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.exportarExcel);
 
 export default router;

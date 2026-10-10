@@ -12,11 +12,20 @@ const CPE_HEADERS = {
 
 const SUFIJO_CPE = { xml: '02', pdf: '01', cdr: '03' };
 
-export function extraerGlosaXml(xml) {
-  const descripciones = [...String(xml || '').matchAll(/<cbc:Description[^>]*>([\s\S]*?)<\/cbc:Description>/g)]
+function decodificarXml(xmlBuf) {
+  if (!Buffer.isBuffer(xmlBuf)) return String(xmlBuf || '');
+  const cabecera = xmlBuf.subarray(0, 120).toString('latin1');
+  const enc = (/encoding=["']([^"']+)["']/i.exec(cabecera)?.[1] || 'utf-8').toLowerCase();
+  const esLatin = enc.includes('8859') || enc.includes('latin') || enc.includes('1252');
+  return xmlBuf.toString(esLatin ? 'latin1' : 'utf8');
+}
+
+export function extraerGlosaXml(xmlBuf) {
+  const txt = decodificarXml(xmlBuf).replace(/�/g, '').replace(/ï¿½/g, '');
+  const descripciones = [...txt.matchAll(/<cbc:Description[^>]*>([\s\S]*?)<\/cbc:Description>/g)]
     .map((m) => m[1].replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean);
-  return [...new Set(descripciones)].join(' | ');
+  return [...new Set(descripciones)].join(', ');
 }
 
 async function bajarArchivoCpe(idComprobante, formato, token) {
@@ -54,7 +63,7 @@ export async function descargarComprobanteCpe({ rucEmisor, tipo, serie, numero, 
   const documento = `${rucEmisor}-${tipo}-${serie}-${numero}`;
   return {
     documento,
-    glosa: xmlBuf ? extraerGlosaXml(xmlBuf.toString('utf8')) : '',
+    glosa: xmlBuf ? extraerGlosaXml(xmlBuf) : '',
     xml: xmlBuf ? { nombre: `${documento}.xml`, base64: xmlBuf.toString('base64') } : null,
     pdf: pdfBuf ? { nombre: `${documento}.pdf`, base64: pdfBuf.toString('base64') } : null
   };

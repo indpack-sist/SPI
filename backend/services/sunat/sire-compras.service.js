@@ -4,6 +4,7 @@ import { sunatConfig } from '../../config/sunat.js';
 import { pool } from '../../config/database.js';
 import { parseComprasPropuesta } from './sire-compras.parser.js';
 import { obtenerTokenGre } from './gre.service.js';
+import { PDFParse } from 'pdf-parse';
 
 const CPE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -20,12 +21,37 @@ function decodificarXml(xmlBuf) {
   return xmlBuf.toString(esLatin ? 'latin1' : 'utf8');
 }
 
-export function extraerGlosaXml(xmlBuf) {
-  const txt = decodificarXml(xmlBuf).replace(/�/g, '').replace(/ï¿½/g, '');
-  const descripciones = [...txt.matchAll(/<cbc:Description[^>]*>([\s\S]*?)<\/cbc:Description>/g)]
+function descripcionesXml(xmlBuf) {
+  const txt = decodificarXml(xmlBuf).replace(/ï¿½/g, '�');
+  return [...txt.matchAll(/<cbc:Description[^>]*>([\s\S]*?)<\/cbc:Description>/g)]
     .map((m) => m[1].replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean);
-  return [...new Set(descripciones)].join(', ');
+}
+
+async function textoPdf(pdfBuf) {
+  try { return ((await new PDFParse({ data: pdfBuf }).getText()).text || '').replace(/\s+/g, ' '); }
+  catch { return ''; }
+}
+
+function repararDescripcion(desc, pdfNorm) {
+  if (!desc.includes('�')) return desc;
+  if (pdfNorm) {
+    const patron = desc
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\s+/g, '\\s+')
+      .replace(/�/g, '.');
+    const m = new RegExp(patron).exec(pdfNorm);
+    if (m) return m[0].replace(/\s+/g, ' ').trim();
+  }
+  return desc.replace(/�/g, '');
+}
+
+export async function extraerGlosa(xmlBuf, pdfBuf) {
+  const descripciones = descripcionesXml(xmlBuf);
+  const hayCorrupcion = descripciones.some((d) => d.includes('�'));
+  const pdfNorm = (hayCorrupcion && pdfBuf) ? await textoPdf(pdfBuf) : '';
+  const reparadas = descripciones.map((d) => repararDescripcion(d, pdfNorm));
+  return [...new Set(reparadas)].join(', ');
 }
 
 async function bajarArchivoCpe(idComprobante, formato, token) {
@@ -46,7 +72,8 @@ async function bajarArchivoCpe(idComprobante, formato, token) {
       await new Promise((r) => setTimeout(r, 2500));
     }
   }
-  throw ultimo;
+  const err = new Error('SUNAT no entregó el archivo (error persistente del servidor SUNAT 500); el comprobante no está disponible para descarga.');
+  err.statusCode = 502; err.isOperational = true; err.sunatHttp = ultimo?.response?.status; throw err;
 }
 
 export async function descargarComprobanteCpe({ rucEmisor, tipo, serie, numero, origen = '2' }) {
@@ -63,7 +90,7 @@ export async function descargarComprobanteCpe({ rucEmisor, tipo, serie, numero, 
   const documento = `${rucEmisor}-${tipo}-${serie}-${numero}`;
   return {
     documento,
-    glosa: xmlBuf ? extraerGlosaXml(xmlBuf) : '',
+    glosa: xmlBuf ? await extraerGlosa(xmlBuf, pdfBuf) : '',
     xml: xmlBuf ? { nombre: `${documento}.xml`, base64: xmlBuf.toString('base64') } : null,
     pdf: pdfBuf ? { nombre: `${documento}.pdf`, base64: pdfBuf.toString('base64') } : null
   };

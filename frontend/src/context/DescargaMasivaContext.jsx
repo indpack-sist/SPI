@@ -134,9 +134,9 @@ export function DescargaMasivaProvider({ children }) {
       setEstado((e) => ({ ...e, actual: doc, hechos: i }));
 
       try {
-        const res = await conReintento(() => sunatAPI.obtenerComprobanteCompra({
+        const res = await sunatAPI.obtenerComprobanteCompra({
           ruc: c.rucProveedor, tipo: c.tipoCP, serie: c.serie, numero: c.numero
-        }));
+        });
         const data = res.data?.data || {};
         glosas[clave] = data.glosa || '';
 
@@ -152,7 +152,7 @@ export function DescargaMasivaProvider({ children }) {
         ok += 1;
       } catch (err) {
         console.error(`[compras] ${doc}:`, err);
-        fallidos.push({ documento: doc, archivo: 'comprobante', error: err?.message || 'error' });
+        fallidos.push({ documento: doc, archivo: 'comprobante', error: err?.error || err?.message || 'SUNAT no entregó el comprobante' });
       }
       await new Promise((r) => setTimeout(r, 150));
     }

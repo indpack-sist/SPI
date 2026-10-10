@@ -23,7 +23,7 @@ const MOTIVOS_TRASLADO = {
   '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
   '08': 'IMPORTACIÓN',
   '09': 'EXPORTACIÓN',
-  '13': 'Otros (no especificados en los anteriores)',
+  '13': 'Otros',
   '14': 'VENTA SUJETA A CONFIRMACIÓN DEL COMPRADOR',
   '18': 'TRASLADO EMISOR ITINERANTE CP'
 };

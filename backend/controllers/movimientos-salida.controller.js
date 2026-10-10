@@ -73,8 +73,8 @@ export async function getAllSalidas(req, res) {
                 ov.porcentaje_impuesto,
                 ov.tipo_comprobante,
                 COUNT(ds.id_detalle) AS num_productos,
-                GROUP_CONCAT(p.nombre SEPARATOR ', ') AS productos_resumen,
-                GROUP_CONCAT(CONCAT(ds.cantidad, '::', COALESCE(p.unidad_medida, ''), '::', p.nombre) ORDER BY p.nombre SEPARATOR '||') AS productos_detalle
+                GROUP_CONCAT(COALESCE(p.nombre, ds.descripcion_libre) SEPARATOR ', ') AS productos_resumen,
+                GROUP_CONCAT(CONCAT(ds.cantidad, '::', COALESCE(p.unidad_medida, ds.unidad_medida_libre, ''), '::', COALESCE(p.nombre, ds.descripcion_libre)) ORDER BY COALESCE(p.nombre, ds.descripcion_libre) SEPARATOR '||') AS productos_detalle
             FROM salidas s -- CAMBIO CLAVE: Usamos la tabla 'salidas'
             INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
             LEFT JOIN clientes c ON s.id_cliente = c.id_cliente
@@ -175,10 +175,10 @@ export async function getSalidaById(req, res) {
         const detallesSql = `
             SELECT
                 ds.*,
-                p.nombre AS producto,
-                p.unidad_medida
+                COALESCE(p.nombre, ds.descripcion_libre) AS producto,
+                COALESCE(p.unidad_medida, ds.unidad_medida_libre) AS unidad_medida
             FROM detalle_salidas ds
-            INNER JOIN productos p ON ds.id_producto = p.id_producto
+            LEFT JOIN productos p ON ds.id_producto = p.id_producto
             LEFT JOIN detalle_orden_venta dov
                 ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
             WHERE ds.id_salida = ?
@@ -576,10 +576,10 @@ export const generarPDFSalidaController = async (req, res, next) => {
       SELECT
         ds.*,
         p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida
+        COALESCE(p.nombre, ds.descripcion_libre) AS producto,
+        COALESCE(p.unidad_medida, ds.unidad_medida_libre) AS unidad_medida
       FROM detalle_salidas ds
-      INNER JOIN productos p ON ds.id_producto = p.id_producto
+      LEFT JOIN productos p ON ds.id_producto = p.id_producto
       LEFT JOIN detalle_orden_venta dov
         ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
       WHERE ds.id_salida = ?

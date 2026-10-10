@@ -1312,6 +1312,8 @@ export const sunatAPI = {
       ...(fecha_emision ? { fecha_emision } : {})
     }),
   darDeBaja: (id_factura, motivo) => api.post('/sunat/comprobantes/baja', { id_factura, motivo }),
+  reenviarComprobante: (id, guias) =>
+    api.post(`/sunat/comprobantes/${id}/reenviar`, Array.isArray(guias) ? { guias } : {}),
   estadoComprobante: (id) => api.get(`/sunat/comprobantes/${id}/estado`),
   verPdfComprobante: (id) => descargarPdfSunat(`/sunat/comprobantes/${id}/pdf`),
   descargarArchivoUrl: (url, nombre) => descargarUrlComoArchivo(url, nombre),

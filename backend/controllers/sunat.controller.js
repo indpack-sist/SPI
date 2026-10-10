@@ -133,6 +133,89 @@ export async function health(req, res) {
   });
 }
 
+async function enviarYProcesarFactura({ idFactura, serie, numero, nombre, xmlFirmado, totales, guiaIds, guiasManualNuevas, idOrdenVenta, idEmpleado, emisionDateTime }) {
+  const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
+  const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
+  console.log('[SUNAT] emitir ->', JSON.stringify(debug));
+  await copiaLocal(`${nombre}.xml`, xmlFirmado);
+  const zipBuf = zipXml(`${nombre}.xml`, xmlFirmado);
+
+  let cdrZip, cdr;
+  const t0 = Date.now();
+  try {
+    cdrZip = await sendBill(`${nombre}.zip`, zipBuf);
+    cdr = parsearCdr(cdrZip);
+  } catch (e) {
+    if (['1032', '1033'].includes(String(e.faultCode))) {
+      await pool.query(
+        `UPDATE facturas_venta SET sunat_estado = 'RECHAZADO', sunat_response_code = ?,
+           sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?`,
+        [String(e.faultCode), `El comprobante ya estaba informado en SUNAT (anulado/rechazado); debe emitirse con el siguiente correlativo. ${e.message}`.slice(0, 4000), idFactura]);
+      await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
+        exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+      return { status: 409, body: {
+        ok: false, estado: 'RECHAZADO', idFactura, serie, numero, faultCode: String(e.faultCode),
+        error: 'Este número de comprobante ya fue informado a SUNAT (rechazado/anulado). Emítalo con el siguiente correlativo.',
+        debug
+      } };
+    }
+    await pool.query(
+      'UPDATE facturas_venta SET sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?',
+      [`FAULT ${e.faultCode || ''}: ${e.message}`.slice(0, 4000), idFactura]);
+    await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
+      exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+    return { status: 502, body: {
+      ok: false, estado: 'ENVIADO', idFactura, serie, numero,
+      faultCode: e.faultCode || null, error: e.message, debug
+    } };
+  }
+  await copiaLocal(`R-${nombre}.zip`, cdrZip);
+
+  const aceptado = cdr.responseCode === '0';
+  const codigo = Number(cdr.responseCode);
+  const rechazado = codigo >= 2000 && codigo <= 3999;
+  const estadoFinal = aceptado ? 'ACEPTADO' : (rechazado ? 'RECHAZADO' : 'ENVIADO');
+  const descripcion = (cdr.description || '') + (cdr.notas.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
+
+  let xmlUrl = null, cdrUrl = null;
+  try { xmlUrl = await subirRaw(Buffer.from(xmlFirmado, 'utf8'), `sunat/xml/${nombre}.xml`); }
+  catch (e) { console.warn('[SUNAT] subir XML falló:', e.message); }
+  try { cdrUrl = await subirRaw(cdrZip, `sunat/cdr/R-${nombre}.zip`); }
+  catch (e) { console.warn('[SUNAT] subir CDR falló:', e.message); }
+
+  await withTransaction(async (conn) => {
+    await conn.query(
+      `UPDATE facturas_venta SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
+         xml_url = ?, cdr_url = ? WHERE id_factura = ?`,
+      [estadoFinal, cdr.responseCode, descripcion.slice(0, 4000),
+       xmlUrl ? JSON.stringify({ url: xmlUrl }) : null,
+       cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, idFactura]);
+
+    if (aceptado) {
+      await marcarOrdenFacturada(conn, { idOrdenVenta, serie, numero, idEmpleado, fecha: emisionDateTime });
+      if (guiaIds && guiaIds.length) {
+        await conn.query(
+          'UPDATE guias_remision SET id_factura = ? WHERE id_guia IN (?)', [idFactura, guiaIds]);
+      }
+      if (guiasManualNuevas && guiasManualNuevas.length) {
+        await conn.query(
+          'INSERT IGNORE INTO facturas_guias_referencia (id_factura, tipo_documento, serie, numero) VALUES ?',
+          [guiasManualNuevas.map((g) => [idFactura, g.tipo_documento, g.serie, g.numero])]);
+      }
+    }
+  });
+
+  await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
+    exito: aceptado, httpStatus: 200, detalle: `${cdr.responseCode} ${descripcion}`.slice(0, 4000),
+    duracionMs: Date.now() - t0 });
+
+  return { status: 200, body: {
+    ok: aceptado, estado: estadoFinal, idFactura, serie, numero,
+    comprobante: `${serie}-${numero}`, responseCode: cdr.responseCode,
+    descripcion, totales, xmlUrl, cdrUrl
+  } };
+}
+
 export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;
   const tipo = req.body.tipo || '01';
@@ -304,87 +387,98 @@ export async function emitirComprobante(req, res, next) {
     }
 
     const { idFactura, numero, nombre, xmlFirmado, totales, guiaIds, guiasManualNuevas } = prep;
-    const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
-    const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
-    console.log('[SUNAT] emitir ->', JSON.stringify(debug));
-    await copiaLocal(`${nombre}.xml`, xmlFirmado);
-    const zipBuf = zipXml(`${nombre}.xml`, xmlFirmado);
+    const r = await enviarYProcesarFactura({
+      idFactura, serie, numero, nombre, xmlFirmado, totales, guiaIds, guiasManualNuevas,
+      idOrdenVenta: id_orden_venta, idEmpleado, emisionDateTime
+    });
+    res.status(r.status).json(r.body);
+  } catch (e) { next(e); }
+}
 
-    let cdrZip, cdr;
-    const t0 = Date.now();
-    try {
-      cdrZip = await sendBill(`${nombre}.zip`, zipBuf);
-      cdr = parsearCdr(cdrZip);
-    } catch (e) {
-      if (String(e.faultCode) === '1032') {
-        await pool.query(
-          `UPDATE facturas_venta SET sunat_estado = 'RECHAZADO', sunat_response_code = '1032',
-             sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?`,
-          [`El comprobante ya estaba informado en SUNAT (anulado/rechazado); debe emitirse con el siguiente correlativo. ${e.message}`.slice(0, 4000), idFactura]);
-        await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
-          exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
-        return res.status(409).json({
-          ok: false, estado: 'RECHAZADO', idFactura, serie, numero, faultCode: '1032',
-          error: 'Este número de comprobante ya fue informado a SUNAT (rechazado/anulado). Emítalo con el siguiente correlativo.',
-          debug
-        });
+export async function reenviarComprobante(req, res, next) {
+  const idFactura = Number(req.params.id);
+  const idEmpleado = req.user?.id_empleado || null;
+  try {
+    if (!idFactura) throw new AppError('id de comprobante inválido', 400);
+    const guiasManual = normalizarGuiasFactura(req.body.guias);
+
+    const prep = await withTransaction(async (conn) => {
+      const [[f]] = await conn.query(
+        'SELECT * FROM facturas_venta WHERE id_factura = ? FOR UPDATE', [idFactura]);
+      if (!f) throw new AppError('Comprobante no existe', 404);
+      if (f.codigo_tipo_sunat !== '01') {
+        throw new AppError('Solo se reenvían facturas (01) desde aquí; las notas se reemiten por su propio flujo', 422);
       }
-      await pool.query(
-        'UPDATE facturas_venta SET sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_factura = ?',
-        [`FAULT ${e.faultCode || ''}: ${e.message}`.slice(0, 4000), idFactura]);
-      await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
-        exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
-      return res.status(502).json({
-        ok: false, estado: 'ENVIADO', idFactura, serie, numero,
-        faultCode: e.faultCode || null, error: e.message, debug
+      if (f.sunat_estado !== 'ENVIADO') {
+        throw new AppError(
+          `Solo se puede reenviar un comprobante que quedó En proceso/ENVIADO (estado actual: ${f.sunat_estado || 'sin enviar'}). ` +
+          'Si fue RECHAZADO o ya está ACEPTADO, no corresponde reenviar el mismo número.', 409);
+      }
+
+      const [[ov]] = await conn.query(
+        'SELECT * FROM ordenes_venta WHERE id_orden_venta = ? FOR UPDATE', [f.id_orden_venta]);
+      if (!ov) throw new AppError('Orden de venta no existe', 404);
+      const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [f.id_cliente]);
+      if (!cliente) throw new AppError('Cliente de la factura no existe', 404);
+      const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
+      if (!empresa) throw new AppError('Falta la configuración de la empresa emisora', 422);
+      const esExport = Number(ov.es_exportacion) === 1;
+      if (esExport) validarUbicacionEntregaExportacion(empresa);
+
+      const [detalle] = await conn.query(
+        'SELECT d.*, p.codigo, p.nombre, p.codigo_unidad_sunat ' +
+        'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
+        'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
+
+      const [guias] = await conn.query(
+        `SELECT id_guia, serie_sunat, numero_sunat FROM guias_remision
+          WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
+            AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL`, [f.id_orden_venta]);
+
+      const [[ft]] = await conn.query(
+        "SELECT DATE_FORMAT(fecha_emision, '%Y-%m-%d') AS emision, DATE_FORMAT(fecha_emision, '%H:%i:%s') AS hora FROM facturas_venta WHERE id_factura = ?",
+        [idFactura]);
+      const emision = ft.emision;
+      const hora = ft.hora && ft.hora !== '00:00:00' ? ft.hora : fechaLima().hora;
+      const emisionDateTime = `${emision} ${hora}`;
+      const fecha = {
+        emision, hora,
+        vencimiento: String(ov.tipo_venta || '').toLowerCase().startsWith('cr')
+          ? addDiasISO(emision, ov.dias_credito) : null
+      };
+
+      ov.observaciones = String(f.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+
+      const serie = f.serie;
+      const numero = f.numero;
+      const guiasSistema = guias.map((g) => ({ tipo_documento: '09', serie: String(g.serie_sunat), numero: String(g.numero_sunat) }));
+      const clavesSistema = new Set(guiasSistema.map((g) => `${g.tipo_documento}|${g.serie}|${g.numero}`));
+      const guiasManualNuevas = (guiasManual || []).filter((g) => !clavesSistema.has(`${g.tipo_documento}|${g.serie}|${g.numero}`));
+      const guiasDeclaradas = [...guiasSistema, ...guiasManualNuevas];
+
+      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias: guiasDeclaradas });
+      const { xmlFirmado, digestValue } = firmarXml(xml);
+      const nombre = `${sunatConfig.ruc}-${f.codigo_tipo_sunat}-${serie}-${numero}`;
+
+      const qr = generarQr({
+        ruc: sunatConfig.ruc, tipo: f.codigo_tipo_sunat, serie, numero,
+        igv: totales.igv, total: totales.total, fechaEmision: emision,
+        tipoDocCliente: esExport ? '-' : '6', numDocCliente: esExport ? '-' : (cliente.ruc || '0'),
+        hash: digestValue
       });
-    }
-    await copiaLocal(`R-${nombre}.zip`, cdrZip);
 
-    const aceptado = cdr.responseCode === '0';
-    const codigo = Number(cdr.responseCode);
-    const rechazado = codigo >= 2000 && codigo <= 3999;
-    const estadoFinal = aceptado ? 'ACEPTADO' : (rechazado ? 'RECHAZADO' : 'ENVIADO');
-    const descripcion = (cdr.description || '') + (cdr.notas.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
-
-    let xmlUrl = null, cdrUrl = null;
-    try { xmlUrl = await subirRaw(Buffer.from(xmlFirmado, 'utf8'), `sunat/xml/${nombre}.xml`); }
-    catch (e) { console.warn('[SUNAT] subir XML falló:', e.message); }
-    try { cdrUrl = await subirRaw(cdrZip, `sunat/cdr/R-${nombre}.zip`); }
-    catch (e) { console.warn('[SUNAT] subir CDR falló:', e.message); }
-
-    await withTransaction(async (conn) => {
       await conn.query(
-        `UPDATE facturas_venta SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
-           xml_url = ?, cdr_url = ? WHERE id_factura = ?`,
-        [estadoFinal, cdr.responseCode, descripcion.slice(0, 4000),
-         xmlUrl ? JSON.stringify({ url: xmlUrl }) : null,
-         cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, idFactura]);
+        `UPDATE facturas_venta SET sunat_digest_value = ?, sunat_qr_data = ?, sunat_nombre_xml = ?, hash_see = ?
+           WHERE id_factura = ?`,
+        [digestValue, qr.data, nombre, digestValue, idFactura]);
 
-      if (aceptado) {
-        await marcarOrdenFacturada(conn, { idOrdenVenta: id_orden_venta, serie, numero,
-          idEmpleado, fecha: emisionDateTime });
-        if (guiaIds && guiaIds.length) {
-          await conn.query(
-            'UPDATE guias_remision SET id_factura = ? WHERE id_guia IN (?)', [idFactura, guiaIds]);
-        }
-        if (guiasManualNuevas && guiasManualNuevas.length) {
-          await conn.query(
-            'INSERT IGNORE INTO facturas_guias_referencia (id_factura, tipo_documento, serie, numero) VALUES ?',
-            [guiasManualNuevas.map((g) => [idFactura, g.tipo_documento, g.serie, g.numero])]);
-        }
-      }
+      return { idFactura, serie, numero, nombre, xmlFirmado, totales,
+        guiaIds: guias.map((g) => g.id_guia), guiasManualNuevas,
+        idOrdenVenta: f.id_orden_venta, emisionDateTime };
     });
 
-    await registrarSunatLog({ origen: 'FACTURA', referenciaId: idFactura, evento: 'sendBill',
-      exito: aceptado, httpStatus: 200, detalle: `${cdr.responseCode} ${descripcion}`.slice(0, 4000),
-      duracionMs: Date.now() - t0 });
-
-    res.json({
-      ok: aceptado, estado: estadoFinal, idFactura, serie, numero,
-      comprobante: `${serie}-${numero}`, responseCode: cdr.responseCode,
-      descripcion, totales, xmlUrl, cdrUrl
-    });
+    const r = await enviarYProcesarFactura({ ...prep, idEmpleado });
+    res.status(r.status).json(r.body);
   } catch (e) { next(e); }
 }
 

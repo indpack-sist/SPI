@@ -496,7 +496,9 @@ function DetalleOrdenVenta() {
     const itemsPendientes = orden.detalle
       .filter(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0)
       .map(item => ({
+        id_detalle: item.id_detalle,
         id_producto: item.id_producto,
+        es_manual: !item.id_producto,
         codigo_producto: item.codigo_producto,
         producto: item.producto,
         unidad_medida: item.unidad_medida,
@@ -517,12 +519,12 @@ function DetalleOrdenVenta() {
     setModalDespacho(true);
   };
 
-  const handleCambioCantidadDespacho = (idProducto, valor) => {
+  const handleCambioCantidadDespacho = (idDetalle, valor) => {
     const nuevosDetalles = [...despachoForm.detalles];
     let val = parseFloat(valor);
     if (isNaN(val) || val < 0) val = 0;
-    
-    const index = nuevosDetalles.findIndex(item => item.id_producto === idProducto);
+
+    const index = nuevosDetalles.findIndex(item => item.id_detalle === idDetalle);
     if (index !== -1) {
         nuevosDetalles[index].cantidad_a_despachar = val;
         setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
@@ -541,7 +543,9 @@ function DetalleOrdenVenta() {
       const itemsADespachar = despachoForm.detalles
         .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
         .map(item => ({
+          id_detalle: item.id_detalle,
           id_producto: item.id_producto,
+          nombre: item.producto,
           cantidad: parseFloat(item.cantidad_a_despachar)
         }));
 
@@ -1924,8 +1928,12 @@ function DetalleOrdenVenta() {
       align: 'center',
       render: (value, row) => {
         const pendiente = parseFloat(row.cantidad_pendiente || 0);
-        
+
         if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
+
+        if (!row.id_producto) {
+          return <span className="badge badge-info">Ítem manual</span>;
+        }
 
         if (row.stock_reservado === 1) {
             return (
@@ -4495,18 +4503,18 @@ function DetalleOrdenVenta() {
                 {despachoForm.detalles.map((item, idx) => {
                   const cantDesp = parseFloat(item.cantidad_a_despachar) || 0;
                   const excedePendiente = cantDesp > parseFloat(item.cantidad_pendiente);
-                  const excedeStock = cantDesp > parseFloat(item.stock_disponible);
+                  const excedeStock = !item.es_manual && cantDesp > parseFloat(item.stock_disponible);
                   return (
-                  <tr key={item.id_producto}>
+                  <tr key={item.id_detalle}>
                     <td>
                       <div className="font-medium text-sm">{item.producto}</div>
-                      <div className="text-xs text-muted">{item.codigo_producto}</div>
+                      <div className="text-xs text-muted">{item.es_manual ? 'Ítem manual' : item.codigo_producto}</div>
                     </td>
                     <td className="text-right font-medium">
                       {parseFloat(parseFloat(item.cantidad_pendiente).toFixed(4))}
                     </td>
                     <td className={`text-right ${excedeStock ? 'text-red-600 font-semibold' : 'text-muted'}`}>
-                      {parseFloat(parseFloat(item.stock_disponible).toFixed(4))}
+                      {item.es_manual ? '—' : parseFloat(parseFloat(item.stock_disponible).toFixed(4))}
                     </td>
                     <td>
                       <input
@@ -4515,7 +4523,7 @@ function DetalleOrdenVenta() {
                         min="0"
                         step="0.001"
                         value={item.cantidad_a_despachar}
-                        onChange={(e) => handleCambioCantidadDespacho(item.id_producto, e.target.value)}
+                        onChange={(e) => handleCambioCantidadDespacho(item.id_detalle, e.target.value)}
                         onWheel={handleWheelDisable}
                       />
                       {excedePendiente && (

@@ -700,9 +700,9 @@ export async function generarPDFSalida(datos) {
           const pesoUE = parseFloat(item.peso_unitario || 0);
           const pesoTE = pesoUE > 0 ? cantidadItem * pesoUE : 0;
 
-          doc.text(item.codigo_producto, 40, yPos + 5);
+          doc.text(item.codigo_producto || '-', 40, yPos + 5);
           doc.text(descripcion, 110, yPos + 5, { width: 165, lineGap: 2 });
-          doc.text(item.unidad_medida, 280, yPos + 5, { width: 25, align: 'center' });
+          doc.text(item.unidad_medida || '', 280, yPos + 5, { width: 25, align: 'center' });
           doc.text(fmtCantidad(cantidadItem), 305, yPos + 5, { width: 50, align: 'center' });
           doc.text(pesoTE > 0 ? fmtPeso(pesoTE) : '-', 355, yPos + 5, { width: 50, align: 'center' });
           const despachado = fmtCantidad(item.cantidad_despachada || 0);
@@ -716,10 +716,10 @@ export async function generarPDFSalida(datos) {
           const precioU = parseFloat(item.precio_unitario || 0);
           const valorV = cantidadItem * precioU;
 
-          doc.text(item.codigo_producto, COLV.codigo.x, yPos + 5, { width: COLV.codigo.w });
+          doc.text(item.codigo_producto || '-', COLV.codigo.x, yPos + 5, { width: COLV.codigo.w });
           doc.text(descripcion, COLV.desc.x, yPos + 5, { width: COLV.desc.w, lineGap: 2 });
           doc.text(fmtCantidad(cantidadItem), COLV.cant.x, yPos + 5, { width: COLV.cant.w, align: 'center' });
-          doc.text(item.unidad_medida, COLV.und.x, yPos + 5, { width: COLV.und.w, align: 'center' });
+          doc.text(item.unidad_medida || '', COLV.und.x, yPos + 5, { width: COLV.und.w, align: 'center' });
           doc.text(fmtPrecio(precioU), COLV.vunit.x, yPos + 5, { width: COLV.vunit.w, align: 'right' });
           doc.text(fmtValor(valorV), COLV.vventa.x, yPos + 5, { width: COLV.vventa.w, align: 'right' });
         } else {
@@ -727,11 +727,11 @@ export async function generarPDFSalida(datos) {
           const pesoU = parseFloat(item.peso_unitario || 0);
           const pesoT = pesoU > 0 ? cantidadItem * pesoU : 0;
 
-          doc.text(item.codigo_producto, 40, yPos + 5);
+          doc.text(item.codigo_producto || '-', 40, yPos + 5);
           doc.text(descripcion, 140, yPos + 5, { width: 220, lineGap: 2 });
           doc.text(fmtCantidad(cantidadItem), 370, yPos + 5, { width: 55, align: 'center' });
           doc.text(pesoT > 0 ? fmtPeso(pesoT) : '-', 425, yPos + 5, { width: 55, align: 'center' });
-          doc.text(item.unidad_medida, 485, yPos + 5, { width: 50, align: 'center' });
+          doc.text(item.unidad_medida || '', 485, yPos + 5, { width: 50, align: 'center' });
         }
 
         yPos += alturaFila;

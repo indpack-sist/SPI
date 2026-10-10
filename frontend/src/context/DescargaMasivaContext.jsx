@@ -107,11 +107,84 @@ export function DescargaMasivaProvider({ children }) {
     }));
   }, []);
 
+  const iniciarDescargaCompras = useCallback(async (comprobantes, periodo) => {
+    if (!soportaDescargaCarpetas()) {
+      throw new Error('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.');
+    }
+    if (!comprobantes?.length) throw new Error('No hay comprobantes para descargar.');
+
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    const carpetaPadre = sanear(`Compras ${periodo} (descarga ${hoy})`);
+    const padre = await dirHandle.getDirectoryHandle(carpetaPadre, { create: true });
+
+    cancelarRef.current = false;
+    setEstado({ ...ESTADO_INICIAL, activa: true, total: comprobantes.length, carpeta: carpetaPadre });
+
+    let ok = 0;
+    const fallidos = [];
+    const omitidos = [];
+    const glosas = {};
+
+    for (let i = 0; i < comprobantes.length; i++) {
+      if (cancelarRef.current) break;
+      const c = comprobantes[i];
+      const clave = `${c.rucProveedor}-${c.tipoCP}-${c.serie}-${c.numero}`;
+      const doc = sanear(clave);
+      setEstado((e) => ({ ...e, actual: doc, hechos: i }));
+
+      try {
+        const res = await conReintento(() => sunatAPI.obtenerComprobanteCompra({
+          ruc: c.rucProveedor, tipo: c.tipoCP, serie: c.serie, numero: c.numero
+        }));
+        const data = res.data?.data || {};
+        glosas[clave] = data.glosa || '';
+
+        if (!data.xml && !data.pdf) {
+          omitidos.push({ documento: doc, archivo: 'XML/PDF' });
+          continue;
+        }
+        const sub = await padre.getDirectoryHandle(doc, { create: true });
+        if (data.xml) await escribir(sub, data.xml.nombre, base64ABlob(data.xml.base64, 'application/xml'));
+        else omitidos.push({ documento: doc, archivo: 'XML' });
+        if (data.pdf) await escribir(sub, data.pdf.nombre, base64ABlob(data.pdf.base64, 'application/pdf'));
+        else omitidos.push({ documento: doc, archivo: 'PDF' });
+        ok += 1;
+      } catch (err) {
+        console.error(`[compras] ${doc}:`, err);
+        fallidos.push({ documento: doc, archivo: 'comprobante', error: err?.message || 'error' });
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+
+    if (!cancelarRef.current) {
+      try {
+        setEstado((e) => ({ ...e, actual: 'Generando Excel con glosa…' }));
+        const blob = await sunatAPI.obtenerBlobExcelCompras(periodo, glosas);
+        await escribir(padre, `compras-sunat-${periodo}.xlsx`, blob);
+      } catch (err) {
+        fallidos.push({ documento: `compras-sunat-${periodo}.xlsx`, archivo: 'Excel', error: err?.message || 'error' });
+      }
+    }
+
+    setEstado((e) => ({
+      ...e, activa: false, terminada: true, cancelada: cancelarRef.current,
+      hechos: comprobantes.length, actual: '', ok, fallidos, omitidos
+    }));
+  }, []);
+
   return (
-    <DescargaMasivaContext.Provider value={{ estado, iniciarDescarga, cancelar, cerrar }}>
+    <DescargaMasivaContext.Provider value={{ estado, iniciarDescarga, iniciarDescargaCompras, cancelar, cerrar }}>
       {children}
     </DescargaMasivaContext.Provider>
   );
+}
+
+function base64ABlob(b64, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 async function conReintento(fn, intentos = 2, esperaMs = 500) {

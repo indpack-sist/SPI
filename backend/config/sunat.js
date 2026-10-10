@@ -10,7 +10,8 @@ const ENDPOINTS = {
     GRE_TOKEN: 'https://api-seguridad.sunat.gob.pe/v1/clientessol/{client_id}/oauth2/token',
     GRE_API: 'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem',
     SIRE_API: 'https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv',
-    SIRE_SCOPE: 'https://api-sire.sunat.gob.pe'
+    SIRE_SCOPE: 'https://api-sire.sunat.gob.pe',
+    CPE_CONSULTA: 'https://api-cpe.sunat.gob.pe/v1/contribuyente/consultacpe'
   },
   PROD: {
     FACTURACION: 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
@@ -18,7 +19,8 @@ const ENDPOINTS = {
     GRE_TOKEN: 'https://api-seguridad.sunat.gob.pe/v1/clientessol/{client_id}/oauth2/token',
     GRE_API: 'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem',
     SIRE_API: 'https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv',
-    SIRE_SCOPE: 'https://api-sire.sunat.gob.pe'
+    SIRE_SCOPE: 'https://api-sire.sunat.gob.pe',
+    CPE_CONSULTA: 'https://api-cpe.sunat.gob.pe/v1/contribuyente/consultacpe'
   }
 };
 

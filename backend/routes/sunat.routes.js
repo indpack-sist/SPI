@@ -54,5 +54,7 @@ router.get('/trazabilidad/guias', verificarToken, verificarPermiso('facturacion'
 
 router.get('/compras/periodo', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.listar);
 router.get('/compras/periodo/excel', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.exportarExcel);
+router.post('/compras/periodo/excel', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.exportarExcel);
+router.get('/compras/comprobante', verificarToken, verificarPermiso('facturacion', 'facturacionConsulta'), compras.descargarComprobante);
 
 export default router;

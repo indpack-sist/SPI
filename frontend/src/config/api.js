@@ -1382,6 +1382,24 @@ export const sunatAPI = {
     setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
     return { success: true };
   },
+  obtenerComprobanteCompra: ({ ruc, tipo, serie, numero }) => {
+    const qs = new URLSearchParams({ ruc, tipo, serie, numero }).toString();
+    return api.get(`/sunat/compras/comprobante?${qs}`);
+  },
+  obtenerBlobExcelCompras: async (periodo, glosas) => {
+    const response = await fetch(`${API_URL}/sunat/compras/periodo/excel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ periodo, glosas })
+    });
+    if (!response.ok) {
+      let msg = 'No se pudo generar el Excel';
+      try { msg = (await response.json())?.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    return response.blob();
+  },
 
   ping: () => api.get('/sunat/ping'),
 };

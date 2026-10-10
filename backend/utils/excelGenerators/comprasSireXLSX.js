@@ -1,5 +1,8 @@
 import ExcelJS from 'exceljs';
-import { EXPORT_COLUMNS } from '../../services/sunat/sire-compras.parser.js';
+import { EXPORT_COLUMNS, COL } from '../../services/sunat/sire-compras.parser.js';
+
+const claveComprobante = (cols) =>
+  `${(cols[COL.nroDocId] || '').trim()}-${(cols[COL.tipoCP] || '').trim()}-${(cols[COL.serie] || '').trim()}-${(cols[COL.nroCP] || '').trim()}`;
 
 const EMPRESA = {
   ruc: '20550932297',
@@ -25,12 +28,13 @@ const toNumero = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-export async function generarComprasSireXLSX(filas, periodo) {
+export async function generarComprasSireXLSX(filas, periodo, glosas = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = EMPRESA.razon_social;
   wb.created = new Date();
 
-  const totalCols = EXPORT_COLUMNS.length;
+  const columnas = [...EXPORT_COLUMNS, { label: 'GLOSA', glosa: true, type: 'text' }];
+  const totalCols = columnas.length;
   const lastColLetter = columnaLetra(totalCols);
 
   const ws = wb.addWorksheet('Compras SIRE', {
@@ -42,8 +46,8 @@ export async function generarComprasSireXLSX(filas, periodo) {
     }
   });
 
-  ws.columns = EXPORT_COLUMNS.map((c) => ({
-    width: Math.min(Math.max(c.label.length + 2, c.type === 'number' ? 12 : 14), 40)
+  ws.columns = columnas.map((c) => ({
+    width: c.glosa ? 60 : Math.min(Math.max(c.label.length + 2, c.type === 'number' ? 12 : 14), 40)
   }));
 
   ws.mergeCells(`A1:${lastColLetter}1`);
@@ -70,7 +74,7 @@ export async function generarComprasSireXLSX(filas, periodo) {
 
   const headerRowIdx = 6;
   const headerRow = ws.getRow(headerRowIdx);
-  EXPORT_COLUMNS.forEach((c, i) => {
+  columnas.forEach((c, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = c.label;
     cell.font = { bold: true, size: 9, color: { argb: 'FF000000' } };
@@ -83,16 +87,22 @@ export async function generarComprasSireXLSX(filas, periodo) {
   let rowIdx = headerRowIdx + 1;
   filas.forEach((cols) => {
     const row = ws.getRow(rowIdx);
-    EXPORT_COLUMNS.forEach((c, i) => {
+    const glosa = glosas[claveComprobante(cols)] || '';
+    columnas.forEach((c, i) => {
       const cell = row.getCell(i + 1);
-      const raw = (cols[c.idx] ?? '').toString().trim();
-      if (c.type === 'number') {
-        cell.value = toNumero(raw);
-        cell.numFmt = '#,##0.00';
-        cell.alignment = { horizontal: 'right', vertical: 'top' };
+      if (c.glosa) {
+        cell.value = glosa;
+        cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
       } else {
-        cell.value = raw;
-        cell.alignment = { horizontal: 'left', vertical: 'top' };
+        const raw = (cols[c.idx] ?? '').toString().trim();
+        if (c.type === 'number') {
+          cell.value = toNumero(raw);
+          cell.numFmt = '#,##0.00';
+          cell.alignment = { horizontal: 'right', vertical: 'top' };
+        } else {
+          cell.value = raw;
+          cell.alignment = { horizontal: 'left', vertical: 'top' };
+        }
       }
       cell.font = { size: 9 };
       cell.border = BORDE_FINO;

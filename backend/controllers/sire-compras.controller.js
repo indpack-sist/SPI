@@ -1,4 +1,4 @@
-import { listarComprasPeriodo } from '../services/sunat/sire-compras.service.js';
+import { listarComprasPeriodo, descargarComprobanteCpe } from '../services/sunat/sire-compras.service.js';
 import { filaATabla } from '../services/sunat/sire-compras.parser.js';
 import { generarComprasSireXLSX } from '../utils/excelGenerators/comprasSireXLSX.js';
 
@@ -12,11 +12,22 @@ export const listar = async (req, res) => {
   }
 };
 
+export const descargarComprobante = async (req, res) => {
+  try {
+    const { ruc, tipo, serie, numero, origen } = req.query;
+    const data = await descargarComprobanteCpe({ rucEmisor: ruc, tipo, serie, numero, origen: origen || '2' });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(e.statusCode || 500).json({ success: false, error: e.message });
+  }
+};
+
 export const exportarExcel = async (req, res) => {
   try {
-    const periodo = req.query.periodo;
+    const periodo = req.query.periodo || req.body?.periodo;
+    const glosas = req.body?.glosas || {};
     const filas = await listarComprasPeriodo(periodo);
-    const buffer = await generarComprasSireXLSX(filas, periodo);
+    const buffer = await generarComprasSireXLSX(filas, periodo, glosas);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="compras-sunat-${periodo}.xlsx"`);
     res.send(buffer);

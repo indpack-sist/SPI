@@ -721,6 +721,7 @@ const TIPO_CP = {
 const tipoCpLabel = (c) => TIPO_CP[c] || (c ? `Cód. ${c}` : '—');
 
 function PanelComprasSunat() {
+  const { estado: estadoDescarga, iniciarDescargaCompras } = useDescargaMasiva();
   const hoy = new Date();
   const [periodo, setPeriodo] = useState(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`);
   const [rows, setRows] = useState([]);
@@ -751,6 +752,13 @@ function PanelComprasSunat() {
     finally { setExportando(false); }
   }, [periodoSunat]);
 
+  const descargarTodo = useCallback(async () => {
+    if (!soportaDescargaCarpetas()) { setAviso('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.'); return; }
+    setAviso(null);
+    try { await iniciarDescargaCompras(rows, periodoSunat); }
+    catch (e) { setAviso(e?.message || 'No se pudo iniciar la descarga.'); }
+  }, [rows, periodoSunat, iniciarDescargaCompras]);
+
   const totalPEN = useMemo(
     () => rows.filter((r) => r.moneda === 'PEN').reduce((s, r) => s + (Number(r.total) || 0), 0),
     [rows]
@@ -780,6 +788,12 @@ function PanelComprasSunat() {
       </div>
 
       {aviso && <div className="tz-toast" onClick={() => setAviso(null)}><XCircle size={15} /> {aviso}</div>}
+      {estadoDescarga.activa && (
+        <div className="tz-descarga-nota">
+          <Loader2 className="tz-spin" size={14} />
+          Descarga en curso ({estadoDescarga.hechos}/{estadoDescarga.total}) — no cierres ni recargues esta pestaña.
+        </div>
+      )}
 
       {hayResultados && (
         <div className="tz-dm-actionbar has-sel">
@@ -788,8 +802,11 @@ function PanelComprasSunat() {
             {totalPEN > 0 && <> · Total {fmtMoneda(totalPEN, 'PEN')}</>}
             {totalUSD > 0 && <> · {fmtMoneda(totalUSD, 'USD')}</>}
           </div>
-          <button className="tz-btn tz-btn-download" onClick={exportar} disabled={exportando}>
-            {exportando ? <Loader2 className="tz-spin" size={15} /> : <DownloadCloud size={15} />} Exportar a Excel
+          <button className="tz-btn tz-btn-ghost" onClick={exportar} disabled={exportando || estadoDescarga.activa}>
+            {exportando ? <Loader2 className="tz-spin" size={15} /> : <FileText size={15} />} Solo Excel (sin glosa)
+          </button>
+          <button className="tz-btn tz-btn-download" onClick={descargarTodo} disabled={estadoDescarga.activa}>
+            <DownloadCloud size={15} /> Descargar XML, PDF y Excel con glosa
           </button>
         </div>
       )}

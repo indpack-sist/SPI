@@ -3,6 +3,62 @@ import AdmZip from 'adm-zip';
 import { sunatConfig } from '../../config/sunat.js';
 import { pool } from '../../config/database.js';
 import { parseComprasPropuesta } from './sire-compras.parser.js';
+import { obtenerTokenGre } from './gre.service.js';
+
+const CPE_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*'
+};
+
+const SUFIJO_CPE = { xml: '02', pdf: '01', cdr: '03' };
+
+export function extraerGlosaXml(xml) {
+  const descripciones = [...String(xml || '').matchAll(/<cbc:Description[^>]*>([\s\S]*?)<\/cbc:Description>/g)]
+    .map((m) => m[1].replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  return [...new Set(descripciones)].join(' | ');
+}
+
+async function bajarArchivoCpe(idComprobante, formato, token) {
+  const url = `${sunatConfig.urls.CPE_CONSULTA}/comprobantes/${idComprobante}/${SUFIJO_CPE[formato]}`;
+  let ultimo;
+  for (let i = 0; i < 6; i++) {
+    try {
+      const { data } = await axios.get(url, {
+        headers: { ...CPE_HEADERS, Authorization: `Bearer ${token}` }, timeout: 45000 });
+      if (!data?.valArchivo) return null;
+      const zip = new AdmZip(Buffer.from(data.valArchivo, 'base64'));
+      const entrada = zip.getEntries()[0];
+      return entrada ? entrada.getData() : null;
+    } catch (e) {
+      const status = e.response?.status;
+      if (status === 422 || status === 404) return null;
+      ultimo = e;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  }
+  throw ultimo;
+}
+
+export async function descargarComprobanteCpe({ rucEmisor, tipo, serie, numero, origen = '2' }) {
+  if (!rucEmisor || !tipo || !serie || !numero) {
+    const e = new Error('Faltan datos del comprobante.'); e.statusCode = 400; e.isOperational = true; throw e;
+  }
+  const idComprobante = `${rucEmisor}-${tipo}-${serie}-${numero}-${origen}`;
+  const token = await obtenerTokenGre();
+
+  const xmlBuf = await bajarArchivoCpe(idComprobante, 'xml', token);
+  let pdfBuf = null;
+  try { pdfBuf = await bajarArchivoCpe(idComprobante, 'pdf', token); } catch { pdfBuf = null; }
+
+  const documento = `${rucEmisor}-${tipo}-${serie}-${numero}`;
+  return {
+    documento,
+    glosa: xmlBuf ? extraerGlosaXml(xmlBuf.toString('utf8')) : '',
+    xml: xmlBuf ? { nombre: `${documento}.xml`, base64: xmlBuf.toString('base64') } : null,
+    pdf: pdfBuf ? { nombre: `${documento}.pdf`, base64: pdfBuf.toString('base64') } : null
+  };
+}
 
 async function tokenSire() {
   const [[t]] = await pool.query(

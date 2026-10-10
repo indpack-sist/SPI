@@ -30,6 +30,8 @@ router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('fact
 
 router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.darDeBajaFactura);
 
+router.post('/comprobantes/:id/reenviar', verificarToken, verificarPermiso('facturacion'), emitirCambioSunat, c.reenviarComprobante);
+
 router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstado);
 
 router.get('/guias/:id/validar', verificarToken, verificarPermiso('facturacion'), c.validarGuia);

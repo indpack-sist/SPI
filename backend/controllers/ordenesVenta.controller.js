@@ -1572,53 +1572,64 @@ export async function registrarDespacho(req, res) {
     const itemsProcesados = [];
 
     for (const itemDespacho of detalles_despacho) {
-      const itemDb = itemsOrden.data.find(i => i.id_producto === itemDespacho.id_producto);
+      const itemDb = itemsOrden.data.find(i => i.id_detalle === itemDespacho.id_detalle);
 
       if (!itemDb) {
-        return res.status(400).json({ 
-          error: `El producto con ID ${itemDespacho.id_producto} no pertenece a esta orden de venta.` 
+        return res.status(400).json({
+          error: `La línea con ID ${itemDespacho.id_detalle} no pertenece a esta orden de venta.`
         });
       }
 
       const pendiente = parseFloat(itemDb.cantidad) - parseFloat(itemDb.cantidad_despachada || 0);
       const cantidadADespachar = parseFloat(itemDespacho.cantidad);
+      const nombreLinea = itemDb.descripcion_libre || itemDespacho.nombre || itemDb.id_producto;
 
       if (cantidadADespachar > pendiente + 0.0001) {
-        return res.status(400).json({ 
-          error: `Cantidad excedida para el producto "${itemDespacho.nombre || itemDespacho.id_producto}". El saldo pendiente es de ${pendiente}, pero intentó despachar ${cantidadADespachar}.` 
+        return res.status(400).json({
+          error: `Cantidad excedida para "${nombreLinea}". El saldo pendiente es de ${pendiente}, pero intentó despachar ${cantidadADespachar}.`
         });
       }
 
-      const productoStock = await executeQuery(
-        'SELECT stock_actual, costo_unitario_promedio, nombre FROM productos WHERE id_producto = ?',
-        [itemDespacho.id_producto]
-      );
+      const esManual = !itemDb.id_producto;
+      let costoUnitario = 0;
+      let estabaReservado = false;
 
-      if (productoStock.data.length === 0) {
-        return res.status(404).json({ 
-          error: `El producto "${itemDespacho.nombre || itemDespacho.id_producto}" no fue encontrado en el inventario.` 
-        });
-      }
+      if (!esManual) {
+        const productoStock = await executeQuery(
+          'SELECT stock_actual, costo_unitario_promedio, nombre FROM productos WHERE id_producto = ?',
+          [itemDb.id_producto]
+        );
 
-      const infoProducto = productoStock.data[0];
-      const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
-
-      if (!estabaReservado) {
-        if (parseFloat(infoProducto.stock_actual) < cantidadADespachar - 0.0001) {
-          return res.status(400).json({
-            error: `Stock insuficiente en almacén para "${infoProducto.nombre}". Solo hay ${infoProducto.stock_actual} disponibles y se requiere despachar ${cantidadADespachar}.`
+        if (productoStock.data.length === 0) {
+          return res.status(404).json({
+            error: `El producto "${nombreLinea}" no fue encontrado en el inventario.`
           });
         }
+
+        const infoProducto = productoStock.data[0];
+        estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
+
+        if (!estabaReservado) {
+          if (parseFloat(infoProducto.stock_actual) < cantidadADespachar - 0.0001) {
+            return res.status(400).json({
+              error: `Stock insuficiente en almacén para "${infoProducto.nombre}". Solo hay ${infoProducto.stock_actual} disponibles y se requiere despachar ${cantidadADespachar}.`
+            });
+          }
+        }
+
+        costoUnitario = parseFloat(infoProducto.costo_unitario_promedio || 0);
       }
 
-      const costoUnitario = parseFloat(infoProducto.costo_unitario_promedio || 0);
       const precioUnitario = parseFloat(itemDb.precio_unitario || 0);
 
       totalCosto += cantidadADespachar * costoUnitario;
       totalPrecio += cantidadADespachar * precioUnitario;
 
       itemsProcesados.push({
-        ...itemDespacho,
+        id_detalle: itemDb.id_detalle,
+        id_producto: itemDb.id_producto || null,
+        descripcion_libre: itemDb.descripcion_libre || null,
+        unidad_medida_libre: itemDb.unidad_medida_libre || null,
         cantidad: cantidadADespachar,
         costo_unitario: costoUnitario,
         precio_unitario: precioUnitario,
@@ -1646,30 +1657,30 @@ export async function registrarDespacho(req, res) {
 
     for (const item of itemsProcesados) {
       queriesDetalle.push({
-        sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario, fue_reservado)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario, item.estaba_reservado ? 1 : 0]
+        sql: `INSERT INTO detalle_salidas (id_salida, id_producto, descripcion_libre, unidad_medida_libre, cantidad, costo_unitario, precio_unitario, fue_reservado)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [idSalida, item.id_producto, item.descripcion_libre, item.unidad_medida_libre, item.cantidad, item.costo_unitario, item.precio_unitario, item.estaba_reservado ? 1 : 0]
       });
 
-      if (!item.estaba_reservado) {
+      if (item.id_producto && !item.estaba_reservado) {
         queriesDetalle.push({
           sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
           params: [item.cantidad, item.id_producto]
         });
       }
 
-      if (item.estaba_reservado) {
+      if (item.id_producto && item.estaba_reservado) {
         queriesDetalle.push({
           sql: `UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0
-                WHERE id_orden_venta = ? AND id_producto = ?`,
-          params: [id, item.id_producto]
+                WHERE id_detalle = ?`,
+          params: [item.id_detalle]
         });
       }
 
       queriesDetalle.push({
         sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ?
-              WHERE id_orden_venta = ? AND id_producto = ?`,
-        params: [item.cantidad, id, item.id_producto]
+              WHERE id_detalle = ?`,
+        params: [item.cantidad, item.id_detalle]
       });
     }
 

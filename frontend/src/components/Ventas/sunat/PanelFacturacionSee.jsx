@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck, Pencil, Check, X } from 'lucide-react';
+import { Zap, FileText, RefreshCw, FileMinus, Ban, FileCode, FileCheck, Pencil, Check, X, Send } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
@@ -173,6 +173,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   };
 
   const handleVerificar = (f) => tras(() => sunatAPI.estadoComprobante(f.id_factura), 'Estado consultado.');
+  const handleReenviar = async (f) => {
+    const r = await tras(() => sunatAPI.reenviarComprobante(f.id_factura), null);
+    const d = r?.data;
+    if (d) {
+      setAlerta(d.ok
+        ? { type: 'success', message: `Factura ${d.comprobante || `${d.serie}-${d.numero}`} ${d.estado} por SUNAT.` }
+        : { type: d.estado === 'RECHAZADO' ? 'error' : 'warning', message: `Factura ${d.serie}-${d.numero}: ${d.estado}. ${d.error || d.descripcion || ''}` });
+    }
+  };
   const handlePdf = async (f) => { try { await sunatAPI.verPdfComprobante(f.id_factura); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
   const handleDescargar = async (url) => { try { await sunatAPI.descargarArchivoUrl(url); } catch (e) { setAlerta({ type: 'error', message: errorMsg(e) }); } };
 
@@ -347,6 +356,11 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                       <RefreshCw size={13} className="mr-1" /> Estado
                     </button>
                   )}
+                  {!soloLectura && esFactura && f.sunat_estado === 'ENVIADO' && (
+                    <button className="btn btn-xs btn-primary" onClick={() => handleReenviar(f)} disabled={procesando} title="Reenviar el mismo comprobante a SUNAT (no consume otro correlativo)">
+                      <Send size={13} className="mr-1" /> Reenviar
+                    </button>
+                  )}
                   {!soloLectura && esFactura && aceptado && (
                     <>
                       <button className="btn btn-xs btn-outline" onClick={() => abrirNota(f)} disabled={procesando} title="Emitir Nota de Crédito/Débito">
@@ -364,6 +378,13 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                       Motivo del rechazo{f.sunat_response_code ? ` (${f.sunat_response_code})` : ''}:
                     </span>{' '}
                     {f.sunat_response_desc || 'Sin detalle. Usa "Estado" para consultar el CDR en SUNAT.'}
+                  </div>
+                )}
+                {!anulada && esFactura && f.sunat_estado === 'ENVIADO' && (
+                  <div className="w-full text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
+                    <span className="font-semibold">En proceso (sin respuesta de SUNAT).</span>{' '}
+                    {f.sunat_response_desc ? `Último intento: ${f.sunat_response_desc}. ` : ''}
+                    Verifica en SUNAT que el comprobante no exista y usa "Reenviar": se envía el mismo número, sin consumir otro correlativo.
                   </div>
                 )}
               </div>

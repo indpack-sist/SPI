@@ -57,6 +57,7 @@ function Empleados() {
     password: '',
     cargo: '',
     rol: 'Operario',
+    licencia_conducir: '',
     validar_dni: true,
     estado: 'Activo'
   });
@@ -88,6 +89,7 @@ function Empleados() {
         password: '', 
         cargo: empleado.cargo || '',
         rol: empleado.rol,
+        licencia_conducir: empleado.licencia_conducir || '',
         validar_dni: false,
         estado: empleado.estado
       });
@@ -103,6 +105,7 @@ function Empleados() {
         password: '',
         cargo: '',
         rol: 'Operario',
+        licencia_conducir: '',
         validar_dni: true,
         estado: 'Activo'
       });
@@ -123,6 +126,7 @@ function Empleados() {
       password: '',
       cargo: '',
       rol: 'Operario',
+      licencia_conducir: '',
       validar_dni: true,
       estado: 'Activo'
     });
@@ -713,6 +717,23 @@ function Empleados() {
                   El rol determina los permisos y accesos en el sistema
                 </small>
               </div>
+
+              {formData.rol === 'Conductor' && (
+                <div className="form-group">
+                  <label className="form-label">Licencia de Conducir</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.licencia_conducir}
+                    onChange={(e) => setFormData({ ...formData, licencia_conducir: e.target.value.toUpperCase() })}
+                    placeholder="Ej: Q40123456"
+                    maxLength={20}
+                  />
+                  <small className="text-muted">
+                    Número de licencia del conductor, usado en las guías de remisión.
+                  </small>
+                </div>
+              )}
             </div>
 
             <div>

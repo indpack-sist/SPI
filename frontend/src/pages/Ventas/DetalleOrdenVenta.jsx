@@ -1895,12 +1895,30 @@ function DetalleOrdenVenta() {
       accessor: 'precio_unitario',
       width: '110px',
       align: 'right',
-      render: (value) => (
+      render: (value, row) => (
         <div className="text-right">
           <span className="font-medium text-primary">{formatearMonedaPrecio(value)}</span>
           {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
             <div className="text-[10px] mt-0.5 font-bold text-gray-500">
               S/ {formatearNumeroPrecio(parseFloat(value) * parseFloat(orden.tipo_cambio))}
+            </div>
+          )}
+          {row.lista_precio_cambio && (
+            <div
+              className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+              title={`El precio de lista cambió desde que se usó en la cotización. Lista "${row.lista_origen_nombre || ''}": usado ${formatearNumeroPrecio(row.precio_lista_snapshot)} → actual ${formatearNumeroPrecio(row.precio_lista_actual)}.`}
+            >
+              <AlertTriangle size={10} />
+              Lista {formatearNumeroPrecio(row.precio_lista_snapshot)} → {formatearNumeroPrecio(row.precio_lista_actual)}
+            </div>
+          )}
+          {row.lista_precio_sin_referencia && (
+            <div
+              className="mt-1 inline-flex items-center gap-1 rounded bg-gray-50 border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500"
+              title={`El producto ya no figura en la lista de precios "${row.lista_origen_nombre || ''}" con la que se cotizó (precio usado ${formatearNumeroPrecio(row.precio_lista_snapshot)}).`}
+            >
+              <AlertTriangle size={10} />
+              Lista sin referencia
             </div>
           )}
         </div>

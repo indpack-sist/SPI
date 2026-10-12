@@ -261,6 +261,40 @@ export async function notificarComercialDefinirComprobante(idOrden, numeroOrden,
   }
 }
 
+export async function notificarPrecioFueraDeLista(idOrden, numeroOrden, destinatarios, resumen, io) {
+  try {
+    const ids = [...new Set((destinatarios || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+    if (ids.length === 0) return;
+
+    const titulo = 'Precio fuera de lista';
+    const mensaje = `La orden ${numeroOrden} fue editada con un precio distinto al de la lista de precios utilizada. ${resumen}`;
+
+    for (const idUsuario of ids) {
+      const insertResult = await executeQuery(
+        `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [idUsuario, titulo, mensaje, 'warning', `/ventas/ordenes/${idOrden}`, 0]
+      );
+
+      if (insertResult.success && io) {
+        const notifCompleta = {
+          id_notificacion: insertResult.data.insertId,
+          id_usuario_destino: idUsuario,
+          titulo,
+          mensaje,
+          tipo: 'warning',
+          ruta_destino: `/ventas/ordenes/${idOrden}`,
+          leido: 0,
+          fecha_creacion: new Date()
+        };
+        await emitirNotificacion(io, idUsuario, notifCompleta);
+      }
+    }
+  } catch (error) {
+    console.error('Error en notificarPrecioFueraDeLista:', error);
+  }
+}
+
 export async function notificarNuevaOP(idOrden, numeroOP, origenInfo, rolesDestino, io) {
   try {
     const destinatariosResult = await executeQuery(`

@@ -47,6 +47,7 @@ import reportesRoutes from './routes/reportesventas.routes.js';
 import tipoCambioRoutes from './routes/tipoCambioRoutes.js';
 import sunatRoutes from './routes/sunat.routes.js';
 import { registrarCronReintentos } from './jobs/sunat-reintentos.job.js';
+import { registrarCronPreciosFueraDeLista } from './services/precios-lista-alerta.service.js';
 dotenv.config();
 
 const allowedOrigins = [
@@ -285,6 +286,7 @@ httpServer.listen(PORT, () => {
       console.log('✓ BASE DE DATOS: CONECTADA CORRECTAMENTE');
       startWorker(io);
       registrarCronReintentos(io);
+      registrarCronPreciosFueraDeLista(io);
     } else {
       console.error('ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
     }

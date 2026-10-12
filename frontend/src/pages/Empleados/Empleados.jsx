@@ -39,6 +39,7 @@ function Empleados() {
   });
 
   const ROLES_CARTERA = ['Comercial', 'Ventas'];
+  const LICENCIA_REGEX = /^[A-Z]\d{8}$/;
   const [carteraModalOpen, setCarteraModalOpen] = useState(false);
   const [carteraEmpleado, setCarteraEmpleado] = useState(null);
   const [carteraRestringir, setCarteraRestringir] = useState(false);
@@ -232,6 +233,11 @@ function Empleados() {
 
     if (formData.password && formData.password.length < 6) {
       setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (formData.rol === 'Conductor' && formData.licencia_conducir && !LICENCIA_REGEX.test(formData.licencia_conducir)) {
+      setError('La licencia de conducir debe ser una letra seguida de 8 dígitos (Ej: Q12345678)');
       return;
     }
 
@@ -725,12 +731,24 @@ function Empleados() {
                     type="text"
                     className="form-input"
                     value={formData.licencia_conducir}
-                    onChange={(e) => setFormData({ ...formData, licencia_conducir: e.target.value.toUpperCase() })}
-                    placeholder="Ej: Q40123456"
-                    maxLength={20}
+                    onChange={(e) => setFormData({ ...formData, licencia_conducir: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+                    placeholder="Ej: Q12345678"
+                    maxLength={9}
                   />
+                  {formData.licencia_conducir && !LICENCIA_REGEX.test(formData.licencia_conducir) && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-danger">
+                      <AlertCircle size={16} />
+                      Formato inválido: una letra seguida de 8 dígitos (Ej: Q12345678)
+                    </div>
+                  )}
+                  {formData.licencia_conducir && LICENCIA_REGEX.test(formData.licencia_conducir) && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-success">
+                      <CheckCircle size={16} />
+                      Formato válido
+                    </div>
+                  )}
                   <small className="text-muted">
-                    Número de licencia del conductor, usado en las guías de remisión.
+                    Una letra seguida de los 8 dígitos del DNI. Usado en las guías de remisión.
                   </small>
                 </div>
               )}

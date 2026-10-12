@@ -4,6 +4,7 @@ import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
 import { hashPassword } from '../utils/password.js';
 
 const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
+const LICENCIA_REGEX = /^[A-Z]\d{8}$/;
 
 export async function getAllEmpleados(req, res) {
   try {
@@ -230,7 +231,13 @@ export async function createEmpleado(req, res) {
       }
     }
     
-    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim() || null) : null;
+    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim().toUpperCase() || null) : null;
+
+    if (licencia && !LICENCIA_REGEX.test(licencia)) {
+      return res.status(400).json({
+        error: 'La licencia de conducir debe ser una letra seguida de 8 dígitos (Ej: Q12345678)'
+      });
+    }
 
     const passwordHash = await hashPassword(password);
     const result = await executeQuery(
@@ -313,7 +320,13 @@ export async function updateEmpleado(req, res) {
       }
     }
 
-    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim() || null) : null;
+    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim().toUpperCase() || null) : null;
+
+    if (licencia && !LICENCIA_REGEX.test(licencia)) {
+      return res.status(400).json({
+        error: 'La licencia de conducir debe ser una letra seguida de 8 dígitos (Ej: Q12345678)'
+      });
+    }
 
     let updateQuery = 'UPDATE empleados SET dni = ?, nombre_completo = ?, email = ?, cargo = ?, rol = ?, estado = ?, licencia_conducir = ?';
     let updateParams = [dni || null, nombre_completo, email, cargo || rol, rol, estado, licencia];

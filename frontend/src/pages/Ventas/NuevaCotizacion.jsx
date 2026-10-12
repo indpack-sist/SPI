@@ -10,6 +10,7 @@ import {
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import ModalTipoCambio from '../../components/Ventas/ModalTipoCambio';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, tipoCambioAPI, listasPreciosAPI } from '../../config/api';
 
@@ -73,6 +74,8 @@ function NuevaCotizacion() {
     
   const [tipoCambio, setTipoCambio] = useState(null);
   const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
+  const [modalTCAbierto, setModalTCAbierto] = useState(false);
+  const [monedaPendiente, setMonedaPendiente] = useState(null);
     
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
@@ -215,9 +218,7 @@ function NuevaCotizacion() {
   }, [formCabecera.fecha_emision, formCabecera.validez_dias]);
 
   useEffect(() => {
-    if (formCabecera.moneda === 'USD') {
-      obtenerTipoCambio();
-    } else {
+    if (formCabecera.moneda === 'PEN') {
       setFormCabecera(prev => ({ ...prev, tipo_cambio: 1.0000 }));
       setTipoCambio(null);
       setTipoCambioFecha(null);
@@ -389,6 +390,54 @@ function NuevaCotizacion() {
     setLoadingTC(false);
   }
 };
+
+  const handleCambioMoneda = (nuevaMoneda) => {
+    if (nuevaMoneda === formCabecera.moneda) return;
+    const hayPrecios = detalle.some(it => parseFloat(it.precio_venta) > 0 || parseFloat(it.precio_base) > 0);
+    if (!hayPrecios) {
+      setFormCabecera(prev => ({ ...prev, moneda: nuevaMoneda, tipo_cambio: nuevaMoneda === 'PEN' ? 1.0000 : prev.tipo_cambio }));
+      return;
+    }
+    setMonedaPendiente(nuevaMoneda);
+    setModalTCAbierto(true);
+  };
+
+  const convertirDetalleMoneda = (tc, destino) => {
+    const convertir = (valor) => {
+      const n = parseFloat(valor);
+      if (isNaN(n) || n === 0) return valor;
+      const r = destino === 'USD' ? n / tc : n * tc;
+      return parseFloat(r.toFixed(4));
+    };
+    setDetalle(prev => prev.map(it => ({
+      ...it,
+      precio_base: convertir(it.precio_base),
+      precio_venta: convertir(it.precio_venta),
+      precio_lista_snapshot: it.precio_lista_snapshot != null ? convertir(it.precio_lista_snapshot) : it.precio_lista_snapshot
+    })));
+  };
+
+  const confirmarTipoCambio = (tc, convertir) => {
+    const destino = monedaPendiente;
+    if (!destino) return;
+    if (convertir && tc) convertirDetalleMoneda(tc, destino);
+    setFormCabecera(prev => ({
+      ...prev,
+      moneda: destino,
+      tipo_cambio: destino === 'PEN' ? 1.0000 : (tc && tc > 0 ? parseFloat(tc).toFixed(4) : prev.tipo_cambio)
+    }));
+    if (destino === 'USD' && tc) {
+      setTipoCambio(tc);
+      setTipoCambioFecha(null);
+    }
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
+  };
+
+  const cancelarTipoCambio = () => {
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
+  };
 
   const cargarCartera = async () => {
     if (!user?.id || !['Comercial', 'Ventas'].includes(user.rol)) return;
@@ -1032,8 +1081,8 @@ setFormCabecera(prev => ({
                 <select
                   className="form-select"
                   value={formCabecera.moneda}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, moneda: e.target.value })}
-                  
+                  onChange={(e) => handleCambioMoneda(e.target.value)}
+
                   required
                 >
                   <option value="PEN">Soles (PEN)</option>
@@ -1924,6 +1973,15 @@ setFormCabecera(prev => ({
           </div>
         </div>
       </Modal>
+
+      <ModalTipoCambio
+        isOpen={modalTCAbierto}
+        monedaOrigen={formCabecera.moneda}
+        monedaDestino={monedaPendiente || formCabecera.moneda}
+        montoReferencia={totales.total}
+        onConfirmar={confirmarTipoCambio}
+        onCancelar={cancelarTipoCambio}
+      />
     </div>
   );
 }

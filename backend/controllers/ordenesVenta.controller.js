@@ -22,6 +22,7 @@ import {
   notificarComercialDefinirComprobante,
   notificarNuevaOP
 } from '../utils/notificacionesHelper.js';
+import { revisarPreciosFueraDeLista } from '../services/precios-lista-alerta.service.js';
 
 const getIO = (req) => req.app.get('socketio');
 function getFechaPeru() {
@@ -489,6 +490,9 @@ export async function getOrdenVentaById(req, res) {
       };
     });
     orden.mostrar_alerta_stock = mostrarAlertaStock;
+
+    revisarPreciosFueraDeLista(id, { io: getIO(req), actorId: req.user?.id_empleado || null })
+      .catch(error => console.error('Error al revisar precios fuera de lista:', error.message));
 
     res.json({
       success: true,
@@ -1422,6 +1426,9 @@ export async function updateOrdenVenta(req, res) {
     if (!resultUpdate.success) {
       return res.status(500).json({ success: false, error: resultUpdate.error });
     }
+
+    revisarPreciosFueraDeLista(id, { io: getIO(req), actorId: req.user?.id_empleado || null })
+      .catch(error => console.error('Error al revisar precios fuera de lista:', error.message));
 
     res.json({ success: true, message: 'Orden de venta actualizada exitosamente' });
 

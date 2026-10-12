@@ -9,7 +9,7 @@ export async function getAllEmpleados(req, res) {
   try {
     const { estado, rol } = req.query;
     
-    let sql = 'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, fecha_registro FROM empleados WHERE 1=1';
+    let sql = 'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, licencia_conducir, fecha_registro FROM empleados WHERE 1=1';
     const params = [];
     
     if (estado) {
@@ -45,7 +45,7 @@ export async function getEmpleadoById(req, res) {
     const { id } = req.params;
     
     const result = await executeQuery(
-      'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, fecha_registro FROM empleados WHERE id_empleado = ?',
+      'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, licencia_conducir, fecha_registro FROM empleados WHERE id_empleado = ?',
       [id]
     );
     
@@ -165,6 +165,7 @@ export async function createEmpleado(req, res) {
       password,
       cargo,
       rol,
+      licencia_conducir,
       validar_dni,
       estado
     } = req.body;
@@ -229,9 +230,11 @@ export async function createEmpleado(req, res) {
       }
     }
     
+    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim() || null) : null;
+
     const passwordHash = await hashPassword(password);
     const result = await executeQuery(
-      'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado, licencia_conducir) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [
         dni || null,
         nombre_completo,
@@ -239,7 +242,8 @@ export async function createEmpleado(req, res) {
         passwordHash,
         cargo || rol,
         rol,
-        estado || 'Activo'
+        estado || 'Activo',
+        licencia
       ]
     );
     
@@ -265,7 +269,7 @@ export async function createEmpleado(req, res) {
 export async function updateEmpleado(req, res) {
   try {
     const { id } = req.params;
-    const { dni, nombre_completo, email, password, cargo, rol, estado } = req.body;
+    const { dni, nombre_completo, email, password, cargo, rol, estado, licencia_conducir } = req.body;
 
     const checkResult = await executeQuery(
       'SELECT * FROM empleados WHERE id_empleado = ?',
@@ -309,8 +313,10 @@ export async function updateEmpleado(req, res) {
       }
     }
 
-    let updateQuery = 'UPDATE empleados SET dni = ?, nombre_completo = ?, email = ?, cargo = ?, rol = ?, estado = ?';
-    let updateParams = [dni || null, nombre_completo, email, cargo || rol, rol, estado];
+    const licencia = rol === 'Conductor' ? (licencia_conducir?.trim() || null) : null;
+
+    let updateQuery = 'UPDATE empleados SET dni = ?, nombre_completo = ?, email = ?, cargo = ?, rol = ?, estado = ?, licencia_conducir = ?';
+    let updateParams = [dni || null, nombre_completo, email, cargo || rol, rol, estado, licencia];
 
     if (password && password.trim() !== '') {
       if (password.length < 6) {

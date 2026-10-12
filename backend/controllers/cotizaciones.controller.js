@@ -2,6 +2,9 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { obtenerTipoCambioCache } from '../services/tipo-cambio.service.js';
 import pool from '../config/database.js';
 import { clientePermitido } from '../utils/asignacionClientes.js';
+import { revisarPreciosFueraDeListaCotizacion } from '../services/precios-lista-alerta.service.js';
+
+const getIO = (req) => req.app.get('socketio');
 
 function getFechaPeru() {
   const now = new Date();
@@ -215,6 +218,9 @@ export async function getCotizacionById(req, res) {
 
     const cotizacion = cotizacionResult.data[0];
     cotizacion.detalle = detalleResult.data || [];
+
+    revisarPreciosFueraDeListaCotizacion(id, { io: getIO(req), actorId: req.user?.id_empleado || null })
+      .catch(error => console.error('Error al revisar precios fuera de lista (cotización):', error.message));
 
     res.json({ success: true, data: cotizacion });
 
@@ -781,6 +787,9 @@ if (moneda !== 'PEN') {
         error: txResult.error || 'Error al actualizar la cotizacion'
       });
     }
+
+    revisarPreciosFueraDeListaCotizacion(id, { io: getIO(req), actorId: req.user?.id_empleado || null })
+      .catch(error => console.error('Error al revisar precios fuera de lista (cotización):', error.message));
 
     res.json({
       success: true,

@@ -1752,7 +1752,8 @@ function DetalleOrdenVenta() {
     } finally { setProcesando(false); }
   };
 
-  const esGREAplicable = orden?.tipo_entrega === 'Vehiculo Empresa' || orden?.tipo_entrega === 'Transporte Privado';
+  const esGREAplicable = (orden?.tipo_entrega === 'Vehiculo Empresa' || orden?.tipo_entrega === 'Transporte Privado')
+    && (orden?.tipo_comprobante === 'Factura' || Number(orden?.es_muestra) === 1);
 
   const puedeReservarStock = () => {
     if (!orden) return false;

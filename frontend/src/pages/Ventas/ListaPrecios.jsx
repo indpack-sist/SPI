@@ -234,6 +234,23 @@ function ListaPrecios() {
     return `${moneda === 'USD' ? '$' : 'S/'} ${parseFloat(valor).toFixed(2)}`;
   };
 
+  const calcVariacion = (anterior, nuevo, moneda) => {
+    if (anterior === null || anterior === undefined) return null;
+    if (nuevo === null || nuevo === undefined) return null;
+    const a = parseFloat(anterior);
+    const n = parseFloat(nuevo);
+    const delta = n - a;
+    const pct = a !== 0 ? (delta / a) * 100 : null;
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
+    const signo = delta > 0 ? '+' : delta < 0 ? '−' : '';
+    const abs = Math.abs(delta).toFixed(2);
+    return {
+      delta,
+      monto: `${signo}${simbolo} ${abs}`,
+      pct: pct === null ? null : `${signo}${Math.abs(pct).toFixed(1)}%`,
+    };
+  };
+
   const handlePrecioChange = (idProducto, valor) => {
     setNuevaLista(prev => ({
       ...prev,
@@ -690,19 +707,21 @@ function ListaPrecios() {
                   <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3">Producto</th>
                   <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Anterior</th>
                   <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Nuevo</th>
+                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Variación</th>
                   <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Editó</th>
                 </tr>
               </thead>
               <tbody>
                 {historialData.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-10">
+                    <td colSpan="6" className="text-center py-10">
                       <p className="text-wire font-bold uppercase tracking-widest text-xs">Esta lista no tiene cambios de precio registrados</p>
                     </td>
                   </tr>
                 ) : historialData.map(h => {
                   const anterior = fmtPrecio(h.precio_anterior, h.moneda);
                   const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
+                  const variacion = calcVariacion(h.precio_anterior, h.precio_nuevo, h.moneda);
                   return (
                     <tr key={h.id_historial} className="border-b border-steel/50 hover:bg-carbon-light">
                       <td className="px-3 text-xs text-mist font-mono align-middle whitespace-nowrap">{fmtFecha(h.fecha)}</td>
@@ -719,6 +738,14 @@ function ListaPrecios() {
                         {nuevo
                           ? <span className="font-black text-primary text-sm">{nuevo}</span>
                           : <span className="badge badge-sm badge-danger text-[9px] uppercase font-black tracking-wider">Retirado</span>}
+                      </td>
+                      <td className="px-3 text-right align-middle whitespace-nowrap">
+                        {variacion
+                          ? <span className={`font-mono text-xs font-bold ${variacion.delta > 0 ? 'text-success' : variacion.delta < 0 ? 'text-danger' : 'text-wire'}`}>
+                              {variacion.monto}
+                              {variacion.pct && <span className="block text-[10px] font-semibold opacity-80">{variacion.pct}</span>}
+                            </span>
+                          : <span className="text-wire text-xs">—</span>}
                       </td>
                       <td className="px-3 text-xs align-middle">
                         {h.empleado

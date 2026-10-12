@@ -366,6 +366,8 @@ useEffect(() => {
               cantidad: parseFloat(item.cantidad),
               precio_base: parseFloat(item.precio_base || item.precio_unitario),
               precio_venta: parseFloat(item.precio_unitario),
+              id_lista_origen: item.id_lista_origen || null,
+              precio_lista_snapshot: item.precio_lista_snapshot != null ? parseFloat(item.precio_lista_snapshot) : null,
               descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
               stock_actual: item.stock_disponible,
               peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0)
@@ -465,6 +467,8 @@ useEffect(() => {
               cantidad: parseFloat(item.cantidad),
               precio_base: parseFloat(item.precio_base || item.precio_unitario),
               precio_venta: parseFloat(item.precio_unitario),
+              id_lista_origen: item.id_lista_origen || null,
+              precio_lista_snapshot: item.precio_lista_snapshot != null ? parseFloat(item.precio_lista_snapshot) : null,
               descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
               stock_actual: item.stock_disponible,
               peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0)
@@ -803,6 +807,8 @@ useEffect(() => {
         cantidad: parseFloat(item.cantidad),
         precio_base: esMuestraSubmit ? 0 : parseFloat(item.precio_base),
         precio_unitario: esMuestraSubmit ? 0 : parseFloat(item.precio_venta),
+        id_lista_origen: item.es_producto_libre ? null : (item.id_lista_origen || null),
+        precio_lista_snapshot: item.precio_lista_snapshot != null ? parseFloat(item.precio_lista_snapshot) : null,
         porcentaje_comision: 0,
         descuento_porcentaje: 0,
         orden: index + 1

@@ -176,6 +176,8 @@ export async function getCotizacionById(req, res) {
           dc.cantidad,
           dc.precio_unitario,
           dc.precio_base,
+          dc.id_lista_origen,
+          dc.precio_lista_snapshot,
           dc.porcentaje_comision,
           dc.monto_comision,
           dc.descuento_porcentaje,
@@ -440,6 +442,10 @@ if (moneda !== 'PEN') {
         const precioVenta = parseFloat(item.precio_venta || 0);
         const precioBase = parseFloat(item.precio_base || 0);
         const valorVentaCalculado = cantidad * precioVenta;
+        const idListaOrigen = esProductoLibre ? null : (item.id_lista_origen || null);
+        const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+          ? null
+          : parseFloat(item.precio_lista_snapshot);
 
         values.push(
           idCotizacion,
@@ -447,6 +453,8 @@ if (moneda !== 'PEN') {
           cantidad,
           precioVenta,
           precioBase,
+          idListaOrigen,
+          precioListaSnapshot,
           parseFloat(item.descuento_porcentaje || 0),
           index + 1,
           valorVentaCalculado,
@@ -456,12 +464,13 @@ if (moneda !== 'PEN') {
           esProductoLibre ? item.nombre_producto_libre?.trim() : null,
           esProductoLibre ? item.unidad_medida?.trim() || null : null
         );
-        return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
       }).join(',');
 
       await connection.execute(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+          id_lista_origen, precio_lista_snapshot,
           descuento_porcentaje, orden, valor_venta, subtotal,
           es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
         ) VALUES ${placeholders}
@@ -649,10 +658,15 @@ if (moneda !== 'PEN') {
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
       const montoComision = precioBase * (pctComision / 100);
       const valorVentaCalculado = cantidad * precioVenta;
+      const idListaOrigen = esProductoLibre ? null : (item.id_lista_origen || null);
+      const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+        ? null
+        : parseFloat(item.precio_lista_snapshot);
       return [
         id,
         esProductoLibre ? null : item.id_producto,
         cantidad, precioVenta, precioBase,
+        idListaOrigen, precioListaSnapshot,
         pctComision, montoComision, pctDescuento, i + 1,
         valorVentaCalculado, valorVentaCalculado,
         esProductoLibre,
@@ -666,10 +680,11 @@ if (moneda !== 'PEN') {
       queries.push({
         sql: `INSERT INTO detalle_cotizacion (
                 id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+                id_lista_origen, precio_lista_snapshot,
                 porcentaje_comision, monto_comision, descuento_porcentaje, orden,
                 valor_venta, subtotal,
                 es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
-              ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+              ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
         params: detalleCotizacionValues.flat()
       });
     }
@@ -721,12 +736,16 @@ if (moneda !== 'PEN') {
         const pctComision = parseFloat(item.porcentaje_comision || 0);
         const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
         const montoComision = precioBase * (pctComision / 100);
-        return [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0, index + 1];
+        const idListaOrigen = item.id_lista_origen || null;
+        const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+          ? null
+          : parseFloat(item.precio_lista_snapshot);
+        return [idOrden, item.id_producto, cantidad, precioVenta, precioBase, idListaOrigen, precioListaSnapshot, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0, index + 1];
       });
 
       if (detalleOrdenValues.length > 0) {
         queries.push({
-          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado, orden) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, id_lista_origen, precio_lista_snapshot, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado, orden) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
           params: detalleOrdenValues.flat()
         });
       }
@@ -904,17 +923,21 @@ export async function duplicarCotizacion(req, res) {
           cantidad,
           precio_unitario,
           precio_base,
+          id_lista_origen,
+          precio_lista_snapshot,
           porcentaje_comision,
           monto_comision,
           descuento_porcentaje,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idNuevaCotizacion,
         item.id_producto,
         item.cantidad,
         item.precio_unitario,
         item.precio_base || item.precio_unitario,
+        item.id_lista_origen || null,
+        item.precio_lista_snapshot ?? null,
         item.porcentaje_comision || 0,
         item.monto_comision || 0,
         item.descuento_porcentaje,

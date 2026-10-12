@@ -418,6 +418,17 @@ export async function getOrdenVentaById(req, res) {
            JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
           WHERE dgr.id_detalle_orden = dov.id_detalle AND gr.estado <> 'Anulada') AS cantidad_en_guias,
         dov.subtotal AS valor_venta,
+        (SELECT lpd.precio_especial
+           FROM listas_precios_detalle lpd
+           JOIN listas_precios lp ON lp.id_lista = lpd.id_lista
+          WHERE lpd.id_lista = dov.id_lista_origen
+            AND lpd.id_producto = dov.id_producto
+            AND lp.estado = 'Activo'
+          LIMIT 1) AS precio_lista_actual,
+        (SELECT lp.nombre_lista
+           FROM listas_precios lp
+          WHERE lp.id_lista = dov.id_lista_origen
+          LIMIT 1) AS lista_origen_nombre,
         CASE
             WHEN dov.precio_base > 0 THEN
                 ROUND(((dov.precio_unitario - dov.precio_base) / dov.precio_base) * 100, 2)
@@ -466,7 +477,17 @@ export async function getOrdenVentaById(req, res) {
       });
     }
 
-    orden.detalle = detalleResult.data;
+    const round4 = (n) => Math.round(parseFloat(n) * 10000) / 10000;
+    orden.detalle = detalleResult.data.map(linea => {
+      const tieneOrigen = linea.id_lista_origen != null && linea.precio_lista_snapshot != null;
+      const snapshot = tieneOrigen ? round4(linea.precio_lista_snapshot) : null;
+      const actual = (tieneOrigen && linea.precio_lista_actual != null) ? round4(linea.precio_lista_actual) : null;
+      return {
+        ...linea,
+        lista_precio_cambio: tieneOrigen && actual != null && actual !== snapshot,
+        lista_precio_sin_referencia: tieneOrigen && linea.precio_lista_actual == null
+      };
+    });
     orden.mostrar_alerta_stock = mostrarAlertaStock;
 
     res.json({
@@ -917,12 +938,16 @@ export async function createOrdenVenta(req, res) {
       const precioVenta = esMuestra ? 0 : parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = esMuestra ? 0 : parseFloat(item.precio_base || 0);
       const codigoBien = item.codigo_bien ? String(item.codigo_bien).trim() : null;
+      const idListaOrigen = esLibre ? null : (item.id_lista_origen || null);
+      const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+        ? null
+        : parseFloat(item.precio_lista_snapshot);
       return [
         esLibre ? null : item.id_producto,
         esLibre,
         esLibre ? (item.descripcion_libre || item.nombre_producto_libre || null) : null,
         esLibre ? (item.unidad_medida_libre || 'NIU') : null,
-        cantidad, precioVenta, precioBase, 0, 0, index + 1, codigoBien
+        cantidad, precioVenta, precioBase, idListaOrigen, precioListaSnapshot, 0, 0, index + 1, codigoBien
       ];
     });
 
@@ -961,7 +986,7 @@ export async function createOrdenVenta(req, res) {
       await connection.query(
         `INSERT INTO detalle_orden_venta (
           id_orden_venta, id_producto, es_producto_libre, descripcion_libre, unidad_medida_libre,
-          cantidad, precio_unitario, precio_base, descuento_porcentaje, stock_reservado, orden, codigo_bien
+          cantidad, precio_unitario, precio_base, id_lista_origen, precio_lista_snapshot, descuento_porcentaje, stock_reservado, orden, codigo_bien
         ) VALUES ?`,
         [detalleValues.map(values => [idOrden, ...values])]
       );
@@ -1285,6 +1310,10 @@ export async function updateOrdenVenta(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
+      const idListaOrigen = esLibre ? null : (item.id_lista_origen || null);
+      const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+        ? null
+        : parseFloat(item.precio_lista_snapshot);
       const infoDespacho = (!esLibre && item.id_producto != null)
         ? (mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 })
         : { cantidad_despachada: 0, cantidad_reservada: 0 };
@@ -1296,6 +1325,7 @@ export async function updateOrdenVenta(req, res) {
         esLibre ? (item.descripcion_libre || item.producto || null) : null,
         esLibre ? (item.unidad_medida_libre || item.unidad_medida || 'NIU') : null,
         cantidad, precioVenta, precioBase,
+        idListaOrigen, precioListaSnapshot,
         pctComision, montoComision, 0, stockReservado ? 1 : 0,
         infoDespacho.cantidad_despachada, infoDespacho.cantidad_reservada, index + 1,
         codigoBien
@@ -1306,9 +1336,10 @@ export async function updateOrdenVenta(req, res) {
       sql: `INSERT INTO detalle_orden_venta (
         id_orden_venta, id_producto, es_producto_libre, descripcion_libre, unidad_medida_libre,
         cantidad, precio_unitario, precio_base,
+        id_lista_origen, precio_lista_snapshot,
         porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
         cantidad_despachada, cantidad_reservada, orden, codigo_bien
-      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+      ) VALUES ${detalleOrdenValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
       params: detalleOrdenValues.flat()
     });
 
@@ -1356,14 +1387,19 @@ export async function updateOrdenVenta(req, res) {
         const cantidad = parseFloat(item.cantidad || 0);
         const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
         const precioBase = parseFloat(item.precio_base || 0);
-        return [ordenActual.id_cotizacion, item.id_producto, cantidad, precioVenta, precioBase, 0, i + 1];
+        const idListaOrigen = item.es_producto_libre ? null : (item.id_lista_origen || null);
+        const precioListaSnapshot = (item.precio_lista_snapshot === null || item.precio_lista_snapshot === undefined || item.precio_lista_snapshot === '')
+          ? null
+          : parseFloat(item.precio_lista_snapshot);
+        return [ordenActual.id_cotizacion, item.id_producto, cantidad, precioVenta, precioBase, idListaOrigen, precioListaSnapshot, 0, i + 1];
       });
 
       queriesNuevoDetalle.push({
         sql: `INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+          id_lista_origen, precio_lista_snapshot,
           descuento_porcentaje, orden
-        ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+        ) VALUES ${detalleCotizacionValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
         params: detalleCotizacionValues.flat()
       });
 

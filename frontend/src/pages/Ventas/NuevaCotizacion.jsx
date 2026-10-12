@@ -315,6 +315,8 @@ function NuevaCotizacion() {
       cantidad: parseFloat(item.cantidad),
       precio_base: parseFloat(item.precio_base || item.precio_unitario || 0),
       precio_venta: parseFloat(item.precio_unitario || 0),
+      id_lista_origen: item.id_lista_origen || null,
+      precio_lista_snapshot: item.precio_lista_snapshot != null ? parseFloat(item.precio_lista_snapshot) : null,
       descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
       stock_actual: item.stock_disponible || null,
       peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0),
@@ -604,9 +606,9 @@ setFormCabecera(prev => ({
     setDetalle(newDetalle);
   };
 
-  const toggleProductoDesdeLista = (prod, monedaLista) => {
+  const toggleProductoDesdeLista = (prod, monedaLista, idLista) => {
     const existeIndex = detalle.findIndex(d => d.id_producto === prod.id_producto);
-    
+
     if (existeIndex >= 0) {
       const newDetalle = detalle.filter((_, i) => i !== existeIndex);
       setDetalle(newDetalle);
@@ -621,6 +623,8 @@ setFormCabecera(prev => ({
         cantidad: 1,
         precio_base: precioLista,
         precio_venta: precioLista,
+        id_lista_origen: idLista || prod.id_lista || null,
+        precio_lista_snapshot: precioLista,
         descuento_porcentaje: 0,
         stock_actual: 0,
         peso_unitario: parseFloat(productoCompleto?.peso_unitario || 0),
@@ -778,6 +782,8 @@ setFormCabecera(prev => ({
   cantidad: parseFloat(item.cantidad),
   precio_base: precioBase,
   precio_venta: precioVenta,
+  id_lista_origen: item.es_producto_libre ? null : (item.id_lista_origen || null),
+  precio_lista_snapshot: item.precio_lista_snapshot != null ? parseFloat(item.precio_lista_snapshot) : null,
   descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
   orden: index + 1
 };
@@ -1302,7 +1308,7 @@ setFormCabecera(prev => ({
                                   <tr
                                     key={prod.id_producto}
                                     className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}
-                                    onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}
+                                    onClick={() => toggleProductoDesdeLista(prod, lista.moneda, lista.id_lista)}
                                   >
                                     <td className="p-2 cursor-pointer border-b border-gray-100 last:border-0">
                                       <div className="flex items-center gap-3">

@@ -10,6 +10,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
+import ModalTipoCambio from '../../components/Ventas/ModalTipoCambio';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -83,6 +84,8 @@ function NuevaOrdenVenta() {
   const [archivosPrevios, setArchivosPrevios] = useState({ orden_compra_url: [], comprobante_url: [] });
   const [tieneOC, setTieneOC] = useState(false);
   const [modalVerificacionOCOpen, setModalVerificacionOCOpen] = useState(false);
+  const [modalTCAbierto, setModalTCAbierto] = useState(false);
+  const [monedaPendiente, setMonedaPendiente] = useState(null);
   const pendingVerifOC = useRef('Sin verificar');
 
   const [formCabecera, setFormCabecera] = useState({
@@ -752,6 +755,50 @@ useEffect(() => {
     const locales = archivos.orden_compra || [];
     const previos = archivosPrevios.orden_compra_url || [];
     return [...locales, ...previos];
+  };
+
+  const handleCambioMoneda = (nuevaMoneda) => {
+    if (nuevaMoneda === formCabecera.moneda) return;
+    const hayPrecios = detalle.some(it => parseFloat(it.precio_venta) > 0 || parseFloat(it.precio_base) > 0);
+    if (!hayPrecios) {
+      setFormCabecera(prev => ({ ...prev, moneda: nuevaMoneda, tipo_cambio: nuevaMoneda === 'PEN' ? 1.0000 : prev.tipo_cambio }));
+      return;
+    }
+    setMonedaPendiente(nuevaMoneda);
+    setModalTCAbierto(true);
+  };
+
+  const convertirDetalleMoneda = (tc, destino) => {
+    const convertir = (valor) => {
+      const n = parseFloat(valor);
+      if (isNaN(n) || n === 0) return valor;
+      const r = destino === 'USD' ? n / tc : n * tc;
+      return parseFloat(r.toFixed(4));
+    };
+    setDetalle(prev => prev.map(it => ({
+      ...it,
+      precio_base: convertir(it.precio_base),
+      precio_venta: convertir(it.precio_venta),
+      precio_lista_snapshot: it.precio_lista_snapshot != null ? convertir(it.precio_lista_snapshot) : it.precio_lista_snapshot
+    })));
+  };
+
+  const confirmarTipoCambio = (tc, convertir) => {
+    const destino = monedaPendiente;
+    if (!destino) return;
+    if (convertir && tc) convertirDetalleMoneda(tc, destino);
+    setFormCabecera(prev => ({
+      ...prev,
+      moneda: destino,
+      tipo_cambio: destino === 'PEN' ? 1.0000 : (tc && tc > 0 ? parseFloat(tc).toFixed(4) : prev.tipo_cambio)
+    }));
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
+  };
+
+  const cancelarTipoCambio = () => {
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
   };
 
   const validarFormulario = () => {
@@ -1429,7 +1476,7 @@ useEffect(() => {
                     <select 
                       className="form-select"
                       value={formCabecera.moneda}
-                      onChange={(e) => setFormCabecera({...formCabecera, moneda: e.target.value})}
+                      onChange={(e) => handleCambioMoneda(e.target.value)}
                     >
                       <option value="PEN">Soles</option>
                       <option value="USD">Dólares</option>
@@ -1947,6 +1994,15 @@ useEffect(() => {
         totales={totales}
         moneda={formCabecera.moneda}
         guardando={loading || cooldownActivo}
+      />
+
+      <ModalTipoCambio
+        isOpen={modalTCAbierto}
+        monedaOrigen={formCabecera.moneda}
+        monedaDestino={monedaPendiente || formCabecera.moneda}
+        montoReferencia={totales.total}
+        onConfirmar={confirmarTipoCambio}
+        onCancelar={cancelarTipoCambio}
       />
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">

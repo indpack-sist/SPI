@@ -2228,95 +2228,106 @@ function DetalleOrdenVenta() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <button className="btn btn-outline" onClick={() => navigate(-1)}>
-            <ArrowLeft size={20} />
+      <div className="ov-header">
+        <div className="ov-header__identity">
+          <button className="btn btn-outline btn-icon" onClick={() => navigate(-1)} title="Volver">
+            <ArrowLeft size={18} />
           </button>
-          
-          <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
-            <button 
-                className="btn btn-sm btn-ghost p-1" 
-                disabled={!navInfo.prev} 
+
+          <div className="ov-pager">
+            <button
+                className="ov-pager__btn"
+                disabled={!navInfo.prev}
                 onClick={() => handleNavegar(navInfo.prev)}
                 title="Orden anterior"
             >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={18} />
             </button>
-            <span className="text-xs font-medium text-gray-500 mx-2">
+            <span className="ov-pager__count">
                 {navInfo.current} / {navInfo.total}
             </span>
-            <button 
-                className="btn btn-sm btn-ghost p-1" 
-                disabled={!navInfo.next} 
+            <button
+                className="ov-pager__btn"
+                disabled={!navInfo.next}
                 onClick={() => handleNavegar(navInfo.next)}
                 title="Orden siguiente"
             >
-                <ChevronRight size={20} />
+                <ChevronRight size={18} />
             </button>
           </div>
 
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingCart size={32} />
+          <div className="ov-header__info">
+            <h1 className="ov-header__title">
+              <span className="ov-header__icon"><ShoppingCart size={22} /></span>
               Orden de Venta {orden.numero_orden}
+            </h1>
+
+            <div className="ov-header__meta">
+              <span className="ov-meta-item">
+                <Calendar size={14} /> Emitida el {formatearFecha(orden.fecha_emision)}
+              </span>
+
+              <span
+                className={`ov-chip ${
+                  orden.estado_verificacion === 'Aprobada' ? 'ov-chip--ok' :
+                  orden.estado_verificacion === 'Rechazada' ? 'ov-chip--danger' :
+                  'ov-chip--warn'
+                }`}
+                title={estadoVerifConfig.texto}
+              >
+                <IconoVerificacion size={13} /> {orden.estado_verificacion}
+              </span>
+
+              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && (
+                <span className="ov-chip ov-chip--ok">
+                  <FileText size={13} /> Factura
+                </span>
+              )}
+
+              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Nota de Venta' && (
+                <span className="ov-chip ov-chip--info">
+                  <FileText size={13} /> Nota de Venta
+                  <span className="ov-chip__code">{orden.numero_comprobante}</span>
+                </span>
+              )}
+
               {orden.stock_reservado === 1 && (
-                <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
-                  <Lock size={12} className="mr-1"/> Reserva Total
+                <span className="ov-chip ov-chip--ok" title="Stock reservado físicamente para toda la orden">
+                  <Lock size={12} /> Reserva Total
                 </span>
               )}
               {orden.stock_reservado === 2 && (
-                <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
-                  <Lock size={12} className="mr-1"/> Reserva Parcial
+                <span className="ov-chip ov-chip--warn" title="Stock reservado parcialmente">
+                  <Lock size={12} /> Reserva Parcial
                 </span>
               )}
+
               {verFinanzas && orden.facturado_sunat === 1 && (
-                <span className="badge badge-sm bg-emerald-600 text-white border-emerald-700 ml-2" title="Facturado en SUNAT">
-                  <BadgeCheck size={12} className="mr-1"/> SUNAT
+                <span className="ov-chip ov-chip--ok" title="Facturado en SUNAT">
+                  <BadgeCheck size={12} /> SUNAT
                 </span>
               )}
-            </h1>
-            <div className="flex items-center gap-3 mt-2">
-              <p className="text-xl font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 rounded-lg border border-blue-200 shadow-sm">
-                Emitida el {formatearFecha(orden.fecha_emision)}
-              </p>
-              
+
               {!esMuestra && sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
-                <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 px-3 py-2 rounded-lg">
-                  <AlertTriangle size={16} className="text-amber-600" />
-                  <span className="text-sm font-semibold text-amber-700">Sin comprobante asignado</span>
+                <span className="ov-chip ov-chip--warn">
+                  <AlertTriangle size={13} /> Sin comprobante
                   <button
-                    className="btn btn-xs btn-warning ml-1"
+                    className="ov-chip__action"
                     onClick={() => {
                       setNuevoTipoComprobante('');
                       setModalAsignarComprobante(true);
                     }}
                   >
-                    Asignar ahora
+                    Asignar
                   </button>
-                </div>
+                </span>
               )}
-
-              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && (
-  <div className="flex items-center gap-2">
-    <span className="badge badge-success">Factura</span>
-  </div>
-)}
-
-              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Nota de Venta' && (
-  <div className="flex items-center gap-2">
-    <span className="badge badge-info">Nota de Venta</span>
-    <span className="font-mono text-sm font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200">
-      {orden.numero_comprobante}
-    </span>
-  </div>
-)}
             </div>
           </div>
         </div>
         
         {!soloLectura && (
-        <div className="flex gap-2">
+        <div className="ov-header__actions">
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && orden.tipo_comprobante === 'Factura' && (
             (facturas.length > 0 && resumenFacturacion && resumenFacturacion.saldo_pendiente <= 1) ? (
               <button
@@ -2356,7 +2367,7 @@ function DetalleOrdenVenta() {
 
           {puedeDespachar() && (
              <button
-               className="btn btn-primary shadow-lg shadow-primary/20"
+               className="btn btn-primary"
                onClick={handleAbrirDespacho}
                disabled={procesando}
                title="Registrar Despacho Parcial o Total"

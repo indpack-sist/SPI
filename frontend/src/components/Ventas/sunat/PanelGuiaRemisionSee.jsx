@@ -66,7 +66,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const guiaVigente = !!estadoNegocio && estadoNegocio !== 'Anulada';
   const sinEmitirSunat = !estado || ['PENDIENTE', 'ERROR', 'RECHAZADO'].includes(estado);
   const esCompra = guia?.tipo_origen === 'Compra';
-  const ordenDespachada = esCompra || guia?.estado_orden === 'Despachada';
+  const ordenDespachada = esCompra || ['Despachada', 'Despacho Parcial', 'Entregada'].includes(guia?.estado_orden);
   const puedeEmitir = guiaVigente && sinEmitirSunat && ordenDespachada;
   const enviado = estado === 'ENVIADO';
   const aceptado = estado === 'ACEPTADO';
@@ -426,7 +426,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       )}
       {guiaVigente && sinEmitirSunat && !ordenDespachada && (
         <p className="text-xs text-warning">
-          Para emitir la GRE, la orden de venta debe estar en estado "Despachada"{guia?.estado_orden ? ` (actualmente: ${guia.estado_orden})` : ''}.
+          Para emitir la GRE, la orden de venta debe estar despachada (total o parcialmente){guia?.estado_orden ? ` (actualmente: ${guia.estado_orden})` : ''}.
         </p>
       )}
       {!estado && guiaVigente && ordenDespachada && faltantes.length === 0 && (

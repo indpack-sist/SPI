@@ -175,8 +175,8 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
                 DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
            FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
       ov = ovRows[0] || null;
-      if (!ov || ov.estado !== 'Despachada') {
-        throw new AppError(`La orden debe estar en estado "Despachada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
+      if (!ov || !['Despachada', 'Despacho Parcial', 'Entregada'].includes(ov.estado)) {
+        throw new AppError(`La orden debe estar en estado "Despachada", "Despacho Parcial" o "Entregada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
       }
     }
     const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');

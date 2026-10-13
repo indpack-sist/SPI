@@ -1285,14 +1285,20 @@ const descargarUrlComoArchivo = async (url, nombreSugerido) => {
 };
 
 export const sunatAPI = {
-  previewComprobante: (id_orden_venta) => api.post('/sunat/comprobantes/preview', { id_orden_venta }),
-  emitirFactura: (id_orden_venta, { fecha_emision, observaciones, orden_compra_cliente, guias } = {}) =>
+  previewComprobante: (id_orden_venta, lineas, guias_sistema) => api.post('/sunat/comprobantes/preview', {
+    id_orden_venta,
+    ...(Array.isArray(lineas) ? { lineas } : {}),
+    ...(Array.isArray(guias_sistema) ? { guias_sistema } : {})
+  }),
+  emitirFactura: (id_orden_venta, { fecha_emision, observaciones, orden_compra_cliente, guias, lineas, guias_sistema } = {}) =>
     api.post('/sunat/comprobantes/emitir', {
       id_orden_venta,
       ...(fecha_emision ? { fecha_emision } : {}),
       ...(observaciones !== undefined ? { observaciones } : {}),
       ...(orden_compra_cliente !== undefined ? { orden_compra_cliente } : {}),
-      ...(Array.isArray(guias) ? { guias } : {})
+      ...(Array.isArray(guias) ? { guias } : {}),
+      ...(Array.isArray(lineas) ? { lineas } : {}),
+      ...(Array.isArray(guias_sistema) ? { guias_sistema } : {})
     }),
   previewNota: ({ id_factura_ref, tipo, motivo_codigo, modo, items, monto_global, solo_catalogo }) =>
     api.post('/sunat/comprobantes/notas/preview', {

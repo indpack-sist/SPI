@@ -28,6 +28,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
   const [emitStep, setEmitStep] = useState(1);
+  const [lineasFactura, setLineasFactura] = useState([]);
+  const [cantidades, setCantidades] = useState({});
 
   const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
   const fmt = (v) => `${simbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
@@ -76,13 +78,17 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const [nuevaGuia, setNuevaGuia] = useState({ tipo_documento: '09', serie: '', numero: '' });
   const [guiaError, setGuiaError] = useState(null);
   const [guiasSistema, setGuiasSistema] = useState([]);
+  const [guiasSistemaSel, setGuiasSistemaSel] = useState({});
   const TIPOS_GUIA = [['09', 'Guía de Remisión Remitente'], ['31', 'Guía de Remisión Transportista']];
+  const claveGuia = (g) => `${g.serie}-${g.numero}`;
 
   const normTxt = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const stripOC = (s) => normTxt(s).replace(/^(OC|ORDENDECOMPRA)+/, '');
   const obsRepiteOC = !!normTxt(ordenCompra) && stripOC(observaciones) === stripOC(ordenCompra);
   const obsPreliminar = obsRepiteOC ? '' : observaciones.trim();
-  const guiasPreliminar = [...guiasSistema, ...guiasRef];
+  const guiasSistemaElegidas = guiasSistema.filter((g) => guiasSistemaSel[claveGuia(g)]);
+  const guiasSistemaPayload = guiasSistemaElegidas.map((g) => ({ serie: g.serie, numero: g.numero }));
+  const guiasPreliminar = [...guiasSistemaElegidas, ...guiasRef];
   const ubicacionExport = preview?.ubicacionEntregaExportacion || null;
 
   const agregarGuia = () => {
@@ -107,12 +113,18 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
     && x.codigo_tipo_sunat === '07' && x.motivo_nota_codigo === '01'
     && x.sunat_estado === 'ACEPTADO');
-  const facturaEnCursoOV = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
+  const facturaEnVuelo = comprobantes.find((f) => f.codigo_tipo_sunat === '01'
     && f.estado !== 'Anulada'
-    && ['ENVIADO', 'ACEPTADO'].includes(f.sunat_estado));
+    && f.sunat_estado === 'ENVIADO');
   const puedeEmitir = orden?.estado_verificacion === 'Aprobada'
     && Number(orden?.facturado_sunat) !== 1
-    && !facturaEnCursoOV;
+    && !facturaEnVuelo;
+
+  const lineasPayload = lineasFactura
+    .map((l) => ({ id_detalle: l.id_detalle, cantidad: Number(cantidades[l.id_detalle] ?? 0) }))
+    .filter((l) => l.cantidad > 0);
+  const cantidadesExceden = lineasFactura.some((l) => Number(cantidades[l.id_detalle] ?? 0) - Number(l.pendiente) > 1e-6);
+  const esParcial = lineasFactura.some((l) => Number(cantidades[l.id_detalle] ?? 0) + 1e-6 < Number(l.pendiente));
 
   const errorMsg = (e) => {
     const d = e?.response?.data;
@@ -156,12 +168,24 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     </>
   );
 
+  const continuar = async () => {
+    setPreviewLoading(true); setPreviewError(null);
+    try {
+      const r = await sunatAPI.previewComprobante(orden.id_orden_venta, lineasPayload, guiasSistemaPayload);
+      setPreview(r.data);
+      setEmitStep(2);
+    } catch (e) { setPreviewError(errorMsg(e)); }
+    finally { setPreviewLoading(false); }
+  };
+
   const handleEmitir = async () => {
     const r = await tras(() => sunatAPI.emitirFactura(orden.id_orden_venta, {
       fecha_emision: fechaEmision,
       observaciones: obsPreliminar,
       orden_compra_cliente: ordenCompra.trim(),
-      guias: guiasRef
+      guias: guiasRef,
+      lineas: lineasPayload,
+      guias_sistema: guiasSistemaPayload
     }), null);
     const d = r?.data;
     if (d) {
@@ -246,10 +270,15 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
       .then((r) => {
         if (cancel) return;
         setPreview(r.data);
+        const lf = Array.isArray(r.data?.lineas) ? r.data.lineas : [];
+        setLineasFactura(lf);
+        setCantidades(Object.fromEntries(lf.map((l) => [l.id_detalle, String(l.pendiente ?? l.cantidad ?? 0)])));
         setObservaciones(r.data?.observacion || '');
         setOrdenCompra(r.data?.ordenCompra || '');
         setGuiasRef([]);
-        setGuiasSistema(Array.isArray(r.data?.guiasSistema) ? r.data.guiasSistema : []);
+        const gs = Array.isArray(r.data?.guiasSistema) ? r.data.guiasSistema : [];
+        setGuiasSistema(gs);
+        setGuiasSistemaSel(Object.fromEntries(gs.map((g) => [`${g.serie}-${g.numero}`, !g.yaFacturada])));
         setNuevaGuia({ tipo_documento: '09', serie: '', numero: '' });
         setGuiaError(null);
       })
@@ -457,6 +486,61 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             </div>
           )}
 
+          {lineasFactura.length > 0 && (
+            <div className="border border-gray-200 rounded p-3 space-y-2">
+              <label className="text-[10px] text-muted uppercase">Cantidades a facturar</label>
+              <div className="text-[10px] text-muted -mt-1">
+                Edita la cantidad por línea para facturar parcialmente. Viene precargado con lo pendiente (pedido − ya facturado) y no puede superarlo. Deja 0 para no incluir una línea.
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100 text-muted">
+                    <tr>
+                      <th className="text-left p-2">Descripción</th>
+                      <th className="text-center p-2">Und</th>
+                      <th className="text-right p-2">Pedido</th>
+                      <th className="text-right p-2">Facturado</th>
+                      <th className="text-right p-2">Pendiente</th>
+                      <th className="text-right p-2">A facturar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineasFactura.map((l) => {
+                      const excede = Number(cantidades[l.id_detalle] ?? 0) - Number(l.pendiente) > 1e-6;
+                      return (
+                        <tr key={l.id_detalle} className="border-t border-gray-100">
+                          <td className="p-2">{l.descripcion}</td>
+                          <td className="p-2 text-center">{l.unidad || '—'}</td>
+                          <td className="p-2 text-right">{fmtCant(l.cantidadPedido)}</td>
+                          <td className="p-2 text-right">{fmtCant(l.facturado)}</td>
+                          <td className="p-2 text-right font-semibold">{fmtCant(l.pendiente)}</td>
+                          <td className="p-2 text-right">
+                            <input
+                              type="number" min="0" max={l.pendiente} step="any"
+                              className={`form-input w-24 text-right text-xs py-0.5 ${excede ? 'border-red-400' : ''}`}
+                              value={cantidades[l.id_detalle] ?? ''}
+                              onChange={(e) => setCantidades((prev) => ({ ...prev, [l.id_detalle]: e.target.value }))}
+                              disabled={procesando || previewLoading}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {cantidadesExceden && (
+                <div className="text-[11px] text-red-600">Alguna cantidad supera lo pendiente. Corrígela antes de continuar.</div>
+              )}
+              {!lineasPayload.length && (
+                <div className="text-[11px] text-red-600">Indica al menos una cantidad mayor a 0 para emitir.</div>
+              )}
+              {esParcial && !cantidadesExceden && lineasPayload.length > 0 && (
+                <div className="text-[11px] text-amber-600">Factura parcial: quedará saldo pendiente en la OV para facturar después.</div>
+              )}
+            </div>
+          )}
+
           <div className="border border-gray-200 rounded p-3 space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -502,9 +586,28 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               Agrega las guías que amparan el traslado (se declaran en la factura). Como las emites directo en SUNAT, ingrésalas a mano.
             </div>
             {guiasSistema.length > 0 && (
-              <div className="text-[11px] bg-blue-50 border border-blue-200 rounded px-2 py-1">
-                <span className="text-blue-700 font-semibold">Ya incluidas (emitidas desde el sistema): </span>
-                <span className="font-mono">{guiasSistema.map((g) => `${g.serie}-${g.numero}`).join(', ')}</span>
+              <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1">
+                <div className="text-[11px] text-blue-700 font-semibold">Guías emitidas desde el sistema (marca las que amparan esta factura):</div>
+                {guiasSistema.map((g) => {
+                  const k = claveGuia(g);
+                  return (
+                    <label key={k} className="flex items-center gap-2 text-[11px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!guiasSistemaSel[k]}
+                        onChange={(e) => setGuiasSistemaSel((prev) => ({ ...prev, [k]: e.target.checked }))}
+                        disabled={procesando || previewLoading}
+                      />
+                      <span className="font-mono font-semibold">{g.serie}-{g.numero}</span>
+                      {g.yaFacturada && (
+                        <span className="text-amber-600">ya declarada en {g.numeroFacturaPrevia || 'otra factura'}</span>
+                      )}
+                    </label>
+                  );
+                })}
+                <div className="text-[10px] text-blue-700/80">
+                  Por defecto se marcan solo las guías que aún no están en otra factura (útil para entregas parciales).
+                </div>
               </div>
             )}
             <div className="flex flex-wrap items-end gap-2">
@@ -567,8 +670,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
 
           <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
             <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-primary" onClick={() => setEmitStep(2)}
-              disabled={procesando || previewLoading || !preview?.lineas?.length || preview?.bloqueaEmision}>
+            <button className="btn btn-sm btn-primary" onClick={continuar}
+              disabled={procesando || previewLoading || !lineasPayload.length || cantidadesExceden || preview?.bloqueaEmision}>
               {previewLoading ? 'Calculando…' : 'Continuar'}
             </button>
           </div>
@@ -724,7 +827,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             <div className="flex gap-2">
               <button className="btn btn-sm btn-outline" onClick={() => setModalEmitir(false)} disabled={procesando}>Cancelar</button>
               <button className="btn btn-sm btn-primary" onClick={handleEmitir}
-                disabled={procesando || previewLoading || !preview?.lineas?.length || preview?.bloqueaEmision}>
+                disabled={procesando || previewLoading || !lineasPayload.length || cantidadesExceden || preview?.bloqueaEmision}>
                 {procesando ? 'Emitiendo…' : 'Emitir'}
               </button>
             </div>

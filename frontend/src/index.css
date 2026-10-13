@@ -1987,3 +1987,173 @@ input.bg-blue-50 {
     padding-inline: 0.625rem;
   }
 }
+
+/* =====================================================
+   CABECERA DETALLE ORDEN DE VENTA
+   Barra de identidad + metadatos (fecha, verificacion, comprobante)
+   + acciones. Tokens de tema => coherente en claro y oscuro.
+   ===================================================== */
+.ov-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.ov-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.btn.btn-icon {
+  padding: 0.5rem;
+  line-height: 0;
+}
+
+.ov-pager {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.125rem;
+}
+.ov-pager__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.ov-pager__btn:hover:not(:disabled) {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.ov-pager__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ov-pager__count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0 0.5rem;
+  white-space: nowrap;
+}
+
+.ov-header__info { min-width: 0; }
+
+.ov-header__title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.ov-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 0.625rem;
+  background-color: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.ov-header__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+.ov-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.ov-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.ov-chip svg { flex-shrink: 0; }
+.ov-chip--ok     { background-color: rgba(46,204,113,0.12); color: #2ecc71; border-color: rgba(46,204,113,0.3); }
+.ov-chip--warn   { background-color: rgba(243,156,18,0.12); color: #f39c12; border-color: rgba(243,156,18,0.3); }
+.ov-chip--danger { background-color: rgba(231,76,60,0.12);  color: #e74c3c; border-color: rgba(231,76,60,0.3); }
+.ov-chip--info   { background-color: rgba(93,173,226,0.14); color: #5dade2; border-color: rgba(93,173,226,0.35); }
+
+.ov-chip__code {
+  margin-left: 0.1rem;
+  padding-left: 0.4rem;
+  border-left: 1px solid currentColor;
+  font-family: 'Barlow', ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ov-chip__action {
+  margin-left: 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.ov-chip__action:hover { background-color: rgba(243,156,18,0.2); }
+
+.ov-header__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.ov-header__actions .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ov-header__actions > div {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+  .ov-header { gap: 1rem; }
+  .ov-header__actions {
+    justify-content: flex-start;
+    margin-left: 0;
+    width: 100%;
+  }
+}

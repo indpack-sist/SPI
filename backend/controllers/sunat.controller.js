@@ -216,6 +216,64 @@ async function enviarYProcesarFactura({ idFactura, serie, numero, nombre, xmlFir
   } };
 }
 
+async function facturadoPorLineaOV(db, idOrdenVenta) {
+  const [rows] = await db.query(
+    `SELECT fnd.id_detalle_ref AS id_detalle, COALESCE(SUM(fnd.cantidad), 0) AS facturado
+       FROM facturas_notas_detalle fnd
+       JOIN facturas_venta fv ON fv.id_factura = fnd.id_factura
+      WHERE fv.id_orden_venta = ? AND fv.codigo_tipo_sunat = '01'
+        AND fv.estado = 'Emitida' AND fv.sunat_estado IN ('ENVIADO', 'ACEPTADO')
+      GROUP BY fnd.id_detalle_ref`, [idOrdenVenta]);
+  const map = new Map();
+  for (const r of rows) map.set(Number(r.id_detalle), Number(r.facturado));
+  return map;
+}
+
+function recortarDetalleParaFacturar(detalle, facturadoMap, lineasPedidas) {
+  const pedidas = Array.isArray(lineasPedidas) && lineasPedidas.length
+    ? new Map(lineasPedidas.map((l) => [Number(l.id_detalle), Number(l.cantidad)]))
+    : null;
+  const recorte = [];
+  for (const d of detalle) {
+    const idDet = Number(d.id_detalle);
+    const facturado = facturadoMap.get(idDet) || 0;
+    const pendiente = +(Number(d.cantidad) - facturado).toFixed(6);
+    const aFacturar = pedidas
+      ? (pedidas.has(idDet) ? pedidas.get(idDet) : 0)
+      : pendiente;
+    if (!(aFacturar > 0)) continue;
+    if (aFacturar - pendiente > 1e-6) {
+      throw new AppError(`La cantidad a facturar (${aFacturar}) supera lo pendiente (${pendiente}) en "${d.nombre || d.codigo}"`, 422);
+    }
+    recorte.push({ ...d, cantidad: aFacturar, _cantidadPedido: Number(d.cantidad), _facturado: facturado, _pendiente: pendiente });
+  }
+  return recorte;
+}
+
+async function guiasAceptadasOV(db, idOrdenVenta) {
+  const [rows] = await db.query(
+    `SELECT g.id_guia, g.serie_sunat AS serie, g.numero_sunat AS numero, g.id_factura,
+            fv.numero_factura AS numero_factura_previa,
+            (g.id_factura IS NOT NULL AND fv.estado IS NOT NULL AND fv.estado <> 'Anulada') AS ya_facturada
+       FROM guias_remision g
+       LEFT JOIN facturas_venta fv ON fv.id_factura = g.id_factura
+      WHERE g.id_orden_venta = ? AND g.sunat_estado = 'ACEPTADO'
+        AND g.serie_sunat IS NOT NULL AND g.numero_sunat IS NOT NULL
+      ORDER BY g.id_guia`, [idOrdenVenta]);
+  return rows.map((g) => ({
+    id_guia: g.id_guia, serie: String(g.serie), numero: String(g.numero),
+    yaFacturada: !!g.ya_facturada, numeroFacturaPrevia: g.numero_factura_previa || null
+  }));
+}
+
+function seleccionarGuiasSistema(guiasAceptadas, seleccion) {
+  if (Array.isArray(seleccion)) {
+    const keep = new Set(seleccion.map((g) => `${g.serie}-${g.numero}`));
+    return guiasAceptadas.filter((g) => keep.has(`${g.serie}-${g.numero}`));
+  }
+  return guiasAceptadas.filter((g) => !g.yaFacturada);
+}
+
 export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;
   const tipo = req.body.tipo || '01';
@@ -243,23 +301,20 @@ export async function emitirComprobante(req, res, next) {
       if (String(ov.tipo_comprobante || '').trim() !== 'Factura') {
         throw new AppError('La orden no es de tipo Factura; las Notas de Venta (inafecto) no se emiten a SUNAT', 422);
       }
-      if (ov.facturado_sunat) throw new AppError('La OV ya fue facturada', 409);
+      if (ov.facturado_sunat) throw new AppError('La OV ya está totalmente facturada', 409);
       if (ov.estado_verificacion !== 'Aprobada') throw new AppError('La OV debe estar Aprobada para facturar', 422);
 
-      const [[facturaVigente]] = await conn.query(
-        `SELECT id_factura, numero_factura, sunat_estado
+      const [[facturaEnVuelo]] = await conn.query(
+        `SELECT id_factura, numero_factura
            FROM facturas_venta
           WHERE id_orden_venta = ? AND codigo_tipo_sunat = '01'
-            AND estado != 'Anulada'
-            AND sunat_estado IN ('ENVIADO', 'ACEPTADO')
+            AND estado != 'Anulada' AND sunat_estado = 'ENVIADO'
           ORDER BY id_factura DESC LIMIT 1`,
         [id_orden_venta]);
-      if (facturaVigente) {
+      if (facturaEnVuelo) {
         throw new AppError(
-          `La OV ya tiene la factura ${facturaVigente.numero_factura} en estado ${facturaVigente.sunat_estado}. ` +
-          (facturaVigente.sunat_estado === 'ENVIADO'
-            ? 'Consulta su estado en SUNAT; no emitas otro correlativo.'
-            : 'No corresponde emitir otra factura.'),
+          `La OV tiene la factura ${facturaEnVuelo.numero_factura} en proceso (ENVIADO) sin respuesta de SUNAT. ` +
+          'Consulta su estado o reenvíala antes de emitir otra; no numeres un nuevo correlativo mientras tanto.',
           409
         );
       }
@@ -288,12 +343,16 @@ export async function emitirComprobante(req, res, next) {
       if (!empresa) throw new AppError('Falta la configuración de la empresa emisora', 422);
       if (esExport) validarUbicacionEntregaExportacion(empresa);
 
-      const [guias] = await conn.query(
-        `SELECT id_guia, serie_sunat, numero_sunat FROM guias_remision
-          WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
-            AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL`, [id_orden_venta]);
+      const facturadoMap = await facturadoPorLineaOV(conn, id_orden_venta);
+      const detalleEmitir = recortarDetalleParaFacturar(detalle, facturadoMap, req.body.lineas);
+      if (!detalleEmitir.length) {
+        throw new AppError('No hay cantidades pendientes por facturar en esta orden.', 409);
+      }
 
-      const calcPrevio = calcularComprobante({ ov, detalle });
+      const guiasAceptadas = await guiasAceptadasOV(conn, id_orden_venta);
+      const guiasElegidas = seleccionarGuiasSistema(guiasAceptadas, req.body.guias_sistema);
+
+      const calcPrevio = calcularComprobante({ ov, detalle: detalleEmitir });
       const validacion = validarComprobantePrevio({
         tipo, ov, cliente, empresa, calc: calcPrevio,
         ordenCompra: req.body.orden_compra_cliente !== undefined ? req.body.orden_compra_cliente : ov.orden_compra_cliente,
@@ -328,12 +387,12 @@ export async function emitirComprobante(req, res, next) {
       }
       ov.observaciones = observacionEnviada;
 
-      const guiasSistema = guias.map((g) => ({ tipo_documento: '09', serie: String(g.serie_sunat), numero: String(g.numero_sunat) }));
+      const guiasSistema = guiasElegidas.map((g) => ({ tipo_documento: '09', serie: g.serie, numero: g.numero }));
       const clavesSistema = new Set(guiasSistema.map((g) => `${g.tipo_documento}|${g.serie}|${g.numero}`));
       const guiasManualNuevas = (guiasManual || []).filter((g) => !clavesSistema.has(`${g.tipo_documento}|${g.serie}|${g.numero}`));
       const guiasDeclaradas = [...guiasSistema, ...guiasManualNuevas];
 
-      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias: guiasDeclaradas });
+      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle: detalleEmitir, cliente, empresa, fecha, guias: guiasDeclaradas });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
 
@@ -358,10 +417,10 @@ export async function emitirComprobante(req, res, next) {
          emisionDateTime, observacionRaw,
          digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
-      const calcDetalle = calcularComprobante({ ov, detalle });
+      const calcDetalle = calcularComprobante({ ov, detalle: detalleEmitir });
       if (calcDetalle.lineas.length) {
         const valuesSnapshot = calcDetalle.lineas.map((linea, i) => {
-          const fuente = detalle[i];
+          const fuente = detalleEmitir[i];
           return [ins.insertId, fuente.id_detalle || null, null,
             linea.codigo, linea.descripcion, linea.unidad, linea.cantidad, linea.valorUnitario,
             linea.afectacion, linea.valorVenta, linea.igv,
@@ -375,7 +434,7 @@ export async function emitirComprobante(req, res, next) {
       }
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales,
-        guiaIds: guias.map((g) => g.id_guia), guiasManualNuevas };
+        guiaIds: guiasElegidas.filter((g) => !g.yaFacturada).map((g) => g.id_guia), guiasManualNuevas };
     });
 
     if (prep.__bloqueo) {
@@ -430,6 +489,14 @@ export async function reenviarComprobante(req, res, next) {
         'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
         'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
 
+      const [snapshot] = await conn.query(
+        'SELECT id_detalle_ref, cantidad FROM facturas_notas_detalle WHERE id_factura = ?', [idFactura]);
+      const cantPorLinea = new Map(snapshot.map((s) => [Number(s.id_detalle_ref), Number(s.cantidad)]));
+      const detalleEmitir = cantPorLinea.size
+        ? detalle.filter((d) => cantPorLinea.has(Number(d.id_detalle)))
+            .map((d) => ({ ...d, cantidad: cantPorLinea.get(Number(d.id_detalle)) }))
+        : detalle;
+
       const [guias] = await conn.query(
         `SELECT id_guia, serie_sunat, numero_sunat FROM guias_remision
           WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
@@ -456,7 +523,7 @@ export async function reenviarComprobante(req, res, next) {
       const guiasManualNuevas = (guiasManual || []).filter((g) => !clavesSistema.has(`${g.tipo_documento}|${g.serie}|${g.numero}`));
       const guiasDeclaradas = [...guiasSistema, ...guiasManualNuevas];
 
-      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha, guias: guiasDeclaradas });
+      const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle: detalleEmitir, cliente, empresa, fecha, guias: guiasDeclaradas });
       const { xmlFirmado, digestValue } = firmarXml(xml);
       const nombre = `${sunatConfig.ruc}-${f.codigo_tipo_sunat}-${serie}-${numero}`;
 
@@ -495,7 +562,9 @@ export async function previewComprobante(req, res, next) {
       'FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
       'WHERE d.id_orden_venta = ?', [id_orden_venta]);
 
-    const calc = calcularComprobante({ ov, detalle });
+    const facturadoMap = await facturadoPorLineaOV(pool, id_orden_venta);
+    const detalleEmitir = recortarDetalleParaFacturar(detalle, facturadoMap, req.body.lineas);
+    const calc = calcularComprobante({ ov, detalle: detalleEmitir });
 
     const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [ov.id_cliente]);
     const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
@@ -508,16 +577,14 @@ export async function previewComprobante(req, res, next) {
       if (strip(obsRaw) === strip(ocRaw)) obsRaw = '';
     }
 
-    const [guiasSistema] = await pool.query(
-      `SELECT serie_sunat AS serie, numero_sunat AS numero FROM guias_remision
-        WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
-          AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL ORDER BY id_guia`, [id_orden_venta]);
+    const guiasSistema = await guiasAceptadasOV(pool, id_orden_venta);
 
     const avisos = [];
     if (String(ov.tipo_comprobante || '').trim() !== 'Factura') {
       avisos.push('La orden no es de tipo Factura (una Nota de Venta / inafecto no se emite a SUNAT).');
     }
-    if (ov.facturado_sunat) avisos.push('La orden ya fue facturada.');
+    if (ov.facturado_sunat) avisos.push('La orden ya está totalmente facturada.');
+    else if (!detalleEmitir.length) avisos.push('No hay cantidades pendientes por facturar en esta orden.');
     if (ov.estado_verificacion !== 'Aprobada') avisos.push('La orden debe estar Aprobada para emitir.');
     const sinUnidad = calc.lineas.filter((l) => !l.unidad).map((l) => l.codigo);
     if (sinUnidad.length) avisos.push(`Productos sin codigo_unidad_sunat: ${sinUnidad.join(', ')}.`);
@@ -541,7 +608,13 @@ export async function previewComprobante(req, res, next) {
       serie: 'FE01',
       moneda: calc.moneda,
       esExport: calc.esExport,
-      lineas: calc.lineas.map(({ cfg, ...l }) => l),
+      lineas: calc.lineas.map(({ cfg, ...l }, i) => ({
+        ...l,
+        id_detalle: Number(detalleEmitir[i].id_detalle),
+        cantidadPedido: detalleEmitir[i]._cantidadPedido,
+        facturado: detalleEmitir[i]._facturado,
+        pendiente: detalleEmitir[i]._pendiente
+      })),
       subtotal: calc.subtotal,
       igv: calc.igv,
       total: calc.total,
@@ -563,7 +636,10 @@ export async function previewComprobante(req, res, next) {
       ubicacionEntregaExportacion: ubicacionExport,
       observacion: obsRaw.slice(0, 200),
       ordenCompra: String(ov.orden_compra_cliente || '').trim().slice(0, 20),
-      guiasSistema: guiasSistema.map((g) => ({ tipo_documento: '09', serie: String(g.serie), numero: String(g.numero) })),
+      guiasSistema: guiasSistema.map((g) => ({
+        tipo_documento: '09', serie: g.serie, numero: g.numero,
+        id_guia: g.id_guia, yaFacturada: g.yaFacturada, numeroFacturaPrevia: g.numeroFacturaPrevia
+      })),
       ultimaFechaEmitida: await ultimaFechaEmitidaSerie(pool, 'FE01'),
       avisos,
       bloqueaEmision: !validacion.ok,

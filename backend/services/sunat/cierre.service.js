@@ -6,12 +6,29 @@ import { copiaLocal } from './util.service.js';
 import { ahoraLima } from './fecha.service.js';
 import { sunatConfig } from '../../config/sunat.js';
 
+async function ordenTotalmenteFacturada(conn, idOrdenVenta) {
+  const [rows] = await conn.query(
+    `SELECT d.cantidad,
+       COALESCE((SELECT SUM(fnd.cantidad)
+                   FROM facturas_notas_detalle fnd
+                   JOIN facturas_venta fv ON fv.id_factura = fnd.id_factura
+                  WHERE fnd.id_detalle_ref = d.id_detalle
+                    AND fv.codigo_tipo_sunat = '01' AND fv.estado = 'Emitida'
+                    AND fv.sunat_estado IN ('ENVIADO', 'ACEPTADO')), 0) AS facturado
+       FROM detalle_orden_venta d
+       JOIN productos p ON p.id_producto = d.id_producto
+      WHERE d.id_orden_venta = ?`, [idOrdenVenta]);
+  if (!rows.length) return false;
+  return rows.every((r) => Number(r.facturado) >= Number(r.cantidad) - 1e-6);
+}
+
 export async function marcarOrdenFacturada(conn, { idOrdenVenta, serie, numero, idEmpleado = null, fecha = null }) {
   if (!idOrdenVenta) return;
+  const completa = await ordenTotalmenteFacturada(conn, idOrdenVenta);
   await conn.query(
-    `UPDATE ordenes_venta SET facturado_sunat = 1, fecha_facturacion_sunat = ?,
+    `UPDATE ordenes_venta SET facturado_sunat = ?, fecha_facturacion_sunat = ?,
        numero_comprobante_sunat = ?, id_facturador = COALESCE(?, id_facturador) WHERE id_orden_venta = ?`,
-    [fecha || ahoraLima(), `${serie}-${numero}`, idEmpleado, idOrdenVenta]);
+    [completa ? 1 : 0, fecha || ahoraLima(), `${serie}-${numero}`, idEmpleado, idOrdenVenta]);
 }
 
 export async function liberarOrdenFacturada(conn, idOrdenVenta) {

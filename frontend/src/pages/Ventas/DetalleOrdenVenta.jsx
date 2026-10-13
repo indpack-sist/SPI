@@ -16,7 +16,7 @@ import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
 import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
-import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI, sunatAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI, sunatAPI, tipoCambioAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -239,6 +239,11 @@ function DetalleOrdenVenta() {
   };
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
+    const soloFecha = fecha.toString().split('T')[0].split(' ')[0];
+    const partes = soloFecha.split('-');
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
     return new Date(fecha).toLocaleDateString('es-PE', {
       year: 'numeric',
       month: '2-digit',

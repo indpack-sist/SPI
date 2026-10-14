@@ -38,6 +38,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const [emitForm, setEmitForm] = useState(null);
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
+  const [transportistas, setTransportistas] = useState([]);
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [modalDespachar, setModalDespachar] = useState(false);
@@ -116,9 +117,10 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     if (soloLectura) return;
     (async () => {
       try {
-        const [rc, rv] = await Promise.all([ordenesVentaAPI.getConductores(), ordenesVentaAPI.getVehiculos()]);
+        const [rc, rv, rt] = await Promise.all([ordenesVentaAPI.getConductores(), ordenesVentaAPI.getVehiculos(), guiasRemisionAPI.getTransportistas()]);
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
+        if (rt.data?.success) setTransportistas(rt.data.data || []);
       } catch { }
       try {
         const re = await guiasRemisionAPI.getEmpresaRemitente();
@@ -150,10 +152,26 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       id_vehiculo: guia?.id_vehiculo ? String(guia.id_vehiculo) : '',
       id_conductor2: guia?.id_conductor2 ? String(guia.id_conductor2) : '',
       id_vehiculo2: guia?.id_vehiculo2 ? String(guia.id_vehiculo2) : '',
-      registrar: guia?.ov_transporte_registrar === 0 ? false : true,
-      indTransbordo: !!guia?.ov_ind_transbordo,
-      indM1l: !!guia?.ov_ind_m1l,
-      indRetornoVacio: !!guia?.ov_ind_retorno_vacio,
+      id_transportista: guia?.id_transportista ? String(guia.id_transportista) : '',
+      nuevoTransportista: false,
+      transportistaRuc: '', transportistaRazon: '', transportistaMtc: '',
+      tPlaca: guia?.transporte_placa || guia?.ov_transporte_placa || '',
+      tTuc: guia?.transporte_tuc || guia?.ov_transporte_tuc || '',
+      tAut: guia?.transporte_autorizacion || guia?.ov_transporte_autorizacion || '',
+      tPlaca2: guia?.transporte_placa2 || guia?.ov_transporte_placa2 || '',
+      tTuc2: guia?.transporte_tuc2 || guia?.ov_transporte_tuc2 || '',
+      tAut2: guia?.transporte_autorizacion2 || guia?.ov_transporte_autorizacion2 || '',
+      tDni: guia?.transporte_dni || guia?.ov_transporte_dni || '',
+      tConductor: guia?.transporte_conductor || guia?.ov_transporte_conductor || '',
+      tLicencia: guia?.transporte_licencia || guia?.ov_transporte_licencia || '',
+      tDni2: guia?.transporte_dni2 || guia?.ov_transporte_dni2 || '',
+      tConductor2: guia?.transporte_conductor2 || guia?.ov_transporte_conductor2 || '',
+      tLicencia2: guia?.transporte_licencia2 || guia?.ov_transporte_licencia2 || '',
+      tFechaEntrega: String(guia?.transporte_fecha_entrega || guia?.ov_transporte_fecha_entrega || '').slice(0, 10),
+      registrar: (guia?.transporte_registrar ?? guia?.ov_transporte_registrar) === 0 ? false : true,
+      indTransbordo: !!(guia?.transporte_ind_transbordo ?? guia?.ov_ind_transbordo),
+      indM1l: !!(guia?.transporte_ind_m1l ?? guia?.ov_ind_m1l),
+      indRetornoVacio: !!(guia?.transporte_ind_retorno_vacio ?? guia?.ov_ind_retorno_vacio),
       codigosBien: Object.fromEntries(
         (guia?.detalle || []).map((it) => [it.id_detalle, it.codigo_bien || ''])
       ),
@@ -220,7 +238,19 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const handleEmitir = async () => {
     const f = emitForm;
     const transporte = f.transporteModo === 'tercero'
-      ? { modo: 'tercero', registrar: f.registrar, indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio } }
+      ? {
+          modo: 'tercero',
+          transportista: f.nuevoTransportista
+            ? { ruc: String(f.transportistaRuc).trim(), razon_social: String(f.transportistaRazon).trim(), numero_mtc: String(f.transportistaMtc).trim() || null }
+            : { id_transportista: f.id_transportista || null },
+          registrar: f.registrar,
+          placa: normPlaca(f.tPlaca), tuc: f.tTuc?.trim() || null, autorizacion: f.tAut?.trim() || null,
+          placa2: normPlaca(f.tPlaca2), tuc2: f.tTuc2?.trim() || null, autorizacion2: f.tAut2?.trim() || null,
+          dni: String(f.tDni || '').trim(), conductor: String(f.tConductor || '').trim(), licencia: String(f.tLicencia || '').trim(),
+          dni2: String(f.tDni2 || '').trim() || null, conductor2: String(f.tConductor2 || '').trim() || null, licencia2: String(f.tLicencia2 || '').trim() || null,
+          fecha_entrega: f.tFechaEntrega || null,
+          indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio },
+        }
       : f.transporteModo === 'particular'
         ? { modo: 'particular', placa: normPlaca(f.placa), dni: f.dni.trim(), conductor: f.conductor.trim(), licencia: f.licencia.trim() }
         : { modo: 'flota', id_conductor: f.id_conductor || null, id_vehiculo: f.id_vehiculo || null,
@@ -318,22 +348,23 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const condFlota2 = conductores.find((c) => String(c.id_empleado) === String(f?.id_conductor2));
   const vehFlota2 = vehiculos.find((v) => String(v.id_vehiculo) === String(f?.id_vehiculo2));
   const MOTIVOS_ACTUALES = f?.es_comercio_exterior ? MOTIVOS_COMEX : MOTIVOS_DOMESTICO;
+  const tSel = transportistas.find((t) => String(t.id_transportista) === String(f?.id_transportista));
   const resTransporte = !f ? null : (
     f.transporteModo === 'tercero'
       ? { modalidad: f.registrar ? 'Público (01) — registra veh/cond (Caso 2/3)' : 'Público (01) — solo transportista (Caso 1)',
-          empresa: guia?.transportista_razon || guia?.ov_transporte_nombre,
-          ruc: guia?.transportista_ruc || guia?.ov_transporte_ruc,
-          mtc: guia?.transportista_mtc || guia?.ov_transporte_mtc,
+          empresa: f.nuevoTransportista ? f.transportistaRazon : (tSel?.razon_social || guia?.transportista_razon || guia?.ov_transporte_nombre),
+          ruc: f.nuevoTransportista ? f.transportistaRuc : (tSel?.ruc || guia?.transportista_ruc || guia?.ov_transporte_ruc),
+          mtc: f.nuevoTransportista ? f.transportistaMtc : (tSel?.numero_mtc || guia?.transportista_mtc || guia?.ov_transporte_mtc),
           registrar: f.registrar,
-          fechaEntrega: guia?.ov_transporte_fecha_entrega || null,
+          fechaEntrega: f.tFechaEntrega || null,
           indicadores: { transbordo: f.indTransbordo, m1l: f.indM1l, retornoVacio: f.indRetornoVacio },
           vehiculos: f.registrar ? [
-            guia?.ov_transporte_placa ? { placa: normPlaca(guia.ov_transporte_placa), tuce: guia?.ov_transporte_tuc, autorizacion: guia?.ov_transporte_autorizacion } : null,
-            guia?.ov_transporte_placa2 ? { placa: normPlaca(guia.ov_transporte_placa2), tuce: guia?.ov_transporte_tuc2, autorizacion: guia?.ov_transporte_autorizacion2 } : null,
+            f.tPlaca ? { placa: normPlaca(f.tPlaca), tuce: f.tTuc, autorizacion: f.tAut } : null,
+            f.tPlaca2 ? { placa: normPlaca(f.tPlaca2), tuce: f.tTuc2, autorizacion: f.tAut2 } : null,
           ].filter(Boolean) : [],
           conductores: f.registrar ? [
-            guia?.ov_transporte_dni ? { nombre: guia.ov_transporte_conductor, dni: guia.ov_transporte_dni, licencia: guia.ov_transporte_licencia } : null,
-            guia?.ov_transporte_dni2 ? { nombre: guia.ov_transporte_conductor2, dni: guia.ov_transporte_dni2, licencia: guia.ov_transporte_licencia2 } : null,
+            f.tDni ? { nombre: f.tConductor, dni: f.tDni, licencia: f.tLicencia } : null,
+            f.tDni2 ? { nombre: f.tConductor2, dni: f.tDni2, licencia: f.tLicencia2 } : null,
           ].filter(Boolean) : [] }
       : f.transporteModo === 'particular'
         ? { modalidad: 'Privado (02) — carro particular', conductor: f.conductor, dni: f.dni, licencia: f.licencia, placa: normPlaca(f.placa) }
@@ -346,7 +377,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const vLlegada = !!f && !!String(f.direccion_llegada).trim() && ubigeoOk(f.ubigeo_llegada);
   const vTransporte = !f ? false : (
     f.transporteModo === 'tercero'
-      ? !!(guia?.id_transportista || guia?.ov_transporte_ruc)
+      ? (
+          (f.nuevoTransportista
+            ? (/^\d{11}$/.test(String(f.transportistaRuc).trim()) && !!String(f.transportistaRazon).trim())
+            : !!(f.id_transportista || guia?.id_transportista))
+          && (!f.registrar || (
+            placaOk(f.tPlaca) && dniOk(f.tDni) && !!String(f.tConductor).trim() && !!String(f.tLicencia).trim()
+            && (!normPlaca(f.tPlaca2) || placaOk(f.tPlaca2))
+            && (!String(f.tDni2 || '').trim() || dniOk(f.tDni2))
+          ))
+        )
       : f.transporteModo === 'particular'
         ? placaOk(f.placa) && dniOk(f.dni) && !!String(f.conductor).trim() && !!String(f.licencia).trim()
         : !!(f.id_conductor && f.id_vehiculo && condFlota?.licencia_conducir
@@ -682,51 +722,76 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               )}
 
               {f.transporteModo === 'tercero' && (
-                (guia?.id_transportista || guia?.ov_transporte_ruc) ? (
-                  <div className="space-y-2">
-                    <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
-                      <p className="font-medium text-green-900">{guia?.transportista_razon || guia?.ov_transporte_nombre || '(sin razón social)'}</p>
-                      <p className="text-green-700">RUC {guia?.transportista_ruc || guia?.ov_transporte_ruc}{(guia?.transportista_mtc || guia?.ov_transporte_mtc) ? ` · MTC ${guia?.transportista_mtc || guia?.ov_transporte_mtc}` : ''}</p>
-                      <p className="text-muted mt-1">Empresa, vehículos y conductores se toman de la orden ("Transporte y Logística"). Aquí ajustas el registro y los indicadores para esta emisión.</p>
-                    </div>
-
-                    <label className="flex items-start gap-2 cursor-pointer border border-gray-200 rounded p-2">
-                      <input type="checkbox" className="mt-1" checked={f.registrar} onChange={(e) => setF('registrar', e.target.checked)} />
-                      <span className="text-xs">
-                        <b>Registrar vehículos y conductores del transportista</b>
-                        <span className="block text-muted">Si lo desactivas, la GRE declara solo al transportista (Caso 1) y él emite su GRE 31.</span>
-                      </span>
-                    </label>
-
-                    {f.registrar ? (
-                      <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
-                        <div className="text-[10px] text-muted uppercase">Se declararán (desde la orden)</div>
-                        {(guia?.ov_transporte_placa || guia?.ov_transporte_placa2)
-                          ? (<>
-                              {guia?.ov_transporte_placa && <div>Veh. principal: <b>{normPlaca(guia.ov_transporte_placa)}</b>{guia?.ov_transporte_tuc ? ` · TUCE ${guia.ov_transporte_tuc}` : ''}{guia?.ov_transporte_autorizacion ? ` · Aut. ${guia.ov_transporte_autorizacion}` : ''}</div>}
-                              {guia?.ov_transporte_placa2 && <div>Veh. secundario: <b>{normPlaca(guia.ov_transporte_placa2)}</b>{guia?.ov_transporte_tuc2 ? ` · TUCE ${guia.ov_transporte_tuc2}` : ''}{guia?.ov_transporte_autorizacion2 ? ` · Aut. ${guia.ov_transporte_autorizacion2}` : ''}</div>}
-                            </>)
-                          : <div className="text-amber-700">Falta la placa del vehículo en la orden.</div>}
-                        {guia?.ov_transporte_dni && <div>Cond. principal: <b>{guia.ov_transporte_conductor}</b> (DNI {guia.ov_transporte_dni}, Lic. {guia.ov_transporte_licencia})</div>}
-                        {guia?.ov_transporte_dni2 && <div>Cond. secundario: <b>{guia.ov_transporte_conductor2}</b> (DNI {guia.ov_transporte_dni2}, Lic. {guia.ov_transporte_licencia2})</div>}
-                        {!guia?.ov_transporte_dni && <div className="text-amber-700">Falta el conductor en la orden.</div>}
-                      </div>
+                <div className="space-y-2">
+                  <div className="border border-gray-200 rounded p-2 space-y-2">
+                    <div className="text-[10px] text-muted uppercase">Transportista (editable)</div>
+                    {!f.nuevoTransportista ? (
+                      <>
+                        <select className="form-input w-full text-sm" value={f.id_transportista} onChange={(e) => setF('id_transportista', e.target.value)}>
+                          <option value="">— Seleccionar transportista —</option>
+                          {transportistas.map((t) => <option key={t.id_transportista} value={t.id_transportista}>{t.razon_social} (RUC {t.ruc})</option>)}
+                        </select>
+                        <button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', true)}>Corregir / registrar transportista por RUC</button>
+                      </>
                     ) : (
-                      <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-xs text-amber-700">
-                        No se declaran vehículos ni conductores: la GRE declara solo al transportista.
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div><label className="block text-[11px] text-muted mb-1">RUC *</label><input className="form-input w-full text-sm" maxLength={11} value={f.transportistaRuc} onChange={(e) => setF('transportistaRuc', e.target.value.replace(/\D/g, '').slice(0, 11))} /></div>
+                        <div><label className="block text-[11px] text-muted mb-1">Razón social *</label><input className="form-input w-full text-sm" value={f.transportistaRazon} onChange={(e) => setF('transportistaRazon', e.target.value)} /></div>
+                        <div><label className="block text-[11px] text-muted mb-1">MTC (opcional)</label><input className="form-input w-full text-sm" value={f.transportistaMtc} onChange={(e) => setF('transportistaMtc', e.target.value)} /></div>
+                        <div className="md:col-span-3"><button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', false)}>Elegir uno existente</button></div>
                       </div>
                     )}
-
-                    <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
-                      <div className="text-[10px] text-muted uppercase">Indicadores (opcional)</div>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indTransbordo} onChange={(e) => setF('indTransbordo', e.target.checked)} /> Transbordo programado</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indM1l} onChange={(e) => setF('indM1l', e.target.checked)} /> Traslado en vehículo M1/L</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={f.indRetornoVacio} onChange={(e) => setF('indRetornoVacio', e.target.checked)} /> Retorno con envases/embalajes vacíos</label>
-                    </div>
                   </div>
-                ) : (
-                  <Alert type="warning" message="Esta orden no tiene una empresa de transporte con RUC. Regístrala en 'Transporte y Logística' de la orden, o usa otra modalidad." />
-                )
+
+                  <label className="flex items-start gap-2 cursor-pointer border border-gray-200 rounded p-2">
+                    <input type="checkbox" className="mt-1" checked={f.registrar} onChange={(e) => setF('registrar', e.target.checked)} />
+                    <span className="text-xs">
+                      <b>Registrar vehículos y conductores del transportista</b>
+                      <span className="block text-muted">Si lo desactivas, la GRE declara solo al transportista (Caso 1) y él emite su GRE 31.</span>
+                    </span>
+                  </label>
+
+                  {f.registrar && (
+                    <div className="border border-gray-200 rounded p-2 space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] text-muted mb-1">Placa *</label>
+                          <input className={`form-input w-full text-sm ${f.tPlaca && !placaOk(f.tPlaca) ? 'border-danger' : ''}`} value={f.tPlaca} onChange={(e) => setF('tPlaca', e.target.value.toUpperCase())} />
+                        </div>
+                        <div><label className="block text-[11px] text-muted mb-1">TUCE / Habilitación</label><input className="form-input w-full text-sm" value={f.tTuc} onChange={(e) => setF('tTuc', e.target.value)} /></div>
+                        <div><label className="block text-[11px] text-muted mb-1">Autorización</label><input className="form-input w-full text-sm" value={f.tAut} onChange={(e) => setF('tAut', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div><label className="block text-[11px] text-muted mb-1">Conductor *</label><input className="form-input w-full text-sm" value={f.tConductor} onChange={(e) => setF('tConductor', e.target.value)} /></div>
+                        <div>
+                          <label className="block text-[11px] text-muted mb-1">DNI *</label>
+                          <input className={`form-input w-full text-sm ${f.tDni && !dniOk(f.tDni) ? 'border-danger' : ''}`} maxLength={8} value={f.tDni} onChange={(e) => setF('tDni', e.target.value.replace(/\D/g, '').slice(0, 8))} />
+                        </div>
+                        <div><label className="block text-[11px] text-muted mb-1">Licencia *</label><input className="form-input w-full text-sm" value={f.tLicencia} onChange={(e) => setF('tLicencia', e.target.value)} /></div>
+                      </div>
+                      <details>
+                        <summary className="text-[11px] text-muted cursor-pointer">2.º vehículo / conductor (opcional)</summary>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                          <div><label className="block text-[11px] text-muted mb-1">Placa 2</label><input className="form-input w-full text-sm" value={f.tPlaca2} onChange={(e) => setF('tPlaca2', e.target.value.toUpperCase())} /></div>
+                          <div><label className="block text-[11px] text-muted mb-1">TUCE 2</label><input className="form-input w-full text-sm" value={f.tTuc2} onChange={(e) => setF('tTuc2', e.target.value)} /></div>
+                          <div><label className="block text-[11px] text-muted mb-1">Autorización 2</label><input className="form-input w-full text-sm" value={f.tAut2} onChange={(e) => setF('tAut2', e.target.value)} /></div>
+                          <div><label className="block text-[11px] text-muted mb-1">Conductor 2</label><input className="form-input w-full text-sm" value={f.tConductor2} onChange={(e) => setF('tConductor2', e.target.value)} /></div>
+                          <div><label className="block text-[11px] text-muted mb-1">DNI 2</label><input className="form-input w-full text-sm" maxLength={8} value={f.tDni2} onChange={(e) => setF('tDni2', e.target.value.replace(/\D/g, '').slice(0, 8))} /></div>
+                          <div><label className="block text-[11px] text-muted mb-1">Licencia 2</label><input className="form-input w-full text-sm" value={f.tLicencia2} onChange={(e) => setF('tLicencia2', e.target.value)} /></div>
+                        </div>
+                      </details>
+                      <div><label className="block text-[11px] text-muted mb-1">Fecha de entrega al transportista (opcional)</label><input type="date" className="form-input w-full text-sm" value={f.tFechaEntrega} onChange={(e) => setF('tFechaEntrega', e.target.value)} /></div>
+                      <p className="text-[11px] text-muted">Precargado con lo registrado en la guía. Si no cambias nada, se emite tal cual.</p>
+                    </div>
+                  )}
+
+                  <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
+                    <div className="text-[10px] text-muted uppercase">Indicadores (opcional)</div>
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={f.indTransbordo} onChange={(e) => setF('indTransbordo', e.target.checked)} /> Transbordo programado</label>
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={f.indM1l} onChange={(e) => setF('indM1l', e.target.checked)} /> Traslado en vehículo M1/L</label>
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={f.indRetornoVacio} onChange={(e) => setF('indRetornoVacio', e.target.checked)} /> Retorno con envases/embalajes vacíos</label>
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

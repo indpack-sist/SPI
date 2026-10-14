@@ -3,6 +3,7 @@ import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat
 import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa, normalizarPlaca, rucValido, dniValido, placaValida } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 import { mapearTransporteDesdeOrden } from '../services/sunat/transporte-guia.service.js';
+import { upsertTransportista } from '../services/sunat/transportista.service.js';
 
 function getFechaPeru() {
   const now = new Date();
@@ -10,30 +11,6 @@ function getFechaPeru() {
 }
 
 const armarDireccionCompleta = armarDireccionEmpresa;
-
-async function upsertTransportista(ruc, razon_social, numero_mtc) {
-  const rucLimpio = String(ruc || '').trim();
-  if (!/^\d{11}$/.test(rucLimpio) || !razon_social || !String(razon_social).trim()) return null;
-  const razon = String(razon_social).trim();
-  const mtc = numero_mtc ? String(numero_mtc).trim() : null;
-
-  const existente = await executeQuery(
-    'SELECT id_transportista FROM transportistas WHERE ruc = ?', [rucLimpio]
-  );
-  if (existente.success && existente.data.length > 0) {
-    const idT = existente.data[0].id_transportista;
-    await executeQuery(
-      'UPDATE transportistas SET razon_social = ?, numero_mtc = COALESCE(?, numero_mtc), activo = 1 WHERE id_transportista = ?',
-      [razon, mtc, idT]
-    );
-    return idT;
-  }
-  const ins = await executeQuery(
-    'INSERT INTO transportistas (ruc, razon_social, numero_mtc) VALUES (?, ?, ?)',
-    [rucLimpio, razon, mtc]
-  );
-  return ins.success ? ins.data.insertId : null;
-}
 
 export async function getAllGuiasRemision(req, res) {
   try {

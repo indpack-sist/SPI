@@ -3,6 +3,7 @@ import {
   getAllGuiasRemision,
   getGuiaRemisionById,
   createGuiaRemision,
+  updateGuiaRemision,
   createGuiaCompra,
   getEmpresaRemitente,
   despacharGuiaRemision,
@@ -30,6 +31,7 @@ router.get('/empresa-remitente', getEmpresaRemitente);
 
 router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);
+router.put('/:id', updateGuiaRemision);
 router.post('/compra', createGuiaCompra);
 
 router.get('/:id/pdf', descargarPDFGuiaRemision);

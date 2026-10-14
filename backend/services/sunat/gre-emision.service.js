@@ -9,8 +9,9 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima } from './fecha.service.js';
-import { sleep, copiaLocal, normalizarPlaca, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, armarDireccionEmpresa } from './util.service.js';
+import { sleep, copiaLocal, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, armarDireccionEmpresa } from './util.service.js';
 import { validarGuiaPrevia } from './validacion-previa.service.js';
+import { resolverTransporteGuia } from './transporte-guia.service.js';
 import AppError from '../../utils/AppError.js';
 
 async function finalizarReemplazoSiAplica(idGuiaCerrada, aceptado) {
@@ -166,14 +167,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     let ov = null;
     if (!esCompra) {
       const [ovRows] = await conn.query(
-        `SELECT estado, orden_compra_cliente, tipo_entrega, transporte_registrar,
-                transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
-                transporte_dni2, transporte_conductor2, transporte_licencia2,
-                transporte_tuc, transporte_autorizacion,
-                transporte_placa2, transporte_tuc2, transporte_autorizacion2,
-                transporte_ind_transbordo, transporte_ind_m1l, transporte_ind_retorno_vacio,
-                DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
-           FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
+        'SELECT estado, orden_compra_cliente FROM ordenes_venta WHERE id_orden_venta = ?', [g.id_orden_venta]);
       ov = ovRows[0] || null;
       if (!ov || !['Despachada', 'Despacho Parcial', 'Entregada'].includes(ov.estado)) {
         throw new AppError(`La orden debe estar en estado "Despachada", "Despacho Parcial" o "Entregada" para emitir la GRE (estado actual: ${ov?.estado || 'desconocido'})`, 409);
@@ -261,56 +255,27 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       }
     }
 
-    const esTercero = !!g.id_transportista;
-    let carrier = null, conductores = [], vehiculos = [], registrar = true;
-    const indicadores = {
-      transbordo: !!ov?.transporte_ind_transbordo,
-      m1l: !!ov?.transporte_ind_m1l,
-      retornoVacio: !!ov?.transporte_ind_retorno_vacio,
-    };
-
-    if (esTercero) {
+    let transportistaRow = null, conductorRow = null, vehiculoRow = null, conductor2Row = null, vehiculo2Row = null;
+    if (g.id_transportista) {
       const [[t]] = await conn.query(
         'SELECT ruc, razon_social, numero_mtc FROM transportistas WHERE id_transportista = ?', [g.id_transportista]);
       if (!t?.ruc || !t?.razon_social) throw new AppError('Falta el transportista (RUC y razón social)', 422);
       if (!/^\d{11}$/.test(String(t.ruc))) throw new AppError('RUC del transportista inválido (11 dígitos)', 422);
-      carrier = { ruc: t.ruc, razon: t.razon_social, mtc: t.numero_mtc || null };
-      registrar = ov.transporte_registrar !== 0;
-      if (registrar) {
-        if (ov.transporte_dni) conductores.push({ dni: ov.transporte_dni, nombre: ov.transporte_conductor, licencia: ov.transporte_licencia });
-        if (ov.transporte_dni2) conductores.push({ dni: ov.transporte_dni2, nombre: ov.transporte_conductor2, licencia: ov.transporte_licencia2 });
-        vehiculos = [{
-          placa: normalizarPlaca(ov.transporte_placa),
-          tuce: ov.transporte_tuc || null,
-          autorizacion: ov.transporte_autorizacion || null
-        }];
-        const placa2 = normalizarPlaca(ov.transporte_placa2);
-        if (placa2) vehiculos.push({ placa: placa2, tuce: ov.transporte_tuc2 || null, autorizacion: ov.transporte_autorizacion2 || null });
-      }
-    } else if (g.transporte_modo === 'particular' || g.transporte_placa) {
-      conductores = [{ dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia }];
-      vehiculos = [{ placa: normalizarPlaca(g.transporte_placa), tuce: null, autorizacion: null }];
+      transportistaRow = t;
     } else {
-      const [[cRow]] = g.id_conductor
-        ? await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
-        : [[null]];
-      const [[vRow]] = g.id_vehiculo
-        ? await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
-        : [[null]];
-      conductores = cRow ? [{ dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir }] : [];
-      vehiculos = vRow ? [{ placa: normalizarPlaca(vRow.placa), tuce: null, autorizacion: null }] : [];
-      if (g.id_conductor2) {
-        const [[c2]] = await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]);
-        if (c2) conductores.push({ dni: c2.dni, nombre: c2.nombre_completo, licencia: c2.licencia_conducir });
-      }
-      if (g.id_vehiculo2) {
-        const [[v2]] = await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]);
-        if (v2) vehiculos.push({ placa: normalizarPlaca(v2.placa), tuce: null, autorizacion: null });
-      }
+      if (g.id_conductor) ([[conductorRow]] = await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor]));
+      if (g.id_vehiculo) ([[vehiculoRow]] = await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo]));
+      if (g.id_conductor2) ([[conductor2Row]] = await conn.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]));
+      if (g.id_vehiculo2) ([[vehiculo2Row]] = await conn.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]));
     }
-    const declararVC = !esTercero || registrar;
-    if (esTercero && registrar) indicadores.registrarTransp = true;
-    const [[ft]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);
+    let { esTercero, carrier, conductores, vehiculos, indicadores, registrar, modalidad, declararVC } =
+      resolverTransporteGuia(g, {
+        transportista: transportistaRow, conductor: conductorRow, vehiculo: vehiculoRow,
+        conductor2: conductor2Row, vehiculo2: vehiculo2Row,
+      });
+    const [[ft]] = await conn.query(
+      "SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f, DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS fe FROM guias_remision WHERE id_guia = ?",
+      [idGuia]);
     const fechaTraslado = ft?.f || emision;
 
     const [detalle] = await conn.query(
@@ -343,7 +308,6 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
         throw new AppError(`Código de bien inválido en "${d.codigo || d.nombre}": debe tener exactamente 13 dígitos (GTIN-13)`, 422);
       }
     }
-    const modalidad = esTercero ? '01' : '02';
 
     if (!ubigeoValido(g.ubigeo_partida)) throw new AppError(`Ubigeo de partida inválido: "${g.ubigeo_partida}" (6 dígitos)`, 422);
     if (!ubigeoValido(g.ubigeo_llegada)) throw new AppError(`Ubigeo de llegada inválido: "${g.ubigeo_llegada}" (6 dígitos)`, 422);
@@ -370,7 +334,7 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
       conductores = []; vehiculos = [];
     }
 
-    const fechaEntregaTransportista = (esTercero && ov.transporte_fecha_entrega) ? ov.transporte_fecha_entrega : null;
+    const fechaEntregaTransportista = (esTercero && ft?.fe) ? ft.fe : null;
 
     const observacion = observacionOverride !== undefined
   ? String(observacionOverride).replace(/\r\n/g, '\n').trim().slice(0, 250)
@@ -412,39 +376,6 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     const { xml } = construirDespatchAdviceXML(datos);
     const { xmlFirmado, digestValue } = firmarXml(xml);
     const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
-
-    if (esTercero) {
-      await conn.query(
-        `UPDATE guias_remision SET
-           transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
-           transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
-           transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
-           transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
-           transporte_registrar = ?, transporte_ind_transbordo = ?, transporte_ind_m1l = ?,
-           transporte_ind_retorno_vacio = ?, transporte_fecha_entrega = ?
-         WHERE id_guia = ?`,
-        [
-          vehiculos[0]?.placa || null,
-          ov.transporte_tuc || null,
-          ov.transporte_autorizacion || null,
-          vehiculos[1]?.placa || null,
-          ov.transporte_tuc2 || null,
-          ov.transporte_autorizacion2 || null,
-          conductores[0]?.dni || null,
-          conductores[0]?.nombre || null,
-          conductores[0]?.licencia || null,
-          conductores[1]?.dni || null,
-          conductores[1]?.nombre || null,
-          conductores[1]?.licencia || null,
-          registrar ? 1 : 0,
-          indicadores.transbordo ? 1 : 0,
-          indicadores.m1l ? 1 : 0,
-          indicadores.retornoVacio ? 1 : 0,
-          fechaEntregaTransportista || null,
-          idGuia,
-        ]
-      );
-    }
 
     await conn.query(
       `UPDATE guias_remision SET serie_sunat = ?, numero_sunat = ?, sunat_estado = 'ENVIADO',
@@ -543,15 +474,6 @@ export async function validarGuiaRemisionPrevia(idGuia) {
   const esCompra = g.tipo_origen === 'Compra';
   const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
 
-  let ov = null;
-  if (!esCompra) {
-    const [[ovRow]] = await pool.query(
-      `SELECT transporte_registrar, transporte_placa, transporte_conductor, transporte_dni, transporte_licencia,
-              transporte_dni2, transporte_conductor2, transporte_licencia2, transporte_placa2
-         FROM ordenes_venta WHERE id_orden_venta = ?`, [g.id_orden_venta]);
-    ov = ovRow || null;
-  }
-
   const gView = { ...g };
   if (esCompra) {
     gView.direccion_llegada = armarDireccionEmpresa(empresa) || String(empresa?.direccion || '').trim();
@@ -574,41 +496,25 @@ export async function validarGuiaRemisionPrevia(idGuia) {
   }
 
   const esTercero = !!g.id_transportista;
-  let carrier = null, conductores = [], vehiculos = [], registrar = true;
+  let transportistaRow = null, conductorRow = null, vehiculoRow = null, conductor2Row = null, vehiculo2Row = null;
   if (esTercero) {
     const [[t]] = await pool.query(
       'SELECT ruc, razon_social, numero_mtc FROM transportistas WHERE id_transportista = ?', [g.id_transportista]);
-    carrier = t ? { ruc: t.ruc, razon: t.razon_social, mtc: t.numero_mtc || null } : { ruc: null, razon: null };
-    registrar = ov?.transporte_registrar !== 0;
-    if (registrar) {
-      if (ov?.transporte_dni) conductores.push({ dni: ov.transporte_dni, nombre: ov.transporte_conductor, licencia: ov.transporte_licencia });
-      if (ov?.transporte_dni2) conductores.push({ dni: ov.transporte_dni2, nombre: ov.transporte_conductor2, licencia: ov.transporte_licencia2 });
-      vehiculos = [{ placa: normalizarPlaca(ov?.transporte_placa) }];
-      const placa2 = normalizarPlaca(ov?.transporte_placa2);
-      if (placa2) vehiculos.push({ placa: placa2 });
-    }
-  } else if (g.transporte_modo === 'particular' || g.transporte_placa) {
-    conductores = [{ dni: g.transporte_dni, nombre: g.transporte_conductor, licencia: g.transporte_licencia }];
-    vehiculos = [{ placa: normalizarPlaca(g.transporte_placa) }];
+    transportistaRow = t || null;
   } else {
-    const [[cRow]] = g.id_conductor
-      ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
-      : [[null]];
-    const [[vRow]] = g.id_vehiculo
-      ? await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo])
-      : [[null]];
-    conductores = cRow ? [{ dni: cRow.dni, nombre: cRow.nombre_completo, licencia: cRow.licencia_conducir }] : [];
-    vehiculos = vRow ? [{ placa: normalizarPlaca(vRow.placa) }] : [];
-    if (g.id_conductor2) {
-      const [[c2]] = await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]);
-      if (c2) conductores.push({ dni: c2.dni, nombre: c2.nombre_completo, licencia: c2.licencia_conducir });
-    }
-    if (g.id_vehiculo2) {
-      const [[v2]] = await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]);
-      if (v2) vehiculos.push({ placa: normalizarPlaca(v2.placa) });
-    }
+    if (g.id_conductor) ([[conductorRow]] = await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor]));
+    if (g.id_vehiculo) ([[vehiculoRow]] = await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo]));
+    if (g.id_conductor2) ([[conductor2Row]] = await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor2]));
+    if (g.id_vehiculo2) ([[vehiculo2Row]] = await pool.query('SELECT placa FROM flota WHERE id_vehiculo = ?', [g.id_vehiculo2]));
   }
-  const declararVC = !esTercero || registrar;
+  const resuelto = resolverTransporteGuia(g, {
+    transportista: transportistaRow, conductor: conductorRow, vehiculo: vehiculoRow,
+    conductor2: conductor2Row, vehiculo2: vehiculo2Row,
+  });
+  const conductores = resuelto.conductores;
+  const vehiculos = resuelto.vehiculos;
+  const declararVC = resuelto.declararVC;
+  const carrier = esTercero ? (resuelto.carrier || { ruc: null, razon: null }) : null;
 
   const [detalle] = await pool.query(
     `SELECT d.id_producto, d.subpartida_nacional, d.codigo_documento, d.descripcion AS descripcion_documento,

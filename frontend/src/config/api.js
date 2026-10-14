@@ -975,6 +975,7 @@ export const guiasRemisionAPI = {
 
   getById: (id) => api.get(`/guias-remision/${id}`),
   create: (data) => api.post('/guias-remision', data),
+  update: (id, data) => api.put(`/guias-remision/${id}`, data),
   createCompra: (data) => api.post('/guias-remision/compra', data),
   getEmpresaRemitente: () => api.get('/guias-remision/empresa-remitente'),
 

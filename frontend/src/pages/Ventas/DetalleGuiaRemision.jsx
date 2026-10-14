@@ -10,6 +10,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
+import PanelDatosGuia from '../../components/Ventas/sunat/PanelDatosGuia';
 import { guiasRemisionAPI, sunatAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -378,6 +379,10 @@ function DetalleGuiaRemision() {
 
       {(tienePermiso('facturacion') || tienePermiso('facturacionConsulta')) && (
         <PanelGuiaRemisionSee guia={guia} onRefresh={() => cargarDatos(true)} soloLectura={!tienePermiso('facturacion')} />
+      )}
+
+      {!esCompra && (
+        <PanelDatosGuia guia={guia} onRefresh={() => cargarDatos(true)} soloLectura={tienePermiso('facturacionConsulta') && !tienePermiso('facturacion')} />
       )}
 
       <div className={`card border-2 ${estadoConfig.color} ${estadoConfig.bgColor} mb-4`}>

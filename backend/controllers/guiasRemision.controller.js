@@ -1,7 +1,8 @@
 import { executeQuery, executeTransaction, withTransaction } from '../config/database.js';
 import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
-import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa } from '../services/sunat/util.service.js';
+import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa, normalizarPlaca, rucValido, dniValido, placaValida } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
+import { mapearTransporteDesdeOrden } from '../services/sunat/transporte-guia.service.js';
 
 function getFechaPeru() {
   const now = new Date();
@@ -405,10 +406,23 @@ export async function createGuiaRemision(req, res) {
         ov.transporte_nombre,
         ov.transporte_ruc,
         ov.transporte_mtc,
+        ov.transporte_registrar,
         ov.transporte_placa,
         ov.transporte_conductor,
         ov.transporte_dni,
-        ov.transporte_licencia
+        ov.transporte_licencia,
+        ov.transporte_tuc,
+        ov.transporte_autorizacion,
+        ov.transporte_placa2,
+        ov.transporte_tuc2,
+        ov.transporte_autorizacion2,
+        ov.transporte_dni2,
+        ov.transporte_conductor2,
+        ov.transporte_licencia2,
+        ov.transporte_ind_transbordo,
+        ov.transporte_ind_m1l,
+        ov.transporte_ind_retorno_vacio,
+        DATE_FORMAT(ov.transporte_fecha_entrega, '%Y-%m-%d') AS transporte_fecha_entrega
       FROM ordenes_venta ov
       WHERE ov.id_orden_venta = ?
     `, [id_orden_venta]);
@@ -646,7 +660,29 @@ export async function createGuiaRemision(req, res) {
     }
     
     const idGuia = result.data.insertId;
-    
+
+    if (idTransportistaFinal) {
+      const snap = mapearTransporteDesdeOrden(orden);
+      await executeQuery(
+        `UPDATE guias_remision SET
+           transporte_registrar = ?, transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
+           transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
+           transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
+           transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
+           transporte_ind_transbordo = ?, transporte_ind_m1l = ?, transporte_ind_retorno_vacio = ?,
+           transporte_fecha_entrega = ?
+         WHERE id_guia = ?`,
+        [
+          snap.transporte_registrar, snap.transporte_dni, snap.transporte_conductor, snap.transporte_licencia,
+          snap.transporte_dni2, snap.transporte_conductor2, snap.transporte_licencia2,
+          snap.transporte_placa, snap.transporte_tuc, snap.transporte_autorizacion,
+          snap.transporte_placa2, snap.transporte_tuc2, snap.transporte_autorizacion2,
+          snap.transporte_ind_transbordo, snap.transporte_ind_m1l, snap.transporte_ind_retorno_vacio,
+          snap.transporte_fecha_entrega, idGuia,
+        ]
+      );
+    }
+
     for (const item of detalle) {
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
       
@@ -711,6 +747,157 @@ export async function createGuiaRemision(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+
+export async function updateGuiaRemision(req, res) {
+  try {
+    const { id } = req.params;
+    const gRes = await executeQuery('SELECT * FROM guias_remision WHERE id_guia = ?', [id]);
+    if (!gRes.success) return res.status(500).json({ success: false, error: gRes.error });
+    const g = gRes.data[0];
+    if (!g) return res.status(404).json({ success: false, error: 'Guía de remisión no encontrada' });
+
+    if (g.sunat_estado === 'ACEPTADO') {
+      return res.status(409).json({ success: false, error: 'La guía ya fue aceptada por SUNAT; no se puede editar.' });
+    }
+    if (g.sunat_estado === 'ENVIADO') {
+      return res.status(409).json({ success: false, error: 'La guía tiene un envío en curso; espera el resultado antes de editar.' });
+    }
+    if (g.estado === 'Anulada') {
+      return res.status(409).json({ success: false, error: 'La guía está anulada; no se puede editar.' });
+    }
+    if (g.tipo_origen === 'Compra') {
+      return res.status(409).json({ success: false, error: 'Las guías de compra no se editan desde aquí.' });
+    }
+
+    const fRes = await executeQuery(
+      "SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS ft, DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS fe FROM guias_remision WHERE id_guia = ?",
+      [id]);
+    const fechasActuales = fRes.success ? (fRes.data[0] || {}) : {};
+
+    const b = req.body || {};
+    const pick = (v, cur) => (v === undefined ? cur : v);
+    const modo = b.modo || g.transporte_modo || (g.id_transportista ? 'tercero' : (g.transporte_placa ? 'particular' : 'flota'));
+    if (!['tercero', 'particular', 'flota'].includes(modo)) {
+      return res.status(422).json({ success: false, error: 'Modalidad de transporte inválida' });
+    }
+
+    const esComex = Number(g.es_comercio_exterior) === 1;
+    const peso = pick(b.peso_bruto_kg, g.peso_bruto_kg);
+    const bultos = pick(b.numero_bultos, g.numero_bultos);
+    const ubigeoLlegada = String(pick(b.ubigeo_llegada, g.ubigeo_llegada) || '').trim();
+    const direccionLlegada = pick(b.direccion_llegada, g.direccion_llegada);
+    const ciudadLlegada = pick(b.ciudad_llegada, g.ciudad_llegada);
+    const observaciones = pick(b.observaciones, g.observaciones);
+    const fechaTraslado = pick(b.fecha_traslado, fechasActuales.ft);
+    const motivoCod = pick(b.motivo_traslado_cod, g.motivo_traslado_cod);
+    const motivoDesc = motivoCod === '13' ? (String(pick(b.motivo_descripcion, g.motivo_descripcion) || '').trim() || null) : null;
+
+    if (ubigeoLlegada && !/^\d{6}$/.test(ubigeoLlegada)) {
+      return res.status(422).json({ success: false, error: 'Ubigeo de llegada inválido (6 dígitos)' });
+    }
+    if (!direccionLlegada || String(direccionLlegada).trim() === '') {
+      return res.status(422).json({ success: false, error: 'La dirección de llegada es obligatoria' });
+    }
+    if (!(Number(peso) > 0)) {
+      return res.status(422).json({ success: false, error: 'El peso bruto debe ser mayor a 0' });
+    }
+
+    let destRuc = g.destinatario_ruc, destRazon = g.destinatario_razon;
+    if (esComex) {
+      destRuc = pick(b.destinatario_ruc, g.destinatario_ruc);
+      destRazon = pick(b.destinatario_razon, g.destinatario_razon);
+      if (!destRuc || !rucValido(destRuc)) {
+        return res.status(422).json({ success: false, error: 'RUC del destinatario de comercio exterior inválido (11 dígitos)' });
+      }
+    }
+
+    let idTransportista = null, idConductor = null, idVehiculo = null, idConductor2 = null, idVehiculo2 = null;
+    let tReg = null, tDni = null, tCond = null, tLic = null, tDni2 = null, tCond2 = null, tLic2 = null;
+    let tPlaca = null, tTuc = null, tAut = null, tPlaca2 = null, tTuc2 = null, tAut2 = null;
+    let indT = 0, indM = 0, indR = 0, fEntrega = null;
+
+    if (modo === 'tercero') {
+      let idT = b.transportista?.id_transportista || null;
+      if (!idT && b.transportista?.ruc) {
+        idT = await upsertTransportista(b.transportista.ruc, b.transportista.razon_social, b.transportista.numero_mtc);
+      }
+      if (!idT) idT = g.id_transportista;
+      if (!idT) return res.status(422).json({ success: false, error: 'Falta el transportista (RUC y razón social)' });
+      const tRes = await executeQuery('SELECT ruc FROM transportistas WHERE id_transportista = ?', [idT]);
+      const tRuc = tRes.success ? tRes.data[0]?.ruc : null;
+      if (!rucValido(tRuc)) return res.status(422).json({ success: false, error: 'El RUC del transportista no es válido (11 dígitos)' });
+      idTransportista = idT;
+
+      tReg = (pick(b.transporte_registrar, g.transporte_registrar) === 0) ? 0 : 1;
+      indT = pick(b.transporte_ind_transbordo, g.transporte_ind_transbordo) ? 1 : 0;
+      indM = pick(b.transporte_ind_m1l, g.transporte_ind_m1l) ? 1 : 0;
+      indR = pick(b.transporte_ind_retorno_vacio, g.transporte_ind_retorno_vacio) ? 1 : 0;
+      fEntrega = pick(b.transporte_fecha_entrega, fechasActuales.fe) || null;
+
+      if (tReg === 1) {
+        tDni = pick(b.transporte_dni, g.transporte_dni) || null;
+        tCond = pick(b.transporte_conductor, g.transporte_conductor) || null;
+        tLic = pick(b.transporte_licencia, g.transporte_licencia) || null;
+        tDni2 = pick(b.transporte_dni2, g.transporte_dni2) || null;
+        tCond2 = pick(b.transporte_conductor2, g.transporte_conductor2) || null;
+        tLic2 = pick(b.transporte_licencia2, g.transporte_licencia2) || null;
+        tPlaca = normalizarPlaca(pick(b.transporte_placa, g.transporte_placa));
+        tTuc = pick(b.transporte_tuc, g.transporte_tuc) || null;
+        tAut = pick(b.transporte_autorizacion, g.transporte_autorizacion) || null;
+        tPlaca2 = normalizarPlaca(pick(b.transporte_placa2, g.transporte_placa2));
+        tTuc2 = pick(b.transporte_tuc2, g.transporte_tuc2) || null;
+        tAut2 = pick(b.transporte_autorizacion2, g.transporte_autorizacion2) || null;
+        if (!tDni || !tCond || !tLic) return res.status(422).json({ success: false, error: 'Faltan datos del conductor (DNI, nombre y licencia)' });
+        if (!dniValido(tDni)) return res.status(422).json({ success: false, error: `DNI del conductor inválido: "${tDni}" (8 dígitos)` });
+        if (!placaValida(tPlaca)) return res.status(422).json({ success: false, error: `Placa inválida: "${tPlaca || ''}" (6 a 8 caracteres)` });
+        if (tDni2 && !dniValido(tDni2)) return res.status(422).json({ success: false, error: `DNI del segundo conductor inválido: "${tDni2}" (8 dígitos)` });
+        if (tPlaca2 && !placaValida(tPlaca2)) return res.status(422).json({ success: false, error: `Placa del segundo vehículo inválida: "${tPlaca2}"` });
+      }
+    } else if (modo === 'particular') {
+      tPlaca = normalizarPlaca(pick(b.transporte_placa, g.transporte_placa));
+      tCond = pick(b.transporte_conductor, g.transporte_conductor) || null;
+      tDni = pick(b.transporte_dni, g.transporte_dni) || null;
+      tLic = pick(b.transporte_licencia, g.transporte_licencia) || null;
+      if (!tDni || !tCond || !tLic) return res.status(422).json({ success: false, error: 'Faltan datos del conductor (DNI, nombre y licencia)' });
+      if (!dniValido(tDni)) return res.status(422).json({ success: false, error: `DNI del conductor inválido: "${tDni}" (8 dígitos)` });
+      if (!placaValida(tPlaca)) return res.status(422).json({ success: false, error: `Placa inválida: "${tPlaca || ''}" (6 a 8 caracteres)` });
+    } else {
+      idConductor = pick(b.id_conductor, g.id_conductor) || null;
+      idVehiculo = pick(b.id_vehiculo, g.id_vehiculo) || null;
+      idConductor2 = pick(b.id_conductor2, g.id_conductor2) || null;
+      idVehiculo2 = pick(b.id_vehiculo2, g.id_vehiculo2) || null;
+      if (!idConductor || !idVehiculo) return res.status(422).json({ success: false, error: 'Selecciona conductor y vehículo de la flota' });
+    }
+
+    const upd = await executeQuery(
+      `UPDATE guias_remision SET
+         transporte_modo = ?, id_transportista = ?, id_conductor = ?, id_vehiculo = ?, id_conductor2 = ?, id_vehiculo2 = ?,
+         transporte_registrar = ?, transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
+         transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
+         transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
+         transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
+         transporte_ind_transbordo = ?, transporte_ind_m1l = ?, transporte_ind_retorno_vacio = ?, transporte_fecha_entrega = ?,
+         peso_bruto_kg = ?, numero_bultos = ?, ubigeo_llegada = ?, direccion_llegada = ?, punto_llegada = ?, ciudad_llegada = ?,
+         destinatario_ruc = ?, destinatario_razon = ?, observaciones = ?, motivo_traslado_cod = ?, motivo_descripcion = ?,
+         fecha_traslado = ?
+       WHERE id_guia = ?`,
+      [
+        modo, idTransportista, idConductor, idVehiculo, idConductor2, idVehiculo2,
+        tReg, tDni, tCond, tLic, tDni2, tCond2, tLic2,
+        tPlaca, tTuc, tAut, tPlaca2, tTuc2, tAut2,
+        indT, indM, indR, fEntrega,
+        parseFloat(peso) || 0, parseInt(bultos) || 0, ubigeoLlegada || null, direccionLlegada, direccionLlegada, ciudadLlegada || null,
+        esComex ? (destRuc || null) : null, esComex ? (destRazon || null) : null, observaciones || null, motivoCod, motivoDesc,
+        fechaTraslado, id,
+      ]);
+    if (!upd.success) return res.status(500).json({ success: false, error: upd.error });
+
+    return res.json({ success: true, message: 'Datos de la guía actualizados' });
+  } catch (error) {
+    console.error('Error al actualizar guía de remisión:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 }
 

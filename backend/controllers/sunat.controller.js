@@ -10,6 +10,7 @@ import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js
 import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
 import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre, validarGuiaRemisionPrevia } from '../services/sunat/gre-emision.service.js';
+import { upsertTransportista } from '../services/sunat/transportista.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
 import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from '../services/sunat/util.service.js';import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
@@ -1220,17 +1221,42 @@ export async function emitirGuiaRemision(req, res, next) {
         sets.push('transporte_modo = ?', 'transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL', 'id_transportista = NULL');
         vals.push('flota');
       } else if (modo === 'tercero') {
-        const ovSets = [], ovVals = [];
-        if (t.registrar !== undefined) { ovSets.push('ov.transporte_registrar = ?'); ovVals.push(t.registrar ? 1 : 0); }
-        if (t.indicadores && typeof t.indicadores === 'object') {
-          ovSets.push('ov.transporte_ind_transbordo = ?', 'ov.transporte_ind_m1l = ?', 'ov.transporte_ind_retorno_vacio = ?');
-          ovVals.push(t.indicadores.transbordo ? 1 : 0, t.indicadores.m1l ? 1 : 0, t.indicadores.retornoVacio ? 1 : 0);
+        let idT = t.transportista?.id_transportista ? Number(t.transportista.id_transportista) : null;
+        if (!idT && t.transportista?.ruc) {
+          idT = await upsertTransportista(t.transportista.ruc, t.transportista.razon_social, t.transportista.numero_mtc);
+          if (!idT) throw new AppError('No se pudo registrar el transportista: revisa el RUC (11 dígitos) y la razón social', 400);
         }
-        if (ovSets.length) {
-          ovVals.push(idGuia);
-          await pool.query(
-            `UPDATE ordenes_venta ov JOIN guias_remision g ON g.id_orden_venta = ov.id_orden_venta
-                SET ${ovSets.join(', ')} WHERE g.id_guia = ?`, ovVals);
+        if (idT) { sets.push('id_transportista = ?'); vals.push(idT); }
+        sets.push('transporte_modo = ?', 'id_conductor = NULL', 'id_vehiculo = NULL', 'id_conductor2 = NULL', 'id_vehiculo2 = NULL');
+        vals.push('tercero');
+        const registrar = t.registrar ? 1 : 0;
+        sets.push('transporte_registrar = ?'); vals.push(registrar);
+        if (registrar) {
+          const placaN = normalizarPlaca(t.placa);
+          if (!placaValida(placaN)) throw new AppError(`Placa inválida: "${t.placa}" (6 a 8 caracteres alfanuméricos)`, 400);
+          if (!dniValido(t.dni)) throw new AppError(`DNI del conductor inválido: "${t.dni}" (8 dígitos)`, 400);
+          if (!String(t.conductor || '').trim()) throw new AppError('Falta el nombre del conductor', 400);
+          if (!String(t.licencia || '').trim()) throw new AppError('Falta la licencia de conducir', 400);
+          const placa2N = normalizarPlaca(t.placa2);
+          if (placa2N && !placaValida(placa2N)) throw new AppError(`Placa del segundo vehículo inválida: "${t.placa2}"`, 400);
+          if (t.dni2 && !dniValido(t.dni2)) throw new AppError(`DNI del segundo conductor inválido: "${t.dni2}" (8 dígitos)`, 400);
+          sets.push('transporte_placa = ?', 'transporte_tuc = ?', 'transporte_autorizacion = ?',
+            'transporte_placa2 = ?', 'transporte_tuc2 = ?', 'transporte_autorizacion2 = ?',
+            'transporte_dni = ?', 'transporte_conductor = ?', 'transporte_licencia = ?',
+            'transporte_dni2 = ?', 'transporte_conductor2 = ?', 'transporte_licencia2 = ?',
+            'transporte_fecha_entrega = ?');
+          vals.push(placaN, t.tuc || null, t.autorizacion || null,
+            placa2N || null, t.tuc2 || null, t.autorizacion2 || null,
+            String(t.dni).trim(), String(t.conductor).trim().slice(0, 250), String(t.licencia).trim().slice(0, 30),
+            t.dni2 ? String(t.dni2).trim() : null, t.conductor2 ? String(t.conductor2).trim().slice(0, 250) : null, t.licencia2 ? String(t.licencia2).trim().slice(0, 30) : null,
+            t.fecha_entrega || null);
+        } else {
+          sets.push('transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL',
+            'transporte_placa2 = NULL', 'transporte_dni2 = NULL', 'transporte_conductor2 = NULL', 'transporte_licencia2 = NULL');
+        }
+        if (t.indicadores && typeof t.indicadores === 'object') {
+          sets.push('transporte_ind_transbordo = ?', 'transporte_ind_m1l = ?', 'transporte_ind_retorno_vacio = ?');
+          vals.push(t.indicadores.transbordo ? 1 : 0, t.indicadores.m1l ? 1 : 0, t.indicadores.retornoVacio ? 1 : 0);
         }
       }
     }

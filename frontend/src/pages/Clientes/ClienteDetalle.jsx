@@ -318,7 +318,7 @@ function ClienteDetalle() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando información del cliente..." />;
+  if (loading) return <Loading variant="detail" />;
 
   if (!cliente) {
     return (

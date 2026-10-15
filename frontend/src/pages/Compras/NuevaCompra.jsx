@@ -474,7 +474,7 @@ function NuevaCompra() {
     return `${m === 'USD' ? '$' : 'S/'} ${parseFloat(val).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
 
-  if (loading && proveedores.length === 0) return <Loading message="Cargando configuracion..." />;
+  if (loading && proveedores.length === 0) return <Loading variant="form" />;
 
   return (
     <div className="container py-6">

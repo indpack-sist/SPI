@@ -566,7 +566,7 @@ function DetalleCompra() {
     }
   };
 
-  if (loading && !compra) return <Loading message="Cargando detalle de compra..." />;
+  if (loading && !compra) return <Loading variant="detail" />;
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);

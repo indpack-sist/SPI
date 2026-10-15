@@ -290,7 +290,7 @@ function Incidencias() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando incidencias..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div className="container py-6">

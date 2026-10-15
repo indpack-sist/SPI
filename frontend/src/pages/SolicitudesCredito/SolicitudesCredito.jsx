@@ -252,7 +252,7 @@ function SolicitudesCredito() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando solicitudes..." />;
+    return <Loading variant="table" />;
   }
 
   return (

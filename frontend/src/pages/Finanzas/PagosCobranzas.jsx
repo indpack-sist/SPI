@@ -485,7 +485,7 @@ function PagosCobranzas() {
   ];
 
   if (loading && !resumen && activeTab === 'movimientos') {
-    return <Loading message="Cargando información financiera..." />;
+    return <Loading variant="table" />;
   }
 
   const cuentasContado = cuentasPorCobrarFiltradas.filter(c => c.tipo_venta === 'Contado');

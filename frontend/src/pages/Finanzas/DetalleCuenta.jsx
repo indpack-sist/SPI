@@ -280,7 +280,7 @@ function DetalleCuenta() {
     }
   ];
 
-  if (loading && !cuenta) return <Loading message="Cargando historial..." />;
+  if (loading && !cuenta) return <Loading variant="detail" />;
   if (!cuenta) return <Alert type="error" message="Cuenta no encontrada" />;
 
   const Icon = getTipoIcon(cuenta.tipo);

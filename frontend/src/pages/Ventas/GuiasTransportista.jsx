@@ -225,7 +225,7 @@ function GuiasTransportista() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando guías de transportista..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div className="p-6">

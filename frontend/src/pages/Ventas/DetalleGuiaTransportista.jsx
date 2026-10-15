@@ -128,7 +128,7 @@ function DetalleGuiaTransportista() {
     return configs[estado] || configs['Pendiente'];
   };
 
-  if (loading && !guia) return <Loading message="Cargando guía de transportista..." />;
+  if (loading && !guia) return <Loading variant="detail" />;
   
   if (!guia) {
     return (

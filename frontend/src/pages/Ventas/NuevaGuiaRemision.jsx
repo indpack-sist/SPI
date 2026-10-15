@@ -581,7 +581,7 @@ function NuevaGuiaRemision() {
   };
 
   if (loading && !orden) {
-    return <Loading message="Cargando orden..." />;
+    return <Loading variant="form" />;
   }
 
   if (!idOrden) {

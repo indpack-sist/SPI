@@ -45,7 +45,7 @@ function ListaProductosSimple() {
     return coincideBusqueda && cumpleStock;
   });
 
-  if (loading) return <Loading message="Cargando inventario..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div className="container py-8">

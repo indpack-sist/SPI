@@ -167,7 +167,7 @@ function Flota() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando flota..." />;
+    return <Loading variant="table" />;
   }
 
   return (

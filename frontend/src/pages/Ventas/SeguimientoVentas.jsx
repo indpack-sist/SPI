@@ -201,7 +201,7 @@ function SeguimientoVentas() {
         .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
       `}} />
 
-      {loading && <Loading message="Cargando seguimiento..." />}
+      {loading && <Loading variant="table" />}
 
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-row justify-between items-start gap-4 mb-6">

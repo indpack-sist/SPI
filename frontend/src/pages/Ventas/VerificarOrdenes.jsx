@@ -445,7 +445,7 @@ function VerificarOrdenes() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando órdenes pendientes..." />;
+  if (loading) return <Loading variant="table" />;
 
   const montoTotalPendiente = ordenesPendientes.reduce(
     (sum, orden) => sum + parseFloat(orden.total || 0),

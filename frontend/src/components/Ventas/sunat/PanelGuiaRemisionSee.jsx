@@ -507,7 +507,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   )}
                 </div>
                 {rechazo && (em.sunat_response_desc || em.sunat_response_code) && (
-                  <div className="w-full text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1">
+                  <div className="w-full text-xs bg-red-50 border border-red-200 text-danger rounded px-2 py-1">
                     <span className="font-semibold">Motivo del rechazo{em.sunat_response_code ? ` (${em.sunat_response_code})` : ''}:</span>{' '}
                     {em.sunat_response_desc || 'Sin detalle. Usa "Estado" para consultar el CDR en SUNAT.'}
                   </div>
@@ -537,14 +537,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">¿Es una operación de comercio exterior?</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">¿Es una operación de comercio exterior?</label>
                   <div className="flex gap-2">
                     <button type="button" className={`btn btn-sm ${f.es_comercio_exterior ? 'btn-primary' : 'btn-outline'}`} onClick={() => toggleComex(true)}>Sí</button>
                     <button type="button" className={`btn btn-sm ${!f.es_comercio_exterior ? 'btn-primary' : 'btn-outline'}`} onClick={() => toggleComex(false)}>No</button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo de traslado *</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">Motivo de traslado *</label>
                   <select className="form-input w-full text-sm" value={f.motivo_traslado_cod} onChange={(e) => setF('motivo_traslado_cod', e.target.value)}>
                     {MOTIVOS_ACTUALES.map((m) => <option key={m.cod} value={m.cod}>{m.label} ({m.cod})</option>)}
                   </select>
@@ -605,11 +605,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Unidad de peso bruto</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">Unidad de peso bruto</label>
                   <input className="form-input w-full text-sm bg-gray-50" value="KGM (kilogramos)" readOnly />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Peso bruto total *</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">Peso bruto total *</label>
                   <input type="number" step="0.01" min="0" className={`form-input w-full text-sm ${Number(f.peso_bruto_kg) > 0 ? '' : 'border-danger'}`} value={f.peso_bruto_kg} onChange={(e) => setF('peso_bruto_kg', e.target.value)} />
                   {!(Number(f.peso_bruto_kg) > 0) && <p className="text-[11px] text-danger mt-1">El peso debe ser mayor a 0.</p>}
                 </div>
@@ -620,7 +620,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           {wizStep === 1 && (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1"><Truck size={13} /> Modalidad de transporte</label>
+                <label className="block text-xs font-semibold text-muted mb-1 flex items-center gap-1"><Truck size={13} /> Modalidad de transporte</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   {[
                     { k: 'flota', t: 'Vehículo propio', d: 'Camioneta/carro de la empresa (flota)' },
@@ -640,14 +640,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 <div className="space-y-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor (flota) *</label>
+                      <label className="block text-xs font-semibold text-muted mb-1">Conductor (flota) *</label>
                       <select className="form-input w-full text-sm" value={f.id_conductor} onChange={(e) => setF('id_conductor', e.target.value)}>
                         <option value="">— Seleccionar —</option>
                         {conductores.map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo / placa (flota) *</label>
+                      <label className="block text-xs font-semibold text-muted mb-1">Vehículo / placa (flota) *</label>
                       <select className="form-input w-full text-sm" value={f.id_vehiculo} onChange={(e) => setF('id_vehiculo', e.target.value)}>
                         <option value="">— Seleccionar —</option>
                         {vehiculos.map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
@@ -655,26 +655,26 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     </div>
                   </div>
                   {(condFlota || vehFlota) && (
-                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-800 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
                       <div>DNI: <span className="font-mono font-semibold">{condFlota?.dni || '—'}</span></div>
                       <div>Licencia: <span className="font-mono font-semibold">{condFlota?.licencia_conducir || '—'}</span></div>
                       <div>Placa: <span className="font-mono font-semibold">{vehFlota?.placa ? normPlaca(vehFlota.placa) : '—'}</span></div>
                       {condFlota && !condFlota.licencia_conducir && (
-                        <div className="md:col-span-3 text-amber-700">Este conductor no tiene licencia registrada en su ficha de empleado. Complétala antes de emitir.</div>
+                        <div className="md:col-span-3 text-warning">Este conductor no tiene licencia registrada en su ficha de empleado. Complétala antes de emitir.</div>
                       )}
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Conductor secundario (opcional)</label>
+                      <label className="block text-xs font-semibold text-muted mb-1">Conductor secundario (opcional)</label>
                       <select className="form-input w-full text-sm" value={f.id_conductor2} onChange={(e) => setF('id_conductor2', e.target.value)}>
                         <option value="">— Ninguno —</option>
                         {conductores.filter((c) => String(c.id_empleado) !== String(f.id_conductor)).map((c) => <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo} (DNI {c.dni})</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Vehículo secundario (opcional)</label>
+                      <label className="block text-xs font-semibold text-muted mb-1">Vehículo secundario (opcional)</label>
                       <select className="form-input w-full text-sm" value={f.id_vehiculo2} onChange={(e) => setF('id_vehiculo2', e.target.value)}>
                         <option value="">— Ninguno —</option>
                         {vehiculos.filter((v) => String(v.id_vehiculo) !== String(f.id_vehiculo)).map((v) => <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa}{v.marca_modelo ? ` — ${v.marca_modelo}` : ''}</option>)}
@@ -682,12 +682,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     </div>
                   </div>
                   {(condFlota2 || vehFlota2) && (
-                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-800 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
                       <div>DNI 2: <span className="font-mono font-semibold">{condFlota2?.dni || '—'}</span></div>
                       <div>Licencia 2: <span className="font-mono font-semibold">{condFlota2?.licencia_conducir || '—'}</span></div>
                       <div>Placa 2: <span className="font-mono font-semibold">{vehFlota2?.placa ? normPlaca(vehFlota2.placa) : '—'}</span></div>
                       {condFlota2 && !condFlota2.licencia_conducir && (
-                        <div className="md:col-span-3 text-amber-700">El conductor secundario no tiene licencia registrada en su ficha. Complétala o quítalo.</div>
+                        <div className="md:col-span-3 text-warning">El conductor secundario no tiene licencia registrada en su ficha. Complétala o quítalo.</div>
                       )}
                     </div>
                   )}
@@ -697,24 +697,24 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               {f.transporteModo === 'particular' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del conductor *</label>
+                    <label className="block text-xs font-semibold text-muted mb-1">Nombre del conductor *</label>
                     <input className="form-input w-full text-sm" value={f.conductor} onChange={(e) => setF('conductor', e.target.value)} placeholder="Ej. CHAVEZ GUERRA CHARLES JORGE" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">DNI del conductor *</label>
+                    <label className="block text-xs font-semibold text-muted mb-1">DNI del conductor *</label>
                     <input className={`form-input w-full text-sm ${f.dni && !dniOk(f.dni) ? 'border-danger' : ''}`} value={f.dni} onChange={(e) => setF('dni', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 dígitos" />
                     {f.dni && !dniOk(f.dni) && <p className="text-[11px] text-danger mt-1">El DNI debe tener 8 dígitos.</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Licencia de conducir *</label>
+                    <label className="block text-xs font-semibold text-muted mb-1">Licencia de conducir *</label>
                     <input className="form-input w-full text-sm" value={f.licencia} onChange={(e) => setF('licencia', e.target.value)} placeholder="Ej. Q07471043" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Placa del vehículo *</label>
+                    <label className="block text-xs font-semibold text-muted mb-1">Placa del vehículo *</label>
                     <input className={`form-input w-full text-sm ${f.placa && !placaOk(f.placa) ? 'border-danger' : ''}`} value={f.placa} onChange={(e) => setF('placa', e.target.value.toUpperCase())} placeholder="Ej. B2Q-671 o B2Q671" />
                     {f.placa
                       ? (placaOk(f.placa)
-                          ? <p className="text-[11px] text-green-600 mt-1">Se enviará como: <span className="font-mono font-bold">{normPlaca(f.placa)}</span></p>
+                          ? <p className="text-[11px] text-success mt-1">Se enviará como: <span className="font-mono font-bold">{normPlaca(f.placa)}</span></p>
                           : <p className="text-[11px] text-danger mt-1">Placa inválida (6 a 8 caracteres alfanuméricos; el guion/espacio se ignora).</p>)
                       : <p className="text-[11px] text-muted mt-1">Acepta con o sin guion; se normaliza para SUNAT.</p>}
                   </div>
@@ -812,7 +812,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       placeholder="Dirección detallada, distrito, provincia, departamento"
                     />
                     {ubigeoDetectado && (
-                      <p className="text-[11px] text-emerald-700 mt-1">
+                      <p className="text-[11px] text-success mt-1">
                         Detectado: {ubigeoDetectado.departamento} / {ubigeoDetectado.provincia} / {ubigeoDetectado.distrito} ({ubigeoDetectado.codigo})
                       </p>
                     )}
@@ -838,7 +838,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     {esCompra && <p className="text-[11px] text-muted mt-1">Se usa la dirección fiscal configurada para la empresa.</p>}
                   </div>
                   {!ubigeoDetectado && f.direccion_llegada && !f.ubigeo_llegada && (
-                    <p className="text-[11px] text-amber-700">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
+                    <p className="text-[11px] text-warning">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
                   )}
                   {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="text-[11px] text-danger">El ubigeo debe tener 6 dígitos.</p>}
                 </div>
@@ -947,7 +947,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                         ))}
                       </>
                     ) : (
-                      <div className="text-amber-700 text-xs mt-1">Solo se declara al transportista (Caso 1); él emite su GRE Transportista (31).</div>
+                      <div className="text-warning text-xs mt-1">Solo se declara al transportista (Caso 1); él emite su GRE Transportista (31).</div>
                     )}
                     {(resTransporte?.indicadores?.transbordo || resTransporte?.indicadores?.m1l || resTransporte?.indicadores?.retornoVacio) && (
                       <div className="flex justify-between gap-2"><span className="text-muted">Indicadores:</span><span className="text-right">{[resTransporte.indicadores.transbordo && 'Transbordo', resTransporte.indicadores.m1l && 'M1/L', resTransporte.indicadores.retornoVacio && 'Retorno vacíos'].filter(Boolean).join(', ')}</span></div>
@@ -1007,7 +1007,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Observaciones (viajan a SUNAT como observación de la GRE)</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Observaciones (viajan a SUNAT como observación de la GRE)</label>
                 <textarea className="form-input w-full text-sm" rows={2} maxLength={250} value={f.observaciones} onChange={(e) => setF('observaciones', e.target.value)} placeholder="Ej. OC: 260810058" />
                 <p className="text-[11px] text-muted mt-1">Lo que escribas aquí es exactamente lo que se envía a SUNAT y se muestra en el PDF. (máx. 250)</p>
               </div>
@@ -1047,8 +1047,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
             <div className="flex items-start gap-3">
               <Truck size={24} className="text-info flex-shrink-0 mt-1" />
               <div>
-                <p className="font-medium text-blue-900">¿Qué sucederá al despachar?</p>
-                <ul className="text-sm text-blue-800 mt-2 space-y-1">
+                <p className="font-medium">¿Qué sucederá al despachar?</p>
+                <ul className="text-sm text-muted mt-2 space-y-1">
                   <li>✓ Se generará salida de inventario automática</li>
                   <li>✓ Se descontará el stock de cada producto</li>
                   <li>✓ La guía cambiará a estado "En Tránsito"</li>
@@ -1060,7 +1060,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha de Despacho *</label>
+            <label className="block text-xs font-semibold text-muted mb-1">Fecha de Despacho *</label>
             <input
               type="date"
               className="form-input w-full"
@@ -1107,7 +1107,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
       <Modal isOpen={modalSinEfecto} onClose={() => !procesando && setModalSinEfecto(false)} title="Dar de baja la GRE en SUNAT" size="md">
         <div className="space-y-3 text-sm">
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <p className="font-semibold">La baja oficial se completa en SUNAT SOL.</p>
             <p className="text-xs mt-1">El API REST de emisión GRE no ofrece una operación de baja. SPI solo registrará la baja después de tu confirmación y conservará la guía en el historial de la OV.</p>
             <a href="https://www.sunat.gob.pe/sol.html" target="_blank" rel="noreferrer" className="btn btn-sm btn-outline mt-3 inline-flex items-center">
@@ -1143,7 +1143,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
           </div>
           <label className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 cursor-pointer">
             <input type="checkbox" className="mt-1" checked={bajaForm.confirmacionSol} onChange={(e) => setBajaForm((f) => ({ ...f, confirmacionSol: e.target.checked }))} />
-            <span className="text-xs text-red-900">Confirmo que ya realicé la baja de <strong>{comprobante}</strong> en SUNAT SOL y que los datos anteriores son correctos.</span>
+            <span className="text-xs text-danger">Confirmo que ya realicé la baja de <strong>{comprobante}</strong> en SUNAT SOL y que los datos anteriores son correctos.</span>
           </label>
           <div className="rounded-md bg-gray-50 p-2 text-xs text-muted">
             Si la baja ya fue hecha anteriormente directamente en SUNAT, utiliza este mismo formulario para sincronizar su estado real en SPI.

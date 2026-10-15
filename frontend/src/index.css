@@ -11,6 +11,7 @@
   --success: #2ecc71;
   --warning: #f39c12;
   --danger: #e74c3c;
+  --info: #5dade2;
   --bg-primary: #1a1a1a;
   --bg-secondary: #141414;
   --bg-tertiary: #222222;
@@ -66,6 +67,7 @@
   --success: #1e8e4a;
   --warning: #b7791f;
   --danger: #c0392b;
+  --info: #2471a3;
 
   --bg-primary: #ffffff;      /* superficies elevadas (cards) */
   --bg-secondary: #eef1f4;    /* fondo de página */
@@ -181,7 +183,7 @@ body {
   border-radius: 2px;
   border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.15s ease-out;
   text-decoration: none;
   letter-spacing: 0.02em;
 }
@@ -194,7 +196,7 @@ body {
 }
 
 .btn:not(:disabled):active {
-  transform: translateY(1px);
+  transform: scale(0.96);
   box-shadow: none;
 }
 
@@ -293,11 +295,11 @@ body {
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.2s ease;
 }
 
-.card:hover {
-  box-shadow: var(--shadow-md);
-  transition: box-shadow 0.2s ease;
+@media (hover: hover) {
+  .card:hover { box-shadow: var(--shadow-md); }
 }
 
 .card-header {
@@ -364,7 +366,7 @@ body {
   border-radius: 2px;
   background-color: var(--carbon-mid);
   color: var(--text-primary);
-  transition: border-color 0.2s;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
 
 .form-input:focus,
@@ -776,38 +778,37 @@ body {
    títulos sobre cards/fondos que se aclaran en modo claro). */
 .text-heading      { color: var(--text-primary); }
 
-.text-blue-600  { color: #5dade2; }
-.text-blue-700  { color: #4a9fc4; }
-.text-blue-800  { color: #3d8eb5; }
-.text-blue-900  { color: #2e7da6; }
-.text-green-600 { color: #2ecc71; }
-.text-green-700 { color: #27ae60; }
-.text-green-800 { color: #1e8449; }
-.text-green-900 { color: #196f3d; }
+.text-blue-600  { color: var(--info); }
+.text-blue-700  { color: var(--info); }
+.text-blue-800  { color: var(--info); }
+.text-blue-900  { color: var(--info); }
+.text-green-600 { color: var(--success); }
+.text-green-700 { color: var(--success); }
+.text-green-800 { color: var(--success); }
+.text-green-900 { color: var(--success); }
 .text-yellow-600 { color: var(--accent); }
 .text-yellow-700 { color: var(--primary-dark); }
-.text-yellow-800 { color: #a07820; }
-.text-yellow-900 { color: #856515; }
-.text-orange-600 { color: #f39c12; }
-.text-orange-700 { color: #d68910; }
-.text-red-600   { color: #e74c3c; }
-.text-red-800   { color: #c0392b; }
+.text-yellow-800 { color: var(--warning); }
+.text-yellow-900 { color: var(--warning); }
+.text-orange-600 { color: var(--warning); }
+.text-orange-700 { color: var(--warning); }
+.text-red-600   { color: var(--danger); }
+.text-red-800   { color: var(--danger); }
 .text-purple-600 { color: #9b59b6; }
 .text-purple-900 { color: #6c3483; }
-.text-emerald-600 { color: #2ecc71; }
-.text-emerald-700 { color: #27ae60; }
-.text-emerald-800 { color: #1e8449; }
+.text-emerald-600 { color: var(--success); }
+.text-emerald-700 { color: var(--success); }
+.text-emerald-800 { color: var(--success); }
 .text-gray-400  { color: #666; }
 .text-gray-500  { color: var(--wire); }
-.text-gray-600  { color: #777; }
+.text-gray-600  { color: var(--text-secondary); }
 .text-gray-700  { color: #999; }
 .text-gray-800  { color: var(--mist); }
 .text-amber-500 { color: var(--accent); }
-/* Ámbar de advertencia legible en AMBOS temas (evita el dorado sobre fondos claros).
-   text-amber-700 estaba sin definir: al usarse heredaba el color del contenedor (a veces verde). */
-.text-amber-700 { color: #b7791f; }
-.text-indigo-600 { color: #5dade2; }
-.text-indigo-700 { color: #4a9fc4; }
+/* Ámbar de advertencia legible en AMBOS temas: token --warning (oscuro #f39c12 / claro #b7791f). */
+.text-amber-700 { color: var(--warning); }
+.text-indigo-600 { color: var(--info); }
+.text-indigo-700 { color: var(--info); }
 .text-teal-700  { color: #1abc9c; }
 
 /* Texto SIEMPRE oscuro para usar SOBRE fondos dorados (bg-primary / acento).
@@ -1125,6 +1126,20 @@ body {
 .slide-in-from-top-2 { animation-name: modalSlideIn; }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin,
+  .btn.loading::after {
+    animation-duration: 0.6s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
 
 .list-disc   { list-style-type: disc; }
 .list-inside { list-style-position: inside; }
@@ -1541,11 +1556,11 @@ input[readonly] {
 .border-dashed { border-color: var(--steel) !important; }
 
 /* Badge colores que se usan en el JSX */
-.text-blue-600  { color: #5dade2 !important; }
+.text-blue-600  { color: var(--info) !important; }
 .bg-blue-500    { background-color: #5dade2 !important; }
 .border-blue-500 { border-color: #5dade2 !important; }
-.text-red-600   { color: #e74c3c !important; }
-.text-green-600 { color: #2ecc71 !important; }
+.text-red-600   { color: var(--danger) !important; }
+.text-green-600 { color: var(--success) !important; }
 
 /* Inputs con estilos inline hardcodeados (modo muestra) */
 input[style*="fffbeb"],

@@ -380,7 +380,7 @@ function CrearOrden() {
   };
 
   if (loading) {
-    return <Loading message="Cargando formulario..." />;
+    return <Loading variant="form" />;
   }
 
   const costoTotalEstimado = listaInsumos.reduce((sum, item) => {

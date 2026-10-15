@@ -519,7 +519,7 @@ function Empleados() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando empleados..." />;
+    return <Loading variant="table" />;
   }
 
   return (

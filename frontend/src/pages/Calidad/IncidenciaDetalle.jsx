@@ -153,7 +153,7 @@ function IncidenciaDetalle() {
     }
   };
 
-  if (loading) return <Loading message="Cargando incidencia..." />;
+  if (loading) return <Loading variant="detail" />;
   if (!incidencia) return <div className="container py-6"><Alert type="error" message="Incidencia no encontrada" /></div>;
 
   const cfgEstado = getEstadoBadge(incidencia.estado);

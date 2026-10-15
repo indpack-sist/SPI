@@ -228,7 +228,7 @@ function NuevaGuiaTransportista() {
   };
 
   if (loading && !guiaRemision) {
-    return <Loading message="Cargando guía de remisión..." />;
+    return <Loading variant="form" />;
   }
 
   if (!idGuia) {

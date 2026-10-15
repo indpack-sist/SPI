@@ -137,7 +137,7 @@ function SeguimientoVentaDetalle() {
     return (
       <div className="p-4 md:p-6 page-ordenes-venta">
         <style dangerouslySetInnerHTML={{__html: `.page-ordenes-venta { background-color: var(--carbon) !important; }`}} />
-        <Loading message="Cargando seguimiento..." />
+        <Loading variant="detail" />
       </div>
     );
   }

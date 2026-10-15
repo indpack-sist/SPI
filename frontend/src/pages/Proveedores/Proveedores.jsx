@@ -223,7 +223,7 @@ function Proveedores() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando proveedores..." />;
+    return <Loading variant="table" />;
   }
 
   return (

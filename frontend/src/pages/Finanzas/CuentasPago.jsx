@@ -267,7 +267,7 @@ function CuentasPago() {
   ];
 
   if (loading && cuentas.length === 0) {
-    return <Loading message="Cargando cuentas..." />;
+    return <Loading variant="table" />;
   }
 
   const totalPEN = cuentas.reduce((sum, c) => sum + parseFloat(c.saldo_pen || 0), 0);

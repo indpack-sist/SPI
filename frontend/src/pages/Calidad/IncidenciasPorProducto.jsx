@@ -114,7 +114,7 @@ function IncidenciasPorProducto() {
     }
   ];
 
-  if (loadingProductos) return <Loading message="Cargando productos..." />;
+  if (loadingProductos) return <Loading variant="table" />;
 
   return (
     <div className="container py-6">

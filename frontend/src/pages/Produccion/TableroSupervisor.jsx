@@ -65,7 +65,7 @@ export default function TableroSupervisor() {
 
   return (
     <div className="p-4 md:p-6">
-      {loading && <Loading message="Cargando tablero..." />}
+      {loading && <Loading variant="detail" />}
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
       <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">

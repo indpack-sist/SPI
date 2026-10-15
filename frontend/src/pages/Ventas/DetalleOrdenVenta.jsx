@@ -1775,7 +1775,7 @@ function DetalleOrdenVenta() {
     return true;
   };
 
-  if (loading) return <Loading message="Cargando orden de venta..." />;
+  if (loading) return <Loading variant="detail" />;
   
   if (!orden) {
     return (

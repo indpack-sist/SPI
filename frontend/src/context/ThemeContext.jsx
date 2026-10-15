@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
 const ThemeContext = createContext(null);
 
@@ -13,13 +13,34 @@ function getTemaInicial() {
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(getTemaInicial);
+  const primerRender = useRef(true);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try {
-      localStorage.setItem('theme', theme);
-    } catch (e) {
+    const root = document.documentElement;
+
+    const persistir = () => {
+      try {
+        localStorage.setItem('theme', theme);
+      } catch (e) {
+      }
+    };
+
+    if (primerRender.current) {
+      primerRender.current = false;
+      root.setAttribute('data-theme', theme);
+      persistir();
+      return;
     }
+
+    root.classList.add('theme-transition-stop');
+    root.setAttribute('data-theme', theme);
+    void root.offsetHeight;
+    persistir();
+
+    const id = window.requestAnimationFrame(() => {
+      root.classList.remove('theme-transition-stop');
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

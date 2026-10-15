@@ -967,7 +967,7 @@ useEffect(() => {
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  if (loading && clientes.length === 0) return <Loading message="Cargando..." />;
+  if (loading && clientes.length === 0) return <Loading variant="form" />;
 
   const esMuestra = Number(formCabecera.es_muestra) === 1;
   const tituloFormulario = modoEdicion

@@ -1831,14 +1831,9 @@ function DetalleOrdenVenta() {
     {
       header: 'Producto',
       accessor: 'producto',
-      render: (value, row) => (
+      render: (value) => (
         <div>
           <div className="font-medium">{value}</div>
-          {row.requiere_receta && (
-            <span className="badge badge-warning badge-sm mt-1">
-              <AlertCircle size={10} /> Prod
-            </span>
-          )}
         </div>
       )
     },
@@ -2047,7 +2042,7 @@ function DetalleOrdenVenta() {
 
         return (
           <div className="flex items-center justify-center gap-1">
-            {row.requiere_receta && !estadosConDespacho.includes(orden.estado) && (
+            {/* {row.requiere_receta && !estadosConDespacho.includes(orden.estado) && (
                <button
                  className={`btn btn-xs ${parseFloat(row.stock_disponible) >= parseFloat(row.cantidad) ? 'btn-outline btn-primary' : 'btn-primary'}`}
                  onClick={() => {
@@ -2063,10 +2058,10 @@ function DetalleOrdenVenta() {
                >
                  <Factory size={12} />
                </button>
-            )}
+            )} */}
 
             <button
-              className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
+              className="btn btn-sm btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
               onClick={() => {
                 setProductoRectificar(row);
                 setRectificarForm({ nueva_cantidad: row.cantidad, motivo: '' });
@@ -2075,7 +2070,7 @@ function DetalleOrdenVenta() {
               disabled={procesando}
               title="Rectificar Cantidad / Corregir Inventario"
             >
-              <Edit size={12} />
+              <Edit size={16} />
             </button>
           </div>
         );

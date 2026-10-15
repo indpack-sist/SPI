@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Truck, Edit, User, IdCard, MapPin, Package, Calendar, Building2,
-  ShieldCheck, Save, X, AlertCircle
+  ShieldCheck, Save, X, AlertCircle, CheckCircle
 } from 'lucide-react';
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
@@ -45,13 +45,16 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
   const [transportistas, setTransportistas] = useState([]);
 
   const [form, setForm] = useState(null);
+  const [topes, setTopes] = useState({});
 
   const modo = modoDeGuia(guia);
   const esComex = Number(guia?.es_comercio_exterior) === 1;
   const registrar = guia?.transporte_registrar !== 0;
 
-  const bloqueada = ['ACEPTADO', 'ENVIADO'].includes(guia?.sunat_estado) || guia?.estado === 'Anulada';
+  const despachada = ['En Tránsito', 'Entregada'].includes(guia?.estado);
+  const bloqueada = ['ACEPTADO', 'ENVIADO'].includes(guia?.sunat_estado) || guia?.estado === 'Anulada' || despachada;
   const puedeEditar = !soloLectura && !bloqueada && guia?.tipo_origen !== 'Compra';
+  const editarLineas = puedeEditar && !esComex;
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -67,6 +70,21 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
         if (rc.data?.success) setConductores(rc.data.data || []);
         if (rv.data?.success) setVehiculos(rv.data.data || []);
         if (rt.data?.success) setTransportistas(rt.data.data || []);
+        if (activo && editarLineas && guia?.id_orden_venta) {
+          try {
+            const ro = await ordenesVentaAPI.getById(guia.id_orden_venta);
+            if (activo && ro.data?.success) {
+              const mapa = {};
+              for (const it of (ro.data.data.detalle || [])) {
+                mapa[Number(it.id_detalle)] = {
+                  pedido: parseFloat(it.cantidad) || 0,
+                  en_guias: parseFloat(it.cantidad_en_guias || 0),
+                };
+              }
+              setTopes(mapa);
+            }
+          } catch { }
+        }
       } catch {
         if (activo) setError('No se pudieron cargar transportistas/flota');
       }
@@ -98,15 +116,40 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
       destinatario_ruc: guia.destinatario_ruc || '', destinatario_razon: guia.destinatario_razon || '',
       observaciones: guia.observaciones || '',
       fecha_traslado: guia.fecha_traslado ? String(guia.fecha_traslado).slice(0, 10) : '',
+      lineas: (guia.detalle || []).map((d) => ({
+        id_detalle: d.id_detalle,
+        id_detalle_orden: d.id_detalle_orden,
+        codigo: d.codigo_producto,
+        producto: d.producto,
+        unidad: d.unidad_medida_producto || d.unidad_medida,
+        es_libre: d.id_producto == null,
+        stock_actual: parseFloat(d.stock_actual ?? 0) || 0,
+        cantidad: d.cantidad ?? 0,
+        cantidad_original: parseFloat(d.cantidad ?? 0) || 0,
+        peso_unitario_kg: d.peso_unitario_kg ?? 0,
+      })),
     });
     setModalOpen(true);
   };
 
   const set = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }));
 
+  const setLinea = (index, campo, valor) =>
+    setForm((prev) => ({ ...prev, lineas: prev.lineas.map((l, i) => (i === index ? { ...l, [campo]: valor } : l)) }));
+
+  const pesoBrutoDe = (lineas) =>
+    (lineas || []).reduce((s, l) => s + (parseFloat(l.cantidad) || 0) * (parseFloat(l.peso_unitario_kg) || 0), 0);
+
   const guardar = async () => {
     try {
       setError(null);
+      if (editarLineas) {
+        const incluidas = (form.lineas || []).filter((l) => (parseFloat(l.cantidad) || 0) > 0);
+        if (incluidas.length === 0) {
+          setError('La guía debe conservar al menos un producto con cantidad mayor a 0');
+          return;
+        }
+      }
       setGuardando(true);
       const payload = {
         modo: form.modo,
@@ -150,6 +193,15 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
           id_conductor2: form.id_conductor2 || null, id_vehiculo2: form.id_vehiculo2 || null,
         });
       }
+      if (editarLineas && Array.isArray(form.lineas)) {
+        payload.detalle = form.lineas.map((l) => ({
+          id_detalle: l.id_detalle,
+          id_detalle_orden: l.id_detalle_orden,
+          cantidad: parseFloat(l.cantidad) || 0,
+          peso_unitario_kg: parseFloat(l.peso_unitario_kg) || 0,
+        }));
+        payload.peso_bruto_kg = pesoBrutoDe(form.lineas);
+      }
       const resp = await guiasRemisionAPI.update(guia.id_guia, payload);
       if (resp.data?.success) {
         setModalOpen(false);
@@ -169,6 +221,21 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
     guia?.transporte_ind_m1l && 'Vehículo M1/L',
     guia?.transporte_ind_retorno_vacio && 'Retorno vehículo vacío',
   ].filter(Boolean);
+
+  const topeDeLinea = (l) => {
+    const t = topes[Number(l.id_detalle_orden)];
+    if (!t) return null;
+    return t.pedido - t.en_guias + (parseFloat(l.cantidad_original) || 0);
+  };
+  const hayErrorLineas = editarLineas && (form?.lineas || []).some((l) => {
+    const cant = parseFloat(l.cantidad) || 0;
+    const tope = topeDeLinea(l);
+    const excedeTope = tope != null && cant > tope + 1e-6;
+    const excedeStock = !l.es_libre && cant > (parseFloat(l.stock_actual) || 0) + 1e-6;
+    return excedeTope || excedeStock;
+  });
+  const sinLineas = editarLineas && !(form?.lineas || []).some((l) => (parseFloat(l.cantidad) || 0) > 0);
+  const pesoBrutoDerivado = pesoBrutoDe(form?.lineas);
 
   return (
     <div className="card mb-4">
@@ -196,7 +263,9 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                 ? 'La GRE fue aceptada por SUNAT: los datos quedan en solo lectura.'
                 : guia?.estado === 'Anulada'
                   ? 'La guía está anulada: solo lectura.'
-                  : 'Hay un envío en curso: espera el resultado para poder editar.'}
+                  : despachada
+                    ? 'La guía ya fue despachada (en tránsito/entregada): solo lectura.'
+                    : 'Hay un envío en curso: espera el resultado para poder editar.'}
             </span>
           </div>
         )}
@@ -419,11 +488,86 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                 onChange={(codigo, meta) => setForm((prev) => ({ ...prev, ubigeo_llegada: codigo, ciudad_llegada: meta?.distrito || prev.ciudad_llegada }))}
               />
               <div className="grid grid-cols-3 gap-3">
-                <div className="form-group"><label className="form-label">Peso bruto (kg)</label><input type="number" step="0.01" className="form-input" value={form.peso_bruto_kg} onChange={(e) => set('peso_bruto_kg', e.target.value)} /></div>
+                <div className="form-group">
+                  <label className="form-label">Peso bruto (kg)</label>
+                  {editarLineas ? (
+                    <>
+                      <input type="number" className="form-input text-right" value={pesoBrutoDerivado.toFixed(2)} readOnly aria-readonly="true" />
+                      <small className="text-gray-500">Se calcula desde las líneas.</small>
+                    </>
+                  ) : (
+                    <input type="number" step="0.01" className="form-input" value={form.peso_bruto_kg} onChange={(e) => set('peso_bruto_kg', e.target.value)} />
+                  )}
+                </div>
                 <div className="form-group"><label className="form-label">Bultos</label><input type="number" className="form-input" value={form.numero_bultos} onChange={(e) => set('numero_bultos', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Fecha de traslado</label><input type="date" className="form-input" value={form.fecha_traslado} onChange={(e) => set('fecha_traslado', e.target.value)} /></div>
               </div>
             </div>
+
+            {editarLineas && form.lineas && (
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-muted" />
+                  <span className="font-semibold">Productos de la guía</span>
+                </div>
+                <p className="text-xs text-muted">Ajusta cantidades y pesos. Para excluir un producto, pon su cantidad en 0; debe quedar al menos uno.</p>
+                <div className="overflow-x-auto">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th className="text-right">Pendiente</th>
+                        <th className="text-right">Cantidad</th>
+                        <th>UM</th>
+                        <th className="text-right">Peso Unit.</th>
+                        <th className="text-right">Peso Total</th>
+                        <th className="text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.lineas.map((l, i) => {
+                        const cant = parseFloat(l.cantidad) || 0;
+                        const pu = parseFloat(l.peso_unitario_kg) || 0;
+                        const tope = topeDeLinea(l);
+                        const excedeTope = tope != null && cant > tope + 1e-6;
+                        const excedeStock = !l.es_libre && cant > (parseFloat(l.stock_actual) || 0) + 1e-6;
+                        const hayError = excedeTope || excedeStock;
+                        return (
+                          <tr key={l.id_detalle} className={hayError ? 'bg-red-50' : cant === 0 ? 'bg-yellow-50' : ''}>
+                            <td className="font-mono text-sm">{l.es_libre ? <span className="badge badge-warning text-[10px]">LIBRE</span> : l.codigo}</td>
+                            <td>
+                              <div className="font-medium">{l.producto}</div>
+                              {excedeTope && <div className="text-xs text-danger mt-1">Excede lo pendiente en la orden ({Math.max(0, tope).toFixed(2)})</div>}
+                              {excedeStock && <div className="text-xs text-danger mt-1">Stock insuficiente ({(parseFloat(l.stock_actual) || 0).toFixed(2)})</div>}
+                            </td>
+                            <td className="text-right font-mono">{tope != null ? Math.max(0, tope).toFixed(2) : '—'}</td>
+                            <td>
+                              <input type="number" min="0" step="0.001" className={`form-input text-right ${hayError ? 'border-danger' : ''}`} value={l.cantidad} onChange={(e) => setLinea(i, 'cantidad', e.target.value)} />
+                            </td>
+                            <td className="text-sm text-muted">{l.unidad}</td>
+                            <td>
+                              <input type="number" min="0" step="0.01" className="form-input text-right text-sm" value={l.peso_unitario_kg} onChange={(e) => setLinea(i, 'peso_unitario_kg', e.target.value)} />
+                            </td>
+                            <td className="text-right font-bold">{(cant * pu).toFixed(2)}</td>
+                            <td className="text-center">
+                              {hayError ? <span className="badge badge-danger text-xs">Error</span> : cant === 0 ? <span className="text-muted text-xs">No se incluye</span> : <CheckCircle size={16} className="text-success mx-auto" />}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan="6" className="text-right font-bold">Peso bruto:</td>
+                        <td className="text-right font-bold text-primary">{pesoBrutoDerivado.toFixed(2)} kg</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {esComex && (
               <div className="grid grid-cols-2 gap-3 border rounded-lg p-4">
@@ -441,7 +585,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
               <button className="btn btn-outline" onClick={() => setModalOpen(false)} disabled={guardando}>
                 <X size={18} /> Cancelar
               </button>
-              <button className="btn btn-primary" onClick={guardar} disabled={guardando}>
+              <button className="btn btn-primary" onClick={guardar} disabled={guardando || hayErrorLineas || sinLineas}>
                 <Save size={18} /> {guardando ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>

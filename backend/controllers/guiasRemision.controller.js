@@ -4,6 +4,7 @@ import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpres
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 import { mapearTransporteDesdeOrden } from '../services/sunat/transporte-guia.service.js';
 import { upsertTransportista } from '../services/sunat/transportista.service.js';
+import { armarEdicionLineasGuia } from '../services/sunat/edicion-guia.service.js';
 
 function getFechaPeru() {
   const now = new Date();
@@ -741,6 +742,9 @@ export async function updateGuiaRemision(req, res) {
     if (g.sunat_estado === 'ENVIADO') {
       return res.status(409).json({ success: false, error: 'La guía tiene un envío en curso; espera el resultado antes de editar.' });
     }
+    if (g.estado === 'En Tránsito' || g.estado === 'Entregada') {
+      return res.status(409).json({ success: false, error: 'La guía ya fue despachada; no se puede editar.' });
+    }
     if (g.estado === 'Anulada') {
       return res.status(409).json({ success: false, error: 'La guía está anulada; no se puede editar.' });
     }
@@ -777,7 +781,51 @@ export async function updateGuiaRemision(req, res) {
     if (!direccionLlegada || String(direccionLlegada).trim() === '') {
       return res.status(422).json({ success: false, error: 'La dirección de llegada es obligatoria' });
     }
-    if (!(Number(peso) > 0)) {
+
+    let planLineas = null;
+    if (Array.isArray(b.detalle) && b.detalle.length > 0 && !esComex && g.tipo_origen !== 'Compra') {
+      const lineasRes = await executeQuery(
+        `SELECT dgr.id_detalle, dgr.id_detalle_orden, dgr.id_producto, dgr.descripcion,
+                dov.cantidad AS pedido, dov.es_producto_libre AS es_libre,
+                p.codigo, COALESCE(p.nombre, dgr.descripcion) AS nombre, p.stock_actual
+           FROM detalle_guia_remision dgr
+           LEFT JOIN detalle_orden_venta dov ON dgr.id_detalle_orden = dov.id_detalle
+           LEFT JOIN productos p ON dgr.id_producto = p.id_producto
+          WHERE dgr.id_guia = ?`,
+        [id]);
+      if (!lineasRes.success) return res.status(500).json({ success: false, error: lineasRes.error });
+
+      const otrasRes = await executeQuery(
+        `SELECT dgr.id_detalle_orden, COALESCE(SUM(dgr.cantidad), 0) AS en_otras
+           FROM detalle_guia_remision dgr
+           JOIN guias_remision gr ON gr.id_guia = dgr.id_guia
+          WHERE gr.id_orden_venta = ? AND gr.estado <> 'Anulada' AND gr.id_guia <> ?
+          GROUP BY dgr.id_detalle_orden`,
+        [g.id_orden_venta, id]);
+      const mapaOtras = new Map(
+        (otrasRes.success ? otrasRes.data : []).map((r) => [Number(r.id_detalle_orden), parseFloat(r.en_otras) || 0]));
+
+      const lineasActuales = lineasRes.data.map((l) => ({
+        id_detalle: Number(l.id_detalle),
+        id_detalle_orden: Number(l.id_detalle_orden),
+        id_producto: l.id_producto,
+        es_libre: Number(l.es_libre) === 1 || l.id_producto == null,
+        codigo: l.codigo,
+        nombre: l.nombre,
+        stock_actual: l.stock_actual,
+        pedido: parseFloat(l.pedido) || 0,
+        en_otras: mapaOtras.get(Number(l.id_detalle_orden)) || 0,
+      }));
+
+      try {
+        planLineas = armarEdicionLineasGuia(lineasActuales, b.detalle);
+      } catch (e) {
+        return res.status(e.status || 422).json({ success: false, error: e.message });
+      }
+    }
+
+    const pesoFinal = planLineas ? planLineas.pesoBruto : (parseFloat(peso) || 0);
+    if (!(Number(pesoFinal) > 0)) {
       return res.status(422).json({ success: false, error: 'El peso bruto debe ser mayor a 0' });
     }
 
@@ -848,28 +896,48 @@ export async function updateGuiaRemision(req, res) {
       if (!idConductor || !idVehiculo) return res.status(422).json({ success: false, error: 'Selecciona conductor y vehículo de la flota' });
     }
 
-    const upd = await executeQuery(
-      `UPDATE guias_remision SET
-         transporte_modo = ?, id_transportista = ?, id_conductor = ?, id_vehiculo = ?, id_conductor2 = ?, id_vehiculo2 = ?,
-         transporte_registrar = ?, transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
-         transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
-         transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
-         transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
-         transporte_ind_transbordo = ?, transporte_ind_m1l = ?, transporte_ind_retorno_vacio = ?, transporte_fecha_entrega = ?,
-         peso_bruto_kg = ?, numero_bultos = ?, ubigeo_llegada = ?, direccion_llegada = ?, punto_llegada = ?, ciudad_llegada = ?,
-         destinatario_ruc = ?, destinatario_razon = ?, observaciones = ?, motivo_traslado_cod = ?, motivo_descripcion = ?,
-         fecha_traslado = ?
-       WHERE id_guia = ?`,
-      [
-        modo, idTransportista, idConductor, idVehiculo, idConductor2, idVehiculo2,
-        tReg, tDni, tCond, tLic, tDni2, tCond2, tLic2,
-        tPlaca, tTuc, tAut, tPlaca2, tTuc2, tAut2,
-        indT, indM, indR, fEntrega,
-        parseFloat(peso) || 0, parseInt(bultos) || 0, ubigeoLlegada || null, direccionLlegada, direccionLlegada, ciudadLlegada || null,
-        esComex ? (destRuc || null) : null, esComex ? (destRazon || null) : null, observaciones || null, motivoCod, motivoDesc,
-        fechaTraslado, id,
-      ]);
-    if (!upd.success) return res.status(500).json({ success: false, error: upd.error });
+    try {
+      await withTransaction(async (conn) => {
+        await conn.query(
+          `UPDATE guias_remision SET
+             transporte_modo = ?, id_transportista = ?, id_conductor = ?, id_vehiculo = ?, id_conductor2 = ?, id_vehiculo2 = ?,
+             transporte_registrar = ?, transporte_dni = ?, transporte_conductor = ?, transporte_licencia = ?,
+             transporte_dni2 = ?, transporte_conductor2 = ?, transporte_licencia2 = ?,
+             transporte_placa = ?, transporte_tuc = ?, transporte_autorizacion = ?,
+             transporte_placa2 = ?, transporte_tuc2 = ?, transporte_autorizacion2 = ?,
+             transporte_ind_transbordo = ?, transporte_ind_m1l = ?, transporte_ind_retorno_vacio = ?, transporte_fecha_entrega = ?,
+             peso_bruto_kg = ?, numero_bultos = ?, ubigeo_llegada = ?, direccion_llegada = ?, punto_llegada = ?, ciudad_llegada = ?,
+             destinatario_ruc = ?, destinatario_razon = ?, observaciones = ?, motivo_traslado_cod = ?, motivo_descripcion = ?,
+             fecha_traslado = ?
+           WHERE id_guia = ?`,
+          [
+            modo, idTransportista, idConductor, idVehiculo, idConductor2, idVehiculo2,
+            tReg, tDni, tCond, tLic, tDni2, tCond2, tLic2,
+            tPlaca, tTuc, tAut, tPlaca2, tTuc2, tAut2,
+            indT, indM, indR, fEntrega,
+            pesoFinal, parseInt(bultos) || 0, ubigeoLlegada || null, direccionLlegada, direccionLlegada, ciudadLlegada || null,
+            esComex ? (destRuc || null) : null, esComex ? (destRazon || null) : null, observaciones || null, motivoCod, motivoDesc,
+            fechaTraslado, id,
+          ]);
+
+        if (planLineas) {
+          for (const u of planLineas.updates) {
+            await conn.query(
+              `UPDATE detalle_guia_remision
+                  SET cantidad = ?, peso_unitario_kg = ?, peso_total_kg = ?
+                WHERE id_detalle = ? AND id_guia = ?`,
+              [u.cantidad, u.peso_unitario_kg, u.peso_total_kg, u.id_detalle, id]);
+          }
+          for (const delId of planLineas.deletes) {
+            await conn.query(
+              'DELETE FROM detalle_guia_remision WHERE id_detalle = ? AND id_guia = ?',
+              [delId, id]);
+          }
+        }
+      });
+    } catch (e) {
+      return res.status(500).json({ success: false, error: e.message });
+    }
 
     return res.json({ success: true, message: 'Datos de la guía actualizados' });
   } catch (error) {

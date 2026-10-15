@@ -767,9 +767,9 @@ body {
 .text-muted        { color: var(--text-secondary); }
 .text-primary      { color: var(--accent); }
 .text-primary-dark { color: var(--primary-dark); }
-.text-success      { color: #2ecc71; }
-.text-warning      { color: #f39c12; }
-.text-danger       { color: #e74c3c; }
+.text-success      { color: var(--success); }
+.text-warning      { color: var(--warning); }
+.text-danger       { color: var(--danger); }
 .text-info         { color: #5dade2; }
 .text-white        { color: #ffffff; }
 /* Texto de encabezado que sigue el tema (usar en vez de text-white en

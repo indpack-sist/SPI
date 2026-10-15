@@ -2995,11 +2995,6 @@ function DetalleOrdenVenta() {
                                         <Edit size={12} /> Editar
                                     </button>
                                 )}
-                                {!sinComprobanteAsignado && orden.comprobante_editado && (
-                                    <span className="badge badge-sm badge-secondary" title="Ya se editó el tipo de comprobante">
-                                        <Lock size={10} /> Editado
-                                    </span>
-                                )}
                             </div>
                         </div>
                         {!sinComprobanteAsignado && orden.numero_comprobante && orden.tipo_comprobante !== 'Factura' && (

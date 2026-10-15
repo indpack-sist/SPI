@@ -311,13 +311,18 @@ export async function generarGuiaRemisionSunatPDF({
 
       const esComex = !!comex;
       const destinatario = (esComex && comex.destinatario) ? comex.destinatario : (cliente || {});
-      const destinatarioRows = [
-        [
-          ['Razón social / nombres:', destinatario.razon_social || destinatario.nombre, { labelWidth: 118, boldValue: true }],
-          ['RUC / Documento:', destinatario.ruc || destinatario.numero_documento, { labelWidth: 100, boldValue: true }]
-        ]
-      ];
-      let destinatarioBodyHeight = twoColumnHeight(destinatarioRows);
+      const destinatarioRazon = destinatario.razon_social || destinatario.nombre;
+      const destinatarioDoc = destinatario.ruc || destinatario.numero_documento;
+      const destLeftW = Math.round((W - 27) * 0.66);
+      const destRightW = (W - 27) - destLeftW;
+      const destLeftX = X + 9;
+      const destRightX = destLeftX + destLeftW + 9;
+      const destRowHeight = Math.max(
+        measureLabelValue('Razón social / nombres:', destinatarioRazon, destLeftW, { labelWidth: 118, boldValue: true }),
+        measureLabelValue('RUC / Documento:', destinatarioDoc, destRightW, { labelWidth: 100, boldValue: true }),
+        10
+      );
+      let destinatarioBodyHeight = 4 + destRowHeight + 3;
       if (destinatario.direccion) destinatarioBodyHeight += fullWidthHeight('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
       if (proveedor?.ruc) destinatarioBodyHeight += fullWidthHeight('Proveedor:', `${limpio(proveedor.razon_social)} · RUC ${limpio(proveedor.ruc)}`, { labelWidth: 105 });
       if (docRelacionado?.numero) {
@@ -330,7 +335,10 @@ export async function generarGuiaRemisionSunatPDF({
         destinatarioBodyHeight += fullWidthHeight('Documento relacionado:', facturasVentaTexto, { labelWidth: 125 });
       }
       top = sectionStart('Datos del destinatario', '', sectionHeight(destinatarioBodyHeight));
-      twoColumnRows(destinatarioRows);
+      const destRowY = y + 4;
+      labelValue('Razón social / nombres:', destinatarioRazon, destLeftX, destRowY, destLeftW, { labelWidth: 118, boldValue: true });
+      labelValue('RUC / Documento:', destinatarioDoc, destRightX, destRowY, destRightW, { labelWidth: 100, boldValue: true });
+      y = destRowY + destRowHeight + 3;
       if (destinatario.direccion) fullWidthRow('Dirección fiscal:', destinatario.direccion, { labelWidth: 105 });
       if (proveedor?.ruc) {
         fullWidthRow('Proveedor:', `${limpio(proveedor.razon_social)} · RUC ${limpio(proveedor.ruc)}`, { labelWidth: 105 });

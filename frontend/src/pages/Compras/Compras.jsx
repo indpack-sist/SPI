@@ -323,7 +323,7 @@ function Compras() {
     });
   };
 
-  if (loading && !estadisticas) return <Loading message="Cargando módulo de compras..." />;
+  if (loading && !estadisticas) return <Loading variant="table" />;
 
   return (
     <div className="p-6">

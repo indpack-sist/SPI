@@ -466,7 +466,7 @@ function Clientes() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando clientes..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div>

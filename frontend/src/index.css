@@ -22,6 +22,15 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
 
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  --skeleton-base: #232323;
+  --skeleton-sheen: #313131;
+
   --carbon: #0f0f0f;
   --carbon-mid: #1a1a1a;
   --carbon-light: #2a2a2a;
@@ -78,6 +87,9 @@
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.10);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.12);
+
+  --skeleton-base: #e4e8ee;
+  --skeleton-sheen: #f3f6f9;
 
   /* Escala "carbon/steel": se invierte la luminosidad respecto al
      tema oscuro, conservando la jerarquía de contraste. */
@@ -167,6 +179,24 @@ body {
   padding: 0 1rem;
 }
 
+.btn:focus-visible,
+a:focus-visible,
+.table tbody tr.clickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* =====================================================
    BOTONES
    ===================================================== */
@@ -183,7 +213,7 @@ body {
   border-radius: 2px;
   border: none;
   cursor: pointer;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.15s ease-out;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform 150ms var(--ease-out);
   text-decoration: none;
   letter-spacing: 0.02em;
 }
@@ -295,11 +325,15 @@ body {
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
 }
 
 @media (hover: hover) {
   .card:hover { box-shadow: var(--shadow-md); }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .card:hover { transform: translateY(-2px); }
 }
 
 .card-header {
@@ -366,7 +400,7 @@ body {
   border-radius: 2px;
   background-color: var(--carbon-mid);
   color: var(--text-primary);
-  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .form-input:focus,
@@ -475,7 +509,7 @@ body {
   padding-bottom: 12px;
 }
 
-.table tbody tr { transition: background-color 0.15s ease; }
+.table tbody tr { transition: background-color var(--dur-fast) var(--ease); }
 .table tbody tr:hover { background-color: var(--carbon-light); }
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr.clickable { cursor: pointer; }
@@ -524,8 +558,11 @@ body {
 }
 .table input.text-right { text-align: right; }
 .table input.text-center { text-align: center; }
-.table .btn-sm { transition: all 0.2s ease; }
-.table .btn-sm:hover { transform: translateY(-1px); }
+.table .btn-sm { transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .table .btn-sm:hover { transform: translateY(-1px); }
+}
 
 /* =====================================================
    BADGES

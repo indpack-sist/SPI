@@ -599,7 +599,7 @@ function ProductoDetalle() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando producto..." />;
+    return <Loading variant="detail" />;
   }
 
   if (!producto) {

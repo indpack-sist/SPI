@@ -559,7 +559,7 @@ function OrdenesProduccion() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando órdenes..." />;
+  if (loading) return <Loading variant="table" />;
 
   const stats = calcularEstadisticas();
 

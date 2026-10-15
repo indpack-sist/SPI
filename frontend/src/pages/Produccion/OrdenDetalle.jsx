@@ -1104,7 +1104,7 @@ function OrdenDetalle() {
   const porcentajeEdicionTotal = insumosEdicion.reduce((sum, item) => sum + item.porcentaje, 0);
 
   if (loading) {
-    return <Loading message="Cargando orden..." />;
+    return <Loading variant="detail" />;
   }
 
   if (!orden) {

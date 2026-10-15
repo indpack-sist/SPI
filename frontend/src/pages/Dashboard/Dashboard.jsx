@@ -120,7 +120,7 @@ function Dashboard() {
     }));
   };
 
-  if (loading && !resumen) return <Loading message="Cargando analítica..." />;
+  if (loading && !resumen) return <Loading variant="detail" />;
 
   return (
     <div className="dashboard-container">

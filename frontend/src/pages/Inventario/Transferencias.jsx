@@ -391,7 +391,7 @@ function Transferencias() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando transferencias..." />;
+    return <Loading variant="table" />;
   }
 
   return (

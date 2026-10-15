@@ -1607,6 +1607,7 @@ export async function generarPdfGuia(req, res, next) {
         comex: snap.comex || null,
         proveedor: snap.proveedor || null,
         docRelacionado: snap.docRelacionado || null,
+        docsRelacionadosVenta: snap.docsRelacionadosVenta || [],
         qrBuffer,
       });
       const nombreEm = `${sunatConfig.ruc}-09-${em.serie_sunat}-${em.numero_sunat}-${em.sunat_estado || 'INTENTO'}.pdf`;
@@ -1725,6 +1726,16 @@ export async function generarPdfGuia(req, res, next) {
           };
         });
 
+    let docsRelacionadosVentaPdf = [];
+    if (!esCompra && Number(g.es_comercio_exterior) !== 1) {
+      const [refs] = await pool.query(
+        'SELECT tipo_desc, serie, numero FROM guias_remision_factura_referencia WHERE id_guia = ? ORDER BY id', [idGuia]);
+      docsRelacionadosVentaPdf = refs.map((r) => ({
+        tipo_desc: r.tipo_desc,
+        numero: r.serie ? `${r.serie}-${r.numero}` : r.numero,
+      }));
+    }
+
     let comexPdf = null;
     if (Number(g.es_comercio_exterior) === 1) {
       const [docsRel] = await pool.query(
@@ -1769,7 +1780,7 @@ export async function generarPdfGuia(req, res, next) {
         motivo_anulacion: g.motivo_anulacion, reemplazo_ref: reemplazoRef
       },
       emisor, cliente: destinatarioPdf, detalle: detallePdf,
-      proveedor: proveedorPdf, docRelacionado: docRelacionadoPdf,
+      proveedor: proveedorPdf, docRelacionado: docRelacionadoPdf, docsRelacionadosVenta: docsRelacionadosVentaPdf,
       transportista: transportistaPdf, conductores, vehiculos: vehiculosPdf,
       indicadores: indicadoresPdf, registrar: registrarPdf, modalidad: modalidadPdf, fechaEntrega: fechaEntregaPdf,
       comex: comexPdf,

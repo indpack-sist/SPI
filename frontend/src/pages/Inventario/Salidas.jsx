@@ -562,7 +562,7 @@ function Salidas() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando salidas..." />;
+    return <Loading variant="table" />;
   }
 
   return (

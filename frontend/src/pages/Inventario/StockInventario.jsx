@@ -298,7 +298,7 @@ function StockInventario() {
     }
   ];
 
-  if (loading) return <Loading message="Calculando valorizaciones..." />;
+  if (loading) return <Loading variant="table" />;
 
   const valorTotalCosto = resumenStock.reduce((sum, item) => sum + parseFloat(item.valor_costo || 0), 0);
   const valorTotalVenta = resumenStock.reduce((sum, item) => sum + parseFloat(item.valor_venta || 0), 0);

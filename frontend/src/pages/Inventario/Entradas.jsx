@@ -509,7 +509,7 @@ function Entradas() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando entradas..." />;
+    return <Loading variant="table" />;
   }
 
   return (

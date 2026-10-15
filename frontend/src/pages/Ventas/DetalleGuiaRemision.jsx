@@ -269,7 +269,7 @@ function DetalleGuiaRemision() {
     }
   ];
 
-  if (loading && !guia) return <Loading message="Cargando guía de remisión..." />;
+  if (loading && !guia) return <Loading variant="detail" />;
   
   if (!guia) {
     return (

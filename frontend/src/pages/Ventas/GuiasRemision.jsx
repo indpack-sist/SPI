@@ -230,7 +230,7 @@ function GuiasRemision() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando guías de remisión..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div className="p-6">

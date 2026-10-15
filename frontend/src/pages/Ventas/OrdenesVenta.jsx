@@ -909,7 +909,7 @@ function OrdenesVenta() {
         }
       `}} />
 
-      {loading && <Loading message="Cargando órdenes de venta..." />}
+      {loading && <Loading variant="table" />}
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
 

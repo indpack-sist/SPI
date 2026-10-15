@@ -884,7 +884,7 @@ setFormCabecera(prev => ({
   );
 
   if (loading && clientes.length === 0) {
-    return <Loading message="Cargando formulario..." />;
+    return <Loading variant="form" />;
   }
 
   const tituloFormulario = modoEdicion ? 'Editar Cotizacion' : modoDuplicar ? 'Duplicar Cotizacion' : 'Nueva Cotizacion';

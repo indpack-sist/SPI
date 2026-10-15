@@ -338,7 +338,7 @@ function Productos() {
   ];
 
   if (loading) {
-    return <Loading message="Cargando productos..." />;
+    return <Loading variant="table" />;
   }
 
   const mostrarPrecioVenta = canSeePrices && esProductoVendible(formData.id_tipo_inventario);

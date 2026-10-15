@@ -11,6 +11,8 @@
   z-index: 2000;
   padding: 1rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: modalOverlayIn var(--dur-base) var(--ease-out);
 }
 
 .modal-content {
@@ -21,7 +23,7 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  animation: modalSlideIn 0.2s ease-out;
+  animation: modalSlideIn var(--dur-base) var(--ease-out);
 }
 
 .modal-sm {
@@ -68,7 +70,7 @@
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 0.25rem;
-  transition: all 0.2s;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
 .modal-close:hover {
@@ -90,6 +92,11 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes modalOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 768px) {

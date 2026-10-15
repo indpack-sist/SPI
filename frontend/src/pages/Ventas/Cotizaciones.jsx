@@ -487,7 +487,7 @@ function Cotizaciones() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando cotizaciones..." />;
+  if (loading) return <Loading variant="table" />;
 
   return (
     <div className="p-4 md:p-6">

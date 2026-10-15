@@ -583,7 +583,7 @@ function DetalleCotizacion() {
   ];
 
   if (loading && !cotizacion) {
-    return <Loading message="Cargando cotizacion..." />;
+    return <Loading variant="detail" />;
   }
 
   if (!cotizacion) {

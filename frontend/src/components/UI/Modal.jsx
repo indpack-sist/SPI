@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import './Modal.css';
 
@@ -17,10 +18,10 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div 
-        className={`modal-content modal-${size}`} 
+      <div
+        className={`modal-content modal-${size}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
@@ -29,12 +30,13 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }) {
             <X size={20} />
           </button>
         </div>
-        
+
         <div className="modal-body">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

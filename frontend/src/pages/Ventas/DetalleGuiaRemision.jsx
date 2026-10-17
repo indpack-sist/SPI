@@ -255,7 +255,7 @@ function DetalleGuiaRemision() {
       width: '100px',
       align: 'right',
       render: (value) => (
-        <span className="text-sm">{parseFloat(value || 0).toFixed(2)} kg</span>
+        <span className="text-sm">{parseFloat(value || 0).toFixed(3)} kg</span>
       )
     },
     {
@@ -264,7 +264,7 @@ function DetalleGuiaRemision() {
       width: '120px',
       align: 'right',
       render: (value) => (
-        <span className="font-bold text-primary">{parseFloat(value || 0).toFixed(2)} kg</span>
+        <span className="font-bold text-primary">{parseFloat(value || 0).toFixed(3)} kg</span>
       )
     }
   ];

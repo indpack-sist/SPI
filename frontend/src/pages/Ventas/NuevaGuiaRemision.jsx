@@ -1197,11 +1197,11 @@ function NuevaGuiaRemision() {
                                 value={item.peso_unitario_kg}
                                 onChange={(e) => handlePesoChange(index, e.target.value)}
                                 min="0"
-                                step="0.01"
+                                step="0.001"
                               />
                             </td>
                             <td className="text-right font-bold">
-                              {pesoTotal.toFixed(2)}
+                              {pesoTotal.toFixed(3)}
                             </td>
                             {esExportacion && (
                               <td>

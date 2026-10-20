@@ -173,6 +173,16 @@ export const cambiarPassword = async (req, res) => {
     const { id_empleado } = req.params;
     const { password_actual, password_nuevo } = req.body;
 
+    const idSolicitado = Number(id_empleado);
+    const idPropio = Number(req.user?.id_empleado);
+    const esAdmin = req.user?.rol === 'Administrador';
+    if (!esAdmin && (!idPropio || idSolicitado !== idPropio)) {
+      return res.status(403).json({
+        success: false,
+        error: 'No tiene permiso para cambiar la contraseña de otro usuario'
+      });
+    }
+
     const result = await executeQuery(
       'SELECT password FROM empleados WHERE id_empleado = ?',
       [id_empleado]

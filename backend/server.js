@@ -3,10 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { testConnection } from './config/database.js';
-import { verificarToken, verificarTokenMedia, verificarPermiso } from './middleware/auth.js';
+import { JWT_SECRET } from './config/security.js';
+import { verificarToken, verificarTokenMedia, verificarPermiso, empleadoSigueActivo } from './middleware/auth.js';
 import { limitadorGlobal } from './middleware/rateLimit.js';
 import { startWorker } from './services/scraping-worker.js';
 
@@ -60,6 +62,16 @@ const allowedOrigins = [
 const app = express();
 app.set('trust proxy', 1);
 const httpServer = createServer(app);
+
+const corsOptions = {
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['Content-Disposition'],
+  maxAge: 86400
+};
+
 const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
@@ -70,7 +82,32 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
   allowEIO3: true,
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6
+});
+
+const MAX_CONEXIONES_POR_IP = 20;
+const conexionesPorIp = new Map();
+
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token) return next(new Error('TOKEN_MISSING'));
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return next(new Error('TOKEN_INVALID'));
+    }
+    if (decoded.scope === 'media') return next(new Error('TOKEN_INVALID'));
+    if ((await empleadoSigueActivo(decoded.id_empleado)) === false) {
+      return next(new Error('ACCOUNT_DISABLED'));
+    }
+    socket.user = decoded;
+    next();
+  } catch {
+    next(new Error('AUTH_ERROR'));
+  }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -81,15 +118,8 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  exposedHeaders: ['Content-Disposition'],
-  maxAge: 86400
-}));
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -111,18 +141,29 @@ app.use((req, res, next) => {
 app.set('socketio', io);
 
 io.on('connection', (socket) => {
+  const ip = socket.handshake.address || 'desconocida';
+  const activas = (conexionesPorIp.get(ip) || 0) + 1;
+  conexionesPorIp.set(ip, activas);
+  if (activas > MAX_CONEXIONES_POR_IP) {
+    socket.disconnect(true);
+    return;
+  }
   console.log('Nuevo cliente WebSocket conectado:', socket.id);
   
   socket.on('identificar_usuario', (id_usuario) => {
-    if (id_usuario) {
-      socket.join(`usuario_${id_usuario}`);
-      console.log(`Usuario ${id_usuario} unido a sala: usuario_${id_usuario}`);
+    const idPropio = socket.user?.id_empleado;
+    if (idPropio && id_usuario && Number(id_usuario) === Number(idPropio)) {
+      socket.join(`usuario_${idPropio}`);
+      console.log(`Usuario ${idPropio} unido a sala: usuario_${idPropio}`);
     } else {
-      console.warn('Intento de identificacion sin id_usuario');
+      console.warn('Intento de identificacion sin id_usuario valido');
     }
   });
 
   socket.on('disconnect', (reason) => {
+    const restantes = (conexionesPorIp.get(ip) || 1) - 1;
+    if (restantes <= 0) conexionesPorIp.delete(ip);
+    else conexionesPorIp.set(ip, restantes);
     console.log('Cliente desconectado:', socket.id, 'Razon:', reason);
   });
 

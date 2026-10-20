@@ -113,7 +113,7 @@ export default function MonitorSunat() {
   useEffect(() => { cargarRef.current = cargar; }, [cargar]);
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:3000';
-    const socket = io(socketUrl, { withCredentials: true, transports: ['polling', 'websocket'], reconnection: true, reconnectionDelay: 1000 });
+    const socket = io(socketUrl, { auth: { token: localStorage.getItem('token') || '' }, withCredentials: true, transports: ['polling', 'websocket'], reconnection: true, reconnectionDelay: 1000 });
     let debounce;
     const refrescar = () => { clearTimeout(debounce); debounce = setTimeout(() => cargarRef.current?.({ silent: true }), 500); };
     socket.on('connect', () => setEnVivo(true)); socket.on('disconnect', () => setEnVivo(false)); socket.on('sunat:cambio', refrescar);

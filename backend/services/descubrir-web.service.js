@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { similitudNombre } from './ruc-lookup.service.js';
+import { urlSegura } from '../utils/url-segura.js';
 
 const UA = 'Mozilla/5.0 (compatible; INDPACK-Prospector/1.0; +https://indpack.pe)';
 const TIMEOUT = Number(process.env.WEB_LOOKUP_TIMEOUT_MS) || 8000;
@@ -62,7 +63,9 @@ function hostCompacto(url) {
 
 async function fetchHtml(url) {
   try {
-    const res = await axios.get(url, {
+    const segura = await urlSegura(url);
+    if (!segura) return '';
+    const res = await axios.get(segura.href, {
       timeout: TIMEOUT,
       maxRedirects: 3,
       headers: { 'User-Agent': UA, Accept: 'text/html', 'Accept-Language': 'es-PE,es;q=0.9' },

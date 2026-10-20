@@ -15,8 +15,6 @@ router.get('/pdf-proxy', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    console.log("Procesando URL:", url);
-
     const urlParts = decodeURIComponent(url).split('/upload/');
     if (urlParts.length < 2) return res.status(400).json({ error: 'URL mal formada' });
 
@@ -29,8 +27,6 @@ router.get('/pdf-proxy', async (req, res) => {
 
     const resourceType = url.includes('/raw/') ? 'raw' : 'image';
 
-    console.log(`Firma para -> ID: ${publicId} | Versión: ${version} | Tipo: ${resourceType}`);
-
     const signOptions = {
       resource_type: resourceType,
       sign_url: true,
@@ -42,8 +38,6 @@ router.get('/pdf-proxy', async (req, res) => {
     }
 
     const signedUrl = cloudinary.url(publicId, signOptions);
-
-    console.log("URL Firmada Generada:", signedUrl);
 
     const response = await fetch(signedUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },

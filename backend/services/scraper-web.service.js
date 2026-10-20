@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { rucChecksumValido } from './ruc-lookup.service.js';
+import { urlSegura } from '../utils/url-segura.js';
 
 const UA = 'Mozilla/5.0 (compatible; INDPACK-Prospector/1.0; +https://indpack.pe)';
 const TIMEOUT = 12000;
@@ -84,7 +85,9 @@ function limpiarTelefono(t) {
 
 async function fetchHtml(url) {
   try {
-    const res = await axios.get(url, {
+    const segura = await urlSegura(url);
+    if (!segura) return '';
+    const res = await axios.get(segura.href, {
       timeout: TIMEOUT,
       maxRedirects: 3,
       headers: { 'User-Agent': UA, Accept: 'text/html' },
@@ -100,6 +103,8 @@ async function fetchHtml(url) {
 export async function scrapeWebsite(website) {
   const base = normalizarUrl(website);
   if (!base) return { ok: false, error: 'URL inválida', emails: [], telefonos: [], redes: {} };
+  const baseSegura = await urlSegura(base);
+  if (!baseSegura) return { ok: false, error: 'URL no permitida', emails: [], telefonos: [], redes: {} };
 
   const emails = new Map();
   const telefonos = new Map();

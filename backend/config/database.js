@@ -17,7 +17,8 @@ export const pool = mysql.createPool({
   connectTimeout: 60000,
   maxIdle: 5,
   idleTimeout: 60000,
-  timezone: '-05:00'
+  timezone: '-05:00',
+  ssl: { rejectUnauthorized: false }
 });
 
 export async function testConnection() {

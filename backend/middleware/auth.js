@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config/security.js';
 import { executeQuery } from '../config/database.js';
 
-const empleadoSigueActivo = async (idEmpleado) => {
+export const empleadoSigueActivo = async (idEmpleado) => {
   if (!idEmpleado) return false;
   const resultado = await executeQuery(
     'SELECT estado FROM empleados WHERE id_empleado = ?',

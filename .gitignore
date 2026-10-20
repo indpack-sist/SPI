@@ -12,5 +12,6 @@ certs/
 *.p12
 *.b64
 backend/sunat-output/
+backend/pdfs/
 
 *.md

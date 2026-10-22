@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle, Sun, Moon } from 'lucide-react';
+import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle, XCircle, Sun, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
@@ -23,31 +23,33 @@ function Navbar({ onToggleSidebar }) {
   }, []);
 
   useEffect(() => {
-    if (user?.id) {
-      if (socket) {
-        socket.disconnect();
-      }
-      
-      const SOCKET_URL = import.meta.env.VITE_API_URL 
-        ? import.meta.env.VITE_API_URL.replace('/api', '') 
-        : 'http://localhost:3000';
-      
-      const newSocket = io(SOCKET_URL, {
-        auth: { token: localStorage.getItem('token') || '' },
+    if (!user?.id) return;
+
+    const SOCKET_URL = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:3000';
+
+    const crearSocket = () => {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+
+      const s = io(SOCKET_URL, {
+        auth: { token },
         withCredentials: true,
         transports: ['polling', 'websocket'],
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
+        reconnectionDelayMax: 10000,
+        reconnectionAttempts: Infinity,
         timeout: 20000,
         forceNew: true
       });
 
-      newSocket.on('connect', () => {
-        newSocket.emit('identificar_usuario', user.id);
+      s.on('connect', () => {
+        s.emit('identificar_usuario', user.id);
       });
 
-      newSocket.on('nueva_notificacion', (notif) => {
+      s.on('nueva_notificacion', (notif) => {
         setNotificaciones(prev => [notif, ...prev]);
         setNoLeidas(prev => prev + 1);
         setToastNotificaciones(prev => [notif, ...prev]);
@@ -73,21 +75,38 @@ function Navbar({ onToggleSidebar }) {
         }
       });
 
-      newSocket.on('disconnect', (reason) => {
+      s.on('disconnect', (reason) => {
         console.log('WebSocket desconectado:', reason);
       });
 
-      newSocket.on('connect_error', (error) => {
-        console.error('Error de conexión WebSocket:', error.message);
+      s.on('connect_error', (error) => {
+        console.error('Error de conexion WebSocket:', error.message);
+        if (error.message === 'TOKEN_INVALID' || error.message === 'TOKEN_EXPIRED') {
+          s.auth = { token: localStorage.getItem('token') || '' };
+        }
       });
 
-      setSocket(newSocket);
+      return s;
+    };
 
-      return () => {
-        newSocket.disconnect();
-      };
-    }
-  }, [user]);
+    const newSocket = crearSocket();
+    if (!newSocket) return;
+    setSocket(newSocket);
+
+    const handleVisibilidad = () => {
+      if (document.visibilityState === 'visible' && !newSocket.connected) {
+        newSocket.auth = { token: localStorage.getItem('token') || '' };
+        newSocket.connect();
+        cargarNotificaciones();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilidad);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilidad);
+      newSocket.disconnect();
+    };
+  }, [user?.id]);
 
   const cargarNotificaciones = async () => {
     try {
@@ -176,8 +195,19 @@ function Navbar({ onToggleSidebar }) {
     switch(tipo) {
       case 'success': return CheckCircle;
       case 'warning': return AlertTriangle;
+      case 'danger': return XCircle;
       case 'info': return Info;
       default: return Bell;
+    }
+  };
+
+  const getEtiquetaTipo = (tipo) => {
+    switch(tipo) {
+      case 'success': return 'Aprobado';
+      case 'warning': return 'Requiere atencion';
+      case 'danger': return 'Rechazado';
+      case 'info': return 'Informativo';
+      default: return 'Sistema';
     }
   };
 
@@ -239,24 +269,30 @@ function Navbar({ onToggleSidebar }) {
                     </div>
                   ) : (
                     notificaciones.map(notif => {
-                      const Icono = getIconoNotificacion(notif.tipo);
+                      const tipoNotif = notif.tipo || 'info';
+                      const Icono = getIconoNotificacion(tipoNotif);
                       return (
-                        <div 
+                        <div
                           key={notif.id_notificacion}
-                          className={`navbar-notification-item ${notif.leido ? 'read' : 'unread'}`}
+                          className={`navbar-notification-item ${notif.leido ? 'read' : 'unread'} notif-${tipoNotif}`}
                           onClick={(e) => handleNotificacionClick(notif, e)}
                         >
-                          <div className={`navbar-notification-icon ${notif.tipo || 'info'}`}>
-                            <Icono size={20} />
+                          <div className={`navbar-notification-icon ${tipoNotif}`}>
+                            <Icono size={18} strokeWidth={2.5} />
                           </div>
                           <div className="navbar-notification-content">
+                            <div className="navbar-notification-meta">
+                              <span className={`navbar-notification-tag tag-${tipoNotif}`}>
+                                {getEtiquetaTipo(tipoNotif)}
+                              </span>
+                              <span className="navbar-notification-time">
+                                {formatearTiempo(notif.fecha_creacion)}
+                              </span>
+                            </div>
                             <h4>{notif.titulo}</h4>
                             <p>{notif.mensaje}</p>
-                            <span className="navbar-notification-time">
-                              {formatearTiempo(notif.fecha_creacion)}
-                            </span>
                           </div>
-                          {!notif.leido && <div className="navbar-notification-dot"></div>}
+                          {!notif.leido && <div className={`navbar-notification-dot dot-${tipoNotif}`}></div>}
                         </div>
                       );
                     })
@@ -282,26 +318,27 @@ function Navbar({ onToggleSidebar }) {
 
       <div className="notification-toast-container">
         {toastNotificaciones.map((notif) => {
-            const Icono = getIconoNotificacion(notif.tipo);
+            const tipoNotif = notif.tipo || 'info';
+            const Icono = getIconoNotificacion(tipoNotif);
             return (
-                <div 
-                    key={`toast-${notif.id_notificacion}`} 
-                    className={`notification-toast toast-${notif.tipo || 'info'}`}
+                <div
+                    key={`toast-${notif.id_notificacion}`}
+                    className={`notification-toast toast-${tipoNotif}`}
                     onClick={(e) => handleNotificacionClick(notif, e)}
                 >
-                    <div className="toast-icon">
-                        <Icono size={24} />
+                    <div className={`toast-icon-wrapper toast-icon-${tipoNotif}`}>
+                        <Icono size={20} strokeWidth={2.5} />
                     </div>
                     <div className="toast-content">
+                        <span className={`toast-tag tag-${tipoNotif}`}>{getEtiquetaTipo(tipoNotif)}</span>
                         <h4 className="toast-title">{notif.titulo}</h4>
                         <p className="toast-message">{notif.mensaje}</p>
-                        <span className="toast-time">{formatearTiempo(notif.fecha_creacion)}</span>
                     </div>
-                    <button 
+                    <button
                         className="toast-close-btn"
                         onClick={(e) => handleCloseToast(e, notif)}
                     >
-                        <X size={18} />
+                        <X size={16} />
                     </button>
                 </div>
             );

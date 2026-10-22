@@ -73,6 +73,8 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
     return `${selectedValues.length} seleccionados`;
   };
 
+  const active = selectedValues.length > 0;
+
   return (
     <div className="form-group mb-0" ref={dropdownRef}>
       <label className="form-label mb-1.5">{label}</label>
@@ -80,19 +82,23 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-10 px-3 text-sm border rounded-sm ${
-            selectedValues.length > 0
-              ? 'border-primary bg-primary/10 text-primary font-bold'
-              : 'border-steel bg-carbon-mid text-mist hover:border-wire'
-          }`}
-          style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}
+          className={`flex items-center justify-between w-full h-10 px-3 text-sm border rounded-sm ${active ? 'font-bold' : ''}`}
+          style={{
+            backgroundColor: active ? 'rgba(232,184,75,0.1)' : 'var(--carbon-mid)',
+            borderColor: active ? 'var(--primary)' : 'var(--steel)',
+            color: active ? 'var(--primary)' : 'var(--mist)',
+            transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease'
+          }}
         >
           <span className="truncate mr-2 font-medium">{getLabelText()}</span>
-          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-primary' : 'text-wire'}`} />
+          <ChevronDown size={16} style={{ color: active ? 'var(--primary)' : 'var(--wire)', transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-2 bg-carbon-light border border-steel rounded-sm shadow-xl overflow-hidden min-w-[220px]">
+          <div
+            className="absolute z-50 w-full mt-2 border rounded-sm overflow-hidden min-w-[220px]"
+            style={{ backgroundColor: 'var(--carbon-light)', borderColor: 'var(--steel)', boxShadow: 'var(--shadow-lg)' }}
+          >
             <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
               {options.map((opt) => {
                 const isSelected = selectedValues.includes(opt.value);
@@ -100,17 +106,22 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
                   <div
                     key={opt.value}
                     onClick={(e) => handleToggle(e, opt.value)}
-                    className={`flex items-center px-3 py-2.5 rounded-sm cursor-pointer transition-colors ${
-                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-steel/30 text-mist'
-                    }`}
+                    className="flex items-center px-3 py-2.5 rounded-sm cursor-pointer transition-colors"
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(232,184,75,0.1)' : undefined,
+                      color: isSelected ? 'var(--primary)' : 'var(--mist)'
+                    }}
                   >
                     <div className="flex items-center justify-center mr-3">
-                      <div className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center ${
-                        isSelected
-                          ? 'bg-primary border-primary'
-                          : 'bg-carbon border-steel'
-                      }`} style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease' }}>
-                        {isSelected && <Check size={14} className="text-carbon stroke-[4px]" />}
+                      <div
+                        className="w-5 h-5 border-2 rounded-sm flex items-center justify-center"
+                        style={{
+                          backgroundColor: isSelected ? 'var(--primary)' : 'var(--carbon)',
+                          borderColor: isSelected ? 'var(--primary)' : 'var(--steel)',
+                          transition: 'background-color 0.15s ease, border-color 0.15s ease'
+                        }}
+                      >
+                        {isSelected && <Check size={14} style={{ color: 'var(--carbon)' }} className="stroke-[4px]" />}
                       </div>
                     </div>
                     <span className={`text-sm select-none ${isSelected ? 'font-bold' : 'font-medium'}`}>
@@ -121,11 +132,11 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
               })}
             </div>
             {selectedValues.length > 0 && (
-              <div className="p-1 bg-carbon border-t border-steel">
+              <div className="p-1 border-t" style={{ backgroundColor: 'var(--carbon)', borderColor: 'var(--steel)' }}>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onChange([]); }}
-                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger hover:bg-danger/10 rounded-sm font-bold transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger rounded-sm font-bold transition-colors flex items-center justify-center gap-2"
                 >
                   <RefreshCcw size={12} />
                   Limpiar selección
@@ -865,19 +876,19 @@ function OrdenesVenta() {
                 <div className="p-2 bg-primary/10 rounded-sm"><ShoppingCart size={28} className="text-primary" /></div>
                 <span className="uppercase font-barlow text-heading">Órdenes de Venta</span>
               </h1>
-              <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
+              <p className="text-[0.7rem] uppercase tracking-[0.2em] mt-1" style={{ color: 'var(--wire)' }}>Gestión de operaciones comerciales</p>
             </div>
             {!soloLectura && (
               <div className="flex gap-3">
                 <button
-                  className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl"
+                  className="btn btn-outline font-black text-sm tracking-widest h-12 px-6 shadow-xl"
+                  style={{ borderColor: 'var(--steel)', color: 'var(--mist)' }}
                   onClick={() => navigate('/ventas/ordenes/verificacion')}
                 >
                   <Shield size={20} /> VERIFICACIÓN
                 </button>
                 <button
-                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 enabled:active:scale-[0.96]"
-                  style={{ transition: 'transform 0.15s ease-out, box-shadow 0.15s ease-out' }}
+                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl btn-press"
                   onClick={() => navigate('/ventas/ordenes/nueva')}
                 >
                   <Plus size={22} /> NUEVA ORDEN
@@ -887,10 +898,10 @@ function OrdenesVenta() {
           </div>
 
           <div className="flex flex-col items-end gap-1 shrink-0 pt-1">
-            <span className="text-[0.55rem] font-black text-wire uppercase tracking-[0.25em]">Período filtrado</span>
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-sm shadow-inner">
+            <span className="text-[0.55rem] font-black uppercase tracking-[0.25em]" style={{ color: 'var(--wire)' }}>Período filtrado</span>
+            <div className="flex items-center gap-2 px-4 py-2.5 border rounded-sm shadow-inner" style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.5)' }}>
               <Calendar size={16} className="text-primary" />
-              <span className="text-sm font-black text-mist tracking-widest uppercase">
+              <span className="text-sm font-black tracking-widest uppercase" style={{ color: 'var(--mist)' }}>
                 {textoFechaPeriodo}
               </span>
             </div>
@@ -904,8 +915,8 @@ function OrdenesVenta() {
           <div className="flex flex-col items-center mb-6">
             <button
   onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
-  className="flex items-center gap-2 h-11 px-6 btn btn-outline border-steel text-mist font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary"
-  style={{ transition: 'border-color 0.15s ease, color 0.15s ease' }}
+  className="flex items-center gap-2 h-11 px-6 btn btn-outline font-black text-[0.7rem] tracking-widest"
+  style={{ borderColor: 'var(--steel)', color: 'var(--mist)', transition: 'border-color 0.15s ease, color 0.15s ease' }}
 >
   <TrendingUp size={16} className={mostrarEstadisticas ? 'text-primary' : ''} />
   {mostrarEstadisticas ? 'OCULTAR RESUMEN' : 'VER RESUMEN GENERAL'}
@@ -914,37 +925,37 @@ function OrdenesVenta() {
 
             {mostrarEstadisticas && (
               <div className="stats-grid mt-4 w-full" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-                <div className="stat-card border-l-4 border-success/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(46,204,113,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">FACTURAS (PEN)</p>
                     <p className="stat-value text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
                   </div>
                 </div>
-                <div className="stat-card border-l-4 border-primary/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(232,184,75,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">FACTURAS (USD)</p>
                     <p className="stat-value text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
                   </div>
                 </div>
-                <div className="stat-card border-l-4 border-info/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(93,173,226,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">N. VENTA (PEN)</p>
                     <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
                   </div>
                 </div>
-                <div className="stat-card border-l-4 border-info/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(93,173,226,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">N. VENTA (USD)</p>
                     <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
                   </div>
                 </div>
-                <div className="stat-card border-l-4 border-warning/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(243,156,18,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">SIN COMPR. (PEN)</p>
                     <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
                   </div>
                 </div>
-                <div className="stat-card border-l-4 border-warning/50">
+                <div className="stat-card" style={{ borderLeft: '4px solid rgba(243,156,18,0.5)' }}>
                   <div className="stat-content">
                     <p className="stat-label">SIN COMPR. (USD)</p>
                     <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
@@ -955,11 +966,11 @@ function OrdenesVenta() {
           </div>
         )}
 
-        <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
+        <div className="card mb-4 shadow-xl" style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.3)' }}>
           <div className="card-body p-4">
             <div className="flex flex-col md:flex-row gap-3">
               <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--wire)' }} />
                 <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
               </div>
 
@@ -976,15 +987,15 @@ function OrdenesVenta() {
                   value={fechaFin} 
                   onChange={handleFechaFinChange} 
                 />
-                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`} style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}>
+                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline'}`} style={{ borderColor: mostrarFiltrosAvanzados ? undefined : 'var(--steel)', transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}>
                   <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
                 </button>
-                <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3" title="Limpiar todos los filtros"><X size={18} /></button>
+                <button onClick={limpiarFiltros} className="btn btn-outline text-danger h-11 px-3" style={{ borderColor: 'var(--steel)' }} title="Limpiar todos los filtros"><X size={18} /></button>
               </div>
             </div>
 
             {mostrarFiltrosAvanzados && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'rgba(58,58,58,0.2)' }}>
                 <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
                   { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
                 ]} />
@@ -1018,15 +1029,15 @@ function OrdenesVenta() {
         <div className="card list-panel relative" ref={tablaRef}>
           <div className="card-header flex items-center justify-between">
             <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-sm text-xs">{pagination.total}</span></h2>
-            <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
+            <div className="text-[0.6rem] font-bold uppercase tracking-widest" style={{ color: 'var(--wire)' }}>Mostrando {currentItems.length} registros</div>
           </div>
 
           <div className="card-body p-0 relative">
             {isFiltering && (
-              <div className="absolute inset-0 z-30 bg-carbon/80 backdrop-blur-[4px] flex items-center justify-center" style={{ transition: 'opacity 0.3s ease' }}>
-                <div className="flex flex-col items-center gap-3 p-8 bg-carbon-light shadow-2xl rounded-sm border border-steel">
+              <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,15,15,0.8)', backdropFilter: 'blur(4px)', transition: 'opacity 0.3s ease' }}>
+                <div className="flex flex-col items-center gap-3 p-8 rounded-sm" style={{ backgroundColor: 'var(--carbon-light)', border: '1px solid var(--steel)', boxShadow: 'var(--shadow-lg)' }}>
                   <RefreshCcw size={32} className="animate-spin text-primary" />
-                  <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.3em]">Procesando</span>
+                  <span className="text-[0.6rem] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--wire)' }}>Procesando</span>
                 </div>
               </div>
             )}
@@ -1036,20 +1047,20 @@ function OrdenesVenta() {
           </div>
 
           {pagination.total > itemsPerPage && (
-            <div className="px-4 sm:px-6 py-4 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
-              <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1 flex items-center gap-1.5">
+            <div className="px-4 sm:px-6 py-4 border-t flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20"
+              style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.3)' }}>
+              <div className="text-[0.7rem] font-medium tracking-wide order-2 lg:order-1 flex items-center gap-1.5" style={{ color: 'var(--wire)' }}>
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
-                <span className="text-steel">–</span>
+                <span style={{ color: 'var(--steel)' }}>–</span>
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + currentItems.length}</span>
-                <span className="text-steel">de</span>
-                <span className="text-mist font-bold">{pagination.total}</span>
+                <span style={{ color: 'var(--steel)' }}>de</span>
+                <span className="font-bold" style={{ color: 'var(--mist)' }}>{pagination.total}</span>
                 <span className="uppercase tracking-widest text-[0.6rem]">ordenes</span>
               </div>
 
               <div className="flex items-center gap-1.5 order-1 lg:order-2">
                 <button
-                  className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-carbon-mid border border-steel text-mist rounded-sm font-bold text-[0.65rem] tracking-wider cursor-pointer hover:border-primary hover:text-primary disabled:opacity-35 disabled:cursor-not-allowed"
-                  style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                  className="pagination-nav-btn"
                   onClick={goToPrevPage}
                   disabled={currentPage === 1}
                 >
@@ -1058,17 +1069,12 @@ function OrdenesVenta() {
                 <div className="flex items-center gap-1 mx-1">
                   {getPageNumbers().map((num, idx) => (
                     num === '...'
-                      ? <span key={`ell-${idx}`} className="w-8 h-9 flex items-center justify-center text-steel font-bold select-none">···</span>
+                      ? <span key={`ell-${idx}`} className="w-8 h-9 flex items-center justify-center font-bold select-none" style={{ color: 'var(--steel)' }}>···</span>
                       : (
                         <button
                           key={`pg-${num}`}
                           onClick={() => setCurrentPage(num)}
-                          className={`flex items-center justify-center w-9 h-9 min-w-[36px] rounded-sm font-bold text-sm cursor-pointer border ${
-                            currentPage === num
-                              ? 'bg-primary border-primary text-[#000] font-extrabold shadow-[0_2px_8px_rgba(232,184,75,0.35)]'
-                              : 'bg-transparent border-transparent text-mist hover:text-primary hover:bg-primary/10'
-                          }`}
-                          style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                          className={`pagination-page-btn ${currentPage === num ? 'active' : ''}`}
                         >
                           {num}
                         </button>
@@ -1076,8 +1082,7 @@ function OrdenesVenta() {
                   ))}
                 </div>
                 <button
-                  className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-carbon-mid border border-steel text-mist rounded-sm font-bold text-[0.65rem] tracking-wider cursor-pointer hover:border-primary hover:text-primary disabled:opacity-35 disabled:cursor-not-allowed"
-                  style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                  className="pagination-nav-btn"
                   onClick={goToNextPage}
                   disabled={currentPage === totalPages}
                 >
@@ -1086,16 +1091,15 @@ function OrdenesVenta() {
               </div>
 
               <div className="flex items-center gap-2 order-3">
-                <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">Ir a</span>
+                <span className="text-[0.6rem] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--wire)' }}>Ir a</span>
                 <input
                   type="number" min="1" max={totalPages} value={inputPage}
                   onChange={(e) => setInputPage(e.target.value)}
                   onKeyDown={handlePageJump}
                   onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }}
-                  className="w-14 h-9 text-center text-sm font-bold text-primary bg-carbon border border-steel rounded-sm outline-none"
-                  style={{ transition: 'border-color 0.15s ease' }}
+                  className="form-input w-14 h-9 text-center text-sm font-bold text-primary rounded-sm"
                 />
-                <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">/ {totalPages}</span>
+                <span className="text-[0.6rem] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--wire)' }}>/ {totalPages}</span>
               </div>
             </div>
           )}

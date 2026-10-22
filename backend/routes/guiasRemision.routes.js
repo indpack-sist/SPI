@@ -34,6 +34,8 @@ router.post('/', createGuiaRemision);
 router.put('/:id', updateGuiaRemision);
 router.post('/compra', createGuiaCompra);
 
+
+
 router.get('/:id/pdf', descargarPDFGuiaRemision);
 router.post('/:id/despachar', despacharGuiaRemision);
 router.post('/:id/entregar', marcarEntregadaGuiaRemision);

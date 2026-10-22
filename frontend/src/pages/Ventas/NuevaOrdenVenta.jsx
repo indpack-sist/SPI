@@ -249,8 +249,9 @@ useEffect(() => {
       if (resProductos.data.success) setProductos(resProductos.data.data || []);
       
       if (resEmpleados.data.success) {
-        const vendedores = (resEmpleados.data.data || []).filter(e => 
+        const vendedores = (resEmpleados.data.data || []).filter(e =>
           ['ventas', 'comercial', 'gerencia', 'administrador'].includes(e.rol?.toLowerCase())
+          && ![2, 21].includes(e.id_empleado)
         );
         setComerciales(vendedores);
       }

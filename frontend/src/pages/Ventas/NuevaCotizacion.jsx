@@ -242,6 +242,7 @@ function NuevaCotizacion() {
       if (resComerciales.data.success) {
         const vendedores = (resComerciales.data.data || []).filter(
           emp => ['ventas', 'comercial'].includes(emp.rol?.toLowerCase())
+          && ![2, 21].includes(emp.id_empleado)
         );
         setComerciales(vendedores);
       }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check, Eye, EyeOff, History, Lock, User } from 'lucide-react';
+import { Search, FileText, Plus, Package, Save, Edit, Trash2, Tag, Eye, EyeOff, History, Lock, User } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
@@ -333,31 +333,16 @@ function ListaPrecios() {
   });
 
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col overflow-hidden page-listas-precios">
-      <style dangerouslySetInnerHTML={{__html: `
-        .page-listas-precios, .page-listas-precios .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
-        .page-listas-precios .search-input, .page-listas-precios .form-input, .page-listas-precios input, .page-listas-precios select {
-          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
-        }
-        .page-listas-precios select { cursor: pointer !important; }
-        .page-listas-precios .table-container { background-color: var(--carbon) !important; border: 1px solid var(--steel) !important; border-radius: 6px !important; }
-        @media (min-width: 641px) { .page-listas-precios .table-container { overflow: hidden !important; } }
-        .page-listas-precios table th { background-color: var(--carbon-light) !important; color: var(--wire) !important; border-bottom: 1px solid var(--steel) !important; }
-        .page-listas-precios table td { border-bottom: 1px solid var(--steel) !important; color: var(--mist) !important; }
-        .page-listas-precios table tr:hover td { background-color: var(--carbon-mid) !important; }
-        .page-listas-precios .bg-blue-50\\/50, .page-listas-precios .bg-blue-50\\/30, .page-listas-precios .bg-green-50\\/50 { background-color: var(--primary-10) !important; border-color: var(--primary) !important; }
-      `}} />
+    <div className="p-4 md:p-6 h-full flex flex-col overflow-hidden">
 
-      <div className="flex flex-row justify-between items-start gap-4 mb-6 shrink-0">
-          <div className="flex flex-col gap-3">
-            <div>
-              <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                <div className="p-2 bg-primary/10 rounded-lg"><Tag size={28} className="text-primary" /></div>
-                <span className="uppercase font-barlow text-white">Listas de Precios</span>
-              </h1>
-              <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de precios especiales por cliente</p>
-            </div>
-          </div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Tag size={28} className="text-primary" />
+            Listas de Precios
+          </h1>
+          <p className="text-muted">Gestión de precios especiales por cliente</p>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -365,29 +350,34 @@ function ListaPrecios() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0">
 
-        <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col h-full">
-          <div className="card-header border-b border-steel/20 p-4">
-            <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">1. Seleccionar Cliente</h2>
-            <div className="relative flex items-center mt-3">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
-              <input 
-                type="text" 
-                className="form-input w-full pl-10 h-11" 
-                placeholder="Buscar cliente..." 
+        <div className="card shadow-sm flex flex-col h-full">
+          <div className="card-header p-4">
+            <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">Seleccionar Cliente</h2>
+            <div className="search-input-wrapper mt-3">
+              <Search size={18} className="search-icon" />
+              <input
+                type="text"
+                className="form-input search-input"
+                placeholder="Buscar cliente por razón social..."
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)} 
+                onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
           </div>
           <div className="overflow-y-auto flex-1 p-2 scrollbar-thin">
-            {clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase())).map(c => (
-              <div 
-                key={c.id_cliente} 
-                onClick={() => seleccionarCliente(c)} 
-                className={`p-3 mb-1 rounded-lg border cursor-pointer transition-all ${clienteSel?.id_cliente === c.id_cliente ? 'bg-primary/10 border-primary shadow-[0_0_10px_rgba(232,184,75,0.1)]' : 'border-transparent hover:border-steel hover:bg-carbon-light'}`}
+            {!busqueda.trim() ? (
+              <div className="flex flex-col items-center justify-center h-full py-8">
+                <Search size={28} className="text-muted mb-3" />
+                <p className="text-sm text-muted text-center">Escriba para buscar un cliente</p>
+              </div>
+            ) : clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase())).map(c => (
+              <div
+                key={c.id_cliente}
+                onClick={() => seleccionarCliente(c)}
+                className={`p-3 mb-1 rounded-lg border cursor-pointer transition-colors ${clienteSel?.id_cliente === c.id_cliente ? 'bg-primary/10 border-primary' : 'border-transparent hover:border-steel hover:bg-carbon-light'}`}
               >
-                <p className={`font-bold text-sm line-clamp-1 ${clienteSel?.id_cliente === c.id_cliente ? 'text-primary' : 'text-mist'}`}>{c.razon_social}</p>
-                <p className="text-xs text-wire font-mono mt-1">RUC: {c.ruc}</p>
+                <p className={`font-bold text-sm line-clamp-1 ${clienteSel?.id_cliente === c.id_cliente ? 'text-primary' : ''}`}>{c.razon_social}</p>
+                <p className="text-xs text-muted font-mono mt-1">RUC: {c.ruc}</p>
               </div>
             ))}
           </div>
@@ -396,42 +386,42 @@ function ListaPrecios() {
         <div className="md:col-span-2 flex flex-col gap-6 h-full min-h-0">
           {clienteSel ? (
             <>
-              <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col shrink-0 max-h-[40%]">
-                <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light">
+              <div className="card shadow-sm flex flex-col shrink-0 max-h-[40%]">
+                <div className="card-header flex justify-between items-center p-4">
                   <div>
-                    <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">Listas de {clienteSel.razon_social}</h2>
-                    <p className="text-[0.6rem] font-bold text-wire uppercase tracking-widest mt-1">Haga clic en Editar para modificar productos.</p>
+                    <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">Listas de {clienteSel.razon_social}</h2>
+                    <p className="text-xs text-muted mt-1">Haga clic en Editar para modificar productos</p>
                   </div>
-                  <button onClick={abrirModalNuevaLista} className="btn btn-primary font-black text-xs tracking-widest h-10 px-4 shadow-xl active:scale-95 transition-all flex items-center gap-2">
-                    <Plus size={16} /> NUEVA LISTA
+                  <button onClick={abrirModalNuevaLista} className="btn btn-primary flex items-center gap-2">
+                    <Plus size={16} /> Nueva Lista
                   </button>
                 </div>
-                
-                <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 scrollbar-thin bg-carbon">
-                  {listas.length === 0 && <p className="text-wire text-sm col-span-2 text-center py-8 uppercase tracking-widest font-black">Este cliente no tiene listas de precios creadas.</p>}
+
+                <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 scrollbar-thin">
+                  {listas.length === 0 && <p className="text-muted text-sm col-span-2 text-center py-8">Este cliente no tiene listas de precios creadas.</p>}
                   {listas.map(l => (
-                    <div 
-                        key={l.id_lista} 
-                        onClick={() => verDetalle(l)} 
-                        className={`p-4 border rounded-xl cursor-pointer flex justify-between items-center transition-all bg-carbon-light
-                            ${listaSeleccionadaID === l.id_lista ? 'border-primary shadow-[0_0_15px_rgba(232,184,75,0.2)]' : 'border-steel hover:border-wire'}
+                    <div
+                        key={l.id_lista}
+                        onClick={() => verDetalle(l)}
+                        className={`p-4 border rounded-lg cursor-pointer flex justify-between items-center transition-colors
+                            ${listaSeleccionadaID === l.id_lista ? 'bg-primary/10 border-primary' : 'border-steel hover:border-wire hover:bg-carbon-light'}
                         `}
                     >
                       <div className="flex-1 overflow-hidden pr-2">
-                        <div className="flex items-center gap-2 mb-2">
-                            <h3 className={`font-black truncate ${listaSeleccionadaID === l.id_lista ? 'text-primary' : 'text-mist'}`} title={l.nombre_lista}>{l.nombre_lista}</h3>
-                            <span className="badge badge-sm badge-info shrink-0 text-[10px] uppercase font-black tracking-wider">{l.moneda}</span>
+                        <div className="flex items-center gap-2 mb-1">
+                            <h3 className={`font-bold truncate ${listaSeleccionadaID === l.id_lista ? 'text-primary' : ''}`} title={l.nombre_lista}>{l.nombre_lista}</h3>
+                            <span className="badge badge-sm badge-info shrink-0">{l.moneda}</span>
                         </div>
-                        <p className="text-xs text-wire font-medium uppercase tracking-wider">{l.total_productos} productos incluidos</p>
-                        <p className="text-[0.65rem] text-wire font-medium mt-1 flex items-center gap-1 truncate" title={l.creador_nombre || ''}>
+                        <p className="text-xs text-muted">{l.total_productos} productos incluidos</p>
+                        <p className="text-xs text-muted mt-1 flex items-center gap-1 truncate" title={l.creador_nombre || ''}>
                             <User size={11} className="shrink-0" />
                             {l.creador_nombre ? `Creada por ${l.creador_nombre}` : 'Sin dueño asignado'}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
-                            className="btn btn-xs btn-outline border-steel p-2 hover:border-info hover:text-info transition-colors text-mist"
+                            className="btn btn-sm btn-outline"
                             onClick={(e) => verHistorial(e, l)}
                             title="Ver historial de cambios de precios"
                         >
@@ -440,23 +430,23 @@ function ListaPrecios() {
                         {puedeEditar(l) ? (
                           <>
                             <button
-                                className="btn btn-xs btn-outline border-steel p-2 hover:border-primary hover:text-primary transition-colors text-mist"
+                                className="btn btn-sm btn-outline"
                                 onClick={(e) => abrirModalEditarLista(e, l)}
-                                title="Editar Lista (Añadir/Eliminar Productos)"
+                                title="Editar lista"
                             >
                                 <Edit size={14} />
                             </button>
                             <button
-                                className="btn btn-xs btn-outline border-steel p-2 hover:border-danger hover:text-danger hover:bg-danger/10 transition-colors text-mist"
+                                className="btn btn-sm btn-outline"
                                 onClick={(e) => eliminarLista(e, l)}
-                                title="Eliminar Lista Completa"
+                                title="Eliminar lista"
                             >
                                 <Trash2 size={14} />
                             </button>
                           </>
                         ) : (
                           <span
-                            className="btn btn-xs btn-outline border-steel p-2 text-wire opacity-60 cursor-not-allowed"
+                            className="btn btn-sm btn-outline opacity-60 cursor-not-allowed"
                             title={`Solo ${l.creador_nombre || 'el creador'} puede editar o eliminar esta lista`}
                           >
                             <Lock size={14} />
@@ -468,30 +458,28 @@ function ListaPrecios() {
                 </div>
               </div>
 
-              <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex-1 flex flex-col min-h-0">
-                <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light shrink-0">
-                  <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">
-                    <FileText size={16} className="text-primary" /> VISUALIZACIÓN DE LISTA
+              <div className="card shadow-sm flex-1 flex flex-col min-h-0">
+                <div className="card-header flex justify-between items-center p-4 shrink-0">
+                  <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
+                    <FileText size={16} className="text-primary" /> Detalle de Lista
                   </h2>
-                  <div className="flex items-center gap-2">
-                      {seleccionados.length > 0 && (
-                        <button onClick={generarCotizacion} className="btn h-10 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all btn-success animate-fadeIn">
-                          COTIZAR ({seleccionados.length})
-                        </button>
-                      )}
-                  </div>
+                  {seleccionados.length > 0 && (
+                    <button onClick={generarCotizacion} className="btn btn-success flex items-center gap-2">
+                      Cotizar ({seleccionados.length})
+                    </button>
+                  )}
                 </div>
-                
-                <div className="flex-1 overflow-auto bg-carbon">
+
+                <div className="card-body p-0 flex-1 overflow-auto">
                     {detalleLista.length > 0 ? (
                         <div className="table-container m-0 border-0 rounded-none h-full">
                           <table className="table w-full relative">
-                              <thead className="sticky top-0 bg-carbon-light shadow-sm z-10">
+                              <thead className="sticky top-0 z-10">
                                   <tr>
-                                      <th className="w-12 text-center border-b border-steel">
-                                          <input 
-                                              type="checkbox" 
-                                              className="w-4 h-4 rounded border-steel bg-carbon-mid accent-primary"
+                                      <th className="w-12 text-center">
+                                          <input
+                                              type="checkbox"
+                                              className="w-4 h-4 rounded accent-primary cursor-pointer"
                                               onChange={(e) => {
                                                   if(e.target.checked) setSeleccionados(detalleLista);
                                                   else setSeleccionados([]);
@@ -499,31 +487,31 @@ function ListaPrecios() {
                                               checked={seleccionados.length === detalleLista.length && detalleLista.length > 0}
                                           />
                                       </th>
-                                      <th className="font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Producto</th>
-                                      <th className="text-right font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Precio Estándar</th>
-                                      <th className="text-right font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Precio de Lista</th>
+                                      <th>Producto</th>
+                                      <th className="text-right">Precio Estándar</th>
+                                      <th className="text-right">Precio de Lista</th>
                                   </tr>
                               </thead>
                               <tbody>
                                   {detalleLista.map(item => (
-                                      <tr key={item.id_producto} className={`${seleccionados.find(s => s.id_producto === item.id_producto) ? 'bg-primary/10' : 'hover:bg-carbon-light'}`}>
-                                          <td className="text-center align-middle border-b border-steel">
-                                              <input 
-                                                  type="checkbox" 
-                                                  className="w-4 h-4 rounded border-steel bg-carbon-mid accent-primary cursor-pointer" 
-                                                  checked={!!seleccionados.find(s => s.id_producto === item.id_producto)} 
-                                                  onChange={() => toggleSeleccion(item)} 
+                                      <tr key={item.id_producto} className={seleccionados.find(s => s.id_producto === item.id_producto) ? 'bg-primary/10' : ''}>
+                                          <td className="text-center align-middle">
+                                              <input
+                                                  type="checkbox"
+                                                  className="w-4 h-4 rounded accent-primary cursor-pointer"
+                                                  checked={!!seleccionados.find(s => s.id_producto === item.id_producto)}
+                                                  onChange={() => toggleSeleccion(item)}
                                               />
                                           </td>
-                                          <td className="border-b border-steel">
-                                              <p className="font-bold text-sm text-mist">{item.producto}</p>
-                                              <p className="text-xs text-wire font-mono mt-1">{item.codigo}</p>
+                                          <td>
+                                              <p className="font-medium">{item.producto}</p>
+                                              <p className="text-xs text-muted font-mono mt-0.5">{item.codigo}</p>
                                           </td>
-                                          <td className="text-right text-wire line-through text-xs border-b border-steel align-middle">
+                                          <td className="text-right text-muted line-through text-xs align-middle">
                                               {item.moneda} {parseFloat(item.precio_estandar).toFixed(2)}
                                           </td>
-                                          <td className="text-right border-b border-steel align-middle p-3">
-                                              <span className="font-black text-primary text-base bg-carbon px-3 py-1.5 rounded border border-steel shadow-inner">
+                                          <td className="text-right align-middle">
+                                              <span className="font-bold text-primary">
                                                   {item.moneda} {parseFloat(item.precio_especial).toFixed(2)}
                                               </span>
                                           </td>
@@ -533,12 +521,10 @@ function ListaPrecios() {
                           </table>
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-wire p-8">
-                            <div className="bg-carbon-light p-5 rounded-xl border border-steel mb-4 shadow-inner">
-                                <Package size={48} className="text-steel" />
-                            </div>
-                            <p className="text-sm font-black uppercase tracking-widest text-mist">Ninguna lista seleccionada</p>
-                            <p className="text-xs mt-2 text-center max-w-sm text-wire uppercase tracking-wider leading-relaxed">
+                        <div className="h-full flex flex-col items-center justify-center p-8">
+                            <Package size={40} className="text-muted mb-3" />
+                            <p className="text-sm font-medium">Ninguna lista seleccionada</p>
+                            <p className="text-xs text-muted mt-1 text-center max-w-sm">
                                 Seleccione una lista arriba para ver sus precios, o edite una lista para agregar o remover productos.
                             </p>
                         </div>
@@ -547,88 +533,82 @@ function ListaPrecios() {
               </div>
             </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center bg-carbon-mid rounded-xl border-2 border-dashed border-steel/50 shadow-inner">
-              <div className="bg-carbon-light p-6 rounded-full shadow-lg border border-steel mb-4">
-                <Search size={32} className="text-wire" />
-              </div>
-              <p className="text-sm font-black text-mist uppercase tracking-widest">Seleccione un cliente</p>
-              <p className="text-xs text-wire mt-2 uppercase tracking-wider font-medium">Podrá visualizar, crear y editar sus listas de precios</p>
+            <div className="h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-steel/50">
+              <Search size={32} className="text-muted mb-3" />
+              <p className="text-sm font-medium">Seleccione un cliente</p>
+              <p className="text-xs text-muted mt-1">Podrá visualizar, crear y editar sus listas de precios</p>
             </div>
           )}
         </div>
       </div>
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="xl">
-        <div className="flex flex-col h-[75vh] page-listas-precios p-1">
-            <div className="grid grid-cols-2 gap-4 mb-4 shrink-0 bg-carbon-mid p-4 rounded-xl border border-steel shadow-inner">
+        <div className="flex flex-col h-[75vh]">
+            <div className="grid grid-cols-2 gap-4 mb-4 shrink-0">
                 <div>
-                    <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Nombre de la Lista</label>
-                    <input 
-                        type="text" 
-                        className="form-input h-11 font-bold text-mist" 
-                        placeholder="Ej: Precios 2026, Mayorista..." 
+                    <label className="form-label">Nombre de la Lista</label>
+                    <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Ej: Precios 2026, Mayorista..."
                         value={nuevaLista.nombre_lista}
                         onChange={(e) => setNuevaLista({...nuevaLista, nombre_lista: e.target.value})}
                     />
                 </div>
                 <div>
-                    <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Moneda</label>
-                    <div className="relative">
-                      <select 
-                          className="w-full h-11 px-3 border border-steel rounded bg-carbon-mid text-mist font-bold focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer appearance-none"
-                          value={nuevaLista.moneda}
-                          onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
-                      >
-                          <option value="PEN" className="bg-carbon text-mist">Soles (PEN)</option>
-                          <option value="USD" className="bg-carbon text-mist">Dólares (USD)</option>
-                      </select>
-                    </div>
+                    <label className="form-label">Moneda</label>
+                    <select
+                        className="form-input cursor-pointer"
+                        value={nuevaLista.moneda}
+                        onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
+                    >
+                        <option value="PEN">Soles (PEN)</option>
+                        <option value="USD">Dólares (USD)</option>
+                    </select>
                 </div>
             </div>
 
-            <div className="flex-1 border border-steel rounded-xl flex flex-col min-h-0 bg-carbon overflow-hidden shadow-xl">
-                <div className="p-3 border-b border-steel bg-carbon-light flex justify-between items-center shrink-0">
-                    <div className="relative w-1/2 flex items-center">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
-                        <input 
-                            type="text" 
-                            className="form-input h-10 w-full pl-10 text-sm" 
-                            placeholder="Buscar producto por nombre o código..." 
+            <div className="flex-1 card flex flex-col min-h-0 overflow-hidden">
+                <div className="card-header flex justify-between items-center p-3 shrink-0">
+                    <div className="search-input-wrapper w-1/2">
+                        <Search size={16} className="search-icon" />
+                        <input
+                            type="text"
+                            className="form-input search-input"
+                            placeholder="Buscar producto por nombre o código..."
                             value={busquedaProdModal}
                             onChange={(e) => setBusquedaProdModal(e.target.value)}
                         />
                     </div>
-                    <div className="flex items-center gap-4">
-                        <button 
-                            className={`flex items-center gap-2 h-10 px-4 rounded-lg border text-[0.65rem] font-black tracking-widest transition-all ${mostrarSoloIncluidos ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(232,184,75,0.1)]' : 'bg-carbon-mid border-steel text-wire hover:text-mist hover:border-wire'}`}
+                    <div className="flex items-center gap-3">
+                        <button
+                            className={`btn btn-sm ${mostrarSoloIncluidos ? 'btn-primary' : 'btn-outline'}`}
                             onClick={() => setMostrarSoloIncluidos(!mostrarSoloIncluidos)}
                         >
-                            {mostrarSoloIncluidos ? <Eye size={16} /> : <EyeOff size={16} />}
-                            {mostrarSoloIncluidos ? 'MOSTRAR TODO EL CATÁLOGO' : 'VER SOLO INCLUIDOS'}
+                            {mostrarSoloIncluidos ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {mostrarSoloIncluidos ? 'Todo el catálogo' : 'Solo incluidos'}
                         </button>
-                        <div className="flex flex-col items-end gap-1 border-l border-steel pl-4">
-                            <div className="badge badge-primary font-black uppercase tracking-widest text-[10px] px-2 py-1 shadow-[0_0_10px_rgba(232,184,75,0.2)]">
-                                {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
-                            </div>
-                        </div>
+                        <span className="badge badge-primary">
+                            {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
+                        </span>
                     </div>
                 </div>
-                
-                <div className="overflow-y-auto flex-1 scrollbar-thin">
+
+                <div className="overflow-y-auto flex-1 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
                     <table className="table w-full">
-                        <thead className="sticky top-0 bg-carbon-mid shadow-md z-10 border-b border-steel">
+                        <thead className="sticky top-0 z-10">
                             <tr>
-                                <th className="w-16 text-center font-black text-[10px] text-wire uppercase tracking-widest py-3">Incluir</th>
-                                <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3">Producto</th>
-                                <th className="text-right w-32 font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Ref.</th>
-                                <th className="text-right w-48 font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Especial</th>
+                                <th className="w-16 text-center">Incluir</th>
+                                <th>Producto</th>
+                                <th className="text-right w-32">Precio Ref.</th>
+                                <th className="text-right w-48">Precio Especial</th>
                             </tr>
                         </thead>
                         <tbody>
                             {productosFiltradosModal.length === 0 ? (
                               <tr>
                                 <td colSpan="4" className="text-center py-8">
-                                  <p className="text-wire font-bold uppercase tracking-widest text-xs">No se encontraron productos</p>
+                                  <p className="text-muted text-sm">No se encontraron productos</p>
                                 </td>
                               </tr>
                             ) : productosFiltradosModal.map(p => {
@@ -636,32 +616,30 @@ function ListaPrecios() {
                                 const isSelected = nuevaLista.items[p.id_producto] !== undefined;
 
                                 return (
-                                <tr key={p.id_producto} className={`border-b border-steel/50 ${isSelected ? 'bg-primary/10' : 'hover:bg-carbon-light'}`}>
+                                <tr key={p.id_producto} className={isSelected ? 'bg-primary/10' : ''}>
                                     <td className="text-center align-middle">
-                                        <div className="flex justify-center">
-                                          <input 
-                                              type="checkbox"
-                                              className="w-5 h-5 rounded border-steel bg-carbon-mid accent-primary cursor-pointer shadow-sm hover:ring-2 hover:ring-primary/50 transition-all"
-                                              checked={isSelected}
-                                              onChange={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
-                                          />
-                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded accent-primary cursor-pointer"
+                                            checked={isSelected}
+                                            onChange={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
+                                        />
                                     </td>
                                     <td>
-                                        <div className={`font-bold text-sm ${isSelected ? 'text-mist' : 'text-wire'}`}>{p.nombre}</div>
-                                        <div className="text-xs text-wire font-mono mt-1">{p.codigo}</div>
+                                        <div className={`font-medium text-sm ${isSelected ? '' : 'text-muted'}`}>{p.nombre}</div>
+                                        <div className="text-xs text-muted font-mono mt-0.5">{p.codigo}</div>
                                     </td>
-                                    <td className="text-right text-xs text-wire align-middle font-medium">
+                                    <td className="text-right text-xs text-muted align-middle">
                                         {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {precioRef}
                                     </td>
                                     <td className="text-right align-middle p-2">
                                         <div className="relative flex items-center">
-                                            <span className={`absolute left-3 font-bold select-none ${isSelected ? 'text-primary' : 'text-steel'}`}>
+                                            <span className={`absolute left-3 text-sm select-none ${isSelected ? 'text-primary' : 'text-muted'}`}>
                                                 {nuevaLista.moneda === 'PEN' ? 'S/' : '$'}
                                             </span>
-                                            <input 
-                                                type="number" 
-                                                className={`form-input w-full text-right pl-8 h-10 ${isSelected ? 'border-primary shadow-[0_0_10px_rgba(232,184,75,0.1)] font-black text-primary bg-carbon text-lg' : 'bg-carbon-mid border-steel text-wire opacity-50'}`}
+                                            <input
+                                                type="number"
+                                                className={`form-input w-full text-right pl-8 h-10 ${isSelected ? 'border-primary font-bold text-primary' : 'opacity-50'}`}
                                                 placeholder="0.00"
                                                 disabled={!isSelected}
                                                 value={isSelected ? nuevaLista.items[p.id_producto] : ''}
@@ -676,87 +654,91 @@ function ListaPrecios() {
                 </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-3 shrink-0">
-                <button className="btn btn-outline border-steel text-mist h-11 px-6 font-black text-xs tracking-widest hover:border-wire hover:bg-carbon-light" onClick={() => setModalOpen(false)}>CANCELAR</button>
-                <button className="btn btn-primary min-w-[200px] h-11 flex justify-center items-center gap-2 font-black text-xs tracking-widest shadow-[0_0_20px_rgba(232,184,75,0.2)] active:scale-95 transition-all" onClick={guardarLista} disabled={loading}>
+            <div className="mt-4 flex justify-end gap-3 shrink-0">
+                <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
+                <button className="btn btn-primary flex items-center gap-2" onClick={guardarLista} disabled={loading}>
                     {loading ? <Loading size="sm" /> : <Save size={18} />}
-                    {modoEdicion ? 'ACTUALIZAR LISTA' : 'GUARDAR LISTA'}
+                    {modoEdicion ? 'Actualizar Lista' : 'Guardar Lista'}
                 </button>
             </div>
         </div>
       </Modal>
 
       <Modal isOpen={historialModalOpen} onClose={() => setHistorialModalOpen(false)} title="Historial de Cambios de Precios" size="xl">
-        <div className="page-listas-precios p-1">
-          <div className="bg-carbon-mid p-4 rounded-xl border border-steel shadow-inner mb-4 flex flex-wrap gap-x-8 gap-y-2">
+        <div>
+          <div className="flex flex-wrap gap-x-8 gap-y-2 mb-4">
             <div>
-              <p className="text-[0.6rem] font-black text-wire uppercase tracking-widest">Cliente</p>
-              <p className="font-bold text-mist text-sm">{clienteSel?.razon_social || historialData[0]?.cliente || '—'}</p>
+              <p className="text-xs text-muted">Cliente</p>
+              <p className="font-medium text-sm">{clienteSel?.razon_social || historialData[0]?.cliente || '—'}</p>
             </div>
             <div>
-              <p className="text-[0.6rem] font-black text-wire uppercase tracking-widest">Lista</p>
-              <p className="font-bold text-mist text-sm">{historialLista?.nombre_lista || '—'}</p>
+              <p className="text-xs text-muted">Lista</p>
+              <p className="font-medium text-sm">{historialLista?.nombre_lista || '—'}</p>
             </div>
           </div>
 
-          <div className="border border-steel rounded-xl overflow-hidden bg-carbon max-h-[60vh] overflow-y-auto scrollbar-thin">
-            <table className="table w-full">
-              <thead className="sticky top-0 bg-carbon-light shadow-sm z-10">
-                <tr>
-                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Fecha</th>
-                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3">Producto</th>
-                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Anterior</th>
-                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Nuevo</th>
-                  <th className="text-right font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Variación</th>
-                  <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3 px-3">Editó</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historialData.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center py-10">
-                      <p className="text-wire font-bold uppercase tracking-widest text-xs">Esta lista no tiene cambios de precio registrados</p>
-                    </td>
-                  </tr>
-                ) : historialData.map(h => {
-                  const anterior = fmtPrecio(h.precio_anterior, h.moneda);
-                  const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
-                  const variacion = calcVariacion(h.precio_anterior, h.precio_nuevo, h.moneda);
-                  return (
-                    <tr key={h.id_historial} className="border-b border-steel/50 hover:bg-carbon-light">
-                      <td className="px-3 text-xs text-mist font-mono align-middle whitespace-nowrap">{fmtFecha(h.fecha)}</td>
-                      <td className="align-middle">
-                        <p className="font-bold text-sm text-mist">{h.producto}</p>
-                        <p className="text-xs text-wire font-mono mt-0.5">{h.codigo}</p>
-                      </td>
-                      <td className="text-right align-middle">
-                        {anterior
-                          ? <span className="text-wire line-through text-xs">{anterior}</span>
-                          : <span className="badge badge-sm badge-success text-[9px] uppercase font-black tracking-wider">Alta</span>}
-                      </td>
-                      <td className="text-right align-middle">
-                        {nuevo
-                          ? <span className="font-black text-primary text-sm">{nuevo}</span>
-                          : <span className="badge badge-sm badge-danger text-[9px] uppercase font-black tracking-wider">Retirado</span>}
-                      </td>
-                      <td className="px-3 text-right align-middle whitespace-nowrap">
-                        {variacion
-                          ? <span className={`font-mono text-xs font-bold ${variacion.delta > 0 ? 'text-success' : variacion.delta < 0 ? 'text-danger' : 'text-wire'}`}>
-                              {variacion.monto}
-                              {variacion.pct && <span className="block text-[10px] font-semibold opacity-80">{variacion.pct}</span>}
-                            </span>
-                          : <span className="text-wire text-xs">—</span>}
-                      </td>
-                      <td className="px-3 text-xs align-middle">
-                        {h.empleado
-                          ? <span className="text-wire">{h.empleado}</span>
-                          : <span className="badge badge-sm badge-warning text-[9px] uppercase font-black tracking-wider" title="Cambio hecho directamente en la base de datos, fuera del sistema">Cambio directo en BD</span>}
-                      </td>
+          <div className="card max-h-[60vh] overflow-y-auto scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
+            <div className="card-body p-0">
+              <div className="table-container">
+                <table className="table w-full">
+                  <thead className="sticky top-0 z-10">
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Producto</th>
+                      <th className="text-right">Precio Anterior</th>
+                      <th className="text-right">Precio Nuevo</th>
+                      <th className="text-right">Variación</th>
+                      <th>Editó</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {historialData.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="text-center py-10">
+                          <p className="text-muted text-sm">Esta lista no tiene cambios de precio registrados</p>
+                        </td>
+                      </tr>
+                    ) : historialData.map(h => {
+                      const anterior = fmtPrecio(h.precio_anterior, h.moneda);
+                      const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
+                      const variacion = calcVariacion(h.precio_anterior, h.precio_nuevo, h.moneda);
+                      return (
+                        <tr key={h.id_historial}>
+                          <td className="text-xs font-mono align-middle whitespace-nowrap">{fmtFecha(h.fecha)}</td>
+                          <td className="align-middle">
+                            <p className="font-medium text-sm">{h.producto}</p>
+                            <p className="text-xs text-muted font-mono mt-0.5">{h.codigo}</p>
+                          </td>
+                          <td className="text-right align-middle">
+                            {anterior
+                              ? <span className="text-muted line-through text-xs">{anterior}</span>
+                              : <span className="badge badge-sm badge-success">Alta</span>}
+                          </td>
+                          <td className="text-right align-middle">
+                            {nuevo
+                              ? <span className="font-bold text-primary text-sm">{nuevo}</span>
+                              : <span className="badge badge-sm badge-danger">Retirado</span>}
+                          </td>
+                          <td className="text-right align-middle whitespace-nowrap">
+                            {variacion
+                              ? <span className={`font-mono text-xs font-bold ${variacion.delta > 0 ? 'text-success' : variacion.delta < 0 ? 'text-danger' : 'text-muted'}`}>
+                                  {variacion.monto}
+                                  {variacion.pct && <span className="block text-[10px] opacity-80">{variacion.pct}</span>}
+                                </span>
+                              : <span className="text-muted text-xs">—</span>}
+                          </td>
+                          <td className="text-xs align-middle">
+                            {h.empleado
+                              ? <span className="text-muted">{h.empleado}</span>
+                              : <span className="badge badge-sm badge-warning" title="Cambio hecho directamente en la base de datos, fuera del sistema">Cambio directo en BD</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

@@ -527,7 +527,7 @@ function Cotizaciones() {
         <div className="card-body p-3">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg" style={{ 
+              <div className="p-2 rounded-sm" style={{
                 background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)'
               }}>
                 <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
@@ -643,10 +643,10 @@ function Cotizaciones() {
 
         <div className="stat-card bg-gradient-to-br from-primary to-blue-600 text-white">
           <div className="stat-content">
-            <p className="stat-label text-white/90">Monto Total (PEN)</p>
+            <p className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Monto Total (PEN)</p>
             <p className="stat-value text-white">S/ {formatearNumero(estadisticas.montoTotalPEN)}</p>
           </div>
-          <div className="stat-icon bg-white/20 text-white">
+          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>
             <DollarSign size={24} />
           </div>
         </div>

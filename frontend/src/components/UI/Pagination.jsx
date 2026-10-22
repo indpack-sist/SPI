@@ -48,25 +48,11 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
   };
 
   return (
-    <div className="ui-pagination mt-6 px-6 py-6 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-6 relative z-20">
-      <style dangerouslySetInnerHTML={{__html: `
-        .ui-pagination button.pagination-btn {
-          background-color: var(--carbon-mid); border: 2px solid var(--steel); color: var(--mist);
-          width: 44px; height: 44px; min-width: 44px; display: flex;
-          align-items: center; justify-content: center; border-radius: 8px;
-          font-weight: 800; font-size: 1rem; cursor: pointer; transition: all 0.2s;
-        }
-        .ui-pagination button.pagination-btn-active {
-          background-color: var(--primary); border-color: var(--primary); color: #000;
-          box-shadow: 0 0 20px rgba(232, 184, 75, 0.4); transform: scale(1.1); z-index: 20;
-        }
-        .ui-pagination button.pagination-btn:hover:not(.pagination-btn-active) {
-          border-color: var(--primary); color: var(--primary); background-color: var(--carbon-light);
-        }
-      `}} />
+    <div className="ui-pagination mt-6 px-6 py-6 border-t flex flex-col lg:flex-row items-center justify-between gap-6 relative z-20"
+      style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.3)' }}>
       <div className="pagination-nav flex items-center gap-3">
         <button
-          className="btn btn-outline border-steel h-11 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all"
+          className="pagination-nav-btn h-11 px-5 font-black text-[0.7rem] tracking-widest"
           onClick={goToPrevPage}
           disabled={currentPage === 1}
         >
@@ -75,20 +61,21 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
         <div className="pagination-numbers flex items-center gap-2 mx-2">
           {getPageNumbers().map((num, idx) => (
             num === '...'
-              ? <span key={`ell-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel font-black">...</span>
-              : <button key={`pg-${num}`} onClick={() => cambiarPagina(num)} className={`pagination-btn ${currentPage === num ? 'pagination-btn-active' : ''}`}>{num}</button>
+              ? <span key={`ell-${idx}`} className="w-10 h-10 flex items-center justify-center font-black" style={{ color: 'var(--steel)' }}>...</span>
+              : <button key={`pg-${num}`} onClick={() => cambiarPagina(num)} className={`pagination-page-btn ${currentPage === num ? 'active' : ''}`}>{num}</button>
           ))}
         </div>
         <button
-          className="btn btn-outline border-steel h-11 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all"
+          className="pagination-nav-btn h-11 px-5 font-black text-[0.7rem] tracking-widest"
           onClick={goToNextPage}
           disabled={currentPage === totalPages}
         >
           SIGUIENTE <ChevronRight size={20} />
         </button>
       </div>
-      <div className="pagination-jump flex items-center gap-4 px-6 py-2.5 bg-carbon border border-steel rounded-lg shadow-inner">
-        <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">Página</span>
+      <div className="flex items-center gap-4 px-6 py-2.5 border rounded-sm shadow-inner"
+        style={{ backgroundColor: 'var(--carbon)', borderColor: 'var(--steel)' }}>
+        <span className="text-[0.6rem] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--wire)' }}>Página</span>
         <input
           type="number"
           min="1"
@@ -97,9 +84,9 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
           onChange={(e) => setInputPage(e.target.value)}
           onKeyDown={handlePageJump}
           onBlur={commitInput}
-          className="w-16 h-10 text-center text-base font-black text-primary bg-carbon-mid border-2 border-steel rounded focus:border-primary outline-none transition-all"
+          className="form-input w-16 h-10 text-center text-base font-black text-primary rounded-sm"
         />
-        <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">de {totalPages}</span>
+        <span className="text-[0.6rem] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--wire)' }}>de {totalPages}</span>
       </div>
     </div>
   );

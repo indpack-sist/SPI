@@ -68,7 +68,8 @@ function ListaPrecios() {
   const seleccionarCliente = async (cliente) => {
     setLoading(true);
     setClienteSel(cliente);
-    setListaSeleccionadaID(null); 
+    setBusqueda('');
+    setListaSeleccionadaID(null);
     try {
       const res = await listasPreciosAPI.getByCliente(cliente.id_cliente);
       if (res.data.success) setListas(res.data.data);
@@ -365,12 +366,15 @@ function ListaPrecios() {
             </div>
           </div>
           <div className="overflow-y-auto flex-1 p-2 scrollbar-thin">
-            {!busqueda.trim() ? (
+            {!busqueda.trim() && !clienteSel ? (
               <div className="flex flex-col items-center justify-center h-full py-8">
                 <Search size={28} className="text-muted mb-3" />
                 <p className="text-sm text-muted text-center">Escriba para buscar un cliente</p>
               </div>
-            ) : clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase())).map(c => (
+            ) : (busqueda.trim()
+              ? clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase()))
+              : clientes.filter(c => c.id_cliente === clienteSel?.id_cliente)
+            ).map(c => (
               <div
                 key={c.id_cliente}
                 onClick={() => seleccionarCliente(c)}

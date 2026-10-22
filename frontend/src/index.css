@@ -1678,7 +1678,7 @@ input.bg-blue-50 {
 .list-panel {
   background-color: var(--carbon) !important;
   border: 1px solid var(--steel) !important;
-  border-radius: 8px !important;
+  border-radius: 2px !important;
   box-shadow: var(--shadow-lg) !important;
   overflow: hidden;
   padding: 0 !important;
@@ -1710,6 +1710,23 @@ input.bg-blue-50 {
 .list-panel .ui-pagination {
   margin-top: 0;
   background-color: var(--carbon-mid);
+}
+
+.list-panel .table td { vertical-align: middle; }
+
+@media (hover: hover) {
+  .btn-sunat-viewer:hover {
+    background-color: #10b981;
+    color: white;
+    border-color: #10b981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+}
+.btn-sunat-viewer {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #10b981;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* =====================================================

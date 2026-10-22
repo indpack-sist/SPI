@@ -75,46 +75,41 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
 
   return (
     <div className="form-group mb-0" ref={dropdownRef}>
-      <label className="form-label mb-1.5" style={{ fontSize: '0.65rem', color: 'var(--wire)' }}>{label}</label>
+      <label className="form-label mb-1.5">{label}</label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all border rounded shadow-inner ${
-            selectedValues.length > 0 
-              ? 'border-primary bg-primary/10 text-primary font-bold' 
+          className={`flex items-center justify-between w-full h-10 px-3 text-sm border rounded-sm ${
+            selectedValues.length > 0
+              ? 'border-primary bg-primary/10 text-primary font-bold'
               : 'border-steel bg-carbon-mid text-mist hover:border-wire'
           }`}
-          style={{ 
-            backgroundColor: selectedValues.length > 0 ? 'rgba(232, 184, 75, 0.1)' : 'var(--carbon-mid)',
-            borderColor: selectedValues.length > 0 ? 'var(--primary)' : 'var(--steel)',
-            color: selectedValues.length > 0 ? 'var(--primary)' : 'var(--mist)'
-          }}
+          style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}
         >
           <span className="truncate mr-2 font-medium">{getLabelText()}</span>
           <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-primary' : 'text-wire'}`} />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-2 bg-carbon-light border border-steel rounded shadow-xl overflow-hidden min-w-[220px]"
-               style={{ backgroundColor: 'var(--carbon-light)', borderColor: 'var(--steel)' }}>
-            <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+          <div className="absolute z-50 w-full mt-2 bg-carbon-light border border-steel rounded-sm shadow-xl overflow-hidden min-w-[220px]">
+            <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
               {options.map((opt) => {
                 const isSelected = selectedValues.includes(opt.value);
                 return (
                   <div
                     key={opt.value}
                     onClick={(e) => handleToggle(e, opt.value)}
-                    className={`flex items-center px-3 py-2.5 rounded cursor-pointer transition-colors ${
+                    className={`flex items-center px-3 py-2.5 rounded-sm cursor-pointer transition-colors ${
                       isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-steel/30 text-mist'
                     }`}
                   >
                     <div className="flex items-center justify-center mr-3">
-                      <div className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-all ${
-                        isSelected 
-                          ? 'bg-primary border-primary shadow-[0_0_10px_rgba(232,184,75,0.3)]' 
+                      <div className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center ${
+                        isSelected
+                          ? 'bg-primary border-primary'
                           : 'bg-carbon border-steel'
-                      }`}>
+                      }`} style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease' }}>
                         {isSelected && <Check size={14} className="text-carbon stroke-[4px]" />}
                       </div>
                     </div>
@@ -130,7 +125,7 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onChange([]); }}
-                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger hover:bg-danger/10 rounded font-bold transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger hover:bg-danger/10 rounded-sm font-bold transition-colors flex items-center justify-center gap-2"
                 >
                   <RefreshCcw size={12} />
                   Limpiar selección
@@ -858,57 +853,7 @@ function OrdenesVenta() {
         );
 
   return (
-    <div className="p-4 md:p-6 page-ordenes-venta">
-      <style dangerouslySetInnerHTML={{__html: `
-        .page-ordenes-venta, .page-ordenes-venta .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
-        .page-ordenes-venta .search-input, .page-ordenes-venta .form-input, .page-ordenes-venta input {
-          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
-        }
-        .page-ordenes-venta button.pagination-btn {
-          background-color: transparent !important; border: 1px solid transparent !important; color: var(--mist) !important;
-          width: 36px !important; height: 36px !important; min-width: 36px !important; display: flex !important;
-          align-items: center !important; justify-content: center !important; border-radius: 9px !important;
-          font-weight: 700 !important; font-size: 0.85rem !important; cursor: pointer !important;
-          transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
-        }
-        .page-ordenes-venta button.pagination-btn-active {
-          background-color: var(--primary) !important; border-color: var(--primary) !important; color: #000 !important;
-          font-weight: 800 !important; box-shadow: 0 2px 8px rgba(232, 184, 75, 0.35) !important;
-        }
-        .page-ordenes-venta button.pagination-btn:hover:not(.pagination-btn-active) {
-          color: var(--primary) !important; background-color: rgba(232, 184, 75, 0.1) !important;
-        }
-        .page-ordenes-venta button.pagination-nav {
-          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--mist) !important;
-          height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important;
-          gap: 0.4rem !important; padding: 0 0.9rem !important; border-radius: 9px !important; font-weight: 700 !important;
-          font-size: 0.65rem !important; letter-spacing: 0.08em !important; cursor: pointer !important;
-          transition: all 0.15s ease !important;
-        }
-        .page-ordenes-venta button.pagination-nav:hover:not(:disabled) {
-          border-color: var(--primary) !important; color: var(--primary) !important;
-        }
-        .page-ordenes-venta button.pagination-nav:disabled { opacity: 0.35 !important; cursor: not-allowed !important; }
-        .page-ordenes-venta .table td { vertical-align: middle !important; }
-        .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
-        @media (min-width: 641px) { .page-ordenes-venta .table-container { overflow: hidden !important; } }
-        .page-ordenes-venta .stat-card { min-height: 85px !important; padding: 1rem !important; border-radius: 8px !important; }
-        
-        .btn-sunat-viewer {
-          background-color: rgba(16, 185, 129, 0.1) !important;
-          border: 1px solid rgba(16, 185, 129, 0.4) !important;
-          color: #10b981 !important;
-          transition: all 0.2s ease !important;
-        }
-        .btn-sunat-viewer:hover {
-          background-color: #10b981 !important;
-          color: white !important;
-          border-color: #10b981 !important;
-          transform: translateY(-1px) !important;
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
-        }
-      `}} />
-
+    <div className="p-4 md:p-6">
       {loading && <Loading variant="table" />}
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
@@ -917,7 +862,7 @@ function OrdenesVenta() {
           <div className="flex flex-col gap-3">
             <div>
               <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
+                <div className="p-2 bg-primary/10 rounded-sm"><ShoppingCart size={28} className="text-primary" /></div>
                 <span className="uppercase font-barlow text-heading">Órdenes de Venta</span>
               </h1>
               <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
@@ -931,7 +876,8 @@ function OrdenesVenta() {
                   <Shield size={20} /> VERIFICACIÓN
                 </button>
                 <button
-                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all"
+                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 enabled:active:scale-[0.96]"
+                  style={{ transition: 'transform 0.15s ease-out, box-shadow 0.15s ease-out' }}
                   onClick={() => navigate('/ventas/ordenes/nueva')}
                 >
                   <Plus size={22} /> NUEVA ORDEN
@@ -942,7 +888,7 @@ function OrdenesVenta() {
 
           <div className="flex flex-col items-end gap-1 shrink-0 pt-1">
             <span className="text-[0.55rem] font-black text-wire uppercase tracking-[0.25em]">Período filtrado</span>
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-lg shadow-inner">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-sm shadow-inner">
               <Calendar size={16} className="text-primary" />
               <span className="text-sm font-black text-mist tracking-widest uppercase">
                 {textoFechaPeriodo}
@@ -958,7 +904,8 @@ function OrdenesVenta() {
           <div className="flex flex-col items-center mb-6">
             <button
   onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
-  className="flex items-center gap-2 h-11 px-6 btn btn-outline border-steel text-mist font-black text-[0.7rem] tracking-widest transition-all hover:border-primary hover:text-primary"
+  className="flex items-center gap-2 h-11 px-6 btn btn-outline border-steel text-mist font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary"
+  style={{ transition: 'border-color 0.15s ease, color 0.15s ease' }}
 >
   <TrendingUp size={16} className={mostrarEstadisticas ? 'text-primary' : ''} />
   {mostrarEstadisticas ? 'OCULTAR RESUMEN' : 'VER RESUMEN GENERAL'}
@@ -966,30 +913,42 @@ function OrdenesVenta() {
 </button>
 
             {mostrarEstadisticas && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-4 w-full animate-in slide-in-from-top-4 fade-in duration-300">
-                <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
-                  <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
+              <div className="stats-grid mt-4 w-full" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                <div className="stat-card border-l-4 border-success/50">
+                  <div className="stat-content">
+                    <p className="stat-label">FACTURAS (PEN)</p>
+                    <p className="stat-value text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
+                  </div>
                 </div>
-                <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
-                  <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
+                <div className="stat-card border-l-4 border-primary/50">
+                  <div className="stat-content">
+                    <p className="stat-label">FACTURAS (USD)</p>
+                    <p className="stat-value text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
+                  </div>
                 </div>
-                <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
-                  <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
+                <div className="stat-card border-l-4 border-info/50">
+                  <div className="stat-content">
+                    <p className="stat-label">N. VENTA (PEN)</p>
+                    <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
+                  </div>
                 </div>
-                <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
-                  <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
+                <div className="stat-card border-l-4 border-info/50">
+                  <div className="stat-content">
+                    <p className="stat-label">N. VENTA (USD)</p>
+                    <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
+                  </div>
                 </div>
-                <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
-                  <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
+                <div className="stat-card border-l-4 border-warning/50">
+                  <div className="stat-content">
+                    <p className="stat-label">SIN COMPR. (PEN)</p>
+                    <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
+                  </div>
                 </div>
-                <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
-                  <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
+                <div className="stat-card border-l-4 border-warning/50">
+                  <div className="stat-content">
+                    <p className="stat-label">SIN COMPR. (USD)</p>
+                    <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -1017,7 +976,7 @@ function OrdenesVenta() {
                   value={fechaFin} 
                   onChange={handleFechaFinChange} 
                 />
-                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`}>
+                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`} style={{ transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}>
                   <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
                 </button>
                 <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3" title="Limpiar todos los filtros"><X size={18} /></button>
@@ -1056,16 +1015,16 @@ function OrdenesVenta() {
           </div>
         </div>
 
-        <div className="card shadow-2xl relative" ref={tablaRef}>
-          <div className="card-header flex items-center justify-between border-b border-steel/20">
-            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{pagination.total}</span></h2>
+        <div className="card list-panel relative" ref={tablaRef}>
+          <div className="card-header flex items-center justify-between">
+            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-sm text-xs">{pagination.total}</span></h2>
             <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
           </div>
-          
+
           <div className="card-body p-0 relative">
             {isFiltering && (
-              <div className="absolute inset-0 z-30 bg-carbon/80 backdrop-blur-[4px] flex items-center justify-center transition-all duration-300">
-                <div className="flex flex-col items-center gap-3 p-8 bg-carbon-light shadow-2xl rounded-xl border border-steel">
+              <div className="absolute inset-0 z-30 bg-carbon/80 backdrop-blur-[4px] flex items-center justify-center" style={{ transition: 'opacity 0.3s ease' }}>
+                <div className="flex flex-col items-center gap-3 p-8 bg-carbon-light shadow-2xl rounded-sm border border-steel">
                   <RefreshCcw size={32} className="animate-spin text-primary" />
                   <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.3em]">Procesando</span>
                 </div>
@@ -1077,35 +1036,65 @@ function OrdenesVenta() {
           </div>
 
           {pagination.total > itemsPerPage && (
-            <div className="px-4 sm:px-6 py-4 bg-carbon-mid/60 border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
+            <div className="px-4 sm:px-6 py-4 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20">
               <div className="text-[0.7rem] font-medium text-wire tracking-wide order-2 lg:order-1 flex items-center gap-1.5">
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
                 <span className="text-steel">–</span>
                 <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + currentItems.length}</span>
                 <span className="text-steel">de</span>
                 <span className="text-mist font-bold">{pagination.total}</span>
-                <span className="uppercase tracking-widest text-[0.6rem]">órdenes</span>
+                <span className="uppercase tracking-widest text-[0.6rem]">ordenes</span>
               </div>
 
               <div className="flex items-center gap-1.5 order-1 lg:order-2">
-                <button className="pagination-nav" onClick={goToPrevPage} disabled={currentPage === 1}>
+                <button
+                  className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-carbon-mid border border-steel text-mist rounded-sm font-bold text-[0.65rem] tracking-wider cursor-pointer hover:border-primary hover:text-primary disabled:opacity-35 disabled:cursor-not-allowed"
+                  style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                  onClick={goToPrevPage}
+                  disabled={currentPage === 1}
+                >
                   <ChevronLeft size={16} /> <span className="hidden sm:inline">ANTERIOR</span>
                 </button>
                 <div className="flex items-center gap-1 mx-1">
                   {getPageNumbers().map((num, idx) => (
                     num === '...'
                       ? <span key={`ell-${idx}`} className="w-8 h-9 flex items-center justify-center text-steel font-bold select-none">···</span>
-                      : <button key={`pg-${num}`} onClick={() => setCurrentPage(num)} className={`pagination-btn ${currentPage === num ? 'pagination-btn-active' : ''}`}>{num}</button>
+                      : (
+                        <button
+                          key={`pg-${num}`}
+                          onClick={() => setCurrentPage(num)}
+                          className={`flex items-center justify-center w-9 h-9 min-w-[36px] rounded-sm font-bold text-sm cursor-pointer border ${
+                            currentPage === num
+                              ? 'bg-primary border-primary text-[#000] font-extrabold shadow-[0_2px_8px_rgba(232,184,75,0.35)]'
+                              : 'bg-transparent border-transparent text-mist hover:text-primary hover:bg-primary/10'
+                          }`}
+                          style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                        >
+                          {num}
+                        </button>
+                      )
                   ))}
                 </div>
-                <button className="pagination-nav" onClick={goToNextPage} disabled={currentPage === totalPages}>
+                <button
+                  className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-carbon-mid border border-steel text-mist rounded-sm font-bold text-[0.65rem] tracking-wider cursor-pointer hover:border-primary hover:text-primary disabled:opacity-35 disabled:cursor-not-allowed"
+                  style={{ transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease' }}
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                >
                   <span className="hidden sm:inline">SIGUIENTE</span> <ChevronRight size={16} />
                 </button>
               </div>
 
               <div className="flex items-center gap-2 order-3">
                 <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">Ir a</span>
-                <input type="number" min="1" max={totalPages} value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handlePageJump} onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }} className="w-14 h-9 text-center text-sm font-bold text-primary bg-carbon border border-steel rounded-lg focus:border-primary outline-none transition-all" />
+                <input
+                  type="number" min="1" max={totalPages} value={inputPage}
+                  onChange={(e) => setInputPage(e.target.value)}
+                  onKeyDown={handlePageJump}
+                  onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }}
+                  className="w-14 h-9 text-center text-sm font-bold text-primary bg-carbon border border-steel rounded-sm outline-none"
+                  style={{ transition: 'border-color 0.15s ease' }}
+                />
                 <span className="text-[0.6rem] font-bold text-wire uppercase tracking-[0.15em]">/ {totalPages}</span>
               </div>
             </div>

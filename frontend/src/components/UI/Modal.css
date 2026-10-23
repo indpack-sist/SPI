@@ -73,14 +73,17 @@
   transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
-.modal-close:hover {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .modal-close:hover {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+  }
 }
 
 .modal-body {
   padding: 1.5rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes modalSlideIn {

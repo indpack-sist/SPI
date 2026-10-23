@@ -2,17 +2,50 @@ import { executeQuery } from '../config/database.js';
 
 export async function getAllVehiculos(req, res) {
   try {
-    const { estado } = req.query;
+    const { estado, resumen } = req.query;
     
-    let sql = 'SELECT * FROM flota';
+    let sql = resumen === '1' ? `
+      SELECT flota.*,
+        COALESCE(ov_uso.ordenes_asignadas, 0) AS ordenes_asignadas,
+        COALESCE(ov_uso.despachos, 0) AS despachos,
+        ov_uso.ultima_orden AS ultima_orden,
+        COALESCE(gr_uso.guias_total, 0) AS guias_total,
+        COALESCE(gr_uso.guias_aceptadas, 0) AS guias_aceptadas,
+        gr_uso.ultima_guia AS ultima_guia,
+        (SELECT e.nombre_completo
+           FROM ordenes_venta ov
+           INNER JOIN empleados e ON e.id_empleado = ov.id_conductor
+          WHERE ov.id_vehiculo = flota.id_vehiculo
+            AND ov.estado != 'Cancelada'
+          ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC
+          LIMIT 1) AS ultimo_conductor
+      FROM flota
+      LEFT JOIN (
+        SELECT id_vehiculo,
+          COUNT(*) AS ordenes_asignadas,
+          SUM(CASE WHEN estado IN ('Despachada', 'Despacho Parcial', 'Entregada') THEN 1 ELSE 0 END) AS despachos,
+          MAX(fecha_emision) AS ultima_orden
+        FROM ordenes_venta
+        WHERE id_vehiculo IS NOT NULL AND estado != 'Cancelada'
+        GROUP BY id_vehiculo
+      ) ov_uso ON ov_uso.id_vehiculo = flota.id_vehiculo
+      LEFT JOIN (
+        SELECT id_vehiculo,
+          COUNT(*) AS guias_total,
+          SUM(CASE WHEN sunat_estado = 'ACEPTADO' THEN 1 ELSE 0 END) AS guias_aceptadas,
+          MAX(fecha_emision) AS ultima_guia
+        FROM guias_remision
+        WHERE id_vehiculo IS NOT NULL AND estado <> 'Anulada'
+        GROUP BY id_vehiculo
+      ) gr_uso ON gr_uso.id_vehiculo = flota.id_vehiculo` : 'SELECT * FROM flota';
     const params = [];
     
     if (estado) {
-      sql += ' WHERE estado = ?';
+      sql += ' WHERE flota.estado = ?';
       params.push(estado);
     }
     
-    sql += ' ORDER BY placa ASC';
+    sql += ' ORDER BY flota.placa ASC';
     
     const result = await executeQuery(sql, params);
     

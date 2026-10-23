@@ -1,12 +1,43 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC, validarDNI } from '../services/documento-cache.service.js';
 import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
+import { PERMISOS_POR_ROL } from '../middleware/auth.js';
 
 const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
 
 export async function getAllClientes(req, res) {
   try {
-    const { estado, search, atencion } = req.query;
+    const { estado, search, atencion, resumen } = req.query;
+    const conResumen = resumen === '1';
+    const verFinanzas = !!PERMISOS_POR_ROL[req.user?.rol]?.ui?.verFinanzasVentas;
+
+    const resumenSelect = conResumen ? `,
+        ov_stats.ultima_venta AS ultima_venta,
+        (SELECT GROUP_CONCAT(e.nombre_completo ORDER BY e.nombre_completo SEPARATOR ', ')
+           FROM empleado_clientes_asignados a
+           INNER JOIN empleados e ON e.id_empleado = a.id_empleado
+          WHERE a.id_cliente = clientes.id_cliente
+            AND e.estado = 'Activo') AS comerciales_asignados,
+        EXISTS(SELECT 1 FROM solicitudes_credito sc
+                WHERE sc.id_cliente = clientes.id_cliente
+                  AND sc.estado = 'Pendiente') AS tiene_solicitud_pendiente${verFinanzas ? `,
+        COALESCE(deuda.saldo_pen, 0) AS saldo_pen,
+        COALESCE(deuda.saldo_usd, 0) AS saldo_usd,
+        COALESCE(deuda.ordenes_por_cobrar, 0) AS ordenes_por_cobrar,
+        COALESCE(deuda.ordenes_vencidas, 0) AS ordenes_vencidas` : ''}` : '';
+
+    const resumenJoin = conResumen && verFinanzas ? `
+      LEFT JOIN (
+        SELECT id_cliente,
+          SUM(CASE WHEN moneda = 'PEN' THEN total - monto_pagado ELSE 0 END) AS saldo_pen,
+          SUM(CASE WHEN moneda = 'USD' THEN total - monto_pagado ELSE 0 END) AS saldo_usd,
+          COUNT(*) AS ordenes_por_cobrar,
+          SUM(CASE WHEN fecha_vencimiento < CURRENT_DATE THEN 1 ELSE 0 END) AS ordenes_vencidas
+        FROM ordenes_venta
+        WHERE estado NOT IN ('Cancelada', 'Borrador')
+          AND estado_pago IN ('Pendiente', 'Parcial')
+        GROUP BY id_cliente
+      ) deuda ON deuda.id_cliente = clientes.id_cliente` : '';
 
     let sql = `
       SELECT clientes.*,
@@ -19,30 +50,31 @@ export async function getAllClientes(req, res) {
           LIMIT 1) AS ubigeo,
         COALESCE(ov_stats.total_ordenes, 0) AS total_ordenes,
         COALESCE(ov_stats.atenciones, 0) AS atenciones,
-        ov_stats.ordenes_desglose AS ordenes_desglose
+        ov_stats.ordenes_desglose AS ordenes_desglose${resumenSelect}
       FROM clientes
       LEFT JOIN (
         SELECT id_cliente,
           SUM(cnt) AS total_ordenes,
           SUM(CASE WHEN estado IN (${ATENCION_PLACEHOLDERS}) THEN cnt ELSE 0 END) AS atenciones,
-          GROUP_CONCAT(CONCAT(estado, ':', cnt) ORDER BY cnt DESC SEPARATOR '|') AS ordenes_desglose
+          GROUP_CONCAT(CONCAT(estado, ':', cnt) ORDER BY cnt DESC SEPARATOR '|') AS ordenes_desglose,
+          MAX(CASE WHEN estado NOT IN ('Cancelada', 'Borrador') THEN ultima END) AS ultima_venta
         FROM (
-          SELECT id_cliente, estado, COUNT(*) AS cnt
+          SELECT id_cliente, estado, COUNT(*) AS cnt, MAX(fecha_emision) AS ultima
           FROM ordenes_venta
           GROUP BY id_cliente, estado
         ) por_estado
         GROUP BY id_cliente
-      ) ov_stats ON ov_stats.id_cliente = clientes.id_cliente
+      ) ov_stats ON ov_stats.id_cliente = clientes.id_cliente${resumenJoin}
       WHERE 1=1`;
     const params = [...ESTADOS_ATENCION];
 
     if (estado) {
-      sql += ' AND estado = ?';
+      sql += ' AND clientes.estado = ?';
       params.push(estado);
     }
 
     if (search) {
-      sql += ' AND (razon_social LIKE ? OR ruc LIKE ?)';
+      sql += ' AND (clientes.razon_social LIKE ? OR clientes.ruc LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 

@@ -55,7 +55,7 @@ export async function getAllCompras(req, res) {
   try {
     const { 
       estado, prioridad, tipo_compra, tipo_cuenta, id_cuenta_pago,
-      fecha_inicio, fecha_fin, mes, anio, alertas 
+      fecha_inicio, fecha_fin, mes, anio, alertas, id_proveedor
     } = req.query;
     
     let sql = `
@@ -133,6 +133,7 @@ export async function getAllCompras(req, res) {
     if (tipo_compra) { sql += ` AND oc.tipo_compra = ?`; params.push(tipo_compra); }
     if (tipo_cuenta) { sql += ` AND cp.tipo = ?`; params.push(tipo_cuenta); }
     if (id_cuenta_pago) { sql += ` AND oc.id_cuenta_pago = ?`; params.push(id_cuenta_pago); }
+    if (id_proveedor) { sql += ` AND oc.id_proveedor = ?`; params.push(id_proveedor); }
     
     if (fecha_inicio) { sql += ` AND DATE(oc.fecha_emision) >= ?`; params.push(fecha_inicio); }
     if (fecha_fin) { sql += ` AND DATE(oc.fecha_emision) <= ?`; params.push(fecha_fin); }

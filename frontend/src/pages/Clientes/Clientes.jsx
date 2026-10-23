@@ -1,37 +1,128 @@
-import { useState, useEffect } from 'react';
-import { 
-  Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, 
-  Loader, Building2, User, CreditCard, FilePlus, Eye, Clock
+import { useState, useEffect, useRef } from 'react';
+import {
+  Plus, Pencil, Trash2, Search, CheckCircle, AlertCircle, AlertTriangle, Loader, Building2, User, CreditCard,
+  FilePlus, Eye, Clock, RefreshCw, X, Users, Wallet, Hourglass, Phone, Mail, MapPin, ExternalLink, Activity,
+  Info, Ban, Megaphone, CalendarDays
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
-import Table from '../../components/UI/Table';
-import Pagination from '../../components/UI/Pagination';
+import { usePermisos } from '../../context/PermisosContext';
 import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import AtencionesBadge from '../../components/UI/AtencionesBadge';
+import PgDrawer from '../../components/UI/PgDrawer';
+import PgPager from '../../components/UI/PgPager';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
+import {
+  BadgeEstadoRegistro, BadgeTipoDocumento, BadgeCondicionPago, BadgeCreditoCliente, usaLimiteCredito
+} from '../Maestros/estadosMaestros';
+import { fmtFecha, fmtMonto, haceTexto, incluye } from '../Maestros/formatoMaestros';
+import { useResetPagina } from '../Maestros/useResetPagina';
+import '../Maestros/Maestros.css';
+
+const FORM_VACIO = {
+  tipo_documento: 'RUC',
+  ruc: '',
+  razon_social: '',
+  contacto: '',
+  telefono: '',
+  email: '',
+  direccion_despacho: '',
+  ubigeo: '',
+  limite_credito_pen: 0,
+  limite_credito_usd: 0,
+  usar_limite_credito: false,
+  condicion_pago: 'Contado',
+  dias_credito: 0,
+  validar_documento: true,
+  estado: 'Activo'
+};
+
+const OPCIONES_ATENCION = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'con', label: 'Con atención' },
+  { id: 'sin', label: 'Sin atención' }
+];
+
+const OPCIONES_TIPO = [
+  { id: '', label: 'Todos' },
+  { id: 'RUC', label: 'Empresas', icon: Building2 },
+  { id: 'DNI', label: 'Personas', icon: User }
+];
+
+const tieneSolicitud = (c) => Number(c.tiene_solicitud_pendiente) === 1 || c.tiene_solicitud_pendiente === true;
+const tieneDeuda = (c) => parseFloat(c.saldo_pen || 0) > 0.009 || parseFloat(c.saldo_usd || 0) > 0.009;
+
+const FILTROS_KPI = {
+  activos: (c) => c.estado === 'Activo',
+  inactivos: (c) => c.estado !== 'Activo',
+  deuda: tieneDeuda,
+  vencidos: (c) => Number(c.ordenes_vencidas) > 0,
+  credito: usaLimiteCredito,
+  solicitud: tieneSolicitud
+};
+
+const desgloseOrdenes = (texto) => (texto ? texto.split('|').map(p => {
+  const idx = p.lastIndexOf(':');
+  return { estado: p.slice(0, idx), cantidad: p.slice(idx + 1) };
+}) : []);
+
+const colorUso = (pct) => {
+  if (pct >= 90) return 'var(--danger)';
+  if (pct >= 70) return 'var(--warning)';
+  return 'var(--success)';
+};
+
+function MedidorCredito({ titulo, linea, moneda }) {
+  const limite = parseFloat(linea?.limite || 0);
+  const usado = parseFloat(linea?.utilizado || 0);
+  const pct = limite > 0 ? (usado / limite) * 100 : 0;
+  return (
+    <div className="ms-measure">
+      <div className="ms-measure-top">
+        <span>{titulo}</span>
+        <b>{fmtMonto(usado, moneda)} <small>/ {fmtMonto(limite, moneda)}</small></b>
+      </div>
+      <div className="pg-meter" title={`${pct.toFixed(1)}% utilizado`} style={{ '--meter-c': colorUso(pct) }}>
+        <span style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className={`ms-measure-note ${pct > 100 ? 'is-danger' : ''}`}>
+        {pct.toFixed(0)}% utilizado · disponible {fmtMonto(parseFloat(linea?.disponible || 0), moneda)}
+      </span>
+    </div>
+  );
+}
 
 function Clientes() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { tienePermiso } = usePermisos();
+  const verFinanzas = tienePermiso('verFinanzasVentas');
+  const inputArchivoRef = useRef(null);
+
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [filtro, setFiltro] = useState('');
+  const [detalle, setDetalle] = useState(null);
+  const [credito, setCredito] = useState({ loading: false, data: null });
+
+  const [busqueda, setBusqueda] = useState('');
   const [filtroAtencion, setFiltroAtencion] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroKpi, setFiltroKpi] = useState('');
 
   const [validandoDocumento, setValidandoDocumento] = useState(false);
   const [documentoValidado, setDocumentoValidado] = useState(null);
   const [datosAPI, setDatosAPI] = useState(null);
   const [creacionManual, setCreacionManual] = useState(false);
-  
+
   const [modalSolicitudOpen, setModalSolicitudOpen] = useState(false);
   const [clienteParaSolicitud, setClienteParaSolicitud] = useState(null);
   const [archivoSustento, setArchivoSustento] = useState(null);
@@ -47,26 +138,10 @@ function Clientes() {
   const [observacionCambio, setObservacionCambio] = useState('');
   const [condicionCambioDetectado, setCondicionCambioDetectado] = useState(false);
 
-  const [formData, setFormData] = useState({
-    tipo_documento: 'RUC', 
-    ruc: '',
-    razon_social: '',
-    contacto: '',
-    telefono: '',
-    email: '',
-    direccion_despacho: '',
-    ubigeo: '',
-    limite_credito_pen: 0,
-    limite_credito_usd: 0,
-    usar_limite_credito: false,
-    condicion_pago: 'Contado',
-    dias_credito: 0,
-    validar_documento: true, 
-    estado: 'Activo'
-  });
+  const [formData, setFormData] = useState(FORM_VACIO);
 
   useEffect(() => {
-    cargarClientes();
+    cargarClientes({ silencioso: clientes.length > 0 });
   }, [filtroAtencion]);
 
   useEffect(() => {
@@ -78,19 +153,34 @@ function Clientes() {
     }
   }, [formData.condicion_pago, formData.dias_credito]);
 
-  const cargarClientes = async () => {
+  useEffect(() => {
+    if (!detalle || !usaLimiteCredito(detalle)) {
+      setCredito({ loading: false, data: null });
+      return undefined;
+    }
+    let vigente = true;
+    setCredito({ loading: true, data: null });
+    clientesAPI.getEstadoCredito(detalle.id_cliente)
+      .then(res => { if (vigente) setCredito({ loading: false, data: res.data.data }); })
+      .catch(() => { if (vigente) setCredito({ loading: false, data: null }); });
+    return () => { vigente = false; };
+  }, [detalle?.id_cliente]);
+
+  const cargarClientes = async ({ silencioso = false } = {}) => {
     try {
-      setLoading(true);
+      if (silencioso) setRefreshing(true);
+      else setLoading(true);
       setError(null);
-      const params = {};
+      const params = { resumen: 1 };
       if (filtroAtencion === 'con') params.atencion = 'con';
       else if (filtroAtencion === 'sin') params.atencion = 'sin';
       const response = await clientesAPI.getAll(params);
-      setClientes(response.data.data);
+      setClientes(response.data.data || []);
     } catch (err) {
       setError(err.error || 'Error al cargar clientes');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -108,7 +198,7 @@ function Clientes() {
         ubigeo: cliente.ubigeo || '',
         limite_credito_pen: parseFloat(cliente.limite_credito_pen || 0),
         limite_credito_usd: parseFloat(cliente.limite_credito_usd || 0),
-        usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
+        usar_limite_credito: usaLimiteCredito(cliente),
         condicion_pago: cliente.condicion_pago || 'Contado',
         dias_credito: parseInt(cliente.dias_credito || 0),
         validar_documento: false,
@@ -118,37 +208,16 @@ function Clientes() {
         condicion_pago: cliente.condicion_pago || 'Contado',
         dias_credito: parseInt(cliente.dias_credito || 0)
       });
-      setObservacionCambio('');
-      setCondicionCambioDetectado(false);
-      setDocumentoValidado(null);
-      setDatosAPI(null);
-      setCreacionManual(false);
     } else {
       setEditando(null);
-      setFormData({
-        tipo_documento: 'RUC',
-        ruc: '',
-        razon_social: '',
-        contacto: '',
-        telefono: '',
-        email: '',
-        direccion_despacho: '',
-        ubigeo: '',
-        limite_credito_pen: 0,
-        limite_credito_usd: 0,
-        usar_limite_credito: false,
-        condicion_pago: 'Contado',
-        dias_credito: 0,
-        validar_documento: true,
-        estado: 'Activo'
-      });
+      setFormData(FORM_VACIO);
       setCondicionOriginal({ condicion_pago: 'Contado', dias_credito: 0 });
-      setObservacionCambio('');
-      setCondicionCambioDetectado(false);
-      setDocumentoValidado(null);
-      setDatosAPI(null);
-      setCreacionManual(false);
     }
+    setObservacionCambio('');
+    setCondicionCambioDetectado(false);
+    setDocumentoValidado(null);
+    setDatosAPI(null);
+    setCreacionManual(false);
     setModalOpen(true);
   };
 
@@ -163,7 +232,7 @@ function Clientes() {
   };
 
   const abrirModalSolicitudCredito = (cliente) => {
-    if (cliente.tiene_solicitud_pendiente) {
+    if (tieneSolicitud(cliente)) {
       setError(`El cliente ${cliente.razon_social} ya tiene una solicitud en proceso.`);
       return;
     }
@@ -188,7 +257,7 @@ function Clientes() {
         const file = new File([blob], `sustento_${fecha}.png`, { type: blob.type });
         setArchivoSustento(file);
         e.preventDefault();
-        return; 
+        return;
       }
     }
   };
@@ -213,7 +282,8 @@ function Clientes() {
       setClienteParaSolicitud(null);
       setArchivoSustento(null);
       cerrarModal();
-      cargarClientes();
+      setDetalle(null);
+      cargarClientes({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al enviar solicitud de crédito');
     }
@@ -237,7 +307,7 @@ function Clientes() {
     try {
       setValidandoDocumento(true);
       setError(null);
-      const response = tipo === 'RUC' 
+      const response = tipo === 'RUC'
         ? await clientesAPI.validarRUC(documento)
         : await clientesAPI.validarDNI(documento);
       if (response.data.valido) {
@@ -330,7 +400,8 @@ function Clientes() {
         }
       }
       cerrarModal();
-      cargarClientes();
+      setDetalle(null);
+      cargarClientes({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al guardar cliente');
     }
@@ -342,7 +413,8 @@ function Clientes() {
       setError(null);
       await clientesAPI.delete(id);
       setSuccess('Cliente desactivado exitosamente');
-      cargarClientes();
+      setDetalle(null);
+      cargarClientes({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al desactivar cliente');
     }
@@ -354,396 +426,575 @@ function Clientes() {
     setDatosAPI(null);
   };
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.razon_social.toLowerCase().includes(filtro.toLowerCase()) ||
-    c.ruc.includes(filtro)
-  );
+  const termino = busqueda.trim().toLowerCase();
+  const clientesFiltrados = clientes.filter(c => {
+    if (filtroKpi && !FILTROS_KPI[filtroKpi](c)) return false;
+    if (filtroTipo && (c.tipo_documento || 'RUC') !== filtroTipo) return false;
+    if (!termino) return true;
+    return incluye(c.razon_social, termino) || incluye(c.ruc, termino) || incluye(c.contacto, termino)
+      || incluye(c.email, termino) || incluye(c.telefono, termino) || incluye(c.comerciales_asignados, termino);
+  });
 
   const { currentItems, setCurrentPage, ...paginacion } = usePagination(clientesFiltrados, { storageKey: 'clientes_pagina' });
+  useResetPagina(setCurrentPage, [busqueda, filtroKpi, filtroTipo, filtroAtencion]);
 
-  const columns = [
-    { 
-      header: 'Tipo',
-      accessor: 'tipo_documento',
-      width: '70px',
-      align: 'center',
-      render: (value) => (
-        <span className={`badge ${value === 'DNI' ? 'badge-info' : 'badge-primary'}`}>
-          {value || 'RUC'}
-        </span>
-      )
-    },
-    { 
-      header: 'Documento', 
-      accessor: 'ruc', 
-      width: '120px',
-      render: (value, row) => (
-        <div>
-          <div className="font-mono font-bold">{value}</div>
-          <div className="text-xs text-muted">{row.tipo_documento || 'RUC'}</div>
-        </div>
-      )
-    },
-    { header: 'Razón Social / Nombre', accessor: 'razon_social' },
-    { header: 'Contacto', accessor: 'contacto' },
-    { header: 'Teléfono', accessor: 'telefono' },
-    {
-      header: 'Condición Pago',
-      accessor: 'condicion_pago',
-      width: '130px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="text-sm">
-          <span className={`badge ${value === 'Credito' ? 'badge-warning' : 'badge-success'}`}>
-            {value === 'Credito' ? 'Crédito' : 'Contado'}
-          </span>
-          {value === 'Credito' && row.dias_credito > 0 && (
-            <div className="text-xs text-muted mt-1">{row.dias_credito} días</div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Atenciones',
-      width: '110px',
-      align: 'center',
-      render: (_, row) => (
-        <AtencionesBadge
-          atenciones={row.atenciones}
-          totalOrdenes={row.total_ordenes}
-          desglose={row.ordenes_desglose}
-        />
-      )
-    },
-    {
-      header: 'Límite Crédito',
-      width: '140px',
-      render: (_, row) => (
-        row.usar_limite_credito === 1 || row.usar_limite_credito === true ? (
-          <div className="text-sm">
-            <div className="text-success font-medium">S/ {parseFloat(row.limite_credito_pen).toFixed(2)}</div>
-            <div className="text-primary font-medium">$ {parseFloat(row.limite_credito_usd).toFixed(2)}</div>
-            {row.tiene_solicitud_pendiente && (
-              <div className="mt-1 text-xs badge badge-warning w-full text-center">
-                Solicitud Pendiente
-              </div>
-            )}
-          </div>
-        ) : (
-          <span className="badge badge-secondary">Sin Límite</span>
-        )
-      )
-    },
-    {
-      header: 'Estado',
-      accessor: 'estado',
-      width: '100px',
-      align: 'center',
-      render: (value) => (
-        <span className={`badge ${value === 'Activo' ? 'badge-success' : 'badge-secondary'}`}>
-          {value}
-        </span>
-      )
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_cliente',
-      width: '160px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="flex gap-2 justify-center">
-          <button className="btn btn-sm btn-primary" onClick={() => navigate(`/clientes/${value}`)} title="Ver historial">
-            <Eye size={14} />
-          </button>
-          <button className="btn btn-sm btn-outline" onClick={() => abrirModal(row)} title="Editar">
-            <Edit size={14} />
-          </button>
-          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(value)} title="Desactivar" disabled={row.estado === 'Inactivo'}>
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )
-    }
-  ];
+  const hayFiltros = !!(busqueda || filtroKpi || filtroTipo || filtroAtencion !== 'todos');
+  const limpiarFiltros = () => {
+    setBusqueda('');
+    setFiltroKpi('');
+    setFiltroTipo('');
+    setFiltroAtencion('todos');
+  };
 
   if (loading) return <Loading variant="table" />;
 
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="card-title">Clientes</h1>
-          <p className="text-muted">Gestión de clientes (Empresas y Personas Naturales)</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => abrirModal()}>
-          <Plus size={20} /> Nuevo Cliente
-        </button>
-      </div>
+  const activos = clientes.filter(FILTROS_KPI.activos).length;
+  const conDeuda = clientes.filter(tieneDeuda);
+  const saldoPen = conDeuda.reduce((s, c) => s + parseFloat(c.saldo_pen || 0), 0);
+  const saldoUsd = conDeuda.reduce((s, c) => s + parseFloat(c.saldo_usd || 0), 0);
+  const conVencidos = clientes.filter(FILTROS_KPI.vencidos);
+  const ordenesVencidas = conVencidos.reduce((s, c) => s + Number(c.ordenes_vencidas || 0), 0);
+  const conLinea = clientes.filter(usaLimiteCredito).length;
+  const solicitudes = clientes.filter(tieneSolicitud).length;
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+  const kpis = verFinanzas ? [
+    { id: 'activos', label: 'Activos', tono: 'is-success', icon: CheckCircle, valor: activos, foot: `de ${clientes.length} clientes` },
+    { id: 'deuda', label: 'Por cobrar', tono: 'is-warning', icon: Wallet, valor: fmtMonto(saldoPen), foot: `${fmtMonto(saldoUsd, 'USD')} · ${conDeuda.length} clientes` },
+    { id: 'vencidos', label: 'Con vencidos', tono: 'is-danger', icon: AlertTriangle, valor: conVencidos.length, foot: `${ordenesVencidas} órdenes vencidas` },
+    { id: 'credito', label: 'Línea de crédito', tono: 'is-info', icon: CreditCard, valor: conLinea, foot: `${solicitudes} solicitudes pendientes` }
+  ] : [
+    { id: 'activos', label: 'Activos', tono: 'is-success', icon: CheckCircle, valor: activos, foot: `de ${clientes.length} clientes` },
+    { id: 'inactivos', label: 'Inactivos', tono: '', icon: Ban, valor: clientes.length - activos },
+    { id: 'credito', label: 'Línea de crédito', tono: 'is-info', icon: CreditCard, valor: conLinea },
+    { id: 'solicitud', label: 'Solicitudes pendientes', tono: 'is-warning', icon: Hourglass, valor: solicitudes }
+  ];
+  const chipsExtra = verFinanzas ? [
+    { id: 'solicitud', label: 'Solicitud pendiente', icon: Hourglass, valor: solicitudes },
+    { id: 'inactivos', label: 'Inactivos', icon: Ban, valor: clientes.length - activos }
+  ] : [];
+  const etiquetaFiltro = (id) => kpis.find(k => k.id === id)?.label || chipsExtra.find(k => k.id === id)?.label;
 
-      <div className="card mb-3">
-        <div className="flex gap-3 items-end" style={{ flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '240px' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={20} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-              <input type="text" className="form-input" placeholder="Buscar por razón social, nombre o documento..." value={filtro} onChange={(e) => setFiltro(e.target.value)} style={{ paddingLeft: '2.5rem' }} />
+  const columnas = 7 + (verFinanzas ? 1 : 0);
+
+  const renderDrawer = () => {
+    const c = detalle;
+    const desglose = desgloseOrdenes(c.ordenes_desglose);
+    const linea = usaLimiteCredito(c);
+    return (
+      <PgDrawer
+        eyebrow={<><Users size={12} /> Cliente</>}
+        title={c.razon_social}
+        badges={(
+          <>
+            <BadgeTipoDocumento tipo={c.tipo_documento || 'RUC'} />
+            <BadgeEstadoRegistro estado={c.estado} />
+            <BadgeCreditoCliente cliente={c} />
+          </>
+        )}
+        onClose={() => setDetalle(null)}
+        footer={(
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => abrirModal(c)}>
+              <Pencil size={16} /> Editar
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => navigate(`/clientes/${c.id_cliente}`)}>
+              <ExternalLink size={16} /> Abrir ficha
+            </button>
+          </>
+        )}
+      >
+        <section>
+          <h3 className="pg-section-title"><User size={14} /> Datos de contacto</h3>
+          <div className="pg-kv">
+            <div><span>{c.tipo_documento || 'RUC'}</span><strong className="pg-code">{c.ruc}</strong></div>
+            <div><span>Contacto</span><strong>{c.contacto || '—'}</strong></div>
+            <div><span>Teléfono</span><strong>{c.telefono || '—'}</strong></div>
+            <div><span>Email</span><strong>{c.email || '—'}</strong></div>
+            <div className="wide"><span>Dirección principal</span><strong>{c.direccion_despacho || '—'}{c.ubigeo ? ` · Ubigeo ${c.ubigeo}` : ''}</strong></div>
+            <div className="wide"><span>Comercial asignado</span><strong>{c.comerciales_asignados || 'Sin cartera asignada'}</strong></div>
+          </div>
+        </section>
+
+        <section>
+          <h3 className="pg-section-title"><CreditCard size={14} /> Condición y crédito</h3>
+          <div className="pg-kv">
+            <div><span>Condición de pago</span><strong><BadgeCondicionPago condicion={c.condicion_pago} dias={c.dias_credito} /></strong></div>
+            <div><span>Línea de crédito</span><strong>{linea ? 'Habilitada' : 'Sin línea'}</strong></div>
+          </div>
+          {linea && (
+            credito.loading ? (
+              <div className="ms-loading"><Loader size={20} className="animate-spin" /></div>
+            ) : credito.data ? (
+              <div className="ms-measures">
+                <MedidorCredito titulo="Soles" linea={credito.data.credito_pen} moneda="PEN" />
+                <MedidorCredito titulo="Dólares" linea={credito.data.credito_usd} moneda="USD" />
+              </div>
+            ) : null
+          )}
+          {tieneSolicitud(c) ? (
+            <p className="ms-status is-warning"><Hourglass size={15} /> Hay una solicitud de crédito pendiente de aprobación.</p>
+          ) : (
+            <div className="ms-actions-end">
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => abrirModalSolicitudCredito(c)}>
+                <CreditCard size={14} /> {linea ? 'Solicitar cambio de límite' : 'Solicitar activación de crédito'}
+              </button>
             </div>
+          )}
+        </section>
+
+        {verFinanzas && (
+          <section>
+            <h3 className="pg-section-title"><Wallet size={14} /> Cobranza</h3>
+            <div className="pg-kv">
+              <div><span>Saldo en soles</span><strong>{fmtMonto(c.saldo_pen)}</strong></div>
+              <div><span>Saldo en dólares</span><strong>{fmtMonto(c.saldo_usd, 'USD')}</strong></div>
+              <div><span>Órdenes por cobrar</span><strong>{c.ordenes_por_cobrar || 0}</strong></div>
+              <div>
+                <span>Vencidas</span>
+                <strong>
+                  {Number(c.ordenes_vencidas) > 0
+                    ? <span className="badge badge-danger"><AlertTriangle size={11} />{c.ordenes_vencidas} vencidas</span>
+                    : 'Ninguna'}
+                </strong>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section>
+          <h3 className="pg-section-title"><Activity size={14} /> Actividad comercial</h3>
+          <div className="pg-kv">
+            <div><span>Órdenes de venta</span><strong>{c.total_ordenes || 0}</strong></div>
+            <div><span>Atenciones</span><strong>{c.atenciones || 0}</strong></div>
+            <div><span>Última venta</span><strong>{fmtFecha(c.ultima_venta)}{c.ultima_venta ? ` · ${haceTexto(c.ultima_venta)}` : ''}</strong></div>
           </div>
-          <div className="form-group" style={{ marginBottom: 0, minWidth: '200px' }}>
-            <label className="form-label text-xs">Atención</label>
-            <select className="form-select" value={filtroAtencion} onChange={(e) => setFiltroAtencion(e.target.value)}>
-              <option value="todos">Todos los clientes</option>
-              <option value="con">Con atención (órdenes despachadas/entregadas)</option>
-              <option value="sin">Sin atención</option>
-            </select>
-          </div>
+          {desglose.length > 0 && (
+            <div className="pg-tags">
+              {desglose.map(d => <span key={d.estado} className="pg-tag">{d.estado} <b>{d.cantidad}</b></span>)}
+            </div>
+          )}
+        </section>
+      </PgDrawer>
+    );
+  };
+
+  return (
+    <div className="pg-page">
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Users size={13} /> Maestros</span>
+          <h1 className="pg-title">Clientes</h1>
+          <p className="pg-subtitle">
+            <b>{clientes.length}</b> clientes · <b>{clientes.filter(c => (c.tipo_documento || 'RUC') === 'RUC').length}</b> empresas ·
+            {' '}<b>{clientes.filter(c => c.tipo_documento === 'DNI').length}</b> personas naturales
+          </p>
         </div>
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline" onClick={() => cargarClientes({ silencioso: true })} disabled={refreshing}>
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Actualizar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => abrirModal()}>
+            <Plus size={16} /> Nuevo cliente
+          </button>
+        </div>
+      </header>
+
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+        <div className="pg-kpis">
+          {kpis.map(k => {
+            const Icono = k.icon;
+            const activo = filtroKpi === k.id;
+            return (
+              <button key={k.id} type="button" className={`pg-kpi ${k.tono} ${activo ? 'on' : ''}`} aria-pressed={activo}
+                onClick={() => setFiltroKpi(activo ? '' : k.id)}>
+                <div className="pg-kpi-top">
+                  <span className="pg-kpi-label">{k.label}</span>
+                  <span className="pg-kpi-icon"><Icono size={16} /></span>
+                </div>
+                <span className="pg-kpi-value">{k.valor}</span>
+                <span className="pg-kpi-foot">{activo ? 'Filtro activo · pulsa para quitar' : (k.foot || 'Pulsa para filtrar')}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <section className="pg-panel">
+          <div className="pg-filters">
+            <div className="pg-filters-row">
+              <div className="pg-field pg-field-grow pg-search">
+                <label className="pg-field-label" htmlFor="ms-cli-busqueda">Buscar</label>
+                <Search size={14} />
+                <input id="ms-cli-busqueda" type="search" className="form-input" placeholder="Razón social, documento, contacto o comercial"
+                  value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label">Tipo</span>
+                <div className="pg-segmented" role="radiogroup" aria-label="Tipo de cliente">
+                  {OPCIONES_TIPO.map(op => {
+                    const Icono = op.icon;
+                    return (
+                      <button key={op.label} type="button" role="radio" aria-checked={filtroTipo === op.id}
+                        className={filtroTipo === op.id ? 'active' : ''} onClick={() => setFiltroTipo(op.id)}>
+                        {Icono && <Icono size={13} />}{op.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label">Atención</span>
+                <div className="pg-segmented" role="radiogroup" aria-label="Atención" title="Con atención: órdenes despachadas, en despacho parcial o entregadas">
+                  {OPCIONES_ATENCION.map(op => (
+                    <button key={op.id} type="button" role="radio" aria-checked={filtroAtencion === op.id}
+                      className={filtroAtencion === op.id ? 'active' : ''} onClick={() => setFiltroAtencion(op.id)}>
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {(chipsExtra.length > 0 || hayFiltros) && (
+              <div className="pg-chips">
+                {chipsExtra.map(ch => {
+                  const Icono = ch.icon;
+                  const on = filtroKpi === ch.id;
+                  return (
+                    <button key={ch.id} type="button" className={`pg-chip ${on ? 'on' : ''}`} aria-pressed={on}
+                      onClick={() => setFiltroKpi(on ? '' : ch.id)}>
+                      <Icono size={14} /> {ch.label} <b>{ch.valor}</b>
+                    </button>
+                  );
+                })}
+                {filtroKpi && !chipsExtra.some(ch => ch.id === filtroKpi) && (
+                  <button type="button" className="pg-chip on" onClick={() => setFiltroKpi('')}>
+                    {etiquetaFiltro(filtroKpi)} <X size={13} />
+                  </button>
+                )}
+                {hayFiltros && (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={limpiarFiltros}>
+                    <X size={14} /> Limpiar filtros
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title"><Users size={16} /> Clientes <span className="pg-count">{clientesFiltrados.length}</span></h2>
+            <span className="pg-panel-meta">Pulsa una fila para ver el detalle rápido</span>
+          </div>
+          <div className="pg-table-wrap">
+            <table className="pg-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Contacto</th>
+                  <th>Comercial</th>
+                  <th>Condición y crédito</th>
+                  {verFinanzas && <th className="num">Por cobrar</th>}
+                  <th>Actividad</th>
+                  <th className="center">Estado</th>
+                  <th className="center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.length > 0 ? currentItems.map(c => {
+                  const linea = usaLimiteCredito(c);
+                  return (
+                    <tr key={c.id_cliente} className="is-clickable" onClick={() => setDetalle(c)}>
+                      <td style={{ minWidth: 230 }}>
+                        <span className="pg-cell-main">{c.razon_social}</span>
+                        <div className="pg-tags">
+                          <BadgeTipoDocumento tipo={c.tipo_documento || 'RUC'} />
+                          <span className="pg-code">{c.ruc}</span>
+                        </div>
+                      </td>
+                      <td>
+                        {c.contacto || c.telefono || c.email ? (
+                          <div className="ms-lines">
+                            {c.contacto && <span><User size={12} /><b>{c.contacto}</b></span>}
+                            {c.telefono && <span><Phone size={12} />{c.telefono}</span>}
+                            {c.email && <span><Mail size={12} /><span className="pg-truncate">{c.email}</span></span>}
+                          </div>
+                        ) : <span className="pg-muted">Sin datos</span>}
+                      </td>
+                      <td>
+                        {c.comerciales_asignados
+                          ? <span className="pg-cell-main"><Megaphone size={12} className="pg-muted" />{c.comerciales_asignados}</span>
+                          : <span className="pg-muted">Sin asignar</span>}
+                      </td>
+                      <td className="nowrap">
+                        <BadgeCondicionPago condicion={c.condicion_pago} dias={c.dias_credito} />
+                        {linea
+                          ? <span className="pg-cell-sub">Límite {fmtMonto(c.limite_credito_pen)} · {fmtMonto(c.limite_credito_usd, 'USD')}</span>
+                          : <span className="pg-cell-sub">Sin línea de crédito</span>}
+                        {tieneSolicitud(c) && (
+                          <div className="pg-tags"><span className="pg-tag is-warning"><Hourglass size={11} />Solicitud pendiente</span></div>
+                        )}
+                      </td>
+                      {verFinanzas && (
+                        <td className="num">
+                          {tieneDeuda(c) ? (
+                            <>
+                              {parseFloat(c.saldo_pen) > 0.009 && <span className="pg-money">{fmtMonto(c.saldo_pen)}</span>}
+                              {parseFloat(c.saldo_usd) > 0.009 && <span className="pg-money">{fmtMonto(c.saldo_usd, 'USD')}</span>}
+                              {Number(c.ordenes_vencidas) > 0 && (
+                                <div className="pg-tags">
+                                  <span className="pg-tag is-danger"><AlertTriangle size={11} />{c.ordenes_vencidas} vencidas</span>
+                                </div>
+                              )}
+                            </>
+                          ) : <span className="pg-muted">Al día</span>}
+                        </td>
+                      )}
+                      <td className="nowrap">
+                        <AtencionesBadge atenciones={c.atenciones} totalOrdenes={c.total_ordenes} desglose={c.ordenes_desglose} />
+                        <span className="pg-cell-sub">
+                          {c.ultima_venta
+                            ? <><CalendarDays size={11} />Última venta {haceTexto(c.ultima_venta)}</>
+                            : 'Sin ventas'}
+                        </span>
+                      </td>
+                      <td className="center"><BadgeEstadoRegistro estado={c.estado} /></td>
+                      <td className="center" onClick={(e) => e.stopPropagation()}>
+                        <div className="pg-rowactions">
+                          <button type="button" className="pg-iconbtn" title="Abrir ficha e historial" aria-label={`Abrir ficha de ${c.razon_social}`}
+                            onClick={() => navigate(`/clientes/${c.id_cliente}`)}>
+                            <Eye size={15} />
+                          </button>
+                          <button type="button" className="pg-iconbtn" title="Editar" aria-label={`Editar ${c.razon_social}`} onClick={() => abrirModal(c)}>
+                            <Pencil size={15} />
+                          </button>
+                          <button type="button" className="pg-iconbtn is-danger" title="Desactivar" aria-label={`Desactivar ${c.razon_social}`}
+                            disabled={c.estado === 'Inactivo'} onClick={() => handleDelete(c.id_cliente)}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={columnas}>
+                      <div className="pg-empty">
+                        <Users size={28} />
+                        <strong>{hayFiltros ? 'Ningún cliente coincide con los filtros' : 'Aún no hay clientes registrados'}</strong>
+                        <span>{hayFiltros ? 'Quita algún filtro o cambia la búsqueda.' : 'Registra un cliente validando su RUC o DNI.'}</span>
+                        {hayFiltros
+                          ? <button type="button" className="btn btn-outline btn-sm" onClick={limpiarFiltros}><X size={14} /> Limpiar filtros</button>
+                          : <button type="button" className="btn btn-primary btn-sm" onClick={() => abrirModal()}><Plus size={14} /> Nuevo cliente</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <PgPager {...paginacion} setCurrentPage={setCurrentPage} sustantivo="clientes" />
+        </section>
       </div>
 
-      <div className="card list-panel">
-        <div className="card-body p-0">
-          <Table columns={columns} data={currentItems} emptyMessage="No se encontraron clientes" />
-        </div>
-        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
-      </div>
+      {detalle && renderDrawer()}
 
-      <Modal isOpen={modalOpen} onClose={cerrarModal} title={editando ? 'Editar Cliente' : 'Nuevo Cliente'} size="lg">
+      <Modal isOpen={modalOpen} onClose={cerrarModal} title={editando ? 'Editar cliente' : 'Nuevo cliente'} size="lg">
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Tipo de Documento *</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" className={`btn ${formData.tipo_documento === 'RUC' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleTipoDocumentoChange('RUC')} disabled={editando}>
-                <Building2 size={18} className="mr-2" /> Empresa (RUC)
+            <span className="form-label">Tipo de documento *</span>
+            <div className="ms-choice" role="radiogroup" aria-label="Tipo de documento">
+              <button type="button" role="radio" aria-checked={formData.tipo_documento === 'RUC'}
+                className={`btn ${formData.tipo_documento === 'RUC' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => handleTipoDocumentoChange('RUC')} disabled={!!editando}>
+                <Building2 size={18} /> Empresa (RUC)
               </button>
-              <button type="button" className={`btn ${formData.tipo_documento === 'DNI' ? 'btn-info' : 'btn-outline'}`} onClick={() => handleTipoDocumentoChange('DNI')} disabled={editando}>
-                <User size={18} className="mr-2" /> Persona Natural (DNI)
+              <button type="button" role="radio" aria-checked={formData.tipo_documento === 'DNI'}
+                className={`btn ${formData.tipo_documento === 'DNI' ? 'btn-info' : 'btn-outline'}`}
+                onClick={() => handleTipoDocumentoChange('DNI')} disabled={!!editando}>
+                <User size={18} /> Persona natural (DNI)
               </button>
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">{formData.tipo_documento === 'RUC' ? 'RUC' : 'DNI'} *</label>
-            <div className="flex gap-2">
-              <input type="text" className="form-input" value={formData.ruc} onChange={(e) => { setFormData({ ...formData, ruc: e.target.value }); setDocumentoValidado(null); }} required maxLength={formData.tipo_documento === 'RUC' ? 11 : 8} style={{ flex: 1 }} />
+            <label className="form-label" htmlFor="ms-cli-doc">{formData.tipo_documento === 'RUC' ? 'RUC' : 'DNI'} *</label>
+            <div className="ms-inline">
+              <input id="ms-cli-doc" type="text" className="form-input" value={formData.ruc}
+                onChange={(e) => { setFormData({ ...formData, ruc: e.target.value }); setDocumentoValidado(null); }}
+                required maxLength={formData.tipo_documento === 'RUC' ? 11 : 8} />
               {!creacionManual && (
-                <button type="button" className="btn btn-outline" onClick={validarDocumento} disabled={validandoDocumento || !formData.ruc} style={{ minWidth: '140px' }}>
-                  {validandoDocumento ? <><Loader size={16} className="animate-spin" /> Validando...</> : <>{formData.tipo_documento === 'RUC' ? <Building2 size={16} /> : <User size={16} />} Validar {formData.tipo_documento}</>}
+                <button type="button" className="btn btn-outline" onClick={validarDocumento} disabled={validandoDocumento || !formData.ruc}>
+                  {validandoDocumento
+                    ? <><Loader size={16} className="animate-spin" /> Validando...</>
+                    : <>{formData.tipo_documento === 'RUC' ? <Building2 size={16} /> : <User size={16} />} Validar {formData.tipo_documento}</>}
                 </button>
               )}
             </div>
             {!editando && !creacionManual && (
-              <button type="button" className="text-xs text-primary mt-2 hover:underline flex items-center" onClick={activarModoManual}>
-                <Edit size={12} className="mr-1"/> Ingresar manualmente (Sin validación API)
+              <button type="button" className="ms-link" onClick={activarModoManual}>
+                <Pencil size={12} /> Ingresar manualmente (sin validación API)
               </button>
             )}
-            {documentoValidado === true && <div className="mt-2 flex items-center gap-2 text-sm text-success"><CheckCircle size={16} /> Validado correctamente</div>}
-            {documentoValidado === false && <div className="mt-2 flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> No válido</div>}
+            {documentoValidado === true && <div className="ms-status is-ok"><CheckCircle size={16} /> Validado correctamente</div>}
+            {documentoValidado === false && <div className="ms-status is-error"><AlertCircle size={16} /> No válido</div>}
           </div>
 
           <div className="form-group">
-            <label className="form-label">{formData.tipo_documento === 'RUC' ? 'Razón Social' : 'Nombre Completo'} *</label>
-            <input type="text" className="form-input" value={formData.razon_social} onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })} required />
+            <label className="form-label" htmlFor="ms-cli-razon">{formData.tipo_documento === 'RUC' ? 'Razón social' : 'Nombre completo'} *</label>
+            <input id="ms-cli-razon" type="text" className="form-input" value={formData.razon_social}
+              onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })} required />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="ms-form-grid">
             <div className="form-group">
-              <label className="form-label">Contacto</label>
-              <input type="text" className="form-input" value={formData.contacto} onChange={(e) => setFormData({ ...formData, contacto: e.target.value })} />
+              <label className="form-label" htmlFor="ms-cli-contacto">Contacto</label>
+              <input id="ms-cli-contacto" type="text" className="form-input" value={formData.contacto}
+                onChange={(e) => setFormData({ ...formData, contacto: e.target.value })} />
             </div>
             <div className="form-group">
-              <label className="form-label">Teléfono</label>
-              <input type="text" className="form-input" value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} />
+              <label className="form-label" htmlFor="ms-cli-telefono">Teléfono</label>
+              <input id="ms-cli-telefono" type="text" className="form-input" value={formData.telefono}
+                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Email</label>
-            <input type="email" className="form-input" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+            <label className="form-label" htmlFor="ms-cli-email">Email</label>
+            <input id="ms-cli-email" type="email" className="form-input" value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Dirección Principal</label>
-            <textarea 
-              className="form-textarea" 
-              value={formData.direccion_despacho} 
-              onChange={(e) => setFormData({ ...formData, direccion_despacho: e.target.value })} 
-              rows={3} 
-              placeholder="Dirección principal de entrega"
-            />
-            <small className="text-muted">Las direcciones adicionales se pueden gestionar desde el detalle del cliente.</small>
+            <label className="form-label" htmlFor="ms-cli-direccion">Dirección principal</label>
+            <textarea id="ms-cli-direccion" className="form-textarea" value={formData.direccion_despacho}
+              onChange={(e) => setFormData({ ...formData, direccion_despacho: e.target.value })}
+              rows={3} placeholder="Dirección principal de entrega" />
+            <small className="ms-hint"><MapPin size={11} />Las direcciones adicionales se gestionan desde la ficha del cliente.</small>
           </div>
 
           {formData.direccion_despacho && (
             <div className="form-group">
-              <label className="form-label">Ubigeo de la Dirección Principal *</label>
-              <UbigeoSelector
-                value={formData.ubigeo}
-                onChange={(codigo) => setFormData({ ...formData, ubigeo: codigo })}
-                required
-              />
-              <small className="text-muted">Este código se reutilizará como ubigeo de llegada al emitir la guía.</small>
+              <span className="form-label">Ubigeo de la dirección principal *</span>
+              <UbigeoSelector value={formData.ubigeo} onChange={(codigo) => setFormData({ ...formData, ubigeo: codigo })} required />
+              <small className="ms-hint">Este código se reutilizará como ubigeo de llegada al emitir la guía.</small>
             </div>
           )}
 
-          <div className="card bg-gray-50 border p-4 mb-4">
-            <p className="text-sm font-bold uppercase text-muted mb-3 flex items-center gap-2">
-              <Clock size={15} /> Condición de Pago Predeterminada
-            </p>
-            <div className="flex gap-3 mb-3">
-              <button
-                type="button"
-                className={`btn flex-1 ${formData.condicion_pago === 'Contado' ? 'btn-success' : 'btn-outline'}`}
-                onClick={() => setFormData({ ...formData, condicion_pago: 'Contado', dias_credito: 0 })}
-              >
+          <div className="ms-box">
+            <h3 className="pg-section-title"><Clock size={14} /> Condición de pago predeterminada</h3>
+            <div className="ms-choice" role="radiogroup" aria-label="Condición de pago">
+              <button type="button" role="radio" aria-checked={formData.condicion_pago === 'Contado'}
+                className={`btn ${formData.condicion_pago === 'Contado' ? 'btn-success' : 'btn-outline'}`}
+                onClick={() => setFormData({ ...formData, condicion_pago: 'Contado', dias_credito: 0 })}>
                 Contado
               </button>
-              <button
-                type="button"
-                className={`btn flex-1 ${formData.condicion_pago === 'Credito' ? 'btn-warning' : 'btn-outline'} ${!formData.usar_limite_credito ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={() => {
-                  if (!formData.usar_limite_credito) return;
-                  setFormData({ ...formData, condicion_pago: 'Credito' });
-                }}
+              <button type="button" role="radio" aria-checked={formData.condicion_pago === 'Credito'}
+                className={`btn ${formData.condicion_pago === 'Credito' ? 'btn-warning' : 'btn-outline'}`}
+                onClick={() => setFormData({ ...formData, condicion_pago: 'Credito' })}
                 disabled={!formData.usar_limite_credito}
-                title={!formData.usar_limite_credito ? 'El cliente debe tener límite de crédito habilitado' : ''}
-              >
+                title={!formData.usar_limite_credito ? 'El cliente debe tener límite de crédito habilitado' : ''}>
                 Crédito
               </button>
             </div>
 
             {!formData.usar_limite_credito && (
-              <p className="text-xs text-muted mb-2">La opción Crédito solo está disponible para clientes con límite de crédito habilitado.</p>
+              <small className="ms-hint">La opción Crédito solo está disponible para clientes con límite de crédito habilitado.</small>
             )}
 
             {formData.condicion_pago === 'Credito' && (
-              <div className="pt-3 border-t border-gray-200">
-                <label className="form-label">Días de Crédito *</label>
-                <div className="flex gap-2 flex-wrap mb-2">
+              <div className="ms-box-sep">
+                <label className="form-label" htmlFor="ms-cli-dias">Días de crédito *</label>
+                <div className="ms-days">
                   {[7, 15, 30, 45, 60, 90].map(dias => (
-                    <button
-                      key={dias}
-                      type="button"
+                    <button key={dias} type="button" aria-pressed={formData.dias_credito === dias}
                       className={`btn btn-xs ${formData.dias_credito === dias ? 'btn-warning' : 'btn-outline'}`}
-                      onClick={() => setFormData({ ...formData, dias_credito: dias })}
-                    >
+                      onClick={() => setFormData({ ...formData, dias_credito: dias })}>
                       {dias} días
                     </button>
                   ))}
                 </div>
-                <input
-                  type="number"
-                  className="form-input"
-                  placeholder="Otro valor en días..."
-                  value={formData.dias_credito || ''}
-                  min="1"
-                  onChange={(e) => setFormData({ ...formData, dias_credito: parseInt(e.target.value) || 0 })}
-                />
+                <input id="ms-cli-dias" type="number" className="form-input" placeholder="Otro valor en días..."
+                  value={formData.dias_credito || ''} min="1"
+                  onChange={(e) => setFormData({ ...formData, dias_credito: parseInt(e.target.value) || 0 })} />
               </div>
             )}
 
             {editando && condicionCambioDetectado && (
-              <div className="mt-3 pt-3 border-t border-orange-200 bg-orange-50 rounded-lg p-3">
-                <p className="text-xs font-bold text-orange-700 mb-2 flex items-center gap-1">
-                  <AlertCircle size={13} /> Se detectó un cambio en la condición comercial
-                </p>
-                <div className="text-xs text-orange-600 mb-2">
-                  <span className="font-medium">Antes: </span>
-                  {condicionOriginal.condicion_pago === 'Credito'
-                    ? `Crédito ${condicionOriginal.dias_credito} días`
-                    : 'Contado'}
-                  <span className="mx-2">→</span>
-                  <span className="font-medium">Ahora: </span>
-                  {formData.condicion_pago === 'Credito'
-                    ? `Crédito ${formData.dias_credito} días`
-                    : 'Contado'}
+              <div className="ms-box-sep">
+                <p className="ms-status is-warning"><AlertCircle size={14} /> Se detectó un cambio en la condición comercial</p>
+                <div className="ms-change">
+                  <span>Antes: <b>{condicionOriginal.condicion_pago === 'Credito' ? `Crédito ${condicionOriginal.dias_credito} días` : 'Contado'}</b></span>
+                  <span aria-hidden="true">→</span>
+                  <span>Ahora: <b>{formData.condicion_pago === 'Credito' ? `Crédito ${formData.dias_credito} días` : 'Contado'}</b></span>
                 </div>
-                <label className="form-label text-orange-700">Motivo del cambio (opcional)</label>
-                <textarea
-                  className="form-textarea"
-                  rows={2}
+                <label className="form-label" htmlFor="ms-cli-motivo">Motivo del cambio (opcional)</label>
+                <textarea id="ms-cli-motivo" className="form-textarea" rows={2}
                   placeholder="Ej. Acuerdo comercial, ampliación de línea, renegociación..."
-                  value={observacionCambio}
-                  onChange={(e) => setObservacionCambio(e.target.value)}
-                />
+                  value={observacionCambio} onChange={(e) => setObservacionCambio(e.target.value)} />
               </div>
             )}
           </div>
 
-          <div className="card bg-gray-50 border p-4 mb-4">
-            <div className="form-group mb-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={formData.usar_limite_credito} 
-                  onChange={(e) => {
-                    const nuevoValor = e.target.checked;
-                    setFormData({
-                      ...formData,
-                      usar_limite_credito: nuevoValor,
-                      condicion_pago: !nuevoValor ? 'Contado' : formData.condicion_pago,
-                      dias_credito: !nuevoValor ? 0 : formData.dias_credito
-                    });
-                  }}
-                  className="form-checkbox" 
-                  style={{ width: '18px', height: '18px' }}
-                  disabled={!!editando} 
-                />
-                <CreditCard size={18} className="text-primary" />
-                <span className="font-medium">Usar límite de crédito</span>
-              </label>
-              <p className="text-xs text-muted mt-1 ml-6">{formData.usar_limite_credito ? 'El cliente tendrá límites de crédito (requiere aprobación)' : 'El cliente puede realizar compras sin límite de crédito'}</p>
-            </div>
+          <div className="ms-box">
+            <label className="ms-check">
+              <input type="checkbox" checked={formData.usar_limite_credito} disabled={!!editando}
+                onChange={(e) => {
+                  const nuevoValor = e.target.checked;
+                  setFormData({
+                    ...formData,
+                    usar_limite_credito: nuevoValor,
+                    condicion_pago: !nuevoValor ? 'Contado' : formData.condicion_pago,
+                    dias_credito: !nuevoValor ? 0 : formData.dias_credito
+                  });
+                }} />
+              <div>
+                <span><CreditCard size={15} />Usar límite de crédito</span>
+                <small>{formData.usar_limite_credito ? 'El cliente tendrá límites de crédito (requiere aprobación).' : 'El cliente puede realizar compras sin límite de crédito.'}</small>
+              </div>
+            </label>
 
             {editando ? (
-              <div className="pt-3 border-t">
-                <div className="card bg-blue-50 mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle size={16} className="text-info" />
-                    <p className="text-sm font-medium text-info">Límites Actuales (Solo lectura)</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-muted">Límite en Soles</p>
-                      <p className="text-lg font-bold text-success">S/ {parseFloat(formData.limite_credito_pen || 0).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted">Límite en Dólares</p>
-                      <p className="text-lg font-bold text-primary">$ {parseFloat(formData.limite_credito_usd || 0).toFixed(2)}</p>
+              <div className="ms-box-sep">
+                <div className="ms-note is-info">
+                  <Info size={16} />
+                  <div>
+                    <strong>Límites actuales (solo lectura)</strong>
+                    <div className="ms-figures">
+                      <div className="ms-figure"><span>Soles</span><b>{fmtMonto(formData.limite_credito_pen)}</b></div>
+                      <div className="ms-figure"><span>Dólares</span><b>{fmtMonto(formData.limite_credito_usd, 'USD')}</b></div>
                     </div>
                   </div>
                 </div>
-                <button 
-                  type="button" 
-                  className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
-                  onClick={() => abrirModalSolicitudCredito(editando)}
-                  disabled={editando.tiene_solicitud_pendiente}
-                >
-                  <CreditCard size={16} /> 
-                  {editando.tiene_solicitud_pendiente 
-                    ? 'Solicitud en Proceso' 
-                    : !formData.usar_limite_credito 
-                      ? 'Solicitar Activación de Crédito' 
-                      : 'Solicitar Cambio de Límite'
-                  }
+                <button type="button" className="btn btn-outline ms-block" onClick={() => abrirModalSolicitudCredito(editando)}
+                  disabled={tieneSolicitud(editando)}>
+                  {tieneSolicitud(editando) ? <Hourglass size={16} /> : <CreditCard size={16} />}
+                  {tieneSolicitud(editando)
+                    ? 'Solicitud en proceso'
+                    : !formData.usar_limite_credito
+                      ? 'Solicitar activación de crédito'
+                      : 'Solicitar cambio de límite'}
                 </button>
               </div>
             ) : (
               formData.usar_limite_credito && (
-                <div className="pt-3 border-t">
-                  <div className="alert alert-info mb-3">
-                    <AlertCircle size={16} />
-                    <span className="text-xs">Estos límites se enviarán como una solicitud de crédito automática para aprobación.</span>
+                <div className="ms-box-sep">
+                  <div className="ms-note is-info">
+                    <Info size={16} />
+                    <p>Estos límites se enviarán como una solicitud de crédito automática para aprobación.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="form-group mb-0">
-                      <label className="form-label">Límite en Soles (S/)</label>
-                      <input type="number" className="form-input" value={formData.limite_credito_pen} onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                  <div className="ms-form-grid">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="ms-cli-lim-pen">Límite en soles (S/)</label>
+                      <input id="ms-cli-lim-pen" type="number" className="form-input" value={formData.limite_credito_pen}
+                        onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
                     </div>
-                    <div className="form-group mb-0">
-                      <label className="form-label">Límite en Dólares ($)</label>
-                      <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="ms-cli-lim-usd">Límite en dólares ($)</label>
+                      <input id="ms-cli-lim-usd" type="number" className="form-input" value={formData.limite_credito_usd}
+                        onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
                     </div>
                   </div>
                 </div>
@@ -752,109 +1003,84 @@ function Clientes() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Estado *</label>
-            <select className="form-select" value={formData.estado} onChange={(e) => setFormData({ ...formData, estado: e.target.value })} required>
+            <label className="form-label" htmlFor="ms-cli-estado">Estado *</label>
+            <select id="ms-cli-estado" className="form-select" value={formData.estado}
+              onChange={(e) => setFormData({ ...formData, estado: e.target.value })} required>
               <option value="Activo">Activo</option>
               <option value="Inactivo">Inactivo</option>
             </select>
           </div>
 
-          <div className="flex gap-2 justify-end mt-4">
+          <div className="ms-actions-end">
             <button type="button" className="btn btn-outline" onClick={cerrarModal}>Cancelar</button>
-            <button type="submit" className="btn btn-primary">{editando ? 'Actualizar' : 'Crear'} Cliente</button>
+            <button type="submit" className="btn btn-primary">{editando ? 'Actualizar' : 'Crear'} cliente</button>
           </div>
         </form>
       </Modal>
 
-      <Modal 
-        isOpen={modalSolicitudOpen} 
-        onClose={() => setModalSolicitudOpen(false)} 
-        title={!clienteParaSolicitud?.usar_limite_credito ? "Solicitar Activación de Crédito" : "Solicitar Cambio de Límite"}
+      <Modal
+        isOpen={modalSolicitudOpen}
+        onClose={() => setModalSolicitudOpen(false)}
+        title={!usaLimiteCredito(clienteParaSolicitud) ? 'Solicitar activación de crédito' : 'Solicitar cambio de límite'}
       >
         {clienteParaSolicitud && (
           <form onSubmit={handleSubmitSolicitud}>
-            <div className="mb-4">
-              <div className="card bg-gray-50">
-                <h3 className="font-medium">{clienteParaSolicitud.razon_social}</h3>
-                <p className="text-sm text-muted">RUC: {clienteParaSolicitud.ruc}</p>
-              </div>
+            <div className="ms-box">
+              <span className="pg-cell-main">{clienteParaSolicitud.razon_social}</span>
+              <span className="pg-cell-sub">{clienteParaSolicitud.tipo_documento || 'RUC'}: {clienteParaSolicitud.ruc}</span>
             </div>
-            
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Límites Actuales</h4>
-              <div className="grid grid-cols-2 gap-3 card bg-gray-50">
-                <div>
-                  <p className="text-xs text-muted">Soles</p>
-                  <p className="font-bold">S/ {parseFloat(clienteParaSolicitud.limite_credito_pen || 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted">Dólares</p>
-                  <p className="font-bold">$ {parseFloat(clienteParaSolicitud.limite_credito_usd || 0).toFixed(2)}</p>
-                </div>
+
+            <div className="ms-box">
+              <h3 className="pg-section-title"><CreditCard size={14} /> Límites actuales</h3>
+              <div className="ms-figures">
+                <div className="ms-figure"><span>Soles</span><b>{fmtMonto(clienteParaSolicitud.limite_credito_pen)}</b></div>
+                <div className="ms-figure"><span>Dólares</span><b>{fmtMonto(clienteParaSolicitud.limite_credito_usd, 'USD')}</b></div>
               </div>
             </div>
 
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Nuevos Límites Solicitados</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Límite en Soles (S/) *</label>
-                  <input type="number" className="form-input" value={solicitudData.limite_credito_pen_solicitado} onChange={(e) => setSolicitudData({ ...solicitudData, limite_credito_pen_solicitado: e.target.value })} min="0" step="0.01" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Límite en Dólares ($) *</label>
-                  <input type="number" className="form-input" value={solicitudData.limite_credito_usd_solicitado} onChange={(e) => setSolicitudData({ ...solicitudData, limite_credito_usd_solicitado: e.target.value })} min="0" step="0.01" required />
-                </div>
+            <h3 className="pg-section-title">Nuevos límites solicitados</h3>
+            <div className="ms-form-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="ms-sol-pen">Límite en soles (S/) *</label>
+                <input id="ms-sol-pen" type="number" className="form-input" value={solicitudData.limite_credito_pen_solicitado}
+                  onChange={(e) => setSolicitudData({ ...solicitudData, limite_credito_pen_solicitado: e.target.value })} min="0" step="0.01" required />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="ms-sol-usd">Límite en dólares ($) *</label>
+                <input id="ms-sol-usd" type="number" className="form-input" value={solicitudData.limite_credito_usd_solicitado}
+                  onChange={(e) => setSolicitudData({ ...solicitudData, limite_credito_usd_solicitado: e.target.value })} min="0" step="0.01" required />
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Justificación *</label>
-              <textarea className="form-textarea" value={solicitudData.justificacion} onChange={(e) => setSolicitudData({ ...solicitudData, justificacion: e.target.value })} rows={4} placeholder="Explique por qué se necesita este crédito..." required />
+              <label className="form-label" htmlFor="ms-sol-just">Justificación *</label>
+              <textarea id="ms-sol-just" className="form-textarea" value={solicitudData.justificacion}
+                onChange={(e) => setSolicitudData({ ...solicitudData, justificacion: e.target.value })}
+                rows={4} placeholder="Explique por qué se necesita este crédito..." required />
             </div>
-            
+
             <div className="form-group">
-              <label className="form-label">Archivo de Sustento (Opcional)</label>
-              <div className="flex gap-2">
-                <div 
-                  className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-primary transition-all"
-                  tabIndex="0"
-                  onPaste={handlePaste}
-                  title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
-                >
-                  {archivoSustento ? (
-                    <div className="flex items-center justify-center gap-2 text-success text-sm">
-                      <CheckCircle size={16} />
-                      <span className="font-medium truncate max-w-[150px]">{archivoSustento.name}</span>
-                    </div>
-                  ) : (
-                    <div className="text-gray-400">
-                      <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
-                    </div>
-                  )}
+              <span className="form-label">Archivo de sustento (opcional)</span>
+              <div className="ms-inline">
+                <div className={`ms-drop ${archivoSustento ? 'is-ok' : ''}`} tabIndex="0" onPaste={handlePaste}
+                  title="Haz clic aquí y presiona Ctrl+V para pegar una captura">
+                  {archivoSustento
+                    ? <><CheckCircle size={16} /><span>{archivoSustento.name}</span></>
+                    : <span>Haz clic aquí y pulsa <b>Ctrl+V</b> para pegar una imagen</span>}
                 </div>
-                <button 
-                  type="button" 
-                  className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
-                  onClick={() => document.getElementById('file-upload-sustento').click()}
-                  title="Abrir explorador de archivos"
-                >
+                <button type="button" className="btn btn-outline ms-upload" onClick={() => inputArchivoRef.current?.click()}
+                  title="Abrir explorador de archivos">
                   <FilePlus size={20} />
-                  <span className="text-[10px] uppercase font-bold">Subir</span>
+                  <small>Subir</small>
                 </button>
-                <input 
-                  id="file-upload-sustento"
-                  type="file" 
-                  className="hidden" 
-                  onChange={(e) => setArchivoSustento(e.target.files[0])}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                />
+                <input ref={inputArchivoRef} type="file" hidden accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setArchivoSustento(e.target.files[0])} />
               </div>
             </div>
 
-            <div className="flex gap-2 justify-end mt-4">
+            <div className="ms-actions-end">
               <button type="button" className="btn btn-outline" onClick={() => setModalSolicitudOpen(false)}>Cancelar</button>
-              <button type="submit" className="btn btn-primary">Enviar Solicitud</button>
+              <button type="submit" className="btn btn-primary">Enviar solicitud</button>
             </div>
           </form>
         )}

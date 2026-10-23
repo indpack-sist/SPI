@@ -1,19 +1,47 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC } from '../services/api-validation.service.js';
+import { PERMISOS_POR_ROL } from '../middleware/auth.js';
 
 export async function getAllProveedores(req, res) {
   try {
-    const { estado } = req.query;
-    
-    let sql = 'SELECT * FROM proveedores WHERE 1=1';
+    const { estado, resumen } = req.query;
+    const conResumen = resumen === '1';
+    const verMontos = !!PERMISOS_POR_ROL[req.user?.rol]?.ui?.verPrecios;
+
+    const montosSelect = verMontos ? `,
+        COALESCE(oc_stats.monto_12m_pen, 0) AS monto_12m_pen,
+        COALESCE(oc_stats.monto_12m_usd, 0) AS monto_12m_usd,
+        COALESCE(oc_stats.saldo_pen, 0) AS saldo_pen,
+        COALESCE(oc_stats.saldo_usd, 0) AS saldo_usd` : '';
+
+    let sql = conResumen ? `
+      SELECT proveedores.*,
+        COALESCE(oc_stats.total_compras, 0) AS total_compras,
+        COALESCE(oc_stats.compras_12m, 0) AS compras_12m,
+        oc_stats.ultima_compra AS ultima_compra${montosSelect}
+      FROM proveedores
+      LEFT JOIN (
+        SELECT id_proveedor,
+          COUNT(*) AS total_compras,
+          SUM(CASE WHEN fecha_emision >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH) THEN 1 ELSE 0 END) AS compras_12m,
+          MAX(fecha_emision) AS ultima_compra,
+          SUM(CASE WHEN moneda = 'PEN' AND fecha_emision >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH) THEN total ELSE 0 END) AS monto_12m_pen,
+          SUM(CASE WHEN moneda = 'USD' AND fecha_emision >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH) THEN total ELSE 0 END) AS monto_12m_usd,
+          SUM(CASE WHEN moneda = 'PEN' THEN saldo_pendiente ELSE 0 END) AS saldo_pen,
+          SUM(CASE WHEN moneda = 'USD' THEN saldo_pendiente ELSE 0 END) AS saldo_usd
+        FROM ordenes_compra
+        WHERE estado != 'Cancelada'
+        GROUP BY id_proveedor
+      ) oc_stats ON oc_stats.id_proveedor = proveedores.id_proveedor
+      WHERE 1=1` : 'SELECT * FROM proveedores WHERE 1=1';
     const params = [];
     
     if (estado) {
-      sql += ' AND estado = ?';
+      sql += ' AND proveedores.estado = ?';
       params.push(estado);
     }
     
-    sql += ' ORDER BY razon_social ASC';
+    sql += ' ORDER BY proveedores.razon_social ASC';
     
     const result = await executeQuery(sql, params);
     

@@ -8,9 +8,12 @@ const LICENCIA_REGEX = /^[A-Z]\d{8}$/;
 
 export async function getAllEmpleados(req, res) {
   try {
-    const { estado, rol } = req.query;
+    const { estado, rol, resumen } = req.query;
     
-    let sql = 'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, licencia_conducir, fecha_registro FROM empleados WHERE 1=1';
+    const carteraSelect = resumen === '1'
+      ? ', (SELECT COUNT(*) FROM empleado_clientes_asignados a WHERE a.id_empleado = empleados.id_empleado) AS clientes_asignados'
+      : '';
+    let sql = `SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, licencia_conducir, fecha_registro${carteraSelect} FROM empleados WHERE 1=1`;
     const params = [];
     
     if (estado) {

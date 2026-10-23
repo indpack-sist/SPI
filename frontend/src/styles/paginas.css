@@ -309,6 +309,41 @@ button.pg-kpi.on {
   background-color: var(--border);
 }
 
+.pg-filters { display: flex; flex-direction: column; gap: 0.85rem; padding: 1rem 1.1rem; }
+.pg-filters-row { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; }
+.pg-search { position: relative; }
+.pg-search .form-input { padding-left: 2.2rem; }
+.pg-search > svg { position: absolute; left: 0.7rem; bottom: 11px; color: var(--text-secondary); pointer-events: none; }
+
+.pg-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.pg-table .num .pg-tags { justify-content: flex-end; }
+.pg-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background-color: var(--bg-tertiary);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.pg-tag svg { flex-shrink: 0; }
+.pg-tag.is-accent { color: var(--accent); border-color: var(--accent-border); }
+.pg-tag.is-warning { color: var(--warning); border-color: rgba(243, 156, 18, 0.3); }
+.pg-tag.is-info { color: var(--info); border-color: rgba(93, 173, 226, 0.3); }
+.pg-tag.is-success { color: var(--success); border-color: rgba(46, 204, 113, 0.3); }
+.pg-tag.is-danger { color: var(--danger); border-color: rgba(231, 76, 60, 0.3); }
+
+.pg-rowactions { display: inline-flex; align-items: center; gap: 0.3rem; }
+.pg-iconbtn.is-danger { color: var(--danger); }
+.pg-iconbtn.is-on { color: var(--accent); border-color: var(--accent-border); background-color: var(--accent-dim); }
+
+.pg-money { display: block; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-money + .pg-money { margin-top: 0.1rem; }
+.pg-money.is-danger { color: var(--danger); }
+
 .pg-iconbtn {
   width: 30px;
   height: 30px;
@@ -373,6 +408,7 @@ button.pg-kpi.on {
 
 .pg-cell-main { display: block; font-weight: 600; color: var(--text-primary); }
 .pg-cell-sub { display: block; margin-top: 0.15rem; font-size: 0.72rem; color: var(--text-secondary); }
+.pg-cell-main > svg, .pg-cell-sub > svg { margin-right: 0.3rem; vertical-align: -1px; }
 .pg-truncate { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -506,6 +542,7 @@ button.pg-kpi.on {
   .pg-segmented button:not(.active):hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
   .pg-chip:not(.on):hover { border-color: var(--steel-light); color: var(--text-primary); }
   .pg-iconbtn:not(:disabled):hover { color: var(--accent); border-color: var(--accent-border); background-color: var(--bg-tertiary); }
+  .pg-iconbtn.is-danger:not(:disabled):hover { color: var(--danger); border-color: rgba(231, 76, 60, 0.4); }
   .pg-table tbody tr:hover { background-color: var(--carbon-light); }
   button.pg-kpi:not(.on):hover { border-color: var(--steel-light); }
 }

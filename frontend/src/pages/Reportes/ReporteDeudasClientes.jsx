@@ -1,15 +1,33 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../config/api';
-import { 
-    Search, User, DollarSign, AlertCircle, TrendingUp, 
-    Calendar, FileText, BarChart3, PieChart,
-    ExternalLink, Filter, Box, X, Coins, Clock, Zap
+import {
+    Search, AlertCircle, TrendingUp, FileText, BarChart3, ExternalLink, X, AlertTriangle,
+    CheckCircle, CalendarClock, ListChecks, Wallet, Receipt, Banknote
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-    Legend, ResponsiveContainer, Cell
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import Alert from '../../components/UI/Alert';
+import Loading from '../../components/UI/Loading';
+import '../Ventas/Ventas.css';
+
+const ETIQUETAS_AGING = {
+    'Corriente': 'Por vencer',
+    '0-30 días': 'Vencida 1-30 d',
+    '31-60 días': 'Vencida 31-60 d',
+    '61-90 días': 'Vencida 61-90 d',
+    '+90 días': 'Vencida +90 d'
+};
+
+const GRUPOS_CXC = [
+    { key: 'facturasPEN', label: 'Facturas', moneda: 'PEN', tono: 'is-accent', icon: FileText },
+    { key: 'facturasUSD', label: 'Facturas', moneda: 'USD', tono: 'is-accent', icon: FileText },
+    { key: 'notasVentaPEN', label: 'N. venta', moneda: 'PEN', tono: 'is-info', icon: Receipt },
+    { key: 'notasVentaUSD', label: 'N. venta', moneda: 'USD', tono: 'is-info', icon: Receipt },
+    { key: 'sinComprPEN', label: 'Sin comprobante', moneda: 'PEN', tono: 'is-warning', icon: Banknote },
+    { key: 'sinComprUSD', label: 'Sin comprobante', moneda: 'USD', tono: 'is-warning', icon: Banknote }
+];
 
 const ReporteDeudasClientes = () => {
     const [clientes, setClientes] = useState([]);
@@ -158,73 +176,90 @@ const ReporteDeudasClientes = () => {
         }
     };
 
+    const simbolo = (moneda) => (moneda === 'USD' ? '$' : 'S/');
+
+    const renderTooltip = (moneda, etiqueta) => ({ active, payload }) => {
+        if (!active || !payload || payload.length === 0) return null;
+        const punto = payload[0].payload;
+        return (
+            <div className="vt-tooltip">
+                {etiqueta(punto)}
+                <strong>{simbolo(moneda)} {formatearNum(payload[0].value)}</strong>
+                <span>Pulsa la barra para auditar los documentos</span>
+            </div>
+        );
+    };
+
     const renderTablaAuditoria = () => (
-        <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-t-2 border-primary/40 bg-carbon-dark rounded-b-2xl shadow-inner overflow-hidden col-span-1 lg:col-span-2" style={{ borderColor: 'rgba(232, 184, 75, 0.4)' }}>
-            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-carbon-light/50">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
-                        <Zap size={20} className="text-primary" />
-                    </div>
-                    <div>
-                        <h3 className="text-xs font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
-                        <p className="text-[9px] text-wire font-bold uppercase tracking-[0.2em]">Auditoría de documentos fuente</p>
-                    </div>
-                </div>
+        <div className="vt-audit">
+            <div className="pg-panel-head">
+                <h3 className="pg-panel-title"><ListChecks size={16} /> {detalleExpandido.titulo} <span className="pg-count">{detalleExpandido.data.length}</span></h3>
                 <button
+                    type="button"
+                    className="pg-iconbtn"
                     onClick={() => setDetalleExpandido({ grupoKey: null, chartType: null, titulo: '', data: [] })}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2a2a2a] hover:bg-red-500/30 border border-white/10 hover:border-red-500/50 text-wire hover:text-red-500 transition-all shadow-lg"
-                    style={{ cursor: 'pointer' }}
+                    aria-label="Cerrar auditoría"
+                    title="Cerrar auditoría"
                 >
-                    <X size={18} />
+                    <X size={16} />
                 </button>
             </div>
-
-            <div className="overflow-x-auto custom-scrollbar max-h-[400px]">
-                <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
-                    <thead className="sticky top-0 z-10">
+            <div className="pg-table-wrap">
+                <table className="pg-table">
+                    <thead>
                         <tr>
-                            <th className="pl-6 bg-carbon-light">Orden</th>
-                            <th className="bg-carbon-light">Emisión / Venc.</th>
-                            <th className="bg-carbon-light">Cliente</th>
-                            <th className="text-right bg-carbon-light">Total Real</th>
-                            <th className="text-right bg-carbon-light">Saldo Pendiente</th>
-                            <th className="text-center bg-carbon-light">Mora</th>
-                            <th className="text-right pr-6 bg-carbon-light">Auditar</th>
+                            <th>Orden</th>
+                            <th>Emisión / vencimiento</th>
+                            <th>Cliente</th>
+                            <th className="num">Total real</th>
+                            <th className="num">Saldo pendiente</th>
+                            <th className="center">Mora</th>
+                            <th className="center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {detalleExpandido.data.map(item => {
                             const dias = parseInt(item.dias_vencidos) || 0;
                             const esVencido = dias > 0;
-                            let badge = "bg-green-500/15 text-green-400 border-green-500/30";
-                            if (dias > 60) badge = "bg-red-600/15 text-red-400 border-red-600/30";
-                            else if (dias > 30) badge = "bg-orange-500/15 text-orange-400 border-orange-500/30";
-                            else if (dias > 0) badge = "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
-
+                            const claseMora = dias > 60 ? 'badge-danger' : dias > 0 ? 'badge-warning' : 'badge-success';
+                            const IconoMora = esVencido ? AlertTriangle : CheckCircle;
                             return (
-                                <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
-                                    <td className="pl-6 py-3">
-                                        <div className="font-mono font-bold text-primary text-xs">{item.numero_orden}</div>
-                                        <div className="text-[9px] text-wire uppercase font-black tracking-tight">{item.tipo_comprobante}</div>
+                                <tr key={item.id_orden_venta}>
+                                    <td className="nowrap">
+                                        <span className="pg-code">{item.numero_orden}</span>
+                                        <span className="pg-cell-sub">{item.tipo_comprobante || 'Sin comprobante'}{item.numero_comprobante_sunat ? ` · ${item.numero_comprobante_sunat}` : ''}</span>
                                     </td>
-                                    <td className="py-3">
-                                        <div className="text-xs text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</div>
-                                        <div className={`text-[9px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
-                                    </td>
-                                    <td className="text-xs text-mist font-bold truncate max-w-[200px] py-3" title={item.cliente}>{item.cliente}</td>
-                                    <td className="text-right font-mono font-bold text-wire text-xs py-3">{item.moneda} {formatearNum(item.total_real)}</td>
-                                    <td className="text-right font-mono py-3">
-                                        <div className="font-black text-white text-xs">{item.moneda} {formatearNum(item.deuda_pendiente)}</div>
-                                        <div className="text-[9px] text-green-500 font-black">Pagado: {parseFloat(item.monto_pagado).toFixed(2)}</div>
-                                    </td>
-                                    <td className="text-center py-3">
-                                        <span className={`px-2 py-0.5 text-[9px] font-black border rounded-full ${badge}`}>
-                                            {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
+                                    <td className="nowrap">
+                                        <span className="pg-cell-main">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</span>
+                                        <span className="pg-cell-sub" style={esVencido ? { color: 'var(--danger)' } : undefined}>
+                                            Vence {new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}
                                         </span>
                                     </td>
-                                    <td className="text-right pr-6 py-3">
-                                        <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-lg shadow-xl">
-                                            <ExternalLink size={16} />
+                                    <td>
+                                        <span className="pg-cell-main pg-truncate" title={item.cliente}>{item.cliente}</span>
+                                        {(item.contacto_cliente || item.telefono_cliente) && (
+                                            <span className="pg-cell-sub">{[item.contacto_cliente, item.telefono_cliente].filter(Boolean).join(' · ')}</span>
+                                        )}
+                                    </td>
+                                    <td className="num pg-muted">{item.moneda} {formatearNum(item.total_real)}</td>
+                                    <td className="num">
+                                        <span className="pg-money"><b>{item.moneda} {formatearNum(item.deuda_pendiente)}</b></span>
+                                        <span className="pg-cell-sub">Pagado {parseFloat(item.monto_pagado).toFixed(2)}</span>
+                                    </td>
+                                    <td className="center">
+                                        <span className={`badge ${claseMora}`}>
+                                            <IconoMora size={11} />{esVencido ? `${dias} días de mora` : 'Al día'}
+                                        </span>
+                                    </td>
+                                    <td className="center">
+                                        <Link
+                                            to={`/ventas/ordenes/${item.id_orden_venta}`}
+                                            target="_blank"
+                                            className="pg-iconbtn"
+                                            title="Abrir la orden en otra pestaña"
+                                            aria-label={`Abrir ${item.numero_orden} en otra pestaña`}
+                                        >
+                                            <ExternalLink size={15} />
                                         </Link>
                                     </td>
                                 </tr>
@@ -233,173 +268,105 @@ const ReporteDeudasClientes = () => {
                     </tbody>
                 </table>
             </div>
-
-            <div className="px-6 py-4 bg-carbon-light/40 border-t border-white/10 flex justify-between items-center">
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Resumen de Selección</span>
-                    <span className="text-[8px] text-wire font-bold uppercase tracking-[0.1em]">{detalleExpandido.data.length} registros componen este monto</span>
-                </div>
+            <div className="pg-pager">
+                <span><b>{detalleExpandido.data.length}</b> documentos componen este monto</span>
             </div>
         </div>
     );
 
-    const renderGrupoGraficos = (keyGrupo, tituloBase, color, moneda) => {
+    const renderGrupoGraficos = (keyGrupo, tituloBase, moneda) => {
         const data = reporteData.resumen[keyGrupo];
         if (!data || parseFloat(data.total) <= 0) return null;
         const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
         const isExpanded = detalleExpandido.grupoKey === keyGrupo;
-
-        const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
-
-        const CustomTick = (props) => {
-            const { x, y, payload } = props;
-            if (!payload || !payload.value) return null;
-            const words = payload.value.split(' ');
-            let lines = [];
-            let currentLine = '';
-            words.forEach(word => {
-                if ((currentLine + word).length > 12) {
-                    if (currentLine) lines.push(currentLine);
-                    currentLine = word + ' ';
-                } else {
-                    currentLine += word + ' ';
-                }
-            });
-            if (currentLine) lines.push(currentLine.trim());
-            return (
-                <g transform={`translate(${x},${y})`}>
-                    {lines.map((line, index) => (
-                        <text key={index} x={0} y={12 + index * 12} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">
-                            {line.length > 15 ? line.substring(0, 13) + '...' : line}
-                        </text>
-                    ))}
-                </g>
-            );
-        };
+        const morosidad = parseFloat(data.morosidad || 0);
 
         return (
-            <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
-                <div className="flex items-center justify-center gap-3 mb-4">
-                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
-                    <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
-                        {tituloBase}
-                    </h2>
-                    <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
-                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                            <PieChart size={20} style={{ color }} />
-                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
-                        </div>
-                        <div className="card-body p-6 flex-1">
-                            <div style={{ width: '100%', height: 320 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" stroke="var(--text-primary)" fontSize={13} width={100} tick={{ fontWeight: '900', fill: 'var(--text-primary)' }} />
-                                        <Tooltip
-                                            cursor={{ fill: 'rgba(255,255,255,0.08)' }}
-                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
-                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
-                                        />
-                                        <Bar
-                                            dataKey="monto"
-                                            radius={[0, 6, 6, 0]}
-                                            cursor="pointer"
-                                            onClick={(barData) => handleDrillDown(barData, 'aging', keyGrupo, tituloBase)}
-                                        >
-                                            {data.aging.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={e.color} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                        {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
-                    </div>
-
-                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
-                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                            <TrendingUp size={20} style={{ color }} />
-                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
-                        </div>
-                        <div className="card-body p-6 flex-1">
-                            <div style={{ width: '100%', height: 320 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }}>
-                                        <XAxis dataKey="name" stroke="var(--text-primary)" interval={0} height={90} tick={<CustomTick />} />
-                                        <YAxis stroke="var(--text-secondary)" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
-                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
-                                        />
-                                        <Bar
-                                            dataKey="deuda"
-                                            radius={[6, 6, 0, 0]}
-                                            cursor="pointer"
-                                            onClick={(barData) => handleDrillDown(barData, 'deudores', keyGrupo, tituloBase)}
-                                        >
-                                            {data.topDeudores.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                        {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
+            <section className="pg-panel" key={keyGrupo} id={`vt-cxc-${keyGrupo}`}>
+                <div className="pg-panel-head">
+                    <h2 className="pg-panel-title"><FileText size={16} /> {tituloBase}</h2>
+                    <div className="vt-figures">
+                        <div className="vt-figure"><span>Por cobrar</span><b>{simbolo(moneda)} {formatearNum(data.total)}</b></div>
+                        <div className="vt-figure"><span>Vencido</span><b className={parseFloat(data.vencido) > 0 ? 'is-danger' : ''}>{simbolo(moneda)} {formatearNum(data.vencido)}</b></div>
+                        <div className="vt-figure"><span>Morosidad</span><b className={morosidad > 0 ? 'is-warning' : 'is-success'}>{morosidad.toFixed(1)}%</b></div>
                     </div>
                 </div>
-            </div>
+                <div className="pg-grid pg-grid-even vt-chart-pair">
+                    <div className="vt-chart-block">
+                        <h3 className="pg-section-title"><CalendarClock size={14} /> Antigüedad de la deuda</h3>
+                        <div className="vt-chart">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={data.aging} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }} barCategoryGap="22%">
+                                    <CartesianGrid stroke="var(--vt-grid)" horizontal={false} />
+                                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--vt-axis)', fontSize: 11 }}
+                                        tickFormatter={(v) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)} />
+                                    <YAxis dataKey="name" type="category" width={112} tickLine={false} axisLine={{ stroke: 'var(--steel)' }}
+                                        tick={{ fill: 'var(--text-primary)', fontSize: 12 }} tickFormatter={(v) => ETIQUETAS_AGING[v] || v} />
+                                    <Tooltip cursor={{ fill: 'var(--bg-tertiary)' }} content={renderTooltip(moneda, (p) => ETIQUETAS_AGING[p.name] || p.name)} />
+                                    <Bar
+                                        dataKey="monto"
+                                        fill="var(--vt-s1)"
+                                        radius={[0, 4, 4, 0]}
+                                        cursor="pointer"
+                                        isAnimationActive={false}
+                                        onClick={(barData) => handleDrillDown(barData, 'aging', keyGrupo, tituloBase)}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="vt-chart-block">
+                        <h3 className="pg-section-title"><TrendingUp size={14} /> {tituloTop}</h3>
+                        <div className="vt-chart">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={data.topDeudores} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }} barCategoryGap="22%">
+                                    <CartesianGrid stroke="var(--vt-grid)" horizontal={false} />
+                                    <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: 'var(--vt-axis)', fontSize: 11 }}
+                                        tickFormatter={(v) => `${simbolo(moneda)}${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)}`} />
+                                    <YAxis dataKey="name" type="category" width={150} tickLine={false} axisLine={{ stroke: 'var(--steel)' }}
+                                        tick={{ fill: 'var(--text-primary)', fontSize: 11 }} tickFormatter={(v) => (String(v).length > 22 ? `${String(v).slice(0, 21)}…` : v)} />
+                                    <Tooltip cursor={{ fill: 'var(--bg-tertiary)' }} content={renderTooltip(moneda, (p) => p.full_name || p.name)} />
+                                    <Bar
+                                        dataKey="deuda"
+                                        fill="var(--vt-s1)"
+                                        radius={[0, 4, 4, 0]}
+                                        cursor="pointer"
+                                        isAnimationActive={false}
+                                        onClick={(barData) => handleDrillDown(barData, 'deudores', keyGrupo, tituloBase)}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+                {isExpanded && renderTablaAuditoria()}
+            </section>
         );
     };
 
     return (
-        <div className="p-4 md:p-6 page-reporte-cuentas bg-carbon text-mist min-h-screen">
-            <style dangerouslySetInnerHTML={{__html: `
-                .page-reporte-cuentas .card { background-color: var(--carbon-mid); border: 1px solid rgba(255,255,255,0.08); }
-                .page-reporte-cuentas .form-input, .page-reporte-cuentas .form-select {
-                    background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; color: white !important; height: 46px !important; font-size: 0.85rem !important; font-weight: 700 !important;
-                }
-                .page-reporte-cuentas .stat-card { min-height: 95px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1.25rem !important; border-radius: 12px !important; transition: all 0.3s; border-top: 1px solid rgba(255,255,255,0.08); shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
-                .page-reporte-cuentas .stat-card:hover { transform: translateY(-4px); background-color: var(--carbon-light); }
-                .page-reporte-cuentas .table-gerencial th { 
-                    background-color: var(--carbon-light); color: var(--wire); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.15em; padding: 14px; border-bottom: 2px solid var(--steel); font-weight: 900;
-                }
-                .page-reporte-cuentas .table-gerencial td { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; font-weight: 600; }
-                .dropdown-menu-solido-absoluto { background-color: #000000 !important; border: 2px solid #444 !important; opacity: 1 !important; visibility: visible !important; z-index: 99999 !important; }
-            `}} />
+        <div className="pg-page vt-page">
+            <header className="pg-header">
+                <div>
+                    <span className="pg-eyebrow"><BarChart3 size={13} /> Reportes de ventas</span>
+                    <h1 className="pg-title">Cuentas por cobrar</h1>
+                    <p className="pg-subtitle">Cartera pendiente por tipo de comprobante y moneda, antigüedad de la deuda y auditoría de mora</p>
+                </div>
+            </header>
 
-            <div className="mb-8 flex flex-col">
-                <h1 className="text-3xl font-black text-white tracking-tighter uppercase font-barlow flex items-center gap-4">
-                    <div className="p-3 bg-primary/20 rounded-2xl shadow-inner">
-                        <BarChart3 size={32} className="text-primary" />
-                    </div>
-                    Reporte Gerencial x Cobrar
-                </h1>
-                <p className="text-wire text-[0.75rem] uppercase tracking-[0.4em] mt-3 font-black">Inteligencia de Cartera y Auditoría de Mora</p>
-            </div>
-
-            <div className="card mb-8 shadow-2xl border-t-2 border-primary/30">
-                <div className="card-body p-6 space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        <div className="form-group lg:col-span-1 relative" ref={dropdownClienteRef}>
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12} /> Cliente</label>
-                            <div className="relative">
-                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+            <div className="pg-stack">
+                <section className="pg-panel">
+                    <div className="pg-filters">
+                        <div className="vt-filters-grid">
+                            <div className="pg-field pg-field-grow vt-combo" ref={dropdownClienteRef}>
+                                <label className="pg-field-label" htmlFor="vt-cxc-cliente">Cliente</label>
+                                <Search size={14} className="vt-combo-icon" />
                                 <input
+                                    id="vt-cxc-cliente"
                                     type="text"
-                                    className="form-input w-full"
-                                    style={{ paddingLeft: '3rem' }}
-                                    placeholder="RUC o Razón Social..."
+                                    autoComplete="off"
+                                    className="form-input"
+                                    placeholder="RUC o razón social"
                                     value={busquedaCliente}
                                     onChange={(e) => {
                                         setBusquedaCliente(e.target.value);
@@ -409,149 +376,170 @@ const ReporteDeudasClientes = () => {
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
                                 {mostrarDropdownCliente && busquedaCliente && (
-                                    <div className="absolute z-[100] left-0 right-0 top-full mt-2 dropdown-menu-solido border-2 border-steel rounded-xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] max-h-72 overflow-y-auto p-2" style={{ backgroundColor: 'var(--carbon)' }}>
+                                    <ul className="vt-suggest">
                                         {clientesFiltrados.length > 0 ? (
                                             clientesFiltrados.map(c => (
-                                                <div key={c.id_cliente} onClick={() => handleSelectCliente(c)} className="p-3.5 hover:bg-steel/40 cursor-pointer rounded-lg transition-all border-b border-white/5 last:border-0 mb-1">
-                                                    <p className="font-black text-sm text-white uppercase tracking-tight">{c.razon_social}</p>
-                                                    <p className="text-[10px] text-primary uppercase font-black tracking-widest mt-1">RUC: {c.ruc}</p>
-                                                </div>
+                                                <li key={c.id_cliente}>
+                                                    <button type="button" onClick={() => handleSelectCliente(c)}>
+                                                        {c.razon_social}
+                                                        <small>RUC {c.ruc}</small>
+                                                    </button>
+                                                </li>
                                             ))
                                         ) : (
-                                            <div className="p-4 text-center text-wire text-xs font-black uppercase tracking-widest">Sin resultados</div>
+                                            <li className="vt-suggest-empty">Sin resultados</li>
                                         )}
-                                    </div>
+                                    </ul>
                                 )}
                             </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Coins size={12} /> Moneda</label>
-                            <select name="moneda" value={filtros.moneda} onChange={handleChangeFiltro} className="form-select w-full font-bold">
-                                <option value="">Todas las Monedas</option>
-                                <option value="PEN">Soles (PEN)</option>
-                                <option value="USD">Dólares (USD)</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><FileText size={12} /> Comprobante</label>
-                            <select name="tipoComprobante" value={filtros.tipoComprobante} onChange={handleChangeFiltro} className="form-select w-full font-bold">
-                                <option value="">Todos los Tipos</option>
-                                <option value="Factura">Factura</option>
-                                <option value="Boleta">Boleta</option>
-                                <option value="Nota de Venta">Nota de Venta</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Box size={12} /> Estado SUNAT</label>
-                            <select name="estadoSunat" value={filtros.estadoSunat} onChange={handleChangeFiltro} className="form-select w-full font-bold">
-                                <option value="">Todos (SUNAT e Internos)</option>
-                                <option value="con_correlativo">Solo con Correlativo SUNAT</option>
-                                <option value="sin_correlativo">Solo Internos / Pendientes</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Clock size={12} /> Tipo de Fecha</label>
-                            <select name="tipoFecha" value={filtros.tipoFecha} onChange={handleChangeFiltro} className="form-select w-full font-bold">
-                                <option value="fecha_emision">Fecha de Emisión (Orden)</option>
-                                <option value="fecha_sunat">Fecha de Facturación SUNAT</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Desde</label>
-                            <input
-                                type="date"
-                                name="fechaInicio"
-                                value={filtros.fechaInicio}
-                                onChange={handleChangeFiltro}
-                                max={filtros.fechaFin || undefined}
-                                className={`form-input w-full ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Hasta</label>
-                            <input
-                                type="date"
-                                name="fechaFin"
-                                value={filtros.fechaFin}
-                                onChange={handleChangeFiltro}
-                                min={filtros.fechaInicio || undefined}
-                                className={`form-input w-full ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Acción</label>
-                            <button
-                                onClick={generarReporte}
-                                disabled={loading || !!errorFecha}
-                                className="btn btn-primary w-full h-[46px] font-black tracking-widest uppercase text-[11px] shadow-2xl shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-95 border-none disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                <TrendingUp size={16} /> {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {errorFecha && (
-                        <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl">
-                            <AlertCircle size={14} className="text-red-400 shrink-0" />
-                            <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
-                        </div>
-                    )}
-
-                    <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-                        <label className="flex items-center gap-4 cursor-pointer group">
-                            <div className="relative flex items-center justify-center">
-                                <input type="checkbox" name="soloVencidas" checked={filtros.soloVencidas} onChange={handleChangeFiltro} className="w-6 h-6 rounded-lg border-steel bg-carbon text-primary focus:ring-primary shadow-inner" />
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-moneda">Moneda</label>
+                                <select id="vt-cxc-moneda" name="moneda" value={filtros.moneda} onChange={handleChangeFiltro} className="form-select">
+                                    <option value="">Todas las Monedas</option>
+                                    <option value="PEN">Soles (PEN)</option>
+                                    <option value="USD">Dólares (USD)</option>
+                                </select>
                             </div>
-                            <span className="text-[11px] font-black text-mist uppercase tracking-widest group-hover:text-white transition-colors">
-                                Filtrar exclusivamente documentos con fecha de vencimiento superada (MORA)
-                            </span>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-comprobante">Comprobante</label>
+                                <select id="vt-cxc-comprobante" name="tipoComprobante" value={filtros.tipoComprobante} onChange={handleChangeFiltro} className="form-select">
+                                    <option value="">Todos los Tipos</option>
+                                    <option value="Factura">Factura</option>
+                                    <option value="Boleta">Boleta</option>
+                                    <option value="Nota de Venta">Nota de Venta</option>
+                                </select>
+                            </div>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-sunat">Estado SUNAT</label>
+                                <select id="vt-cxc-sunat" name="estadoSunat" value={filtros.estadoSunat} onChange={handleChangeFiltro} className="form-select">
+                                    <option value="">Todos (SUNAT e Internos)</option>
+                                    <option value="con_correlativo">Solo con Correlativo SUNAT</option>
+                                    <option value="sin_correlativo">Solo Internos / Pendientes</option>
+                                </select>
+                            </div>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-tipo-fecha">Tipo de fecha</label>
+                                <select id="vt-cxc-tipo-fecha" name="tipoFecha" value={filtros.tipoFecha} onChange={handleChangeFiltro} className="form-select">
+                                    <option value="fecha_emision">Fecha de Emisión (Orden)</option>
+                                    <option value="fecha_sunat">Fecha de Facturación SUNAT</option>
+                                </select>
+                            </div>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-desde">Desde</label>
+                                <input
+                                    id="vt-cxc-desde"
+                                    type="date"
+                                    name="fechaInicio"
+                                    value={filtros.fechaInicio}
+                                    onChange={handleChangeFiltro}
+                                    max={filtros.fechaFin || undefined}
+                                    className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
+                                />
+                            </div>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-cxc-hasta">Hasta</label>
+                                <input
+                                    id="vt-cxc-hasta"
+                                    type="date"
+                                    name="fechaFin"
+                                    value={filtros.fechaFin}
+                                    onChange={handleChangeFiltro}
+                                    min={filtros.fechaInicio || undefined}
+                                    className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
+                                />
+                            </div>
+                        </div>
+
+                        <label className="pg-check">
+                            <input type="checkbox" name="soloVencidas" checked={filtros.soloVencidas} onChange={handleChangeFiltro} />
+                            <div>
+                                <span><AlertTriangle size={14} />Solo documentos vencidos</span>
+                                <small>Filtra exclusivamente documentos con fecha de vencimiento superada (mora).</small>
+                            </div>
                         </label>
+
+                        {errorFecha && (
+                            <span className="vt-error" role="alert"><AlertCircle size={14} /> {errorFecha}</span>
+                        )}
                     </div>
-                </div>
+                    <div className="vt-filters-foot">
+                        <span className="pg-hint">Si no indicas Desde y Hasta se consideran todos los documentos con saldo pendiente.</span>
+                        <button
+                            type="button"
+                            onClick={generarReporte}
+                            disabled={loading || !!errorFecha}
+                            className="btn btn-primary"
+                        >
+                            <TrendingUp size={16} /> {loading ? 'Procesando…' : 'Generar reporte'}
+                        </button>
+                    </div>
+                </section>
+
+                {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+
+                {!reporteData && !loading && (
+                    <section className="pg-panel">
+                        <div className="pg-empty">
+                            <Wallet size={28} />
+                            <strong>Configura los filtros y genera el reporte</strong>
+                            <span>Verás la deuda pendiente por comprobante y moneda, su antigüedad y los principales deudores.</span>
+                        </div>
+                    </section>
+                )}
+
+                {loading && !reporteData && <Loading variant="table" />}
+
+                {reporteData && (
+                    <>
+                        <div className="pg-kpis">
+                            {GRUPOS_CXC.map(g => {
+                                const datos = reporteData.resumen[g.key];
+                                const total = parseFloat(datos?.total || 0);
+                                const morosidad = parseFloat(datos?.morosidad || 0);
+                                const contenido = (
+                                    <>
+                                        <div className="pg-kpi-top">
+                                            <span className="pg-kpi-label">{g.label} · {g.moneda}</span>
+                                            <span className="pg-kpi-icon"><g.icon size={16} /></span>
+                                        </div>
+                                        <span className="pg-kpi-value"><small>{simbolo(g.moneda)}</small>{formatearNum(total)}</span>
+                                        <div className="pg-meter" style={{ '--meter-c': 'var(--danger)' }} title={`${morosidad.toFixed(1)}% vencido`}>
+                                            <span style={{ width: `${Math.min(100, morosidad)}%` }} />
+                                        </div>
+                                        <span className="pg-kpi-foot">
+                                            {total > 0
+                                                ? <>Vencido <b>{simbolo(g.moneda)} {formatearNum(datos?.vencido || 0)}</b> · {morosidad.toFixed(1)}% mora</>
+                                                : 'Sin saldo pendiente'}
+                                        </span>
+                                    </>
+                                );
+                                return total > 0 ? (
+                                    <a key={g.key} href={`#vt-cxc-${g.key}`} className={`pg-kpi vt-kpi-link ${g.tono}`}>{contenido}</a>
+                                ) : (
+                                    <div key={g.key} className="pg-kpi">{contenido}</div>
+                                );
+                            })}
+                        </div>
+
+                        {GRUPOS_CXC.every(g => parseFloat(reporteData.resumen[g.key]?.total || 0) <= 0) && (
+                            <section className="pg-panel">
+                                <div className="pg-empty">
+                                    <CheckCircle size={28} />
+                                    <strong>No hay deuda pendiente con estos filtros</strong>
+                                    <span>Cambia el cliente, la moneda o el rango de fechas para revisar otra parte de la cartera.</span>
+                                </div>
+                            </section>
+                        )}
+
+                        {renderGrupoGraficos('facturasPEN', 'Facturas (PEN)', 'PEN')}
+                        {renderGrupoGraficos('facturasUSD', 'Facturas (USD)', 'USD')}
+                        {renderGrupoGraficos('notasVentaPEN', 'N. Venta (PEN)', 'PEN')}
+                        {renderGrupoGraficos('notasVentaUSD', 'N. Venta (USD)', 'USD')}
+                        {renderGrupoGraficos('sinComprPEN', 'Sin Compr. (PEN)', 'PEN')}
+                        {renderGrupoGraficos('sinComprUSD', 'Sin Compr. (USD)', 'USD')}
+                    </>
+                )}
             </div>
-
-            {reporteData && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                        <div className="card stat-card border-l-4 border-success/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (PEN)</p>
-                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.facturasPEN.total)}</p>
-                        </div>
-                        <div className="card stat-card border-l-4 border-primary/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (USD)</p>
-                            <p className="text-xl font-black text-primary">$ {formatearNum(reporteData.resumen.facturasUSD.total)}</p>
-                        </div>
-                        <div className="card stat-card border-l-4 border-[#3B82F6]/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (PEN)</p>
-                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.notasVentaPEN.total)}</p>
-                        </div>
-                        <div className="card stat-card border-l-4 border-[#60A5FA]/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (USD)</p>
-                            <p className="text-xl font-black text-white">$ {formatearNum(reporteData.resumen.notasVentaUSD.total)}</p>
-                        </div>
-                        <div className="card stat-card border-l-4 border-[#F59E0B]/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">SIN COMPR. (PEN)</p>
-                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.sinComprPEN.total)}</p>
-                        </div>
-                        <div className="card stat-card border-l-4 border-[#FCD34D]/60 shadow-2xl">
-                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">SIN COMPR. (USD)</p>
-                            <p className="text-xl font-black text-white">$ {formatearNum(reporteData.resumen.sinComprUSD.total)}</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-20 pb-32 mt-12">
-                        {renderGrupoGraficos('facturasPEN', 'Análisis: Facturas (PEN)', '#10B981', 'PEN')}
-                        {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', 'var(--accent)', 'USD')}
-                        {renderGrupoGraficos('notasVentaPEN', 'Análisis: N. Venta (PEN)', '#3B82F6', 'PEN')}
-                        {renderGrupoGraficos('notasVentaUSD', 'Análisis: N. Venta (USD)', '#60A5FA', 'USD')}
-                        {renderGrupoGraficos('sinComprPEN', 'Análisis: Sin Compr. (PEN)', '#F59E0B', 'PEN')}
-                        {renderGrupoGraficos('sinComprUSD', 'Análisis: Sin Compr. (USD)', '#FCD34D', 'USD')}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

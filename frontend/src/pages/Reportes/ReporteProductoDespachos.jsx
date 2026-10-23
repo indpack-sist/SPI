@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../config/api';
-import { Search, Package, Box, User, TrendingUp, AlertCircle } from 'lucide-react';
+import { Search, Package, Box, User, TrendingUp, AlertCircle, FileText, Receipt, Banknote } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Alert from '../../components/UI/Alert';
+import Loading from '../../components/UI/Loading';
+import { BadgeEstadoOrden, configEstadoOrden } from '../Ventas/estadosVentas';
+import '../Ventas/Ventas.css';
 
 const particionarDatosGrafico = (detalle) => {
     const grupos = {
@@ -98,109 +102,66 @@ const ReporteProductoDespachos = () => {
                 : data.fecha;
 
             return (
-                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: 'var(--bg-primary)', border: '2px solid #444', color: 'var(--text-primary)', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
-                    <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
-                        <div>
-                            <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{fechaPrincipal}</p>
-                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">
-                                {filtros.tipoFecha === 'despacho' ? 'Ref: Fecha Despacho' : 'Ref: Fecha Emisión'}
-                            </p>
-                        </div>
-                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded ${
-                            data.estado === 'Entregada' ? 'bg-success/20 text-success border border-success/30' :
-                            data.estado === 'Despacho Parcial' ? 'bg-warning/20 text-warning border border-warning/30' :
-                            'bg-primary/20 text-primary border border-primary/30'
-                        }`}>
-                            {data.estado}
-                        </span>
-                    </div>
-
-                    <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
-                    {filtros.tipoFecha === 'emision' && (
-                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
-                            Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
-                        </p>
-                    )}
-                    {filtros.tipoFecha === 'despacho' && (
-                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
-                            Emisión: {data.fecha}
-                        </p>
-                    )}
-
-                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
-
-                    <div className="grid grid-cols-2 gap-2 mb-4 bg-carbon/50 p-2 rounded border border-steel/10">
-                        <div>
-                            <p className="text-[10px] text-wire uppercase font-black">Despachado</p>
-                            <p className="text-sm font-black text-white">{data.cantidad}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-wire uppercase font-black">Pendiente</p>
-                            <p className={`text-sm font-black ${data.cantidadPendiente > 0 ? 'text-warning' : 'text-success'}`}>
-                                {data.cantidadPendiente}
-                            </p>
-                        </div>
-                    </div>
-
-                    <p className="text-mist text-base font-bold" style={{ color: 'var(--accent)' }}>
-                        <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
-                    </p>
+                <div className="vt-tooltip">
+                    {filtros.tipoFecha === 'despacho' ? 'Fecha de despacho' : 'Fecha de emisión'} · {fechaPrincipal}
+                    <strong>{data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}</strong>
+                    <dl>
+                        <dt>Orden</dt><dd>{data.orden}</dd>
+                        {filtros.tipoFecha === 'emision' && (
+                            <><dt>Despacho</dt><dd>{data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}</dd></>
+                        )}
+                        {filtros.tipoFecha === 'despacho' && (
+                            <><dt>Emisión</dt><dd>{data.fecha}</dd></>
+                        )}
+                        <dt>Despachado</dt><dd>{data.cantidad}</dd>
+                        <dt>Pendiente</dt><dd>{data.cantidadPendiente}</dd>
+                    </dl>
+                    <span className="pg-cell-sub">{data.cliente}</span>
+                    <BadgeEstadoOrden estado={data.estado} />
                 </div>
             );
         }
         return null;
     };
 
-    const renderGrafico = (datos, titulo, colorLinea) => {
+    const renderGrafico = (datos, titulo) => {
         if (!datos || datos.length === 0) return null;
 
-        const cantidadPuntos = datos.length;
-        const esMuyDenso = cantidadPuntos > 30;
-        const esDenso = cantidadPuntos > 15;
-
-        const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
-        const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
-        const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
-        const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;
-
         return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '700px' }}>
-                <div className="card-header border-b border-steel/30 px-6 py-5 flex flex-col items-center justify-center gap-1">
-                    <TrendingUp size={28} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
-                    <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
-                </div>
-                <div className="card-body p-6" style={{ flex: 1, minHeight: 0 }}>
+            <div className="vt-chart-card">
+                <h4 className="pg-section-title"><TrendingUp size={14} /> {titulo}</h4>
+                <div className="vt-chart">
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={datos} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                        <LineChart data={datos} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
+                            <CartesianGrid stroke="var(--vt-grid)" vertical={false} />
                             <XAxis
                                 dataKey="idUnico"
-                                stroke="#888"
+                                tickLine={false}
+                                axisLine={{ stroke: 'var(--steel)' }}
                                 tickFormatter={(val) => {
                                     const found = datos.find(d => d.idUnico === val);
                                     return found ? found.fecha : val;
                                 }}
-                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
-                                tickMargin={20}
-                                interval={intervaloX}
+                                tick={{ fill: 'var(--vt-axis)', fontSize: 11 }}
+                                minTickGap={16}
                             />
                             <YAxis
-                                stroke="#888"
-                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: 'var(--vt-axis)', fontSize: 11 }}
                                 tickFormatter={(value) => `${value.toFixed(2)}`}
                                 domain={[0, 'auto']}
-                                width={80}
+                                width={64}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
-                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: 'var(--text-secondary)', paddingTop: '30px', fontWeight: 'bold' }} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--steel-light)', strokeWidth: 1 }} isAnimationActive={false} />
                             <Line
                                 type="monotone"
                                 dataKey="precio"
-                                name="Precio Unitario"
-                                stroke={colorLinea}
-                                strokeWidth={strokeLinea}
-                                dot={{ r: radioPunto, strokeWidth: 2, fill: 'var(--bg-primary)', stroke: colorLinea }}
-                                activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }}
+                                name="Precio unitario"
+                                stroke="var(--vt-s1)"
+                                strokeWidth={2}
+                                dot={datos.length <= 31 ? { r: 4, strokeWidth: 2, fill: 'var(--bg-primary)', stroke: 'var(--vt-s1)' } : false}
+                                activeDot={{ r: 5, stroke: 'var(--bg-primary)', strokeWidth: 2, fill: 'var(--vt-s1)' }}
                                 isAnimationActive={false}
                             />
                         </LineChart>
@@ -379,144 +340,110 @@ const ReporteProductoDespachos = () => {
     }, [reporteData]);
 
     const renderTablaDetalles = (detalles) => (
-        <div className="card-body p-0 overflow-x-auto">
-            <div className="table-container border-0 rounded-none">
-                <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead>
-                        <tr>
-                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Emisión</th>
-                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Despacho</th>
-                            <th>N° Orden</th>
-                            <th>Documento</th>
-                            <th>Cliente</th>
-                            <th className="text-right">Cant. Solicitada</th>
-                            <th className="text-right">Cant. Despachada</th>
-                            <th className="text-right">Cant. Pendiente</th>
-                            <th className="text-right">Precio Unit.</th>
-                            <th className="text-right">Subtotal Desp.</th>
-                            <th className="text-center">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {detalles.map((row, idx) => {
-                            const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
-                            const esFactura = tipoDoc.includes('Factura');
-                            const esNV = tipoDoc.includes('Nota de Venta');
-                            const cantSolicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
-                            const cantDespachada = parseFloat(row.cantidad_despachada);
-                            const cantPendiente = Math.max(0, cantSolicitada - cantDespachada);
+        <div className="pg-table-wrap">
+            <table className="pg-table">
+                <thead>
+                    <tr>
+                        <th className={filtros.tipoFecha === 'emision' ? 'is-focus' : ''}>Emisión</th>
+                        <th className={filtros.tipoFecha === 'despacho' ? 'is-focus' : ''}>Despacho</th>
+                        <th>N° Orden</th>
+                        <th>Documento</th>
+                        <th>Cliente</th>
+                        <th className="num">Cant. solicitada</th>
+                        <th className="num">Cant. despachada</th>
+                        <th className="num">Cant. pendiente</th>
+                        <th className="num">Precio unit.</th>
+                        <th className="num">Subtotal desp.</th>
+                        <th className="center">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {detalles.map((row, idx) => {
+                        const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
+                        const esFactura = tipoDoc.includes('Factura');
+                        const esNV = tipoDoc.includes('Nota de Venta');
+                        const cantSolicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
+                        const cantDespachada = parseFloat(row.cantidad_despachada);
+                        const cantPendiente = Math.max(0, cantSolicitada - cantDespachada);
+                        const IconoDoc = esFactura ? FileText : esNV ? Receipt : Banknote;
 
-                            return (
-                                <tr key={idx} className="transition-colors">
-                                    <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)' } : {}}>
-                                        {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
-                                    </td>
-                                    <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)' } : {}}>
-                                        {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
-                                    </td>
-                                    <td className="font-mono font-bold">
-                                        <Link
-                                            to={`/ventas/ordenes/${row.id_orden_venta}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary hover:text-primary/80 transition-colors underline decoration-primary/30"
-                                        >
-                                            {row.numero_orden}
-                                        </Link>
-                                    </td>
-                                    <td>
-                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
-                                            esFactura ? 'bg-success/10 text-success border border-success/20' :
-                                            esNV ? 'bg-info/10 text-info border border-info/20' :
-                                            'bg-steel/20 text-wire border border-steel/30'
-                                        }`}>
-                                            {tipoDoc}
-                                        </span>
-                                    </td>
-                                    <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
-                                    <td className="text-right font-medium text-mist">{formatearNumero(cantSolicitada)}</td>
-                                    <td className="text-right font-black text-white">{formatearNumero(cantDespachada)}</td>
-                                    <td className={`text-right font-black ${cantPendiente > 0 ? 'text-warning' : 'text-success'}`}>
-                                        {formatearNumero(cantPendiente)}
-                                    </td>
-                                    <td className="text-right font-mono text-mist text-[11px]">
-                                        <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                        {formatearNumero(row.precio_unitario)}
-                                    </td>
-                                    <td className="text-right font-black text-white">
-                                        <span className="text-wire mr-1 font-mono">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                        {formatearNumero(row.subtotal_item)}
-                                    </td>
-                                    <td className="text-center">
-                                        <span className={`px-2.5 py-1 text-[9px] uppercase tracking-widest font-black rounded border ${
-                                            row.estado === 'Entregada' ? 'bg-success/10 text-success border-success/20' :
-                                            row.estado === 'Despacho Parcial' ? 'bg-warning/10 text-warning border-warning/20' :
-                                            'bg-primary/10 text-primary border-primary/20'
-                                        }`}>
-                                            {row.estado}
-                                        </span>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+                        return (
+                            <tr key={idx}>
+                                <td className={`nowrap ${filtros.tipoFecha === 'emision' ? 'is-focus' : ''}`}>
+                                    {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
+                                </td>
+                                <td className={`nowrap ${filtros.tipoFecha === 'despacho' ? 'is-focus' : ''}`}>
+                                    {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : <span className="pg-muted">—</span>}
+                                </td>
+                                <td className="nowrap">
+                                    <Link
+                                        to={`/ventas/ordenes/${row.id_orden_venta}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="pg-code"
+                                        title="Abrir la orden en otra pestaña"
+                                    >
+                                        {row.numero_orden}
+                                    </Link>
+                                </td>
+                                <td>
+                                    <span className={`badge ${esFactura ? 'badge-success' : esNV ? 'badge-info' : 'badge-secondary'}`}>
+                                        <IconoDoc size={11} />{tipoDoc}
+                                    </span>
+                                </td>
+                                <td><span className="pg-cell-main pg-truncate" title={row.cliente}>{row.cliente}</span></td>
+                                <td className="num pg-muted">{formatearNumero(cantSolicitada)}</td>
+                                <td className="num"><b>{formatearNumero(cantDespachada)}</b></td>
+                                <td className="num" style={{ color: cantPendiente > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                                    <b>{formatearNumero(cantPendiente)}</b>
+                                </td>
+                                <td className="num">
+                                    <span className="pg-muted">{row.moneda === 'USD' ? '$' : 'S/'}</span> {formatearNumero(row.precio_unitario)}
+                                </td>
+                                <td className="num">
+                                    <span className="pg-muted">{row.moneda === 'USD' ? '$' : 'S/'}</span> <b>{formatearNumero(row.subtotal_item)}</b>
+                                </td>
+                                <td className="center"><BadgeEstadoOrden estado={row.estado} /></td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
         </div>
     );
 
+    const tarjetasMonto = estadisticas ? [
+        { label: 'Facturas · PEN', valor: estadisticas.facturas_pen, moneda: 'PEN', tono: 'is-accent', icon: FileText },
+        { label: 'Facturas · USD', valor: estadisticas.facturas_usd, moneda: 'USD', tono: 'is-accent', icon: FileText },
+        { label: 'N. venta · PEN', valor: estadisticas.notas_venta_pen, moneda: 'PEN', tono: 'is-info', icon: Receipt },
+        { label: 'N. venta · USD', valor: estadisticas.notas_venta_usd, moneda: 'USD', tono: 'is-info', icon: Receipt },
+        { label: 'Sin compr. · PEN', valor: estadisticas.sin_comprobante_pen, moneda: 'PEN', tono: 'is-warning', icon: Banknote },
+        { label: 'Sin compr. · USD', valor: estadisticas.sin_comprobante_usd, moneda: 'USD', tono: 'is-warning', icon: Banknote }
+    ] : [];
+
     return (
-        <div className="p-4 md:p-6 page-reporte-despachos">
-            <style dangerouslySetInnerHTML={{__html: `
-                .page-reporte-despachos, 
-                .page-reporte-despachos .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
-                .page-reporte-despachos .form-input, .page-reporte-despachos input[type="text"], .page-reporte-despachos input[type="date"] {
-                    background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important; height: 48px !important;
-                }
-                .page-reporte-despachos .form-input:focus, .page-reporte-despachos input:focus {
-                    border-color: var(--primary) !important; outline: none !important; background-color: var(--carbon-light) !important; box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1) !important;
-                }
-                .page-reporte-despachos .dropdown-menu { background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; z-index: 100 !important; }
-                .page-reporte-despachos .dropdown-item:hover { background-color: var(--steel) !important; }
-                .page-reporte-despachos .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; }
-                @media (min-width: 641px) { .page-reporte-despachos .table-container { overflow: hidden !important; } }
-                .page-reporte-despachos table { background-color: var(--carbon) !important; }
-                .page-reporte-despachos th { background-color: var(--carbon-light) !important; color: var(--wire) !important; text-transform: uppercase !important; font-size: 0.65rem !important; letter-spacing: 0.05em !important; border-bottom: 2px solid var(--steel) !important; padding: 10px 12px !important; }
-                .page-reporte-despachos td { border-bottom: 1px solid var(--border) !important; color: var(--mist) !important; padding: 10px 12px !important; font-size: 0.75rem !important; }
-                .page-reporte-despachos tr:hover td { background-color: rgba(255, 255, 255, 0.02) !important; }
-                .page-reporte-despachos .stat-card { min-height: 85px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1rem !important; border-radius: 8px !important; }
-                .custom-scrollbar::-webkit-scrollbar { height: 8px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: var(--carbon-mid); }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--wire); }
-            `}} />
+        <div className="pg-page vt-page">
+            <header className="pg-header">
+                <div>
+                    <span className="pg-eyebrow"><Package size={13} /> Reportes de ventas</span>
+                    <h1 className="pg-title">Despachos por producto y cliente</h1>
+                    <p className="pg-subtitle">Análisis histórico, trazabilidad logística y variación de precios</p>
+                </div>
+            </header>
 
-            <div className="flex flex-col mb-6">
-                <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                        <Package size={28} className="text-primary" />
-                    </div>
-                    <span className="uppercase font-barlow text-white">Despachos por Producto y Cliente</span>
-                </h1>
-                <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-2">
-                    Análisis histórico, trazabilidad logística y variación de precios
-                </p>
-            </div>
-
-            <div className="card mb-6 bg-carbon-mid border border-steel/30 shadow-xl">
-                <div className="card-body p-4">
-                    <div className="flex flex-col lg:flex-row gap-4 items-end">
-                        <div className="form-group flex-1 w-full" ref={dropdownProductoRef}>
-                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                Producto (Opcional si elige cliente)
-                            </label>
-                            <div className="relative">
-                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
+            <div className="pg-stack">
+                <section className="pg-panel">
+                    <div className="pg-filters">
+                        <div className="vt-filters-grid">
+                            <div className="pg-field pg-field-grow vt-combo" ref={dropdownProductoRef}>
+                                <label className="pg-field-label" htmlFor="vt-desp-producto">Producto (opcional si eliges cliente)</label>
+                                <Search size={14} className="vt-combo-icon" />
                                 <input
+                                    id="vt-desp-producto"
                                     type="text"
-                                    className="form-input w-full"
-                                    style={{ paddingLeft: '3rem' }}
-                                    placeholder="Buscar producto por nombre o código..."
+                                    autoComplete="off"
+                                    className="form-input"
+                                    placeholder="Nombre o código del producto"
                                     value={busquedaProducto}
                                     onChange={(e) => {
                                         setBusquedaProducto(e.target.value);
@@ -526,37 +453,32 @@ const ReporteProductoDespachos = () => {
                                     onFocus={() => setMostrarDropdownProducto(true)}
                                 />
                                 {mostrarDropdownProducto && busquedaProducto && (
-                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 dropdown-menu shadow-2xl rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                        <ul className="max-h-64 overflow-y-auto p-1 space-y-0.5">
-                                            {productosFiltrados.length > 0 ? (
-                                                productosFiltrados.map((producto) => (
-                                                    <li key={producto.id_producto} className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors" onClick={() => handleSelectProducto(producto)}>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-mist text-sm">{producto.nombre}</span>
-                                                            <span className="text-[10px] text-primary font-black uppercase tracking-widest mt-0.5">{producto.codigo}</span>
-                                                        </div>
-                                                    </li>
-                                                ))
-                                            ) : (
-                                                <li className="cursor-default select-none py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center">No se encontraron productos</li>
-                                            )}
-                                        </ul>
-                                    </div>
+                                    <ul className="vt-suggest">
+                                        {productosFiltrados.length > 0 ? (
+                                            productosFiltrados.map((producto) => (
+                                                <li key={producto.id_producto}>
+                                                    <button type="button" onClick={() => handleSelectProducto(producto)}>
+                                                        {producto.nombre}
+                                                        <small>{producto.codigo}</small>
+                                                    </button>
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li className="vt-suggest-empty">No se encontraron productos</li>
+                                        )}
+                                    </ul>
                                 )}
                             </div>
-                        </div>
 
-                        <div className="form-group flex-1 w-full" ref={dropdownClienteRef}>
-                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                Cliente (Opcional si elige producto)
-                            </label>
-                            <div className="relative">
-                                <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
+                            <div className="pg-field pg-field-grow vt-combo" ref={dropdownClienteRef}>
+                                <label className="pg-field-label" htmlFor="vt-desp-cliente">Cliente (opcional si eliges producto)</label>
+                                <User size={14} className="vt-combo-icon" />
                                 <input
+                                    id="vt-desp-cliente"
                                     type="text"
-                                    className="form-input w-full"
-                                    style={{ paddingLeft: '3rem' }}
-                                    placeholder="Todos los clientes..."
+                                    autoComplete="off"
+                                    className="form-input"
+                                    placeholder="Todos los clientes"
                                     value={busquedaCliente}
                                     onChange={(e) => {
                                         setBusquedaCliente(e.target.value);
@@ -566,224 +488,195 @@ const ReporteProductoDespachos = () => {
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
                                 {mostrarDropdownCliente && busquedaCliente && (
-                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 dropdown-menu shadow-2xl rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                        <ul className="max-h-64 overflow-y-auto p-1 space-y-0.5">
-                                            {clientesFiltrados.length > 0 ? (
-                                                clientesFiltrados.map((cliente) => (
-                                                    <li key={cliente.id_cliente} className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors" onClick={() => handleSelectCliente(cliente)}>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-mist text-sm">{cliente.razon_social}</span>
-                                                            <span className="text-[10px] text-wire font-black uppercase tracking-widest mt-0.5">RUC: {cliente.ruc || 'N/A'}</span>
-                                                        </div>
-                                                    </li>
-                                                ))
-                                            ) : (
-                                                <li className="cursor-default select-none py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center">No se encontraron clientes</li>
-                                            )}
-                                        </ul>
-                                    </div>
+                                    <ul className="vt-suggest">
+                                        {clientesFiltrados.length > 0 ? (
+                                            clientesFiltrados.map((cliente) => (
+                                                <li key={cliente.id_cliente}>
+                                                    <button type="button" onClick={() => handleSelectCliente(cliente)}>
+                                                        {cliente.razon_social}
+                                                        <small>RUC {cliente.ruc || 'N/A'}</small>
+                                                    </button>
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li className="vt-suggest-empty">No se encontraron clientes</li>
+                                        )}
+                                    </ul>
                                 )}
                             </div>
-                        </div>
 
-                        <div className="flex flex-col gap-2 w-full lg:w-auto">
-                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] block">Filtrar por:</label>
-                            <div className="flex gap-4 p-2 bg-carbon/50 rounded-lg border border-steel/20 h-[48px] items-center">
-                                {[
-                                    { id: 'emision', label: 'Emisión' },
-                                    { id: 'despacho', label: 'Despacho' }
-                                ].map(opcion => (
-                                    <label key={opcion.id} className="flex items-center gap-2 cursor-pointer select-none group">
-                                        <div className="relative">
-                                            <input
-                                                type="radio"
-                                                name="tipoFecha"
-                                                className="hidden"
-                                                checked={filtros.tipoFecha === opcion.id}
-                                                onChange={() => setFiltros({ ...filtros, tipoFecha: opcion.id })}
-                                            />
-                                            <div className={`w-4 h-4 rounded-full border transition-all flex items-center justify-center ${
-                                                filtros.tipoFecha === opcion.id
-                                                    ? 'bg-primary border-primary shadow-lg shadow-primary/20'
-                                                    : 'bg-transparent border-steel group-hover:border-wire'
-                                            }`}>
-                                                {filtros.tipoFecha === opcion.id && <div className="w-1.5 h-1.5 bg-carbon rounded-full" />}
-                                            </div>
-                                        </div>
-                                        <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
-                                            filtros.tipoFecha === opcion.id ? 'text-primary' : 'text-wire group-hover:text-mist'
-                                        }`}>
+                            <div className="pg-field">
+                                <span className="pg-field-label">Filtrar fechas por</span>
+                                <div className="pg-segmented" role="group" aria-label="Filtrar fechas por">
+                                    {[
+                                        { id: 'emision', label: 'Emisión' },
+                                        { id: 'despacho', label: 'Despacho' }
+                                    ].map(opcion => (
+                                        <button
+                                            key={opcion.id}
+                                            type="button"
+                                            className={filtros.tipoFecha === opcion.id ? 'active' : ''}
+                                            aria-pressed={filtros.tipoFecha === opcion.id}
+                                            onClick={() => setFiltros({ ...filtros, tipoFecha: opcion.id })}
+                                        >
                                             {opcion.label}
-                                        </span>
-                                    </label>
-                                ))}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="flex flex-row gap-4 w-full lg:w-auto">
-                            <div className="form-group flex-1 lg:w-32">
-                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Desde</label>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-desp-desde">Desde</label>
                                 <input
+                                    id="vt-desp-desde"
                                     type="date"
                                     name="fechaInicio"
                                     value={filtros.fechaInicio}
                                     onChange={handleChangeFiltro}
                                     max={filtros.fechaFin || undefined}
-                                    className={`form-input w-full text-sm font-bold ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                                    className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
                                 />
                             </div>
-                            <div className="form-group flex-1 lg:w-32">
-                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Hasta</label>
+                            <div className="pg-field">
+                                <label className="pg-field-label" htmlFor="vt-desp-hasta">Hasta</label>
                                 <input
+                                    id="vt-desp-hasta"
                                     type="date"
                                     name="fechaFin"
                                     value={filtros.fechaFin}
                                     onChange={handleChangeFiltro}
                                     min={filtros.fechaInicio || undefined}
-                                    className={`form-input w-full text-sm font-bold ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                                    className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
                                 />
                             </div>
                         </div>
 
-                        <div className="form-group w-full lg:w-auto min-w-[300px]">
-                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-2 block">Estados a incluir</label>
-                            <div className="flex flex-wrap gap-2 p-2 bg-carbon/50 rounded-lg border border-steel/20 h-[48px] items-center">
-                                {['Despachada', 'Despacho Parcial', 'Entregada'].map(estado => (
-                                    <label key={estado} className="flex items-center gap-2 cursor-pointer select-none group">
-                                        <div className="relative">
-                                            <input
-                                                type="checkbox"
-                                                className="hidden"
-                                                checked={filtros.estados.includes(estado)}
-                                                onChange={() => handleToggleEstado(estado)}
-                                            />
-                                            <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                                                filtros.estados.includes(estado)
-                                                    ? 'bg-primary border-primary'
-                                                    : 'bg-transparent border-steel group-hover:border-wire'
-                                            }`}>
-                                                {filtros.estados.includes(estado) && <div className="w-2 h-2 bg-carbon rounded-full" />}
+                        <div className="pg-field">
+                            <span className="pg-field-label">Estados a incluir</span>
+                            <div className="pg-chips">
+                                {['Despachada', 'Despacho Parcial', 'Entregada'].map(estado => {
+                                    const cfg = configEstadoOrden(estado);
+                                    const activo = filtros.estados.includes(estado);
+                                    return (
+                                        <button
+                                            key={estado}
+                                            type="button"
+                                            className={`pg-chip ${activo ? 'on' : ''}`}
+                                            style={{ '--chip-c': cfg.color }}
+                                            aria-pressed={activo}
+                                            onClick={() => handleToggleEstado(estado)}
+                                        >
+                                            <i />{estado}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {errorFecha && (
+                            <span className="vt-error" role="alert"><AlertCircle size={14} /> {errorFecha}</span>
+                        )}
+                    </div>
+                    <div className="vt-filters-foot">
+                        <span className="pg-hint">Elige al menos un producto o un cliente.</span>
+                        <button
+                            type="button"
+                            onClick={generarReporte}
+                            className="btn btn-primary"
+                            disabled={loading || !!errorFecha}
+                        >
+                            <TrendingUp size={16} /> {loading ? 'Procesando…' : 'Generar reporte'}
+                        </button>
+                    </div>
+                </section>
+
+                {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+
+                {!reporteData && !loading && (
+                    <section className="pg-panel">
+                        <div className="pg-empty">
+                            <Package size={28} />
+                            <strong>Elige un producto o un cliente y genera el reporte</strong>
+                            <span>Verás cuánto se pidió, cuánto se despachó y cómo evolucionó el precio en el periodo.</span>
+                        </div>
+                    </section>
+                )}
+
+                {loading && !reporteData && <Loading variant="table" />}
+
+                {reporteData && estadisticas && (
+                    <>
+                        <div className="pg-kpis">
+                            <div className="pg-kpi">
+                                <div className="pg-kpi-top">
+                                    <span className="pg-kpi-label">Total unidades</span>
+                                    <span className="pg-kpi-icon"><Box size={16} /></span>
+                                </div>
+                                <span className="pg-kpi-value">{formatearNumero(estadisticas.total_unidades)}</span>
+                                <span className="pg-kpi-foot"><b>{productosAgrupados.length}</b> productos · <b>{reporteData.detalle.length}</b> movimientos</span>
+                            </div>
+                            {tarjetasMonto.map(t => (
+                                <div key={t.label} className={`pg-kpi ${t.tono}`}>
+                                    <div className="pg-kpi-top">
+                                        <span className="pg-kpi-label">{t.label}</span>
+                                        <span className="pg-kpi-icon"><t.icon size={16} /></span>
+                                    </div>
+                                    <span className="pg-kpi-value"><small>{t.moneda === 'USD' ? '$' : 'S/'}</small>{formatearNumero(t.valor)}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {productosAgrupados.length === 0 && (
+                            <section className="pg-panel">
+                                <div className="pg-empty">
+                                    <Package size={28} />
+                                    <strong>No hay despachos con estos filtros</strong>
+                                    <span>Amplía el rango de fechas o incluye más estados.</span>
+                                </div>
+                            </section>
+                        )}
+
+                        {productosAgrupados.map(prod => {
+                            const graficosProd = particionarDatosGrafico(prod.detalles);
+                            const avance = prod.total_solicitada > 0 ? Math.min(100, (prod.total_despachada / prod.total_solicitada) * 100) : 0;
+
+                            return (
+                                <section key={prod.id_producto} className="pg-panel">
+                                    <div className="pg-panel-head">
+                                        <h3 className="pg-panel-title">
+                                            <Package size={16} /> {prod.codigo} - {prod.nombre}
+                                            <span className="pg-count">{prod.detalles.length} movs</span>
+                                        </h3>
+                                        <div className="vt-figures">
+                                            <div className="vt-figure"><span>Solicitado</span><b>{formatearNumero(prod.total_solicitada)}</b></div>
+                                            <div className="vt-figure"><span>Despachado</span><b className="is-success">{formatearNumero(prod.total_despachada)}</b></div>
+                                            <div className="vt-figure"><span>Pendiente</span><b className={prod.total_pendiente > 0 ? 'is-warning' : ''}>{formatearNumero(prod.total_pendiente)}</b></div>
+                                            <div className="pg-measure">
+                                                <div className="pg-measure-top"><span>Avance</span><b>{avance.toFixed(0)}%</b></div>
+                                                <div className="pg-meter" style={{ '--meter-c': avance >= 99.99 ? 'var(--success)' : 'var(--accent)' }}>
+                                                    <span style={{ width: `${avance}%` }} />
+                                                </div>
                                             </div>
                                         </div>
-                                        <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
-                                            filtros.estados.includes(estado) ? 'text-primary' : 'text-wire group-hover:text-mist'
-                                        }`}>
-                                            {estado}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
+                                    </div>
+                                    {renderTablaDetalles(prod.detalles)}
 
-                        <div className="w-full lg:w-auto mt-4 lg:mt-0">
-                            <button
-                                onClick={generarReporte}
-                                className="btn btn-primary w-full lg:w-auto font-black tracking-widest h-12 px-8 shadow-xl shadow-primary/20 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                disabled={loading || !!errorFecha}
-                            >
-                                {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {errorFecha && (
-                        <div className="flex items-center gap-2 px-4 py-2.5 mt-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                            <AlertCircle size={14} className="text-red-400 shrink-0" />
-                            <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
-                        </div>
-                    )}
-                </div>
+                                    {graficosProd && (
+                                        <div className="vt-charts">
+                                            {renderGrafico(graficosProd.facturasPEN, 'Precio · Facturas (PEN)')}
+                                            {renderGrafico(graficosProd.facturasUSD, 'Precio · Facturas (USD)')}
+                                            {renderGrafico(graficosProd.notasVentaPEN, 'Precio · N. Venta (PEN)')}
+                                            {renderGrafico(graficosProd.notasVentaUSD, 'Precio · N. Venta (USD)')}
+                                            {renderGrafico(graficosProd.sinComprPEN, 'Precio · Sin Compr. (PEN)')}
+                                            {renderGrafico(graficosProd.sinComprUSD, 'Precio · Sin Compr. (USD)')}
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })}
+                    </>
+                )}
             </div>
-
-            {error && (
-                <div className="bg-danger/10 border-l-4 border-danger p-4 mb-6 rounded">
-                    <p className="text-danger font-bold text-sm">{error}</p>
-                </div>
-            )}
-
-            {reporteData && estadisticas && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="card bg-carbon-mid border-l-4 border-mist shadow-lg mb-4 h-16 flex items-center px-6">
-                        <div className="flex items-center gap-3 w-full">
-                            <Box size={20} className="text-wire" />
-                            <span className="text-[0.7rem] font-black text-wire uppercase tracking-widest">Total Unidades:</span>
-                            <span className="text-xl font-black text-white ml-auto">{formatearNumero(estadisticas.total_unidades)}</span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
-                            <p className="text-lg font-black text-white">S/ {formatearNumero(estadisticas.facturas_pen)}</p>
-                        </div>
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
-                            <p className="text-lg font-black text-primary">$ {formatearNumero(estadisticas.facturas_usd)}</p>
-                        </div>
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
-                            <p className="text-lg font-black text-white">S/ {formatearNumero(estadisticas.notas_venta_pen)}</p>
-                        </div>
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
-                            <p className="text-lg font-black text-white">$ {formatearNumero(estadisticas.notas_venta_usd)}</p>
-                        </div>
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
-                            <p className="text-lg font-black text-warning">S/ {formatearNumero(estadisticas.sin_comprobante_pen)}</p>
-                        </div>
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
-                            <p className="text-lg font-black text-warning">$ {formatearNumero(estadisticas.sin_comprobante_usd)}</p>
-                        </div>
-                    </div>
-
-                    {productosAgrupados.map(prod => {
-                        const graficosProd = particionarDatosGrafico(prod.detalles);
-
-                        return (
-                            <div key={prod.id_producto} className="card shadow-2xl relative border border-steel/20 bg-carbon mb-6">
-                                <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                    <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-                                        {prod.codigo} - {prod.nombre}
-                                        <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">
-                                            {prod.detalles.length} movs
-                                        </span>
-                                    </h3>
-                                    <div className="flex gap-4 w-full md:w-auto justify-between md:justify-end bg-carbon-mid p-2 rounded-lg border border-steel/30">
-                                        <div className="text-center md:text-right px-2">
-                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Solicitado</p>
-                                            <p className="text-sm font-black text-white">{formatearNumero(prod.total_solicitada)}</p>
-                                        </div>
-                                        <div className="text-center md:text-right px-2 border-l border-steel/30">
-                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Despachado</p>
-                                            <p className="text-sm font-black text-success">{formatearNumero(prod.total_despachada)}</p>
-                                        </div>
-                                        <div className="text-center md:text-right px-2 border-l border-steel/30">
-                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Pendiente</p>
-                                            <p className={`text-sm font-black ${prod.total_pendiente > 0 ? 'text-warning' : 'text-mist'}`}>
-                                                {formatearNumero(prod.total_pendiente)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                {renderTablaDetalles(prod.detalles)}
-
-                                {graficosProd && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-steel/20 bg-carbon-mid">
-                                        {renderGrafico(graficosProd.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
-                                        {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', 'var(--accent)')}
-                                        {renderGrafico(graficosProd.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
-                                        {renderGrafico(graficosProd.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
-                                        {renderGrafico(graficosProd.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
-                                        {renderGrafico(graficosProd.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
         </div>
     );
 };

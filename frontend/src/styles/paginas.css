@@ -230,6 +230,7 @@ button.pg-kpi.on {
 .pg-field .form-input,
 .pg-field .form-select { height: 38px; }
 .pg-field-grow { flex: 1 1 260px; }
+.form-input.is-invalid { border-color: var(--danger); }
 
 .pg-segmented {
   display: inline-flex;

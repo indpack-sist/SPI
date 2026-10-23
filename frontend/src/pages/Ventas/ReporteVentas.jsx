@@ -7,11 +7,11 @@ import {
 } from 'recharts';
 import {
   Calendar, Search, Filter, Download, FileSpreadsheet,
-  DollarSign, TrendingUp, FileText, CheckCircle, AlertCircle, Truck, X,
+  DollarSign, TrendingUp, FileText, AlertCircle, Truck, X,
   Eye, Package, MapPin, Phone, Mail, CreditCard, FileCheck,
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
   RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  ShieldCheck, ShieldAlert, ShieldOff, Trash2, XCircle, Ban, Receipt, FileCode,
+  ShieldCheck, ShieldAlert, ShieldOff, Trash2, Ban, Receipt, FileCode,
   FileArchive, Users, Wallet, ExternalLink, ClipboardList, BarChart3
 } from 'lucide-react';
 import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI, archivosAPI, sunatAPI } from '../../config/api';
@@ -21,23 +21,10 @@ import Alert from '../../components/UI/Alert';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { generarReporteVentasPDF } from './reporteVentasPDF';
+import { ESTADOS_SEE, BadgeSee, BadgeEstadoOrden } from './estadosVentas';
 import './ReporteVentas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
-
-const ESTADOS_SEE = {
-  ACEPTADO:   { label: 'Aceptada',    badge: 'badge-success',   icon: CheckCircle,   color: 'var(--success)' },
-  OBSERVADO:  { label: 'Observada',   badge: 'badge-warning',   icon: AlertTriangle, color: 'var(--warning)' },
-  RECHAZADO:  { label: 'Rechazada',   badge: 'badge-danger',    icon: XCircle,       color: 'var(--danger)' },
-  EN_PROCESO: { label: 'En proceso',  badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
-  PENDIENTE:  { label: 'Pendiente',   badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
-  ENVIADO:    { label: 'Enviada',     badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
-  ERROR:      { label: 'Error',       badge: 'badge-danger',    icon: XCircle,       color: 'var(--danger)' },
-  SIN_EMITIR: { label: 'Sin emitir',  badge: 'badge-secondary', icon: Receipt,       color: 'var(--steel-light)' },
-  ANULADA:    { label: 'Anulada',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
-  BAJA:       { label: 'De baja',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
-  NO_APLICA:  { label: 'No aplica',   badge: 'badge-secondary', icon: FileText,      color: 'var(--steel-light)' }
-};
 
 const TILES_SEE = ['ACEPTADO', 'OBSERVADO', 'EN_PROCESO', 'RECHAZADO', 'SIN_EMITIR', 'ANULADA'];
 
@@ -49,23 +36,7 @@ const ESTADOS_PAGO = [
   { id: 'Pendiente', badge: 'badge-danger', color: 'var(--danger)' }
 ];
 
-const BADGE_ESTADO_ORDEN = {
-  'En Espera': 'badge-secondary',
-  'En Proceso': 'badge-info',
-  'Atendido por Produccion': 'badge-primary',
-  'Despacho Parcial': 'badge-warning',
-  'Despachada': 'badge-success',
-  'Entregada': 'badge-success',
-  'Cancelada': 'badge-danger'
-};
-
 const FILAS_POR_PAGINA = 25;
-
-const BadgeSee = ({ estado }) => {
-  const cfg = ESTADOS_SEE[estado] || ESTADOS_SEE.SIN_EMITIR;
-  const Icono = cfg.icon;
-  return <span className={`badge ${cfg.badge}`}><Icono size={11} />{cfg.label}</span>;
-};
 
 const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -1686,7 +1657,7 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
               <span className="pg-eyebrow"><ClipboardList size={12} /> Orden de venta</span>
               <h2 id="rv-drawer-title">{o.numero}</h2>
               <div className="pg-drawer-badges">
-                <span className={`badge ${BADGE_ESTADO_ORDEN[o.estado] || 'badge-secondary'}`}>{o.estado}</span>
+                <BadgeEstadoOrden estado={o.estado} />
                 <span className={`badge ${ESTADOS_PAGO.find(e => e.id === o.estado_pago)?.badge || 'badge-secondary'}`}><Wallet size={11} />{o.estado_pago}</span>
                 {see.estado !== 'NO_APLICA' && <BadgeSee estado={see.estado} />}
                 {['Retrasado', 'Vencido'].includes(o.estado_logistico) && (
@@ -2595,7 +2566,7 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
                           )}
                         </td>
                         <td className="center">
-                          <span className={`badge ${BADGE_ESTADO_ORDEN[item.estado] || 'badge-secondary'}`}>{item.estado}</span>
+                          <BadgeEstadoOrden estado={item.estado} />
                           {['Retrasado', 'Vencido'].includes(item.estado_logistico) && (
                             <span className="pg-cell-sub text-danger">{item.estado_logistico}</span>
                           )}

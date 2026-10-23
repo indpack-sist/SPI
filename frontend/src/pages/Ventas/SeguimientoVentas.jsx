@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Truck, Search, X, Eye, Clock, PlayCircle, Factory,
-  CheckCircle, XCircle, Package, Calendar, RefreshCcw
+  Truck, Search, X, Eye, Package, CalendarDays, FileCheck, ClipboardList, AlertTriangle
 } from 'lucide-react';
-import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import PgPager from '../../components/UI/PgPager';
 import { ordenesVentaAPI } from '../../config/api';
+import { ESTADOS_ORDEN, BadgeEstadoOrden, BadgeSee, configTipoEntrega } from './estadosVentas';
+import { diasDesde } from '../Maestros/formatoMaestros';
+import './Ventas.css';
+
+const ESTADOS_KPI = ['En Espera', 'En Proceso', 'Atendido por Producción', 'Despacho Parcial', 'Despachada', 'Entregada'];
+const ESTADOS_CERRADOS = ['Despachada', 'Entregada', 'Cancelada'];
+
+const numeroGuia = (g) => (g.serie_sunat && g.numero_sunat ? `${g.serie_sunat}-${g.numero_sunat}` : g.numero_guia);
 
 function SeguimientoVentas() {
   const navigate = useNavigate();
@@ -71,19 +78,6 @@ function SeguimientoVentas() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
-  const getEstadoConfig = (estado) => {
-    const configs = {
-      'En Espera': { icono: Clock, clase: 'badge-warning', texto: 'En Espera' },
-      'En Proceso': { icono: PlayCircle, clase: 'badge-info', texto: 'En Proceso' },
-      'Atendido por Producción': { icono: Factory, clase: 'badge-primary', texto: 'Atendido' },
-      'Despacho Parcial': { icono: Truck, clase: 'badge-warning', texto: 'Desp. Parcial' },
-      'Despachada': { icono: Truck, clase: 'badge-primary', texto: 'Despachada' },
-      'Entregada': { icono: CheckCircle, clase: 'badge-success', texto: 'Entregada' },
-      'Cancelada': { icono: XCircle, clase: 'badge-danger', texto: 'Cancelada' }
-    };
-    return configs[estado] || configs['En Espera'];
-  };
-
   const ordenesFiltradas = ordenes.filter(orden => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -104,136 +98,89 @@ function SeguimientoVentas() {
     if (totalPages > 0 && currentPage > totalPages) setCurrentPage(1);
   }, [totalPages, currentPage]);
 
-  const columns = [
-    {
-      header: 'Orden',
-      accessor: 'numero_orden',
-      width: '150px',
-      render: (value, row) => (
-        <div>
-          <div className="font-mono font-bold text-mist">{value}</div>
-          <div className="text-[10px] text-wire uppercase tracking-wider">
-            {formatearFechaVisual(row.fecha_emision)}
-          </div>
-        </div>
-      )
-    },
-    {
-      header: 'Cliente',
-      accessor: 'cliente',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium text-mist">{value}</div>
-          <div className="text-xs text-wire">RUC: {row.ruc_cliente || '-'}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Vendedor',
-      accessor: 'comercial',
-      width: '160px',
-      render: (value) => <div className="text-xs text-mist">{value || 'Sin asignar'}</div>
-    },
-    {
-      header: 'Ítems',
-      accessor: 'total_items',
-      width: '90px',
-      align: 'center',
-      render: (value) => (
-        <span className="inline-flex items-center gap-1 text-mist font-bold">
-          <Package size={14} className="text-wire" /> {value || 0}
-        </span>
-      )
-    },
-    {
-      header: 'Despachos',
-      accessor: 'total_despachos',
-      width: '110px',
-      align: 'center',
-      render: (value) => {
-        const n = Number(value || 0);
-        return (
-          <span className={`inline-flex items-center gap-1 font-bold ${n > 0 ? 'text-primary' : 'text-wire'}`}>
-            <Truck size={14} /> {n}
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Estado',
-      accessor: 'estado',
-      width: '140px',
-      align: 'center',
-      render: (value) => {
-        const config = getEstadoConfig(value);
-        const Icono = config.icono;
-        return (
-          <span className={`badge ${config.clase} text-[10px]`}>
-            <Icono size={12} /> {config.texto}
-          </span>
-        );
-      }
-    },
-    {
-      header: '',
-      accessor: 'id_orden_venta',
-      width: '70px',
-      align: 'center',
-      render: (value) => (
-        <button
-          className="btn btn-xs btn-primary p-1.5"
-          onClick={(e) => { e.stopPropagation(); navigate(`/ventas/seguimiento/${value}`); }}
-          title="Ver seguimiento"
-        >
-          <Eye size={14} />
-        </button>
-      )
-    }
-  ];
+  const conteoEstados = ordenes.reduce((acc, o) => ({ ...acc, [o.estado]: (acc[o.estado] || 0) + 1 }), {});
+  const conDespacho = ordenes.filter(o => Number(o.total_despachos || 0) > 0).length;
+  const hayFiltros = !!(busqueda || fechaInicio || fechaFin || filtroEstado);
+
+  const renderEntrega = (orden) => {
+    const tipo = configTipoEntrega(orden.tipo_entrega);
+    const TipoIcono = tipo?.icon;
+    const estimadaSuperada = !orden.fecha_entrega_real && orden.fecha_entrega_estimada
+      && diasDesde(orden.fecha_entrega_estimada) > 0 && !ESTADOS_CERRADOS.includes(orden.estado);
+    return (
+      <>
+        {orden.fecha_entrega_real ? (
+          <span className="pg-cell-main"><CalendarDays size={12} className="pg-muted" />Entregada {formatearFechaVisual(orden.fecha_entrega_real)}</span>
+        ) : orden.fecha_entrega_estimada ? (
+          <span className="pg-cell-main"><CalendarDays size={12} className="pg-muted" />Estimada {formatearFechaVisual(orden.fecha_entrega_estimada)}</span>
+        ) : (
+          <span className="pg-muted">Sin fecha estimada</span>
+        )}
+        {tipo && <span className="pg-cell-sub"><TipoIcono size={11} />{tipo.label}</span>}
+        {estimadaSuperada && (
+          <span className="pg-tags"><span className="pg-tag is-warning"><AlertTriangle size={11} />Fecha estimada superada</span></span>
+        )}
+      </>
+    );
+  };
 
   return (
-    <div className="p-4 md:p-6 page-ordenes-venta">
-      <style dangerouslySetInnerHTML={{__html: `
-        .page-ordenes-venta, .page-ordenes-venta .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
-        .page-ordenes-venta .form-input, .page-ordenes-venta input {
-          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
-        }
-        .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
-      `}} />
+    <div className="pg-page vt-page">
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Truck size={13} /> Ventas</span>
+          <h1 className="pg-title">Seguimiento de despachos</h1>
+          <p className="pg-subtitle">
+            Pedido, despachado y pendiente por orden de venta · <b>{ordenes.length}</b> órdenes · <b>{conDespacho}</b> con despachos registrados
+          </p>
+        </div>
+      </header>
 
       {loading && <Loading variant="table" />}
 
-      <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="flex flex-row justify-between items-start gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-              <div className="p-2 bg-primary/10 rounded-lg"><Truck size={28} className="text-primary" /></div>
-              <span className="uppercase font-barlow text-white">Seguimiento de Despachos</span>
-            </h1>
-            <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">
-              Pedido · Despachado · Pendiente por orden de venta
-            </p>
-          </div>
-        </div>
-
+      <div className={`pg-stack vt-fade ${loading ? 'is-hidden' : ''}`}>
         {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-        <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
-          <div className="card-body p-4">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+        <div className="pg-kpis">
+          {ESTADOS_KPI.map(estado => {
+            const cfg = ESTADOS_ORDEN[estado];
+            const Icono = cfg.icon;
+            const activo = filtroEstado === estado;
+            const visible = !filtroEstado || activo;
+            return (
+              <button key={estado} type="button" className={`pg-kpi ${cfg.tono} ${activo ? 'on' : ''}`} aria-pressed={activo}
+                onClick={() => setFiltroEstado(activo ? '' : estado)}>
+                <div className="pg-kpi-top">
+                  <span className="pg-kpi-label">{cfg.label}</span>
+                  <span className="pg-kpi-icon"><Icono size={16} /></span>
+                </div>
+                <span className="pg-kpi-value">{visible ? (conteoEstados[estado] || 0) : '—'}</span>
+                <span className="pg-kpi-foot">{activo ? 'Filtro activo · pulsa para quitar' : 'Pulsa para filtrar'}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <section className="pg-panel">
+          <div className="pg-filters">
+            <div className="pg-filters-row">
+              <div className="pg-field pg-field-grow pg-search">
+                <label className="pg-field-label" htmlFor="vt-seg-busqueda">Buscar</label>
+                <Search size={14} />
                 <input
-                  type="text"
-                  className="form-input w-full pl-10 h-11"
-                  placeholder="Buscar por N° orden, cliente, RUC o vendedor..."
+                  id="vt-seg-busqueda"
+                  type="search"
+                  className="form-input"
+                  placeholder="N° orden, cliente, RUC o vendedor"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                 />
               </div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="vt-seg-estado">Estado</label>
                 <select
-                  className="form-input text-xs h-11 px-3"
+                  id="vt-seg-estado"
+                  className="form-select"
                   value={filtroEstado}
                   onChange={(e) => setFiltroEstado(e.target.value)}
                 >
@@ -246,40 +193,114 @@ function SeguimientoVentas() {
                   <option value="Entregada">Entregada</option>
                   <option value="Cancelada">Cancelada</option>
                 </select>
-                <input type="date" className="form-input text-xs h-11 w-36" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
-                <input type="date" className="form-input text-xs h-11 w-36" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
-                <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3" title="Limpiar filtros"><X size={18} /></button>
               </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="vt-seg-desde">Desde</label>
+                <input id="vt-seg-desde" type="date" className="form-input vt-date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+              </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="vt-seg-hasta">Hasta</label>
+                <input id="vt-seg-hasta" type="date" className="form-input vt-date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+              </div>
+              {hayFiltros && (
+                <button type="button" onClick={limpiarFiltros} className="btn btn-ghost" style={{ height: 38 }}>
+                  <X size={15} /> Limpiar filtros
+                </button>
+              )}
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="card shadow-2xl">
-          <div className="card-header flex items-center justify-between border-b border-steel/20">
-            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-              Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{ordenesFiltradas.length}</span>
-            </h2>
-            <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title"><ClipboardList size={16} /> Órdenes <span className="pg-count">{ordenesFiltradas.length}</span></h2>
+            <span className="pg-panel-meta">Pulsa una fila para ver el seguimiento</span>
           </div>
-          <div className="card-body p-0">
-            <div className="table-container">
-              <Table
-                columns={columns}
-                data={currentItems}
-                emptyMessage="No hay órdenes con los filtros aplicados"
-                onRowClick={(row) => navigate(`/ventas/seguimiento/${row.id_orden_venta}`)}
-              />
-            </div>
+          <div className="pg-table-wrap">
+            <table className="pg-table">
+              <thead>
+                <tr>
+                  <th>Orden</th>
+                  <th>Cliente</th>
+                  <th>Vendedor</th>
+                  <th>Entrega</th>
+                  <th className="center">Ítems</th>
+                  <th className="center">Despachos</th>
+                  <th>Guías de remisión</th>
+                  <th className="center">Estado</th>
+                  <th className="center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.length > 0 ? currentItems.map(orden => {
+                  const despachos = Number(orden.total_despachos || 0);
+                  const guias = orden.guias || [];
+                  return (
+                    <tr key={orden.id_orden_venta} className="is-clickable" onClick={() => navigate(`/ventas/seguimiento/${orden.id_orden_venta}`)}>
+                      <td className="nowrap">
+                        <span className="pg-code">{orden.numero_orden}</span>
+                        <span className="pg-cell-sub">{formatearFechaVisual(orden.fecha_emision)}</span>
+                      </td>
+                      <td>
+                        <span className="pg-cell-main pg-truncate" title={orden.cliente}>{orden.cliente}</span>
+                        <span className="pg-cell-sub">RUC {orden.ruc_cliente || '—'}</span>
+                      </td>
+                      <td>{orden.comercial || <span className="pg-muted">Sin asignar</span>}</td>
+                      <td className="nowrap">{renderEntrega(orden)}</td>
+                      <td className="center nowrap"><span className="pg-cell-main"><Package size={13} className="pg-muted" />{orden.total_items || 0}</span></td>
+                      <td className="center nowrap">
+                        <span className={`pg-cell-main ${despachos > 0 ? '' : 'pg-muted'}`}><Truck size={13} className="pg-muted" />{despachos}</span>
+                      </td>
+                      <td>
+                        {guias.length > 0 ? (
+                          <div className="vt-guias">
+                            {guias.map((g, i) => (
+                              <span key={`${numeroGuia(g)}-${i}`} className="vt-guia">
+                                <span className="pg-code">{numeroGuia(g)}</span>
+                                <BadgeSee estado={g.sunat_estado} />
+                              </span>
+                            ))}
+                          </div>
+                        ) : <span className="pg-muted">Sin guías</span>}
+                      </td>
+                      <td className="center"><BadgeEstadoOrden estado={orden.estado} /></td>
+                      <td className="center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="pg-iconbtn"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/ventas/seguimiento/${orden.id_orden_venta}`); }}
+                          title="Ver seguimiento"
+                          aria-label={`Ver seguimiento de ${orden.numero_orden}`}
+                        >
+                          <Eye size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={9}>
+                      <div className="pg-empty">
+                        <FileCheck size={28} />
+                        <strong>{hayFiltros ? 'Ninguna orden coincide con los filtros' : 'Aún no hay órdenes de venta'}</strong>
+                        <span>{hayFiltros ? 'Quita algún filtro o cambia la búsqueda.' : 'Las órdenes aparecerán aquí con su avance de despacho.'}</span>
+                        {hayFiltros && <button type="button" className="btn btn-outline btn-sm" onClick={limpiarFiltros}><X size={14} /> Limpiar filtros</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-
-          {totalPages > 1 && (
-            <div className="px-6 py-4 bg-carbon-mid border-t border-steel/30 flex items-center justify-center gap-3">
-              <button className="btn btn-outline border-steel h-10 px-4 font-black text-[0.7rem] tracking-widest" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>ANTERIOR</button>
-              <span className="text-sm font-black text-mist tracking-widest">{currentPage} / {totalPages}</span>
-              <button className="btn btn-outline border-steel h-10 px-4 font-black text-[0.7rem] tracking-widest" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>SIGUIENTE</button>
-            </div>
-          )}
-        </div>
+          <PgPager
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={ordenesFiltradas.length}
+            itemsPerPage={itemsPerPage}
+            setCurrentPage={setCurrentPage}
+            sustantivo="órdenes"
+          />
+        </section>
       </div>
     </div>
   );

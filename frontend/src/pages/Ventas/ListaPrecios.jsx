@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, Package, Save, Edit, Trash2, Tag, Eye, EyeOff, History, Lock, User } from 'lucide-react';
+import { Search, FileText, Plus, Package, Save, Edit, Trash2, Tag, Eye, EyeOff, History, Lock, User, AlertTriangle } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
+import './Ventas.css';
 
 function ListaPrecios() {
   const navigate = useNavigate();
@@ -333,415 +334,442 @@ function ListaPrecios() {
     return cumpleBusqueda;
   });
 
+  const clientesVisibles = busqueda.trim()
+    ? clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase()))
+    : clientes.filter(c => c.id_cliente === clienteSel?.id_cliente);
+  const totalIncluidos = Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length;
+
   return (
-    <div className="p-4 md:p-6 h-full flex flex-col overflow-hidden">
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 shrink-0">
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Tag size={28} className="text-primary" />
-            Listas de Precios
-          </h1>
-          <p className="text-muted">Gestión de precios especiales por cliente</p>
+          <span className="pg-eyebrow"><Tag size={13} /> Ventas</span>
+          <h1 className="pg-title">Listas de precios</h1>
+          <p className="pg-subtitle">
+            Gestión de precios especiales por cliente
+            {clienteSel && <> · <b>{clienteSel.razon_social}</b> · <b>{listas.length}</b> {listas.length === 1 ? 'lista' : 'listas'}</>}
+          </p>
         </div>
-      </div>
+      </header>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0">
-
-        <div className="card shadow-sm flex flex-col h-full">
-          <div className="card-header p-4">
-            <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">Seleccionar Cliente</h2>
-            <div className="search-input-wrapper mt-3">
-              <Search size={18} className="search-icon" />
-              <input
-                type="text"
-                className="form-input search-input"
-                placeholder="Buscar cliente por razón social..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
+        <div className="vt-lp">
+          <aside className="pg-panel vt-lp-aside">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><User size={16} /> Cliente</h2>
             </div>
-          </div>
-          <div className="overflow-y-auto flex-1 p-2 scrollbar-thin">
+            <div className="pg-filters">
+              <div className="pg-field pg-search">
+                <label className="pg-field-label" htmlFor="vt-lp-cliente">Buscar cliente</label>
+                <Search size={14} />
+                <input
+                  id="vt-lp-cliente"
+                  type="search"
+                  className="form-input"
+                  placeholder="Razón social"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              </div>
+            </div>
             {!busqueda.trim() && !clienteSel ? (
-              <div className="flex flex-col items-center justify-center h-full py-8">
-                <Search size={28} className="text-muted mb-3" />
-                <p className="text-sm text-muted text-center">Escriba para buscar un cliente</p>
+              <div className="pg-empty">
+                <Search size={24} />
+                <span>Escribe para buscar un cliente</span>
               </div>
-            ) : (busqueda.trim()
-              ? clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase()))
-              : clientes.filter(c => c.id_cliente === clienteSel?.id_cliente)
-            ).map(c => (
-              <div
-                key={c.id_cliente}
-                onClick={() => seleccionarCliente(c)}
-                className={`p-3 mb-1 rounded-lg border cursor-pointer transition-colors ${clienteSel?.id_cliente === c.id_cliente ? 'bg-primary/10 border-primary' : 'border-transparent hover:border-steel hover:bg-carbon-light'}`}
-              >
-                <p className={`font-bold text-sm line-clamp-1 ${clienteSel?.id_cliente === c.id_cliente ? 'text-primary' : ''}`}>{c.razon_social}</p>
-                <p className="text-xs text-muted font-mono mt-1">RUC: {c.ruc}</p>
+            ) : clientesVisibles.length === 0 ? (
+              <div className="pg-empty">
+                <Search size={24} />
+                <span>Ningún cliente coincide con la búsqueda</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="md:col-span-2 flex flex-col gap-6 h-full min-h-0">
-          {clienteSel ? (
-            <>
-              <div className="card shadow-sm flex flex-col shrink-0 max-h-[40%]">
-                <div className="card-header flex justify-between items-center p-4">
-                  <div>
-                    <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">Listas de {clienteSel.razon_social}</h2>
-                    <p className="text-xs text-muted mt-1">Haga clic en Editar para modificar productos</p>
-                  </div>
-                  <button onClick={abrirModalNuevaLista} className="btn btn-primary flex items-center gap-2">
-                    <Plus size={16} /> Nueva Lista
-                  </button>
-                </div>
-
-                <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 scrollbar-thin">
-                  {listas.length === 0 && <p className="text-muted text-sm col-span-2 text-center py-8">Este cliente no tiene listas de precios creadas.</p>}
-                  {listas.map(l => (
-                    <div
-                        key={l.id_lista}
-                        onClick={() => verDetalle(l)}
-                        className={`p-4 border rounded-lg cursor-pointer flex justify-between items-center transition-colors
-                            ${listaSeleccionadaID === l.id_lista ? 'bg-primary/10 border-primary' : 'border-steel hover:border-wire hover:bg-carbon-light'}
-                        `}
+            ) : (
+              <ul className="vt-lp-clientes">
+                {clientesVisibles.map(c => (
+                  <li key={c.id_cliente}>
+                    <button
+                      type="button"
+                      onClick={() => seleccionarCliente(c)}
+                      className={`vt-lp-cliente ${clienteSel?.id_cliente === c.id_cliente ? 'on' : ''}`}
+                      aria-pressed={clienteSel?.id_cliente === c.id_cliente}
                     >
-                      <div className="flex-1 overflow-hidden pr-2">
-                        <div className="flex items-center gap-2 mb-1">
-                            <h3 className={`font-bold truncate ${listaSeleccionadaID === l.id_lista ? 'text-primary' : ''}`} title={l.nombre_lista}>{l.nombre_lista}</h3>
-                            <span className="badge badge-sm badge-info shrink-0">{l.moneda}</span>
-                        </div>
-                        <p className="text-xs text-muted">{l.total_productos} productos incluidos</p>
-                        <p className="text-xs text-muted mt-1 flex items-center gap-1 truncate" title={l.creador_nombre || ''}>
-                            <User size={11} className="shrink-0" />
-                            {l.creador_nombre ? `Creada por ${l.creador_nombre}` : 'Sin dueño asignado'}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                            className="btn btn-sm btn-outline"
-                            onClick={(e) => verHistorial(e, l)}
-                            title="Ver historial de cambios de precios"
-                        >
-                            <History size={14} />
-                        </button>
-                        {puedeEditar(l) ? (
-                          <>
-                            <button
-                                className="btn btn-sm btn-outline"
-                                onClick={(e) => abrirModalEditarLista(e, l)}
-                                title="Editar lista"
-                            >
-                                <Edit size={14} />
-                            </button>
-                            <button
-                                className="btn btn-sm btn-outline"
-                                onClick={(e) => eliminarLista(e, l)}
-                                title="Eliminar lista"
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                          </>
-                        ) : (
-                          <span
-                            className="btn btn-sm btn-outline opacity-60 cursor-not-allowed"
-                            title={`Solo ${l.creador_nombre || 'el creador'} puede editar o eliminar esta lista`}
-                          >
-                            <Lock size={14} />
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card shadow-sm flex-1 flex flex-col min-h-0">
-                <div className="card-header flex justify-between items-center p-4 shrink-0">
-                  <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
-                    <FileText size={16} className="text-primary" /> Detalle de Lista
-                  </h2>
-                  {seleccionados.length > 0 && (
-                    <button onClick={generarCotizacion} className="btn btn-success flex items-center gap-2">
-                      Cotizar ({seleccionados.length})
+                      <strong title={c.razon_social}>{c.razon_social}</strong>
+                      <small>RUC {c.ruc}</small>
                     </button>
-                  )}
-                </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
 
-                <div className="card-body p-0 flex-1 overflow-auto">
-                    {detalleLista.length > 0 ? (
-                        <div className="table-container m-0 border-0 rounded-none h-full">
-                          <table className="table w-full relative">
-                              <thead className="sticky top-0 z-10">
-                                  <tr>
-                                      <th className="w-12 text-center">
-                                          <input
-                                              type="checkbox"
-                                              className="w-4 h-4 rounded accent-primary cursor-pointer"
-                                              onChange={(e) => {
-                                                  if(e.target.checked) setSeleccionados(detalleLista);
-                                                  else setSeleccionados([]);
-                                              }}
-                                              checked={seleccionados.length === detalleLista.length && detalleLista.length > 0}
-                                          />
-                                      </th>
-                                      <th>Producto</th>
-                                      <th className="text-right">Precio Estándar</th>
-                                      <th className="text-right">Precio de Lista</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {detalleLista.map(item => (
-                                      <tr key={item.id_producto} className={seleccionados.find(s => s.id_producto === item.id_producto) ? 'bg-primary/10' : ''}>
-                                          <td className="text-center align-middle">
-                                              <input
-                                                  type="checkbox"
-                                                  className="w-4 h-4 rounded accent-primary cursor-pointer"
-                                                  checked={!!seleccionados.find(s => s.id_producto === item.id_producto)}
-                                                  onChange={() => toggleSeleccion(item)}
-                                              />
-                                          </td>
-                                          <td>
-                                              <p className="font-medium">{item.producto}</p>
-                                              <p className="text-xs text-muted font-mono mt-0.5">{item.codigo}</p>
-                                          </td>
-                                          <td className="text-right text-muted line-through text-xs align-middle">
-                                              {item.moneda} {parseFloat(item.precio_estandar).toFixed(2)}
-                                          </td>
-                                          <td className="text-right align-middle">
-                                              <span className="font-bold text-primary">
-                                                  {item.moneda} {parseFloat(item.precio_especial).toFixed(2)}
-                                              </span>
-                                          </td>
-                                      </tr>
-                                  ))}
-                              </tbody>
-                          </table>
+          <div className="pg-stack">
+            {clienteSel ? (
+              <>
+                <section className="pg-panel">
+                  <div className="pg-panel-head">
+                    <div>
+                      <h2 className="pg-panel-title"><Tag size={16} /> Listas de {clienteSel.razon_social} <span className="pg-count">{listas.length}</span></h2>
+                      <span className="pg-panel-meta">Pulsa una lista para ver sus precios; usa Editar para modificar productos</span>
+                    </div>
+                    <button type="button" onClick={abrirModalNuevaLista} className="btn btn-primary">
+                      <Plus size={16} /> Nueva lista
+                    </button>
+                  </div>
+
+                  {listas.length === 0 ? (
+                    <div className="pg-empty">
+                      <Tag size={28} />
+                      <strong>Este cliente no tiene listas de precios creadas</strong>
+                      <span>Crea una lista para fijarle precios especiales y cotizar más rápido.</span>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={abrirModalNuevaLista}><Plus size={14} /> Nueva lista</button>
+                    </div>
+                  ) : (
+                    <div className="vt-lp-cards">
+                      {listas.map(l => (
+                        <div
+                          key={l.id_lista}
+                          onClick={() => verDetalle(l)}
+                          className={`vt-lp-card ${listaSeleccionadaID === l.id_lista ? 'on' : ''}`}
+                        >
+                          <div className="vt-lp-card-main">
+                            <div className="vt-lp-card-title">
+                              <strong title={l.nombre_lista}>{l.nombre_lista}</strong>
+                              <span className="badge badge-sm badge-info">{l.moneda}</span>
+                            </div>
+                            <span className="vt-lp-card-meta"><Package size={12} /><span>{l.total_productos} productos incluidos</span></span>
+                            <span className="vt-lp-card-meta" title={l.creador_nombre || ''}>
+                              <User size={12} />
+                              <span>{l.creador_nombre ? `Creada por ${l.creador_nombre}` : 'Sin dueño asignado'}</span>
+                            </span>
+                          </div>
+
+                          <div className="pg-rowactions">
+                            <button
+                              type="button"
+                              className="pg-iconbtn"
+                              onClick={(e) => verHistorial(e, l)}
+                              title="Ver historial de cambios de precios"
+                              aria-label={`Ver historial de ${l.nombre_lista}`}
+                            >
+                              <History size={15} />
+                            </button>
+                            {puedeEditar(l) ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="pg-iconbtn"
+                                  onClick={(e) => abrirModalEditarLista(e, l)}
+                                  title="Editar lista"
+                                  aria-label={`Editar ${l.nombre_lista}`}
+                                >
+                                  <Edit size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pg-iconbtn is-danger"
+                                  onClick={(e) => eliminarLista(e, l)}
+                                  title="Eliminar lista"
+                                  aria-label={`Eliminar ${l.nombre_lista}`}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
+                            ) : (
+                              <span
+                                className="pg-iconbtn vt-lp-lock"
+                                title={`Solo ${l.creador_nombre || 'el creador'} puede editar o eliminar esta lista`}
+                              >
+                                <Lock size={15} />
+                              </span>
+                            )}
+                          </div>
                         </div>
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center p-8">
-                            <Package size={40} className="text-muted mb-3" />
-                            <p className="text-sm font-medium">Ninguna lista seleccionada</p>
-                            <p className="text-xs text-muted mt-1 text-center max-w-sm">
-                                Seleccione una lista arriba para ver sus precios, o edite una lista para agregar o remover productos.
-                            </p>
-                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="pg-panel vt-lp-detail">
+                  <div className="pg-panel-head">
+                    <h2 className="pg-panel-title"><FileText size={16} /> Detalle de lista {detalleLista.length > 0 && <span className="pg-count">{detalleLista.length}</span>}</h2>
+                    {seleccionados.length > 0 && (
+                      <button type="button" onClick={generarCotizacion} className="btn btn-success">
+                        <FileText size={16} /> Cotizar ({seleccionados.length})
+                      </button>
                     )}
+                  </div>
+
+                  {detalleLista.length > 0 ? (
+                    <div className="pg-table-wrap">
+                      <table className="pg-table">
+                        <thead>
+                          <tr>
+                            <th className="center" aria-label="Seleccionar">
+                              <input
+                                type="checkbox"
+                                className="vt-lp-check"
+                                aria-label="Seleccionar todos los productos"
+                                onChange={(e) => {
+                                  if(e.target.checked) setSeleccionados(detalleLista);
+                                  else setSeleccionados([]);
+                                }}
+                                checked={seleccionados.length === detalleLista.length && detalleLista.length > 0}
+                              />
+                            </th>
+                            <th>Producto</th>
+                            <th className="num">Precio estándar</th>
+                            <th className="num">Precio de lista</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detalleLista.map(item => (
+                            <tr key={item.id_producto} className={seleccionados.find(s => s.id_producto === item.id_producto) ? 'is-selected' : ''}>
+                              <td className="center">
+                                <input
+                                  type="checkbox"
+                                  className="vt-lp-check"
+                                  aria-label={`Seleccionar ${item.producto}`}
+                                  checked={!!seleccionados.find(s => s.id_producto === item.id_producto)}
+                                  onChange={() => toggleSeleccion(item)}
+                                />
+                              </td>
+                              <td>
+                                <span className="pg-cell-main">{item.producto}</span>
+                                <span className="pg-cell-sub">{item.codigo}</span>
+                              </td>
+                              <td className="num">
+                                <span className="vt-lp-old">{item.moneda} {parseFloat(item.precio_estandar).toFixed(2)}</span>
+                              </td>
+                              <td className="num">
+                                <span className="vt-lp-price">{item.moneda} {parseFloat(item.precio_especial).toFixed(2)}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="pg-empty">
+                      <Package size={28} />
+                      <strong>Ninguna lista seleccionada</strong>
+                      <span>Selecciona una lista arriba para ver sus precios, o edita una lista para agregar o quitar productos.</span>
+                    </div>
+                  )}
+                </section>
+              </>
+            ) : (
+              <section className="pg-panel">
+                <div className="pg-empty">
+                  <User size={28} />
+                  <strong>Selecciona un cliente</strong>
+                  <span>Podrás ver, crear y editar sus listas de precios.</span>
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-steel/50">
-              <Search size={32} className="text-muted mb-3" />
-              <p className="text-sm font-medium">Seleccione un cliente</p>
-              <p className="text-xs text-muted mt-1">Podrá visualizar, crear y editar sus listas de precios</p>
-            </div>
-          )}
+              </section>
+            )}
+          </div>
         </div>
       </div>
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="xl">
-        <div className="flex flex-col h-[75vh]">
-            <div className="grid grid-cols-2 gap-4 mb-4 shrink-0">
-                <div>
-                    <label className="form-label">Nombre de la Lista</label>
-                    <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ej: Precios 2026, Mayorista..."
-                        value={nuevaLista.nombre_lista}
-                        onChange={(e) => setNuevaLista({...nuevaLista, nombre_lista: e.target.value})}
-                    />
+        <div className="vt-lp-modal">
+          <div className="pg-form-grid">
+            <div className="form-group">
+              <label className="form-label" htmlFor="vt-lp-nombre">Nombre de la lista</label>
+              <input
+                id="vt-lp-nombre"
+                type="text"
+                className="form-input"
+                placeholder="Ej: Precios 2026, Mayorista..."
+                value={nuevaLista.nombre_lista}
+                onChange={(e) => setNuevaLista({...nuevaLista, nombre_lista: e.target.value})}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="vt-lp-moneda">Moneda</label>
+              <select
+                id="vt-lp-moneda"
+                className="form-select"
+                value={nuevaLista.moneda}
+                onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
+              >
+                <option value="PEN">Soles (PEN)</option>
+                <option value="USD">Dólares (USD)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pg-panel vt-lp-modal-table">
+            <div className="vt-lp-modal-tools">
+              <div className="pg-field pg-search">
+                <label className="pg-field-label" htmlFor="vt-lp-producto">Buscar producto</label>
+                <Search size={14} />
+                <input
+                  id="vt-lp-producto"
+                  type="search"
+                  className="form-input"
+                  placeholder="Nombre o código"
+                  value={busquedaProdModal}
+                  onChange={(e) => setBusquedaProdModal(e.target.value)}
+                />
+              </div>
+              <div className="pg-rowactions">
+                <div className="pg-segmented" role="group" aria-label="Productos a mostrar">
+                  <button type="button" className={!mostrarSoloIncluidos ? 'active' : ''} aria-pressed={!mostrarSoloIncluidos} onClick={() => setMostrarSoloIncluidos(false)}>
+                    <Eye size={14} /> Todo el catálogo
+                  </button>
+                  <button type="button" className={mostrarSoloIncluidos ? 'active' : ''} aria-pressed={mostrarSoloIncluidos} onClick={() => setMostrarSoloIncluidos(true)}>
+                    <EyeOff size={14} /> Solo incluidos
+                  </button>
                 </div>
-                <div>
-                    <label className="form-label">Moneda</label>
-                    <select
-                        className="form-input cursor-pointer"
-                        value={nuevaLista.moneda}
-                        onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
-                    >
-                        <option value="PEN">Soles (PEN)</option>
-                        <option value="USD">Dólares (USD)</option>
-                    </select>
-                </div>
+                <span className="pg-count">{totalIncluidos} productos</span>
+              </div>
             </div>
 
-            <div className="flex-1 card flex flex-col min-h-0 overflow-hidden">
-                <div className="card-header flex justify-between items-center p-3 shrink-0">
-                    <div className="search-input-wrapper w-1/2">
-                        <Search size={16} className="search-icon" />
-                        <input
-                            type="text"
-                            className="form-input search-input"
-                            placeholder="Buscar producto por nombre o código..."
-                            value={busquedaProdModal}
-                            onChange={(e) => setBusquedaProdModal(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            className={`btn btn-sm ${mostrarSoloIncluidos ? 'btn-primary' : 'btn-outline'}`}
-                            onClick={() => setMostrarSoloIncluidos(!mostrarSoloIncluidos)}
-                        >
-                            {mostrarSoloIncluidos ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {mostrarSoloIncluidos ? 'Todo el catálogo' : 'Solo incluidos'}
-                        </button>
-                        <span className="badge badge-primary">
-                            {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
-                        </span>
-                    </div>
-                </div>
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th className="center">Incluir</th>
+                    <th>Producto</th>
+                    <th className="num">Precio ref.</th>
+                    <th className="num">Precio especial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productosFiltradosModal.length === 0 ? (
+                    <tr>
+                      <td colSpan="4">
+                        <div className="pg-empty">
+                          <Package size={24} />
+                          <span>No se encontraron productos</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : productosFiltradosModal.map(p => {
+                    const precioRef = parseFloat((nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
+                    const isSelected = nuevaLista.items[p.id_producto] !== undefined;
 
-                <div className="overflow-y-auto flex-1 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
-                    <table className="table w-full">
-                        <thead className="sticky top-0 z-10">
-                            <tr>
-                                <th className="w-16 text-center">Incluir</th>
-                                <th>Producto</th>
-                                <th className="text-right w-32">Precio Ref.</th>
-                                <th className="text-right w-48">Precio Especial</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {productosFiltradosModal.length === 0 ? (
-                              <tr>
-                                <td colSpan="4" className="text-center py-8">
-                                  <p className="text-muted text-sm">No se encontraron productos</p>
-                                </td>
-                              </tr>
-                            ) : productosFiltradosModal.map(p => {
-                                const precioRef = parseFloat((nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
-                                const isSelected = nuevaLista.items[p.id_producto] !== undefined;
-
-                                return (
-                                <tr key={p.id_producto} className={isSelected ? 'bg-primary/10' : ''}>
-                                    <td className="text-center align-middle">
-                                        <input
-                                            type="checkbox"
-                                            className="w-4 h-4 rounded accent-primary cursor-pointer"
-                                            checked={isSelected}
-                                            onChange={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
-                                        />
-                                    </td>
-                                    <td>
-                                        <div className={`font-medium text-sm ${isSelected ? '' : 'text-muted'}`}>{p.nombre}</div>
-                                        <div className="text-xs text-muted font-mono mt-0.5">{p.codigo}</div>
-                                    </td>
-                                    <td className="text-right text-xs text-muted align-middle">
-                                        {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {precioRef}
-                                    </td>
-                                    <td className="text-right align-middle p-2">
-                                        <div className="relative flex items-center">
-                                            <span className={`absolute left-3 text-sm select-none ${isSelected ? 'text-primary' : 'text-muted'}`}>
-                                                {nuevaLista.moneda === 'PEN' ? 'S/' : '$'}
-                                            </span>
-                                            <input
-                                                type="number"
-                                                className={`form-input w-full text-right pl-8 h-10 ${isSelected ? 'border-primary font-bold text-primary' : 'opacity-50'}`}
-                                                placeholder="0.00"
-                                                disabled={!isSelected}
-                                                value={isSelected ? nuevaLista.items[p.id_producto] : ''}
-                                                onChange={(e) => handlePrecioChange(p.id_producto, e.target.value)}
-                                            />
-                                        </div>
-                                    </td>
-                                </tr>
-                            )})}
-                        </tbody>
-                    </table>
-                </div>
+                    return (
+                      <tr key={p.id_producto} className={isSelected ? 'is-selected' : ''}>
+                        <td className="center">
+                          <input
+                            type="checkbox"
+                            className="vt-lp-check"
+                            aria-label={`Incluir ${p.nombre}`}
+                            checked={isSelected}
+                            onChange={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
+                          />
+                        </td>
+                        <td>
+                          <span className={`pg-cell-main ${isSelected ? '' : 'pg-muted'}`}>{p.nombre}</span>
+                          <span className="pg-cell-sub">{p.codigo}</span>
+                        </td>
+                        <td className="num pg-muted">
+                          {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {precioRef}
+                        </td>
+                        <td className="num">
+                          <div className={`vt-money-input ${isSelected ? 'is-on' : ''}`}>
+                            <span>{nuevaLista.moneda === 'PEN' ? 'S/' : '$'}</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              placeholder="0.00"
+                              aria-label={`Precio especial de ${p.nombre}`}
+                              disabled={!isSelected}
+                              value={isSelected ? nuevaLista.items[p.id_producto] : ''}
+                              onChange={(e) => handlePrecioChange(p.id_producto, e.target.value)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          </div>
 
-            <div className="mt-4 flex justify-end gap-3 shrink-0">
-                <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
-                <button className="btn btn-primary flex items-center gap-2" onClick={guardarLista} disabled={loading}>
-                    {loading ? <Loading size="sm" /> : <Save size={18} />}
-                    {modoEdicion ? 'Actualizar Lista' : 'Guardar Lista'}
-                </button>
-            </div>
+          <div className="vt-lp-modal-foot">
+            <button type="button" className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" onClick={guardarLista} disabled={loading}>
+              {loading ? <Loading size="sm" /> : <Save size={18} />}
+              {modoEdicion ? 'Actualizar Lista' : 'Guardar Lista'}
+            </button>
+          </div>
         </div>
       </Modal>
 
       <Modal isOpen={historialModalOpen} onClose={() => setHistorialModalOpen(false)} title="Historial de Cambios de Precios" size="xl">
-        <div>
-          <div className="flex flex-wrap gap-x-8 gap-y-2 mb-4">
-            <div>
-              <p className="text-xs text-muted">Cliente</p>
-              <p className="font-medium text-sm">{clienteSel?.razon_social || historialData[0]?.cliente || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">Lista</p>
-              <p className="font-medium text-sm">{historialLista?.nombre_lista || '—'}</p>
-            </div>
+        <div className="pg-stack">
+          <div className="pg-kv">
+            <div><span>Cliente</span><strong>{clienteSel?.razon_social || historialData[0]?.cliente || '—'}</strong></div>
+            <div><span>Lista</span><strong>{historialLista?.nombre_lista || '—'}</strong></div>
           </div>
 
-          <div className="card max-h-[60vh] overflow-y-auto scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
-            <div className="card-body p-0">
-              <div className="table-container">
-                <table className="table w-full">
-                  <thead className="sticky top-0 z-10">
+          <div className="pg-panel">
+            <div className="pg-table-wrap vt-lp-historial">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Producto</th>
+                    <th className="num">Precio anterior</th>
+                    <th className="num">Precio nuevo</th>
+                    <th className="num">Variación</th>
+                    <th>Editó</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historialData.length === 0 ? (
                     <tr>
-                      <th>Fecha</th>
-                      <th>Producto</th>
-                      <th className="text-right">Precio Anterior</th>
-                      <th className="text-right">Precio Nuevo</th>
-                      <th className="text-right">Variación</th>
-                      <th>Editó</th>
+                      <td colSpan="6">
+                        <div className="pg-empty">
+                          <History size={24} />
+                          <span>Esta lista no tiene cambios de precio registrados</span>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {historialData.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="text-center py-10">
-                          <p className="text-muted text-sm">Esta lista no tiene cambios de precio registrados</p>
+                  ) : historialData.map(h => {
+                    const anterior = fmtPrecio(h.precio_anterior, h.moneda);
+                    const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
+                    const variacion = calcVariacion(h.precio_anterior, h.precio_nuevo, h.moneda);
+                    return (
+                      <tr key={h.id_historial}>
+                        <td className="nowrap">{fmtFecha(h.fecha)}</td>
+                        <td>
+                          <span className="pg-cell-main">{h.producto}</span>
+                          <span className="pg-cell-sub">{h.codigo}</span>
+                        </td>
+                        <td className="num">
+                          {anterior
+                            ? <span className="vt-lp-old">{anterior}</span>
+                            : <span className="badge badge-sm badge-success"><Plus size={10} />Alta</span>}
+                        </td>
+                        <td className="num">
+                          {nuevo
+                            ? <span className="vt-lp-price">{nuevo}</span>
+                            : <span className="badge badge-sm badge-danger"><Trash2 size={10} />Retirado</span>}
+                        </td>
+                        <td className="num">
+                          {variacion
+                            ? <span className={variacion.delta > 0 ? 'vt-delta-up' : variacion.delta < 0 ? 'vt-delta-down' : 'pg-muted'}>
+                                {variacion.monto}
+                                {variacion.pct && <span className="pg-cell-sub">{variacion.pct}</span>}
+                              </span>
+                            : <span className="pg-muted">—</span>}
+                        </td>
+                        <td>
+                          {h.empleado
+                            ? <span className="pg-muted">{h.empleado}</span>
+                            : <span className="badge badge-sm badge-warning" title="Cambio hecho directamente en la base de datos, fuera del sistema"><AlertTriangle size={10} />Cambio directo en BD</span>}
                         </td>
                       </tr>
-                    ) : historialData.map(h => {
-                      const anterior = fmtPrecio(h.precio_anterior, h.moneda);
-                      const nuevo = fmtPrecio(h.precio_nuevo, h.moneda);
-                      const variacion = calcVariacion(h.precio_anterior, h.precio_nuevo, h.moneda);
-                      return (
-                        <tr key={h.id_historial}>
-                          <td className="text-xs font-mono align-middle whitespace-nowrap">{fmtFecha(h.fecha)}</td>
-                          <td className="align-middle">
-                            <p className="font-medium text-sm">{h.producto}</p>
-                            <p className="text-xs text-muted font-mono mt-0.5">{h.codigo}</p>
-                          </td>
-                          <td className="text-right align-middle">
-                            {anterior
-                              ? <span className="text-muted line-through text-xs">{anterior}</span>
-                              : <span className="badge badge-sm badge-success">Alta</span>}
-                          </td>
-                          <td className="text-right align-middle">
-                            {nuevo
-                              ? <span className="font-bold text-primary text-sm">{nuevo}</span>
-                              : <span className="badge badge-sm badge-danger">Retirado</span>}
-                          </td>
-                          <td className="text-right align-middle whitespace-nowrap">
-                            {variacion
-                              ? <span className={`font-mono text-xs font-bold ${variacion.delta > 0 ? 'text-success' : variacion.delta < 0 ? 'text-danger' : 'text-muted'}`}>
-                                  {variacion.monto}
-                                  {variacion.pct && <span className="block text-[10px] opacity-80">{variacion.pct}</span>}
-                                </span>
-                              : <span className="text-muted text-xs">—</span>}
-                          </td>
-                          <td className="text-xs align-middle">
-                            {h.empleado
-                              ? <span className="text-muted">{h.empleado}</span>
-                              : <span className="badge badge-sm badge-warning" title="Cambio hecho directamente en la base de datos, fuera del sistema">Cambio directo en BD</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

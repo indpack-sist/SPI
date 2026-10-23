@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Pencil, Trash2, Package, Copy, Star, Clock, CheckCircle, XCircle, History, Factory,
-  AlertTriangle, Info, Coins, Boxes, ShoppingCart, ShieldAlert, FileText, FileSpreadsheet, BookOpen,
+  AlertTriangle, Info, Boxes, ShoppingCart, ShieldAlert, FileText, FileSpreadsheet, BookOpen,
   ChevronRight, CalendarDays, PackageCheck, TrendingUp, TrendingDown, Loader, Layers
 } from 'lucide-react';
 import { productosAPI, inventarioAPI, incidenciasAPI } from '../../config/api';
@@ -84,8 +84,6 @@ function ProductoDetalle() {
   const [modalInsumoOpen, setModalInsumoOpen] = useState(false);
   const [editandoReceta, setEditandoReceta] = useState(null);
   const [editandoInsumo, setEditandoInsumo] = useState(null);
-  const [cupCalculado, setCupCalculado] = useState(null);
-  const [evolucionCUP, setEvolucionCUP] = useState(null);
   const [repDesde, setRepDesde] = useState('');
   const [repHasta, setRepHasta] = useState('');
   const [generando, setGenerando] = useState('');
@@ -146,32 +144,10 @@ function ProductoDetalle() {
         setRecetaSeleccionada(null);
         setDetalleReceta([]);
       }
-
-      if (verPrecios) {
-        await Promise.all([calcularCUPDesdeReceta(), cargarEvolucionCUP()]);
-      }
     } catch (err) {
       setError(err.error || 'Error al cargar datos del producto');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const cargarEvolucionCUP = async () => {
-    try {
-      const response = await productosAPI.getEvolucionCUP(id);
-      if (response.data.success) setEvolucionCUP(response.data);
-    } catch {
-      setEvolucionCUP(null);
-    }
-  };
-
-  const calcularCUPDesdeReceta = async () => {
-    try {
-      const response = await productosAPI.calcularCUPDesdeReceta(id);
-      if (response.data.success) setCupCalculado(response.data);
-    } catch {
-      setCupCalculado(null);
     }
   };
 
@@ -431,8 +407,6 @@ function ProductoDetalle() {
   const resumen = compromisos.resumen;
   const pendienteOV = num(resumen?.pendiente_ov);
   const disponible = num(producto.stock_actual) - pendienteOV;
-  const cupVigente = cupCalculado?.cup_calculado || num(producto.costo_unitario_promedio);
-  const precioVenta = num(producto.precio_venta);
   const vendible = esTipoVendible(producto.tipo_inventario);
   const opsActivas = compromisos.data?.produccion || [];
   const opsConsumo = compromisos.data?.consumo || [];
@@ -440,7 +414,7 @@ function ProductoDetalle() {
   const incidenciasAbiertas = incidencias.data.filter(i => !['Cerrada', 'Anulada'].includes(i.estado));
   const costoTotalReceta = detalleReceta.reduce((sum, item) => sum + num(item.costo_total_insumo), 0);
   const columnasMov = 6 + (verPrecios ? 2 : 0);
-  const columnasInsumos = 5 + (verPrecios ? 2 : 0);
+  const columnasInsumos = 5 + (verPrecios ? 1 : 0);
 
   const enlace = (tienePermisoRuta, ruta, etiqueta) => (tienePermisoRuta ? (
     <button type="button" className="pg-iconbtn" title={`Abrir ${etiqueta}`} aria-label={`Abrir ${etiqueta}`} onClick={() => navigate(ruta)}>
@@ -538,67 +512,11 @@ function ProductoDetalle() {
                   <div><span>Peso unitario</span><strong>{fmtPeso(producto.peso_unitario)}</strong></div>
                   <div><span>Receta principal</span><strong>{producto.receta_principal || (producto.requiere_receta ? 'Sin definir' : 'No requiere')}</strong></div>
                   <div><span>Estado</span><strong>{producto.estado}</strong></div>
+                  {verPrecios && vendible && <div><span>Precio de venta</span><strong>{fmtMonto(producto.precio_venta)}</strong></div>}
                   {producto.descripcion && <div className="wide"><span>Descripción</span><strong>{producto.descripcion}</strong></div>}
                 </div>
               </div>
             </section>
-
-            {verPrecios && (
-              <section className="pg-panel">
-                <div className="pg-panel-head">
-                  <h2 className="pg-panel-title"><Coins size={16} /> Costos y precio</h2>
-                  {cupCalculado?.origen && (
-                    <span className="pg-panel-meta">
-                      {cupCalculado.origen === 'promedio_ponderado'
-                        ? `CUP teórico de ${cupCalculado.detalle?.total_producciones || 0} producciones`
-                        : `CUP teórico de la receta "${cupCalculado.receta_usada}"`}
-                    </span>
-                  )}
-                </div>
-                <div className="pg-panel-body pg-stack">
-                  <div className="pg-kv">
-                    <div><span>CUP inventario · soles</span><strong>{fmtCosto(producto.costo_unitario_promedio)}</strong></div>
-                    <div><span>CUP inventario · dólares</span><strong>{fmtCosto(producto.costo_unitario_promedio_usd, 'USD')}</strong></div>
-                    <div><span>CUP teórico</span><strong>{cupCalculado?.cup_calculado > 0 ? fmtCosto(cupCalculado.cup_calculado) : 'Sin cálculo disponible'}</strong></div>
-                    <div><span>Valor en stock</span><strong>{fmtMonto(Math.max(num(producto.stock_actual), 0) * cupVigente)}</strong></div>
-                    {vendible && <div><span>Precio de venta</span><strong>{fmtMonto(precioVenta)}</strong></div>}
-                    {vendible && (
-                      <div>
-                        <span>Margen bruto</span>
-                        <strong>{cupCalculado?.cup_calculado > 0 && precioVenta > 0
-                          ? `${(((precioVenta - cupCalculado.cup_calculado) / precioVenta) * 100).toFixed(2)} %`
-                          : '—'}</strong>
-                      </div>
-                    )}
-                  </div>
-                  {cupCalculado?.origen === 'promedio_ponderado' && evolucionCUP?.evolucion?.length > 0 && (
-                    <div>
-                      <h3 className="pg-section-title"><History size={14} /> Histórico de costos</h3>
-                      <div className="pg-table-wrap">
-                        <table className="pg-table" data-mobile-table="scroll">
-                          <thead>
-                            <tr>
-                              <th>Fecha</th>
-                              <th className="num">Cantidad</th>
-                              <th className="num">CUP</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {evolucionCUP.evolucion.slice(0, 5).map((item, idx) => (
-                              <tr key={idx}>
-                                <td>{fmtFecha(item.fecha)}</td>
-                                <td className="num">{fmtCantidad(item.cantidad)}</td>
-                                <td className="num">{fmtCosto(item.cup_produccion)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
 
             <section className="pg-panel">
               <div className="pg-panel-head">
@@ -949,12 +867,6 @@ function ProductoDetalle() {
                     <div><span>Tiempo de producción</span><strong><Clock size={12} className="pr-inline-icon" />{recetaSeleccionada.tiempo_produccion_minutos || 0} min</strong></div>
                     <div><span>Insumos</span><strong>{detalleReceta.length}</strong></div>
                     {verPrecios && <div><span>Costo materiales</span><strong>{fmtMonto(costoTotalReceta)}</strong></div>}
-                    {verPrecios && (
-                      <div>
-                        <span>Costo por {unidad}</span>
-                        <strong>{fmtCosto(costoTotalReceta / (num(recetaSeleccionada.rendimiento_unidades) || 1))}</strong>
-                      </div>
-                    )}
                   </div>
 
                   <div className="pr-subhead">
@@ -971,7 +883,6 @@ function ProductoDetalle() {
                           <th className="center">#</th>
                           <th>Insumo / material</th>
                           <th className="num">Cantidad</th>
-                          {verPrecios && <th className="num">CUP</th>}
                           {verPrecios && <th className="num">Costo total</th>}
                           <th className="num">Stock disponible</th>
                           <th className="center">Acciones</th>
@@ -1009,9 +920,6 @@ function ProductoDetalle() {
                                 )}
                               </td>
                               <td className="num">{fmtCantidad(item.cantidad_requerida)} <span className="pg-muted">{item.unidad_medida}</span></td>
-                              {verPrecios && (
-                                <td className="num">{num(item.costo_unitario_promedio) > 0 ? fmtCosto(item.costo_unitario_promedio) : <span className="pg-muted">Sin CUP</span>}</td>
-                              )}
                               {verPrecios && <td className="num">{fmtMonto(item.costo_total_insumo)}</td>}
                               <td className="num">
                                 <span className={`pr-qty ${suficiente ? 'is-in' : 'is-out'}`}>{fmtCantidad(stock)} {item.unidad_medida}</span>

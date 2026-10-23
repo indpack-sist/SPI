@@ -2,13 +2,10 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Loader, ClipboardCheck } from 'lucide-react';
 import Modal from '../UI/Modal';
 import { api } from '../../config/api';
-import { usePermisos } from '../../context/PermisosContext';
-import { fmtCantidad, fmtCosto } from '../../pages/Productos/estadosProductos';
+import { fmtCantidad } from '../../pages/Productos/estadosProductos';
 import '../../pages/Productos/Productos.css';
 
 function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
-  const { tienePermiso } = usePermisos();
-  const verPrecios = tienePermiso('verPrecios');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [motivos, setMotivos] = useState([]);
@@ -132,9 +129,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
   if (!producto) return null;
 
   const stockSistema = parseFloat(producto.stock_actual || 0);
-  const valorAjuste = diferencia && producto.costo_unitario_promedio 
-    ? Math.abs(diferencia) * parseFloat(producto.costo_unitario_promedio)
-    : 0;
 
   const unidad = producto.unidad_medida;
   const hayDiferencia = diferencia !== null && diferencia !== 0;
@@ -150,7 +144,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
           </div>
           <div className="pg-kv pr-kv-flat">
             <div><span>Stock en sistema</span><strong>{fmtCantidad(stockSistema)} {unidad}</strong></div>
-            {verPrecios && <div><span>CUP</span><strong>{fmtCosto(producto.costo_unitario_promedio)}</strong></div>}
           </div>
         </div>
 
@@ -184,7 +177,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
             </div>
             <div className="pg-kv pr-kv-flat">
               <div><span>Diferencia</span><strong className={`pr-qty ${esSobrante ? 'is-in' : 'is-out'}`}>{diferencia > 0 ? '+' : '−'}{fmtCantidad(Math.abs(diferencia), 2)} {unidad}</strong></div>
-              {verPrecios && <div><span>Valor del ajuste</span><strong>{fmtCosto(valorAjuste)}</strong></div>}
               <div><span>Stock nuevo</span><strong>{fmtCantidad(formData.stock_fisico, 2)} {unidad}</strong></div>
             </div>
           </div>

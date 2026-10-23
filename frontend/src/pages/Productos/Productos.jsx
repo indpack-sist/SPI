@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Pencil, Trash2, Search, Eye, ClipboardCheck, RefreshCw, X, Package, Boxes, AlertTriangle,
-  Coins, Tag, BookOpen, Ruler, Info, ExternalLink
+  BookOpen, Ruler, Info, ExternalLink
 } from 'lucide-react';
 import { productosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
@@ -18,7 +18,7 @@ import { fmtMonto, incluye } from '../Maestros/formatoMaestros';
 import { useResetPagina } from '../Maestros/useResetPagina';
 import {
   ESTADOS_STOCK, ORDEN_ESTADOS_STOCK, estadoStock, BadgeEstadoStock, MedidorStock,
-  fmtCantidad, fmtCosto, fmtPeso, esTipoVendible
+  fmtCantidad, fmtPeso, esTipoVendible
 } from './estadosProductos';
 import './Productos.css';
 
@@ -231,10 +231,6 @@ function Productos() {
     return acc;
   }, {});
   const enAlerta = (conteoEstados.sin || 0) + (conteoEstados.bajo || 0);
-  const valorCosto = activos.reduce((s, p) => s + Math.max(num(p.valor_inventario), 0), 0);
-  const valorVenta = activos
-    .filter(p => esTipoVendible(p.tipo_inventario))
-    .reduce((s, p) => s + Math.max(num(p.stock_actual), 0) * num(p.precio_venta), 0);
   const conteoTipos = tiposInventario.map(t => ({
     ...t,
     total: productos.filter(p => String(p.id_tipo_inventario) === String(t.id_tipo_inventario)).length
@@ -243,13 +239,10 @@ function Productos() {
   const nombreTipo = (id) => tiposInventario.find(t => String(t.id_tipo_inventario) === String(id))?.nombre;
   const mostrarPrecioVenta = verPrecios && esTipoVendible(nombreTipo(formData.id_tipo_inventario));
 
-  const columnas = 9 + (verPrecios ? 2 : 0);
+  const columnas = 9 + (verPrecios ? 1 : 0);
 
   const renderDrawer = () => {
     const p = detalle;
-    const cup = num(p.costo_unitario_promedio);
-    const precio = num(p.precio_venta);
-    const margen = cup > 0 && precio > 0 ? ((precio - cup) / precio) * 100 : null;
     return (
       <PgDrawer
         eyebrow={<><Package size={12} /> {p.tipo_inventario}</>}
@@ -300,26 +293,12 @@ function Productos() {
             <div><span>Unidad SUNAT</span><strong>{p.codigo_unidad_sunat || 'Sin código'}</strong></div>
             <div><span>Peso unitario</span><strong>{fmtPeso(p.peso_unitario)}</strong></div>
             <div><span>Receta (BOM)</span><strong>{p.requiere_receta ? 'Requiere receta' : 'No requiere'}</strong></div>
+            {verPrecios && esTipoVendible(p.tipo_inventario) && (
+              <div><span>Precio de venta</span><strong>{fmtMonto(p.precio_venta)}</strong></div>
+            )}
             {p.descripcion && <div className="wide"><span>Descripción</span><strong>{p.descripcion}</strong></div>}
           </div>
         </section>
-
-        {verPrecios && (
-          <section>
-            <h3 className="pg-section-title"><Coins size={14} /> Costos y precio</h3>
-            <div className="pg-kv">
-              <div><span>CUP soles</span><strong>{fmtCosto(p.costo_unitario_promedio)}</strong></div>
-              <div><span>CUP dólares</span><strong>{fmtCosto(p.costo_unitario_promedio_usd, 'USD')}</strong></div>
-              <div><span>Valor en stock</span><strong>{fmtMonto(Math.max(num(p.valor_inventario), 0))}</strong></div>
-              {esTipoVendible(p.tipo_inventario) && (
-                <>
-                  <div><span>Precio de venta</span><strong>{fmtMonto(precio)}</strong></div>
-                  <div><span>Margen bruto</span><strong>{margen !== null ? `${margen.toFixed(1)} %` : '—'}</strong></div>
-                </>
-              )}
-            </div>
-          </section>
-        )}
       </PgDrawer>
     );
   };
@@ -372,36 +351,15 @@ function Productos() {
             </span>
           </button>
 
-          {verPrecios ? (
-            <>
-              <div className="pg-kpi is-success">
-                <div className="pg-kpi-top">
-                  <span className="pg-kpi-label">Valorización a costo</span>
-                  <span className="pg-kpi-icon"><Coins size={16} /></span>
-                </div>
-                <span className="pg-kpi-value">{fmtMonto(valorCosto)}</span>
-                <span className="pg-kpi-foot">Stock activo × CUP</span>
-              </div>
-              <div className="pg-kpi is-info">
-                <div className="pg-kpi-top">
-                  <span className="pg-kpi-label">Valorización a venta</span>
-                  <span className="pg-kpi-icon"><Tag size={16} /></span>
-                </div>
-                <span className="pg-kpi-value">{fmtMonto(valorVenta)}</span>
-                <span className="pg-kpi-foot">Terminados y reventa × precio de venta</span>
-              </div>
-            </>
-          ) : (
-            <button type="button" className={`pg-kpi is-info ${filtroStock === 'sobre' ? 'on' : ''}`} aria-pressed={filtroStock === 'sobre'}
-              onClick={() => { setFiltroAlerta(false); setFiltroStock(filtroStock === 'sobre' ? '' : 'sobre'); }}>
-              <div className="pg-kpi-top">
-                <span className="pg-kpi-label">Sobre stock</span>
-                <span className="pg-kpi-icon"><Boxes size={16} /></span>
-              </div>
-              <span className="pg-kpi-value">{conteoEstados.sobre || 0}</span>
-              <span className="pg-kpi-foot">Por encima del máximo definido</span>
-            </button>
-          )}
+          <button type="button" className={`pg-kpi is-info ${filtroStock === 'sobre' ? 'on' : ''}`} aria-pressed={filtroStock === 'sobre'}
+            onClick={() => { setFiltroAlerta(false); setFiltroStock(filtroStock === 'sobre' ? '' : 'sobre'); }}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Sobre stock</span>
+              <span className="pg-kpi-icon"><Boxes size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{conteoEstados.sobre || 0}</span>
+            <span className="pg-kpi-foot">Por encima del máximo definido</span>
+          </button>
         </div>
 
         <section className="pg-panel">
@@ -483,7 +441,6 @@ function Productos() {
                   <th>Stock</th>
                   <th>Estado de stock</th>
                   <th className="num">Peso unit.</th>
-                  {verPrecios && <th className="num">CUP</th>}
                   {verPrecios && <th className="num">Precio venta</th>}
                   <th>Receta</th>
                   <th>Registro</th>
@@ -534,12 +491,6 @@ function Productos() {
                     </td>
                     <td><BadgeEstadoStock producto={p} /></td>
                     <td className="num">{fmtPeso(p.peso_unitario)}</td>
-                    {verPrecios && (
-                      <td className="num">
-                        <span className="pg-money">{fmtCosto(p.costo_unitario_promedio)}</span>
-                        <span className="pg-money pg-muted">{fmtCosto(p.costo_unitario_promedio_usd, 'USD')}</span>
-                      </td>
-                    )}
                     {verPrecios && (
                       <td className="num">{esTipoVendible(p.tipo_inventario) ? fmtMonto(p.precio_venta) : <span className="pg-muted">—</span>}</td>
                     )}

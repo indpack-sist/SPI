@@ -1,19 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  Eye, 
-  Download, 
-  Filter,
+import {
+  Plus,
+  Eye,
+  Download,
   Clock,
   CheckCircle,
-  XCircle,
-  Pause,
   AlertCircle,
   Factory,
-  TrendingUp,
-  Package,
-  Users,
   Calendar,
   Search,
   RefreshCw,
@@ -21,33 +15,45 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  List,
   ShoppingCart,
   UserCog,
   CalendarCheck,
+  CalendarDays,
   Moon,
   Sun,
   ShieldCheck,
-  Paperclip
+  Paperclip,
+  PauseCircle,
+  Users,
+  X
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
-import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { BadgeEstadoProduccion, BadgePrioridad } from './estadosProduccion';
+import './Produccion.css';
 
 const fmtUnid = (valor) => String(parseFloat(parseFloat(valor || 0).toFixed(2)));
+
+const KPIS_ESTADO = [
+  { estado: 'Pendiente Asignación', label: 'Por asignar', tono: 'is-warning', icon: AlertCircle },
+  { estado: 'Pendiente', label: 'Pendientes', tono: '', icon: Clock },
+  { estado: 'En Curso', label: 'En curso', tono: 'is-accent', icon: Factory },
+  { estado: 'En Pausa', label: 'En pausa', tono: 'is-info', icon: PauseCircle },
+  { estado: 'Finalizada', label: 'Finalizadas', tono: 'is-success', icon: CheckCircle }
+];
 
 function OrdenesProduccion() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [ordenes, setOrdenes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
+
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('');
   const [filtroProgramadasHoy, setFiltroProgramadasHoy] = useState(false);
@@ -62,7 +68,7 @@ function OrdenesProduccion() {
 
   useEffect(() => {
     cargarDatos({ silencioso: ordenes.length > 0 });
-  }, [filtroEstado, filtroOrigen, fechaInicio, fechaFin]);
+  }, [filtroOrigen, fechaInicio, fechaFin]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -78,7 +84,6 @@ function OrdenesProduccion() {
       setError(null);
 
       const params = {};
-      if (filtroEstado) params.estado = filtroEstado;
       if (filtroOrigen) params.origen_tipo = filtroOrigen;
       if (fechaInicio) params.fecha_inicio = fechaInicio;
       if (fechaFin) params.fecha_fin = fechaFin;
@@ -94,48 +99,41 @@ function OrdenesProduccion() {
     }
   };
 
+  const esProgramadaParaHoy = (orden) => {
+    if (!orden.fecha_programada) return false;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const inicio = new Date(orden.fecha_programada);
+    inicio.setHours(0, 0, 0, 0);
+
+    const fin = orden.fecha_programada_fin ? new Date(orden.fecha_programada_fin) : new Date(orden.fecha_programada);
+    fin.setHours(0, 0, 0, 0);
+
+    return hoy >= inicio && hoy <= fin;
+  };
+
   const calcularEstadisticas = () => {
+    const porEstado = KPIS_ESTADO.reduce((acc, k) => ({ ...acc, [k.estado]: 0 }), {});
+    ordenes.forEach(o => {
+      if (porEstado[o.estado] !== undefined) porEstado[o.estado] += 1;
+    });
     const total = ordenes.length;
-    const pendientes = ordenes.filter(o => o.estado === 'Pendiente').length;
-    const pendientesAsignacion = ordenes.filter(o => o.estado === 'Pendiente Asignación').length;
-    const enCurso = ordenes.filter(o => o.estado === 'En Curso').length;
-    const finalizadas = ordenes.filter(o => o.estado === 'Finalizada').length;
-    const canceladas = ordenes.filter(o => o.estado === 'Cancelada').length;
-    
-    const desdeVentas = ordenes.filter(o => o.origen_tipo === 'Orden de Venta').length;
-    const desdeSupervisor = ordenes.filter(o => o.origen_tipo === 'Supervisor' || !o.origen_tipo).length;
-    
-    const costoTotal = ordenes.reduce((sum, o) => sum + parseFloat(o.costo_materiales || 0), 0);
-    const cantidadTotal = ordenes.reduce((sum, o) => sum + parseFloat(o.cantidad_planificada || 0), 0);
-    const productosDiferentes = new Set(ordenes.map(o => o.id_producto_terminado)).size;
-    
     return {
-      total, pendientes, pendientesAsignacion, enCurso, finalizadas, canceladas,
-      desdeVentas, desdeSupervisor,
-      costoTotal, cantidadTotal, productosDiferentes,
-      porcentajeCompletado: total > 0 ? ((finalizadas / total) * 100).toFixed(1) : 0
+      total,
+      porEstado,
+      programadasHoy: ordenes.filter(esProgramadaParaHoy).length,
+      desdeVentas: ordenes.filter(o => o.origen_tipo === 'Orden de Venta').length,
+      desdeSupervisor: ordenes.filter(o => o.origen_tipo === 'Supervisor' || !o.origen_tipo).length,
+      productosDiferentes: new Set(ordenes.map(o => o.id_producto_terminado)).size,
+      porcentajeCompletado: total > 0 ? ((porEstado.Finalizada / total) * 100).toFixed(1) : '0.0'
     };
   };
 
-  const esProgramadaParaHoy = (orden) => {
-    if (!orden.fecha_programada) return false;
-    
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
-    const fechaInicio = new Date(orden.fecha_programada);
-    fechaInicio.setHours(0, 0, 0, 0);
-    
-    const fechaFin = orden.fecha_programada_fin ? new Date(orden.fecha_programada_fin) : new Date(orden.fecha_programada);
-    fechaFin.setHours(0, 0, 0, 0);
-    
-    return hoy >= fechaInicio && hoy <= fechaFin;
-  };
-
   const ordenesFiltradas = ordenes.filter(orden => {
-    if (filtroProgramadasHoy && !esProgramadaParaHoy(orden)) {
-        return false;
-    }
+    if (filtroEstado && orden.estado !== filtroEstado) return false;
+    if (filtroProgramadasHoy && !esProgramadaParaHoy(orden)) return false;
 
     if (!busqueda) return true;
     const searchTerm = busqueda.toLowerCase();
@@ -152,22 +150,13 @@ function OrdenesProduccion() {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
-  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
-  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+  const totalPages = Math.max(1, Math.ceil(ordenesFiltradas.length / itemsPerPage));
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
 
     if (fecha.includes('T') || (fecha.includes(' ') && fecha.includes(':'))) {
-      return new Date(fecha).toLocaleString('es-PE', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
+      return new Date(fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
     const partes = fecha.split(' ')[0].split('-');
@@ -175,58 +164,27 @@ function OrdenesProduccion() {
       const [year, month, day] = partes;
       return `${day}/${month}/${year}`;
     }
-    
+
     return fecha;
   };
 
-  const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'PEN' }).format(valor || 0);
-  };
-
-  const getEstadoConfig = (estado) => {
-    const configs = {
-      'Pendiente Asignación': { icono: AlertCircle, color: 'text-warning', bg: 'badge-warning', texto: 'Pend. Asignación' },
-      'Pendiente': { icono: Clock, color: 'text-warning', bg: 'badge-warning', texto: 'Pendiente' },
-      'En Curso': { icono: Factory, color: 'text-primary', bg: 'badge-primary', texto: 'En Curso' },
-      'En Pausa': { icono: Pause, color: 'text-info', bg: 'badge-info', texto: 'En Pausa' },
-      'Finalizada': { icono: CheckCircle, color: 'text-success', bg: 'badge-success', texto: 'Finalizada' },
-      'Cancelada': { icono: XCircle, color: 'text-danger', bg: 'badge-danger', texto: 'Cancelada' },
-      'Anulada': { icono: XCircle, color: 'text-danger', bg: 'badge-danger', texto: 'Anulada' }
-    };
-    return configs[estado] || configs['Pendiente'];
-  };
-
-  const getPrioridadBadge = (prioridad) => {
-    if (!prioridad) return '';
-    const p = prioridad.toLowerCase();
-    if (p === 'urgente') return 'badge-error animate-pulse';
-    if (p === 'alta') return 'badge-error';
-    if (p === 'media') return 'badge-warning';
-    return 'badge-success';
-  };
-
-  const handleNuevaOrden = () => navigate('/produccion/ordenes/nueva');
-  const handleVerDetalle = (id) => navigate(`/produccion/ordenes/${id}`);
-  
   const parseVerificacionCalidad = (observaciones) => {
     if (!observaciones || !observaciones.includes('[VERIFICACIÓN CALIDAD]')) return null;
-    
-    try {
-      const regex = /Verificado por:\s*(.*?)\s*el\s*(.*)/i;
-      const match = observaciones.match(regex);
-      
-      if (match && match[1]) {
-        return { 
-          nombre: match[1].trim(), 
-          fecha: match[2] ? match[2].trim() : '' 
-        };
-      }
 
+    try {
+      const match = observaciones.match(/Verificado por:\s*(.*?)\s*el\s*(.*)/i);
+      if (match && match[1]) {
+        return { nombre: match[1].trim(), fecha: match[2] ? match[2].trim() : '' };
+      }
       return { nombre: 'Verificado', fecha: '' };
     } catch (e) {
       return { nombre: 'Verificado', fecha: '' };
     }
   };
+
+  const limpiarObservaciones = (valor) => (
+    valor ? valor.replace(/\[VERIFICACIÓN CALIDAD\].*?(?:\n|$)/gi, '').trim() : ''
+  );
 
   const handleDescargarPDF = async (id) => {
     try {
@@ -238,555 +196,319 @@ function OrdenesProduccion() {
     }
   };
 
+  const hayFiltros = filtroEstado || filtroOrigen || filtroProgramadasHoy || busqueda || fechaInicio || fechaFin;
+
   const limpiarFiltros = () => {
-    setFiltroEstado(''); 
+    setFiltroEstado('');
     setFiltroOrigen('');
     setFiltroProgramadasHoy(false);
-    setBusqueda(''); 
-    setFechaInicio(''); 
+    setBusqueda('');
+    setFechaInicio('');
     setFechaFin('');
   };
 
-  const columns = [
-    {
-      header: 'N° Orden',
-      accessor: 'numero_orden',
-      width: '150px',
-      render: (value, row) => (
-        <div>
-          <span className="font-mono font-bold text-primary">{value}</span>
-          {row.numero_orden_venta && (
-            <div className="flex flex-col mt-1 gap-1">
-              <div className="text-xs text-muted flex items-center gap-1">
-                <ShoppingCart size={10} />
-                De: {row.numero_orden_venta}
-              </div>
-              {row.prioridad_venta && (
-                <span className={`badge ${getPrioridadBadge(row.prioridad_venta)} badge-xs w-fit`}>
-                  {row.prioridad_venta}
-                </span>
-              )}
-            </div>
-          )}
-          {row.es_manual === 1 && (
-            <div className="badge badge-warning text-xs mt-1">Manual</div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Producto',
-      accessor: 'producto',
-      render: (value, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="font-medium text-sm">{value}</div>
-          <div className="text-xs text-muted font-mono">{row.codigo_producto}</div>
-          {row.nombre_receta && (
-            <div className="flex items-center gap-1 text-xs text-info bg-info-light px-2 py-0.5 rounded w-fit">
-              <ClipboardList size={12} />
-              <span className="font-medium">{row.nombre_receta}</span>
-            </div>
-          )}
-          {row.producto_eliminado === 1 && (
-            <div className="flex items-center gap-1 badge badge-danger text-xs w-fit">
-              <AlertTriangle size={12} />
-              <span>Producto Eliminado</span>
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Origen',
-      accessor: 'origen_tipo',
-      width: '110px',
-      align: 'center',
-      render: (value) => {
-        if (value === 'Orden de Venta') {
-          return (
-            <span className="badge badge-info flex items-center gap-1 justify-center">
-              <ShoppingCart size={12} />
-              Venta
-            </span>
-          );
-        }
-        return (
-          <span className="badge badge-secondary flex items-center gap-1 justify-center">
-            <UserCog size={12} />
-            Interno
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Progreso (Kg / Und)',
-      accessor: 'cantidad_planificada',
-      align: 'left',
-      width: '240px',
-      render: (value, row) => {
-        const metaKg = parseFloat(row.cantidad_planificada || 0);
-        const realKg = parseFloat(row.cantidad_producida || 0);
-        let pctKg = 0;
-        if (metaKg > 0) pctKg = (realKg / metaKg) * 100;
-        else if (realKg > 0) pctKg = 100;
+  const renderProgreso = (row) => {
+    const metaKg = parseFloat(row.cantidad_planificada || 0);
+    const realKg = parseFloat(row.cantidad_producida || 0);
+    const pctKg = metaKg > 0 ? (realKg / metaKg) * 100 : (realKg > 0 ? 100 : 0);
 
-        const metaUnd = parseFloat(row.cantidad_unidades || 0);
-        const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
-        let pctUnd = 0;
-        if (metaUnd > 0) pctUnd = (realUnd / metaUnd) * 100;
-        else if (realUnd > 0) pctUnd = 100; 
-        
-        const unidadLabel = row.unidad_medida || 'Und';
+    const metaUnd = parseFloat(row.cantidad_unidades || 0);
+    const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
+    const pctUnd = metaUnd > 0 ? (realUnd / metaUnd) * 100 : (realUnd > 0 ? 100 : 0);
 
-        return (
-          <div className="w-full flex flex-col gap-3 py-2">
+    const unidadLabel = row.unidad_medida || 'Und';
 
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between items-end leading-none">
-                <span className="text-[10px] uppercase font-bold text-gray-500">Kilos (Kg)</span>
-                <div className="text-xs font-mono">
-                  <span className={realKg > 0 ? "font-bold text-success" : "text-gray-400"}>
-                    {realKg.toFixed(2)}
-                  </span>
-                  <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{metaKg.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${Math.min(pctKg, 100)}%`,
-                    height: '100%',
-                    backgroundColor: pctKg > 100 ? '#f97316' : '#10b981',
-                    transition: 'width 0.5s ease'
-                  }}
-                  title={`Avance Kilos: ${pctKg.toFixed(1)}%`}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between items-end leading-none">
-                <span className="text-[10px] uppercase font-bold text-blue-500 truncate max-w-[80px]" title={unidadLabel}>
-                  {unidadLabel}
-                </span>
-                <div className="text-xs font-mono">
-                  <span className={realUnd > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
-                    {fmtUnid(realUnd)}
-                  </span>
-                  <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{fmtUnid(metaUnd)}</span>
-                </div>
-              </div>
-
-              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${Math.min(pctUnd, 100)}%`,
-                    height: '100%',
-                    backgroundColor: pctUnd > 100 ? '#6366f1' : '#3b82f6',
-                    transition: 'width 0.5s ease'
-                  }}
-                  title={`Avance Unidades: ${pctUnd.toFixed(1)}%`}
-                />
-              </div>
-            </div>
-
+    return (
+      <div className="pd-progress">
+        <div className="pd-progress-row">
+          <div className="pd-progress-top">
+            <span>Kilos</span>
+            <b className={pctKg > 100 ? 'pd-over' : ''}>{realKg.toFixed(2)} <small>/ {metaKg.toFixed(2)}</small></b>
           </div>
-        );
-      }
-    },
-    {
-      header: 'Supervisor / Turno',
-      accessor: 'supervisor',
-      width: '150px',
-      render: (value, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Users size={14} className="text-muted" />
-            <span className="text-sm font-medium truncate">{value || 'Sin asignar'}</span>
+          <div className="pg-meter" title={`Avance en kilos: ${pctKg.toFixed(1)}%`}
+            style={{ '--meter-c': pctKg > 100 ? 'var(--warning)' : 'var(--success)' }}>
+            <span style={{ width: `${Math.min(pctKg, 100)}%` }} />
           </div>
-          {row.turno && (
-            <div className="flex items-center gap-1 text-xs text-muted ml-5">
-               {row.turno === 'Noche' ? <Moon size={10} /> : <Sun size={10} />}
-               {row.turno}
-            </div>
-          )}
         </div>
-      )
-    },
-    {
-      header: 'Calidad',
-      accessor: 'observaciones',
-      width: '150px',
-      align: 'center',
-      render: (value) => {
-        const verificacion = parseVerificacionCalidad(value);
-        if (!verificacion) return <span className="text-muted">-</span>;
-        
-        return (
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex items-center gap-1 text-success font-bold text-[10px] bg-green-50 px-2 py-1 rounded border border-green-100">
-              <ShieldCheck size={12} />
-              <span>VERIFICADO</span>
-            </div>
-            {verificacion.nombre && (
-              <span className="text-[10px] font-bold text-gray-700 uppercase text-center leading-tight">
-                {verificacion.nombre}
-              </span>
-            )}
-            {verificacion.fecha && (
-              <span className="text-[9px] text-muted leading-tight text-center">
-                {verificacion.fecha.split(',')[0]}<br/>
-                {verificacion.fecha.split(',')[1]}
-              </span>
-            )}
+        <div className="pd-progress-row">
+          <div className="pd-progress-top">
+            <span title={unidadLabel}>{unidadLabel}</span>
+            <b className={pctUnd > 100 ? 'pd-over' : ''}>{fmtUnid(realUnd)} <small>/ {fmtUnid(metaUnd)}</small></b>
           </div>
-        );
-      }
-    },
-    {
-      header: 'Observaciones',
-      accessor: 'observaciones',
-      width: '180px',
-      render: (value) => {
-        if (!value) return <span className="text-muted text-xs">-</span>;
-        const textoLimpio = value.replace(/\[VERIFICACIÓN CALIDAD\].*?(?:\n|$)/gi, '').trim();
-        if (!textoLimpio) return <span className="text-muted text-xs">-</span>;
-        
-        return (
-          <div className="text-xs text-gray-700 truncate max-w-[170px]" title={textoLimpio}>
-            {textoLimpio}
+          <div className="pg-meter" title={`Avance en ${unidadLabel}: ${pctUnd.toFixed(1)}%`}
+            style={{ '--meter-c': pctUnd > 100 ? 'var(--warning)' : 'var(--info)' }}>
+            <span style={{ width: `${Math.min(pctUnd, 100)}%` }} />
           </div>
-        );
-      }
-    },
-    {
-      header: 'Estado',
-      accessor: 'estado',
-      align: 'center',
-      width: '130px',
-      render: (value) => {
-        const config = getEstadoConfig(value);
-        const Icono = config.icono;
-        return (
-          <span className={`badge ${config.bg} flex items-center justify-center gap-1 px-3 py-1`}>
-            <Icono size={14} />
-            {config.texto}
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Fechas',
-      accessor: 'fecha_creacion',
-      width: '150px',
-      render: (value, row) => (
-        <div className="text-xs flex flex-col gap-1">
-          <div className="flex items-center gap-1 text-muted">
-            <Calendar size={12} />
-            <span>Creación: {formatearFecha(value)}</span>
-          </div>
-          
-          {row.fecha_estimada_venta && (
-             <div className="flex items-center gap-1 text-orange-700 font-medium bg-orange-50 p-0.5 rounded border border-orange-100">
-               <AlertCircle size={10} />
-               <span>Entrega: {formatearFecha(row.fecha_estimada_venta)}</span>
-             </div>
-          )}
+        </div>
+      </div>
+    );
+  };
 
-          {row.fecha_programada && (
-             <div className="flex items-center gap-1 text-blue-700 font-medium bg-blue-50 p-0.5 rounded border border-blue-100">
-               <CalendarCheck size={10} />
-               <span>Prog: {formatearFecha(row.fecha_programada)}</span>
-             </div>
-          )}
-
-          {row.fecha_fin && (
-             <div className="text-success font-medium">
-               Fin: {formatearFecha(row.fecha_fin)}
-             </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Adjuntos',
-      accessor: 'total_adjuntos',
-      width: '80px',
-      align: 'center',
-      render: (value) => (
-        value > 0 ? (
-          <span className="flex items-center justify-center gap-1 text-primary text-sm font-medium">
-            <Paperclip size={14} />
-            {value}
-          </span>
-        ) : (
-          <span className="text-gray-300"><Paperclip size={14} /></span>
-        )
-      )
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_orden',
-      width: '100px',
-      align: 'center',
-      render: (value) => (
-        <div className="flex gap-1 justify-center">
-          <button 
-            className="btn btn-sm btn-primary p-2" 
-            onClick={(e) => {
-              e.stopPropagation();
-              handleVerDetalle(value);
-            }} 
-            title="Ver detalle"
-          >
-            <Eye size={16} />
-          </button>
-          <button 
-            className="btn btn-sm btn-outline p-2" 
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDescargarPDF(value);
-            }} 
-            title="Descargar PDF"
-          >
-            <Download size={16} />
-          </button>
-        </div>
-      )
-    }
-  ];
+  const numerosPagina = (() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const nums = [...new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])]
+      .filter(n => n >= 1 && n <= totalPages)
+      .sort((a, b) => a - b);
+    return nums.reduce((acc, n, i) => {
+      if (i > 0 && n - nums[i - 1] > 1) acc.push('…');
+      acc.push(n);
+      return acc;
+    }, []);
+  })();
 
   if (loading) return <Loading variant="table" />;
 
   const stats = calcularEstadisticas();
 
   return (
-    <div className="container py-6">
-      <div className="page-header flex justify-between items-center mb-6">
+    <div className="pg-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-primary-dark">
-            <Factory className="text-primary" />
-            Órdenes de Producción
-          </h1>
-          <p className="text-muted text-sm mt-1">Gestión del ciclo de fabricación</p>
+          <span className="pg-eyebrow"><Factory size={13} /> Producción</span>
+          <h1 className="pg-title">Órdenes de producción</h1>
+          <p className="pg-subtitle">
+            <b>{stats.total}</b> órdenes · <b>{stats.productosDiferentes}</b> productos ·
+            {' '}<ShoppingCart size={12} style={{ verticalAlign: '-1px' }} /> <b>{stats.desdeVentas}</b> desde ventas ·
+            {' '}<UserCog size={12} style={{ verticalAlign: '-1px' }} /> <b>{stats.desdeSupervisor}</b> internas
+          </p>
         </div>
-        
-        {!esComercial && (
-          <button className="btn btn-primary" onClick={handleNuevaOrden}>
-            <Plus size={18} />
-            Nueva Orden
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/calendario')}>
+            <CalendarDays size={16} /> Calendario
           </button>
-        )}
-      </div>
-
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Total</p>
-                <h3 className="text-2xl font-bold">{stats.total}</h3>
-                <p className="text-xs text-muted">{stats.productosDiferentes} productos</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Factory size={24} className="text-primary" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-l-4 border-warning">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Pendientes</p>
-                <h3 className="text-2xl font-bold text-warning">{stats.pendientes}</h3>
-                {stats.pendientesAsignacion > 0 && (
-                  <p className="text-xs text-danger flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {stats.pendientesAsignacion} por asignar
-                  </p>
-                )}
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Clock size={24} className="text-warning" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-l-4 border-primary">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">En Curso</p>
-                <h3 className="text-2xl font-bold text-primary">{stats.enCurso}</h3>
-                <p className="text-xs text-muted">En proceso</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <TrendingUp size={24} className="text-primary" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-l-4 border-success">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Finalizadas</p>
-                <h3 className="text-2xl font-bold text-success">{stats.finalizadas}</h3>
-                <p className="text-xs text-success">{stats.porcentajeCompletado}%</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <CheckCircle size={24} className="text-success" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-l-4 border-info">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted">Por Origen</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex items-center gap-1">
-                    <ShoppingCart size={12} className="text-info" />
-                    <span className="text-sm font-bold">{stats.desdeVentas}</span>
-                  </div>
-                  <div className="border-l h-4"></div>
-                  <div className="flex items-center gap-1">
-                    <UserCog size={12} className="text-muted" />
-                    <span className="text-sm font-bold">{stats.desdeSupervisor}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Package size={24} className="text-info" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card mb-6">
-        <div className="card-header flex justify-between items-center">
-          <h3 className="card-title text-lg flex items-center gap-2">
-            <Filter size={18} /> Filtros
-          </h3>
-          {(filtroEstado || filtroOrigen || filtroProgramadasHoy || busqueda || fechaInicio || fechaFin) && (
-            <button className="btn btn-sm btn-outline text-danger border-danger" onClick={limpiarFiltros}>
-              <XCircle size={14} /> Limpiar
+          <button type="button" className="btn btn-outline" onClick={() => cargarDatos({ silencioso: true })} disabled={refreshing}>
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Actualizar
+          </button>
+          {!esComercial && (
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/produccion/ordenes/nueva')}>
+              <Plus size={16} /> Nueva orden
             </button>
           )}
         </div>
-        <div className="card-body">
-          <div className="grid grid-cols-1 gap-4">
-            <div className="search-input-wrapper">
-              <Search size={18} className="search-icon" />
-              <input
-                type="text"
-                className="form-input search-input"
-                placeholder="Buscar orden, producto, supervisor, maquinista..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap">
+      </header>
+
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+        <div className="pg-kpis">
+          {KPIS_ESTADO.map(k => {
+            const Icono = k.icon;
+            const activo = filtroEstado === k.estado;
+            return (
               <button
-                className={`btn btn-sm ${filtroProgramadasHoy ? 'btn-primary' : 'btn-outline'} flex items-center gap-2`}
-                onClick={() => setFiltroProgramadasHoy(!filtroProgramadasHoy)}
+                key={k.estado}
+                type="button"
+                className={`pg-kpi ${k.tono} ${activo ? 'on' : ''}`}
+                aria-pressed={activo}
+                onClick={() => setFiltroEstado(activo ? '' : k.estado)}
               >
-                <CalendarCheck size={14} />
-                Programadas para Hoy
+                <div className="pg-kpi-top">
+                  <span className="pg-kpi-label">{k.label}</span>
+                  <span className="pg-kpi-icon"><Icono size={16} /></span>
+                </div>
+                <span className="pg-kpi-value">{stats.porEstado[k.estado]}</span>
+                <span className="pg-kpi-foot">
+                  {k.estado === 'Finalizada'
+                    ? <><b>{stats.porcentajeCompletado}%</b> del total</>
+                    : <>{activo ? 'Filtro activo · pulsa para quitar' : 'Pulsa para filtrar'}</>}
+                </span>
               </button>
+            );
+          })}
+        </div>
 
-              <div className="border-l h-6 mx-2 border-gray-300"></div>
-
-              <span className="text-sm font-medium text-muted">Estado:</span>
-              {['Pendiente Asignación', 'Pendiente', 'En Curso', 'Finalizada', 'Cancelada'].map(est => (
-                <button
-                  key={est}
-                  className={`btn btn-sm ${filtroEstado === est ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado(filtroEstado === est ? '' : est)}
-                >
-                  {est}
+        <section className="pg-panel">
+          <div className="pd-filters">
+            <div className="pd-filters-row">
+              <div className="pg-field pg-field-grow pd-search">
+                <label className="pg-field-label" htmlFor="pd-busqueda">Buscar</label>
+                <Search size={14} />
+                <input
+                  id="pd-busqueda"
+                  type="search"
+                  className="form-input"
+                  placeholder="Orden, producto, código, supervisor, maquinista u OV"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              </div>
+              <div className="pg-field pd-date">
+                <label className="pg-field-label" htmlFor="pd-desde">Desde</label>
+                <input id="pd-desde" type="date" className="form-input" value={fechaInicio}
+                  max={fechaFin || undefined} onChange={(e) => setFechaInicio(e.target.value)} />
+              </div>
+              <div className="pg-field pd-date">
+                <label className="pg-field-label" htmlFor="pd-hasta">Hasta</label>
+                <input id="pd-hasta" type="date" className="form-input" value={fechaFin}
+                  min={fechaInicio || undefined} onChange={(e) => setFechaFin(e.target.value)} />
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label">Origen</span>
+                <div className="pg-segmented" role="radiogroup" aria-label="Origen">
+                  {[
+                    { id: '', label: 'Todas' },
+                    { id: 'Orden de Venta', label: 'Ventas', icon: ShoppingCart },
+                    { id: 'Supervisor', label: 'Internas', icon: UserCog }
+                  ].map(op => {
+                    const Icono = op.icon;
+                    return (
+                      <button key={op.label} type="button" role="radio" aria-checked={filtroOrigen === op.id}
+                        className={filtroOrigen === op.id ? 'active' : ''} onClick={() => setFiltroOrigen(op.id)}>
+                        {Icono && <Icono size={13} />}{op.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="pg-chips">
+              <button type="button" className={`pg-chip ${filtroProgramadasHoy ? 'on' : ''}`} aria-pressed={filtroProgramadasHoy}
+                onClick={() => setFiltroProgramadasHoy(!filtroProgramadasHoy)}>
+                <CalendarCheck size={14} /> Programadas para hoy <b>{stats.programadasHoy}</b>
+              </button>
+              {filtroEstado && (
+                <button type="button" className="pg-chip on" onClick={() => setFiltroEstado('')}>
+                  Estado: {filtroEstado} <X size={13} />
                 </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-muted">Origen:</span>
-              <button
-                className={`btn btn-sm ${filtroOrigen === 'Orden de Venta' ? 'btn-info' : 'btn-outline'}`}
-                onClick={() => setFiltroOrigen(filtroOrigen === 'Orden de Venta' ? '' : 'Orden de Venta')}
-              >
-                <ShoppingCart size={14} />
-                Desde Órdenes Venta
-              </button>
-              <button
-                className={`btn btn-sm ${filtroOrigen === 'Supervisor' ? 'btn-secondary' : 'btn-outline'}`}
-                onClick={() => setFiltroOrigen(filtroOrigen === 'Supervisor' ? '' : 'Supervisor')}
-              >
-                <UserCog size={14} />
-                Creadas por Supervisor
-              </button>
+              )}
+              {hayFiltros && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={limpiarFiltros}>
+                  <X size={14} /> Limpiar filtros
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="card">
-        <div className="card-header flex justify-between items-center">
-          <h2 className="card-title">Listado</h2>
-          <div className="flex gap-2 items-center text-sm text-muted">
-             <span>
-               Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
-             </span>
-             <button className="btn btn-sm btn-outline ml-2" onClick={() => cargarDatos({ silencioso: true })} disabled={refreshing}><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''}/></button>
-          </div>
-        </div>
-        <div className="card-body table-container">
-            <Table
-              columns={columns}
-              data={currentItems}
-              emptyMessage="No hay órdenes registradas"
-              onRowClick={(row) => navigate(`/produccion/ordenes/${row.id_orden}`)}
-              mobileCards={true}
-            />
-        </div>
-        
-        {ordenesFiltradas.length > itemsPerPage && (
-          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
-            <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
-            >
-                <ChevronLeft size={16} /> Anterior
-            </button>
-
-            <span className="text-sm font-medium">
-                Página {currentPage} de {totalPages}
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title"><ClipboardList size={16} /> Listado <span className="pg-count">{ordenesFiltradas.length}</span></h2>
+            <span className="pg-panel-meta">
+              {ordenesFiltradas.length > 0
+                ? `Mostrando ${indexOfFirstItem + 1}–${Math.min(indexOfLastItem, ordenesFiltradas.length)} de ${ordenesFiltradas.length}`
+                : 'Sin resultados'}
             </span>
-
-            <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-            >
-                Siguiente <ChevronRight size={16} />
-            </button>
           </div>
-        )}
+          <div className="pg-table-wrap">
+            <table className="pg-table">
+              <thead>
+                <tr>
+                  <th>N° orden</th>
+                  <th>Producto</th>
+                  <th>Progreso</th>
+                  <th>Responsable</th>
+                  <th>Fechas</th>
+                  <th className="center">Estado</th>
+                  <th className="center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.length > 0 ? currentItems.map(row => {
+                  const verificacion = parseVerificacionCalidad(row.observaciones);
+                  const observaciones = limpiarObservaciones(row.observaciones);
+                  return (
+                    <tr key={row.id_orden} className="is-clickable" onClick={() => navigate(`/produccion/ordenes/${row.id_orden}`)}>
+                      <td className="nowrap">
+                        <span className="pg-code">{row.numero_orden}</span>
+                        <div className="pd-tags">
+                          {row.origen_tipo === 'Orden de Venta' ? (
+                            <span className="pd-tag is-info"><ShoppingCart size={11} />{row.numero_orden_venta || 'Venta'}</span>
+                          ) : (
+                            <span className="pd-tag"><UserCog size={11} />Interna</span>
+                          )}
+                          {row.es_manual === 1 && <span className="pd-tag is-warning">Manual</span>}
+                        </div>
+                        {row.prioridad_venta && <div className="pd-tags"><BadgePrioridad prioridad={row.prioridad_venta} /></div>}
+                      </td>
+                      <td style={{ minWidth: 220 }}>
+                        <span className="pg-cell-main">{row.producto}</span>
+                        <span className="pg-cell-sub">{row.codigo_producto}</span>
+                        <div className="pd-tags">
+                          {row.nombre_receta && <span className="pd-tag is-info"><ClipboardList size={11} />{row.nombre_receta}</span>}
+                          {row.producto_eliminado === 1 && <span className="pd-tag is-danger"><AlertTriangle size={11} />Producto eliminado</span>}
+                        </div>
+                        {observaciones && <span className="pg-cell-sub pg-truncate" title={observaciones}>{observaciones}</span>}
+                      </td>
+                      <td>{renderProgreso(row)}</td>
+                      <td className="nowrap">
+                        <span className="pg-cell-main"><Users size={12} className="pg-muted" style={{ marginRight: 4, verticalAlign: '-1px' }} />{row.supervisor || 'Sin asignar'}</span>
+                        {row.maquinista && <span className="pg-cell-sub">Maquinista: {row.maquinista}</span>}
+                        {row.turno && (
+                          <span className="pg-cell-sub">
+                            {row.turno === 'Noche' ? <Moon size={11} style={{ verticalAlign: '-1px' }} /> : <Sun size={11} style={{ verticalAlign: '-1px' }} />} {row.turno}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="pd-dates">
+                          <span><Calendar size={11} /> Creada {formatearFecha(row.fecha_creacion)}</span>
+                          {row.fecha_programada && <span className="is-info"><CalendarCheck size={11} /> Prog. {formatearFecha(row.fecha_programada)}</span>}
+                          {row.fecha_estimada_venta && <span className="is-warning"><AlertCircle size={11} /> Entrega {formatearFecha(row.fecha_estimada_venta)}</span>}
+                          {row.fecha_fin && <span className="is-success"><CheckCircle size={11} /> Fin {formatearFecha(row.fecha_fin)}</span>}
+                        </div>
+                      </td>
+                      <td className="center">
+                        <BadgeEstadoProduccion estado={row.estado} />
+                        {verificacion && (
+                          <span className="pg-cell-sub" title={verificacion.fecha}>
+                            <ShieldCheck size={11} className="text-success" style={{ verticalAlign: '-1px' }} /> {verificacion.nombre}
+                          </span>
+                        )}
+                      </td>
+                      <td className="center" onClick={(e) => e.stopPropagation()}>
+                        <div className="pd-actions">
+                          <button type="button" className="pg-iconbtn" title="Ver detalle" aria-label={`Ver ${row.numero_orden}`}
+                            onClick={() => navigate(`/produccion/ordenes/${row.id_orden}`)}>
+                            <Eye size={15} />
+                          </button>
+                          <button type="button" className="pg-iconbtn" title="Descargar PDF" aria-label={`PDF ${row.numero_orden}`}
+                            onClick={() => handleDescargarPDF(row.id_orden)}>
+                            <Download size={15} />
+                          </button>
+                        </div>
+                        {row.total_adjuntos > 0 && (
+                          <span className="pg-cell-sub"><Paperclip size={11} style={{ verticalAlign: '-1px' }} /> {row.total_adjuntos} adjuntos</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="pg-empty">
+                        <Factory size={28} />
+                        <strong>{hayFiltros ? 'No hay órdenes con estos filtros' : 'No hay órdenes registradas'}</strong>
+                        {hayFiltros && <span>Quita algún filtro o limpia la búsqueda.</span>}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {ordenesFiltradas.length > itemsPerPage && (
+            <div className="pg-pager">
+              <span>
+                <b>{indexOfFirstItem + 1}</b>–<b>{Math.min(indexOfLastItem, ordenesFiltradas.length)}</b> de <b>{ordenesFiltradas.length}</b> órdenes
+              </span>
+              <div className="pg-pager-nav">
+                <button type="button" className="pagination-nav-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+                  <ChevronLeft size={15} /> Anterior
+                </button>
+                {numerosPagina.map((n, i) => (
+                  n === '…'
+                    ? <span key={`e-${i}`} className="pg-muted">…</span>
+                    : <button key={n} type="button" className={`pagination-page-btn ${n === currentPage ? 'active' : ''}`} onClick={() => setCurrentPage(n)}>{n}</button>
+                ))}
+                <button type="button" className="pagination-nav-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+                  Siguiente <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

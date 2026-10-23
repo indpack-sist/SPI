@@ -1,4 +1,121 @@
 import db from '../config/database.js';
+import { extraerUrl } from '../services/sunat/util.service.js';
+
+const CLASE_POR_CODIGO = { '07': 'NOTA_CREDITO', '08': 'NOTA_DEBITO' };
+
+function estadoFinalComprobante(fila, anuladasPorNc) {
+    if (fila.estado === 'Anulada' || anuladasPorNc.has(fila.id_factura)) return 'ANULADA';
+    if (fila.sunat_estado) return String(fila.sunat_estado).toUpperCase();
+    if (fila.codigo_tipo_sunat == null) return 'ACEPTADO';
+    return 'PENDIENTE';
+}
+
+function estadoFinalGuia(fila) {
+    if (fila.estado === 'Anulada') return Number(fila.baja_sunat_confirmada) === 1 ? 'BAJA' : 'ANULADA';
+    if (fila.sunat_estado) return String(fila.sunat_estado).toUpperCase();
+    return 'PENDIENTE';
+}
+
+function estadoSeeOrden(orden, facturas) {
+    const tipo = String(orden.tipo_comprobante || '').trim();
+    if (!tipo.includes('Factura')) return 'NO_APLICA';
+    const estados = facturas.map(f => f.estado_final);
+    if (estados.includes('OBSERVADO')) return 'OBSERVADO';
+    if (estados.includes('ACEPTADO')) return 'ACEPTADO';
+    if (estados.some(e => ['PENDIENTE', 'ENVIADO', 'EN_PROCESO'].includes(e))) return 'EN_PROCESO';
+    if (estados.includes('RECHAZADO') || estados.includes('ERROR')) return 'RECHAZADO';
+    if (Number(orden.facturado_sunat) === 1) return 'ACEPTADO';
+    if (estados.includes('ANULADA')) return 'ANULADA';
+    return 'SIN_EMITIR';
+}
+
+async function construirMapaSee(ordenesIds) {
+    const mapa = {};
+    if (ordenesIds.length === 0) return mapa;
+
+    const [comprobantes] = await db.query(`
+        SELECT fv.id_factura, fv.id_orden_venta, fv.codigo_tipo_sunat, fv.serie, fv.numero,
+               fv.numero_factura, fv.fecha_emision, fv.total, fv.moneda, fv.estado, fv.sunat_estado,
+               fv.motivo_nota_codigo, fv.id_factura_ref, fv.url_pdf, fv.xml_url, fv.cdr_url
+        FROM facturas_venta fv
+        WHERE fv.id_orden_venta IN (?) AND fv.estado <> 'Eliminada'
+        ORDER BY fv.fecha_emision, fv.id_factura
+    `, [ordenesIds]);
+
+    const [guias] = await db.query(`
+        SELECT gr.id_guia, gr.id_orden_venta, gr.serie_sunat, gr.numero_sunat, gr.numero_guia,
+               gr.fecha_emision, gr.estado, gr.sunat_estado, gr.baja_sunat_confirmada
+        FROM guias_remision gr
+        WHERE gr.id_orden_venta IN (?)
+        ORDER BY gr.fecha_emision, gr.id_guia
+    `, [ordenesIds]);
+
+    const anuladasPorNc = new Set(
+        comprobantes
+            .filter(c => c.codigo_tipo_sunat === '07' && c.motivo_nota_codigo === '01' && c.sunat_estado === 'ACEPTADO')
+            .map(c => c.id_factura_ref)
+    );
+
+    const asegurar = (id) => {
+        if (!mapa[id]) mapa[id] = { comprobantes: [], guias: [] };
+        return mapa[id];
+    };
+
+    comprobantes.forEach(c => {
+        asegurar(c.id_orden_venta).comprobantes.push({
+            id_factura: c.id_factura,
+            clase: CLASE_POR_CODIGO[c.codigo_tipo_sunat] || 'FACTURA',
+            documento: (c.serie && c.numero != null) ? `${c.serie}-${c.numero}` : c.numero_factura,
+            fecha_emision: c.fecha_emision,
+            total: parseFloat(c.total || 0),
+            moneda: c.moneda,
+            motivo_nota_codigo: c.motivo_nota_codigo,
+            es_electronico: c.codigo_tipo_sunat != null || c.sunat_estado != null,
+            estado_final: estadoFinalComprobante(c, anuladasPorNc),
+            url_pdf: extraerUrl(c.url_pdf),
+            xml_url: extraerUrl(c.xml_url),
+            cdr_url: extraerUrl(c.cdr_url)
+        });
+    });
+
+    guias.forEach(g => {
+        asegurar(g.id_orden_venta).guias.push({
+            id_guia: g.id_guia,
+            documento: (g.serie_sunat && g.numero_sunat) ? `${g.serie_sunat}-${g.numero_sunat}` : g.numero_guia,
+            fecha_emision: g.fecha_emision,
+            estado_final: estadoFinalGuia(g),
+            es_electronica: Boolean(g.serie_sunat && g.numero_sunat)
+        });
+    });
+
+    return mapa;
+}
+
+function resumirSee(orden, entrada) {
+    const comprobantes = entrada?.comprobantes || [];
+    const guias = entrada?.guias || [];
+    const facturas = comprobantes.filter(c => c.clase === 'FACTURA');
+    const vigentes = facturas.filter(c => ['ACEPTADO', 'OBSERVADO'].includes(c.estado_final));
+    const notasCredito = comprobantes.filter(c => c.clase === 'NOTA_CREDITO' && c.estado_final === 'ACEPTADO');
+    const notasDebito = comprobantes.filter(c => c.clase === 'NOTA_DEBITO' && c.estado_final === 'ACEPTADO');
+    const ajusteNc = notasCredito
+        .filter(c => c.motivo_nota_codigo !== '01')
+        .reduce((s, c) => s + c.total, 0);
+    const ajusteNd = notasDebito.reduce((s, c) => s + c.total, 0);
+    const facturado = vigentes.reduce((s, c) => s + c.total, 0) - ajusteNc + ajusteNd;
+
+    return {
+        estado: estadoSeeOrden(orden, facturas),
+        comprobantes,
+        guias,
+        facturado: parseFloat(facturado.toFixed(3)),
+        monto_nc: parseFloat(notasCredito.reduce((s, c) => s + c.total, 0).toFixed(3)),
+        cantidad_nc: notasCredito.length,
+        cantidad_nd: notasDebito.length,
+        guias_vigentes: guias.filter(g => !['ANULADA', 'BAJA'].includes(g.estado_final)).length,
+        guias_aceptadas: guias.filter(g => g.estado_final === 'ACEPTADO').length
+    };
+}
 
 export const getReporteVentas = async (req, res) => {
     try {
@@ -7,6 +124,8 @@ export const getReporteVentas = async (req, res) => {
             filtro_fecha, estadoOrden, estadoPago, moneda,
             tipo_unificacion, tc_dia 
         } = req.query;
+
+        const tcDiaConsulta = parseFloat(tc_dia) || 1;
 
         let campoFecha = 'ov.fecha_emision';
         if (filtro_fecha === 'fecha_sunat') campoFecha = 'ov.fecha_facturacion_sunat';
@@ -125,6 +244,8 @@ export const getReporteVentas = async (req, res) => {
                 detallesMap[det.id_orden_venta].push(det);
             });
         }
+
+        const mapaSee = await construirMapaSee(ordenesIds);
 
         let kpis = {
             totalVentasPEN: 0, totalVentasUSD: 0,
@@ -361,6 +482,7 @@ export const getReporteVentas = async (req, res) => {
                 observaciones: orden.observaciones,
                 motivo_rechazo: orden.motivo_rechazo,
                 observaciones_verificador: orden.observaciones_verificador,
+                see: resumirSee(orden, mapaSee[orden.id_orden_venta]),
                 detalles: detallesOrden.map(det => ({
                     id: det.id_detalle,
                     producto_nombre: det.producto_nombre,

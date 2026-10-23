@@ -1,261 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
+import {
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Package, User, ExternalLink, Clock,
-  AlertCircle, PlayCircle, PauseCircle, CheckCircle, XCircle, X, ArrowRight, RotateCcw,
-  ShoppingCart, Flag, Briefcase
+  CheckCircle, X, ArrowRight, RotateCcw, ShoppingCart, Briefcase, Factory, ClipboardList
 } from 'lucide-react';
-import { ordenesProduccionAPI } from '../../config/api'; 
+import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
-import Loading from '../../components/UI/Loading'; 
+import Loading from '../../components/UI/Loading';
+import { ESTADOS_PRODUCCION, configEstadoProduccion, BadgeEstadoProduccion, BadgePrioridad } from './estadosProduccion';
+import './Produccion.css';
 
-const S = {
-  root: {
-    display: 'flex', flexDirection: 'row',
-    height: 'calc(100vh - 80px)',
-    backgroundColor: 'var(--bg-primary)',
-    padding: '16px', gap: '12px',
-    overflow: 'hidden',
-    fontFamily: "'Barlow', sans-serif"
-  },
-  calPanel: {
-    flex: 3, display: 'flex', flexDirection: 'column',
-    backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: '2px',
-    overflow: 'hidden'
-  },
-  calHeader: {
-    padding: '14px 16px',
-    borderBottom: '1px solid var(--border)',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: 'var(--carbon-light)',
-  },
-  calTitle: {
-    display: 'flex', alignItems: 'center', gap: '10px'
-  },
-  calTitleIcon: {
-    backgroundColor: 'rgba(232,184,75,0.1)',
-    border: '1px solid rgba(232,184,75,0.2)',
-    padding: '7px', borderRadius: '2px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center'
-  },
-  calTitleText: {
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontSize: '1.25rem', fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: '0.06em',
-    color: 'var(--text-primary)', margin: 0
-  },
-  calControls: {
-    display: 'flex', gap: '8px', alignItems: 'center'
-  },
-  btnHoy: {
-    padding: '6px 14px', cursor: 'pointer',
-    background: 'var(--bg-tertiary)',
-    border: '1px solid var(--border)',
-    borderRadius: '2px',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 600, fontSize: '12px',
-    textTransform: 'uppercase', letterSpacing: '0.08em',
-    color: 'var(--text-secondary)',
-    transition: 'border-color 0.15s, color 0.15s'
-  },
-  btnNav: {
-    padding: '5px 7px', cursor: 'pointer',
-    background: 'var(--bg-tertiary)',
-    border: '1px solid var(--border)',
-    borderRadius: '2px',
-    display: 'flex', alignItems: 'center',
-    color: 'var(--text-secondary)',
-    transition: 'border-color 0.15s'
-  },
-  weekRow: {
-    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-    borderBottom: '1px solid var(--border)',
-    backgroundColor: 'var(--carbon-light)'
-  },
-  weekCell: {
-    padding: '8px', textAlign: 'center',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700, fontSize: '0.75rem',
-    textTransform: 'uppercase', letterSpacing: '0.12em',
-    color: 'var(--text-secondary)'
-  },
-  daysGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-    gridAutoRows: '1fr', flex: 1,
-    overflowY: 'auto',
-    backgroundColor: 'var(--border)', gap: '1px'
-  },
-  dayCell: (isToday, isPotentialEnd) => ({
-    backgroundColor: isPotentialEnd
-      ? 'rgba(93,173,226,0.08)'
-      : isToday
-        ? 'rgba(232,184,75,0.05)'
-        : 'var(--bg-secondary)',
-    padding: '4px', display: 'flex', flexDirection: 'column',
-    overflow: 'hidden', minHeight: '100px',
-    cursor: isPotentialEnd ? 'pointer' : 'default',
-    transition: 'background-color 0.1s'
-  }),
-  dayCellEmpty: {
-    backgroundColor: 'var(--carbon-light)', minHeight: '100px'
-  },
-  dayNumber: (isToday) => ({
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700, fontSize: '13px',
-    color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
-    backgroundColor: isToday ? 'rgba(232,184,75,0.15)' : 'transparent',
-    width: '22px', height: '22px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: '2px',
-    border: isToday ? '1px solid var(--accent-border)' : 'none'
-  }),
-  ordenesBadge: {
-    fontSize: '9px',
-    background: 'var(--carbon-light)',
-    border: '1px solid var(--border)',
-    padding: '1px 5px', borderRadius: '2px',
-    color: 'var(--text-secondary)',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700, letterSpacing: '0.06em'
-  },
-  sidebar: {
-    width: '300px', minWidth: '300px',
-    backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: '2px',
-    display: 'flex', flexDirection: 'column',
-    height: '100%'
-  },
-  sidebarHeader: {
-    padding: '14px 16px',
-    borderBottom: '1px solid var(--border)',
-    backgroundColor: 'var(--carbon-light)',
-  },
-  sidebarTitle: {
-    margin: 0, display: 'flex', alignItems: 'center', gap: '8px',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontSize: '0.875rem', fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: '0.1em',
-    color: 'var(--text-primary)'
-  },
-  sidebarSub: {
-    margin: '4px 0 0', fontSize: '11px',
-    color: 'var(--text-secondary)',
-    fontFamily: "'Barlow', sans-serif"
-  },
-  sidebarBody: {
-    flex: 1, overflowY: 'auto', padding: '10px',
-    backgroundColor: 'var(--bg-primary)'
-  },
-  resizeBanner: {
-    position: 'absolute', top: '20px', left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 100,
-    backgroundColor: 'var(--accent)',
-    color: '#0f0f0f',
-    padding: '10px 20px', borderRadius: '2px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-    display: 'flex', alignItems: 'center', gap: '10px',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700, fontSize: '0.875rem',
-    textTransform: 'uppercase', letterSpacing: '0.06em'
-  },
-  resizeBannerBtn: {
-    marginLeft: '8px', background: 'rgba(0,0,0,0.15)',
-    border: 'none', borderRadius: '2px',
-    padding: '4px', cursor: 'pointer', color: '#0f0f0f',
-    display: 'flex', alignItems: 'center'
-  },
-  modalOverlay: {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    zIndex: 200
-  },
-  modalBox: {
-    backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: '2px',
-    width: '520px', maxWidth: '90%', maxHeight: '80vh',
-    display: 'flex', flexDirection: 'column',
-    boxShadow: '0 24px 48px rgba(0,0,0,0.6)'
-  },
-  modalHeader: {
-    padding: '14px 16px',
-    borderBottom: '1px solid var(--border)',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: 'var(--carbon-light)'
-  },
-  modalTitle: {
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontSize: '1.1rem', fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: '0.06em',
-    color: 'var(--text-primary)', margin: 0
-  },
-  modalBody: { padding: '12px', overflowY: 'auto', flex: 1 },
-  modalFooter: {
-    padding: '12px 16px',
-    borderTop: '1px solid var(--border)',
-    display: 'flex', justifyContent: 'flex-end',
-    backgroundColor: 'var(--carbon-light)'
-  },
-  modalOrdenWrap: (colorEstado) => ({
-    border: '1px solid var(--border)',
-    borderLeft: `3px solid ${colorEstado}`,
-    borderRadius: '2px',
-    padding: '10px',
-    backgroundColor: 'var(--bg-tertiary)',
-    marginBottom: '8px'
-  }),
-  modalOrdenStatus: (colorEstado) => ({
-    fontSize: '9px', fontWeight: 700,
-    color: colorEstado, textTransform: 'uppercase',
-    backgroundColor: 'var(--carbon-light)',
-    padding: '2px 7px', borderRadius: '2px',
-    border: `1px solid ${colorEstado}`,
-    fontFamily: "'Barlow Condensed', sans-serif",
-    letterSpacing: '0.08em', display: 'inline-block',
-    marginBottom: '6px'
-  }),
-  modalOrdenDates: {
-    fontSize: '10px', marginTop: '6px',
-    color: 'var(--text-secondary)',
-    display: 'flex', gap: '12px',
-    borderTop: '1px solid var(--border)', paddingTop: '6px',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    textTransform: 'uppercase', letterSpacing: '0.06em'
-  },
-  emptySidebar: {
-    textAlign: 'center', color: 'var(--text-secondary)',
-    marginTop: '40px', padding: '20px'
-  },
-  emptyModal: {
-    textAlign: 'center', color: 'var(--text-secondary)',
-    padding: '24px', fontSize: '13px'
-  }
-};
+const LEYENDA = ['Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa', 'Finalizada', 'Cancelada'];
 
-const getStatusColor = (estado) => {
-  switch(estado) {
-    case 'Pendiente': case 'Pendiente Asignación': return 'var(--accent)';
-    case 'En Curso':   return '#5dade2';
-    case 'En Pausa':   return '#f39c12';
-    case 'Finalizada': return '#2ecc71';
-    case 'Cancelada':  return '#e74c3c';
-    default:           return '#555555';
-  }
-};
-
-const getPriorityStyle = (prioridad) => {
-  switch(prioridad?.toUpperCase()) {
-    case 'URGENTE': return { bg: 'rgba(231,76,60,0.12)',  text: '#e74c3c', border: 'rgba(231,76,60,0.3)' };
-    case 'ALTA':    return { bg: 'rgba(243,156,18,0.12)', text: '#f39c12', border: 'rgba(243,156,18,0.3)' };
-    case 'MEDIA':   return { bg: 'rgba(93,173,226,0.12)', text: '#5dade2', border: 'rgba(93,173,226,0.3)' };
-    case 'BAJA':    return { bg: 'rgba(46,204,113,0.12)', text: '#2ecc71', border: 'rgba(46,204,113,0.3)' };
-    default:        return { bg: 'rgba(85,85,85,0.12)',   text: 'var(--wire)', border: 'rgba(85,85,85,0.3)' };
-  }
+const fechaCorta = (iso) => {
+  if (!iso) return '';
+  const p = String(iso).split('T')[0].split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
 };
 
 const CalendarioProduccion = () => {
@@ -387,149 +147,97 @@ const CalendarioProduccion = () => {
     catch { cargarOrdenes(); }
   };
 
-  const OrdenCard = ({ orden, compact = false, isRangePart = false }) => {
-    const isDraggable = !esComercial && (orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación');
-    const isScheduled = !!orden.fecha_programada;
-    const borderColor = getStatusColor(orden.estado);
-    const priorityStyle = getPriorityStyle(orden.prioridad_venta);
+  const [diaDestino, setDiaDestino] = useState(null);
 
-    let IconEstado = AlertCircle;
-    switch(orden.estado) {
-      case 'Pendiente': case 'Pendiente Asignación': IconEstado = Clock; break;
-      case 'En Curso':   IconEstado = PlayCircle; break;
-      case 'En Pausa':   IconEstado = PauseCircle; break;
-      case 'Finalizada': IconEstado = CheckCircle; break;
-      case 'Cancelada':  IconEstado = XCircle; break;
-    }
+  useEffect(() => {
+    if (!modalOpen && !pendingResize) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (modalOpen) setModalOpen(false);
+      else setPendingResize(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [modalOpen, pendingResize]);
 
+  const esArrastrable = (orden) => !esComercial && (orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación');
+
+  const abrirOrden = (orden) => navigate(`/produccion/ordenes/${orden.id_orden}`);
+
+  const renderEvento = (orden) => {
+    const cfg = configEstadoProduccion(orden.estado);
+    const Icono = cfg.icon;
+    const { start, end } = getOrderDates(orden);
+    const arrastrable = esArrastrable(orden);
     return (
-      <div
-        draggable={isDraggable}
-        onDragStart={(e) => isDraggable && handleDragStart(e, orden)}
+      <button
+        key={orden.id_orden}
+        type="button"
+        draggable={arrastrable}
+        onDragStart={(e) => arrastrable && handleDragStart(e, orden)}
+        onDragEnd={() => setDiaDestino(null)}
         onClick={(e) => {
           if (pendingResize) return;
           e.stopPropagation();
-          navigate(`/produccion/ordenes/${orden.id_orden}`);
+          abrirOrden(orden);
         }}
-        style={{
-          backgroundColor: isRangePart ? 'rgba(232,184,75,0.06)' : 'var(--bg-tertiary)',
-          borderLeft: `3px solid ${borderColor}`,
-          border: `1px solid var(--border)`,
-          borderLeftColor: borderColor,
-          borderRadius: '2px',
-          padding: '5px 6px',
-          marginBottom: '3px',
-          cursor: pendingResize ? 'crosshair' : (isDraggable ? 'grab' : 'pointer'),
-          fontSize: '11px',
-          opacity: draggedOrden?.id_orden === orden.id_orden ? 0.4 : 1,
-          transition: 'opacity 0.15s'
-        }}
+        className={`pd-event ${start !== end ? 'is-range' : ''} ${draggedOrden?.id_orden === orden.id_orden ? 'is-dragging' : ''}`}
+        style={{ '--c': cfg.color, cursor: pendingResize ? 'crosshair' : (arrastrable ? 'grab' : 'pointer') }}
+        title={`${orden.numero_orden} · ${orden.producto} · ${cfg.label}`}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {!compact && <IconEstado size={10} color={borderColor} />}
-            <span style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontWeight: 700, color: 'var(--text-primary)',
-              fontSize: '11px', letterSpacing: '0.04em'
-            }}>
-              {orden.numero_orden}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: '3px' }}>
-            {isScheduled && isDraggable && (
-              <button
-                onClick={(e) => handleDesprogramar(e, orden)}
-                style={{
-                  border: 'none', background: 'rgba(231,76,60,0.1)',
-                  borderRadius: '2px', cursor: 'pointer',
-                  color: '#e74c3c', padding: '2px',
-                  display: 'flex', alignItems: 'center'
-                }}
-                title="Retornar a pendientes"
-              >
-                <RotateCcw size={11} />
+        <Icono size={11} />
+        <b>{orden.numero_orden}</b>
+        <span>{orden.producto}</span>
+      </button>
+    );
+  };
+
+  const renderTarjeta = (orden) => {
+    const arrastrable = esArrastrable(orden);
+    const programada = !!orden.fecha_programada;
+    return (
+      <div
+        key={orden.id_orden}
+        role="button"
+        tabIndex={0}
+        draggable={arrastrable}
+        onDragStart={(e) => arrastrable && handleDragStart(e, orden)}
+        onDragEnd={() => setDiaDestino(null)}
+        onClick={() => { if (!pendingResize) abrirOrden(orden); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') abrirOrden(orden); }}
+        className={`pd-card ${arrastrable ? '' : 'is-locked'}`}
+        style={{ opacity: draggedOrden?.id_orden === orden.id_orden ? 0.4 : 1 }}
+      >
+        <div className="pd-card-top">
+          <span className="pg-code">{orden.numero_orden}</span>
+          <BadgeEstadoProduccion estado={orden.estado} />
+        </div>
+        <span className="pd-card-product">{orden.producto}</span>
+        <div className="pd-card-meta">
+          <span><Package size={12} /> <b>{parseFloat(orden.cantidad_planificada || 0).toFixed(0)}</b> {orden.unidad_medida}</span>
+          {orden.supervisor && <span><User size={12} /> {orden.supervisor}</span>}
+          {orden.numero_orden_venta && (
+            <span><ShoppingCart size={12} /> <b>{orden.numero_orden_venta}</b>{orden.comercial_venta && <> · <Briefcase size={11} /> {orden.comercial_venta.split(' ')[0]}</>}</span>
+          )}
+          {orden.fecha_estimada_venta && (
+            <span className="text-warning"><Clock size={12} /> Entrega {fechaCorta(orden.fecha_estimada_venta)}</span>
+          )}
+        </div>
+        <div className="pd-card-top">
+          <BadgePrioridad prioridad={orden.prioridad_venta} />
+          <span className="pd-card-actions">
+            {programada && arrastrable && (
+              <button type="button" className="pg-iconbtn" title="Retornar a pendientes" aria-label="Retornar a pendientes"
+                onClick={(e) => handleDesprogramar(e, orden)}>
+                <RotateCcw size={13} />
               </button>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); navigate(`/produccion/ordenes/${orden.id_orden}`); }}
-              style={{
-                border: 'none', background: 'var(--carbon-light)',
-                borderRadius: '2px', cursor: 'pointer',
-                color: 'var(--text-secondary)', padding: '2px',
-                display: 'flex', alignItems: 'center'
-              }}
-              title="Ver detalle"
-            >
-              <ExternalLink size={11} />
+            <button type="button" className="pg-iconbtn" title="Ver detalle" aria-label={`Ver ${orden.numero_orden}`}
+              onClick={(e) => { e.stopPropagation(); abrirOrden(orden); }}>
+              <ExternalLink size={13} />
             </button>
-          </div>
+          </span>
         </div>
-
-        <div style={{
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          color: 'var(--text-secondary)', margin: '2px 0', fontWeight: 500,
-          fontSize: '10px'
-        }} title={orden.producto}>
-          {orden.producto}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '3px' }}>
-          {orden.numero_orden_venta ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-              <div style={{ fontSize: '9px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
-                <ShoppingCart size={9} /> {orden.numero_orden_venta}
-              </div>
-              {orden.comercial_venta && (
-                <div style={{ fontSize: '9px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <Briefcase size={9} /> {orden.comercial_venta.split(' ')[0]}
-                </div>
-              )}
-            </div>
-          ) : <span />}
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-            {orden.prioridad_venta && (
-              <div style={{
-                fontSize: '8px', fontWeight: 700,
-                color: priorityStyle.text, backgroundColor: priorityStyle.bg,
-                padding: '1px 4px', borderRadius: '2px',
-                border: `1px solid ${priorityStyle.border}`,
-                display: 'flex', alignItems: 'center', gap: '2px',
-                textTransform: 'uppercase',
-                fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.06em'
-              }}>
-                <Flag size={8} /> {orden.prioridad_venta}
-              </div>
-            )}
-            {orden.fecha_estimada_venta && (
-              <div style={{
-                fontSize: '8px', fontWeight: 700,
-                color: '#f39c12', backgroundColor: 'rgba(243,156,18,0.1)',
-                padding: '1px 4px', borderRadius: '2px',
-                display: 'flex', alignItems: 'center', gap: '2px',
-                border: '1px solid rgba(243,156,18,0.2)'
-              }}>
-                <Clock size={8} />
-                {new Date(orden.fecha_estimada_venta).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!compact && (
-          <div style={{ color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', marginTop: '4px', borderTop: '1px solid var(--border)', paddingTop: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Package size={10} />
-              {parseFloat(orden.cantidad_planificada).toFixed(0)} {orden.unidad_medida}
-            </div>
-            {orden.supervisor && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <User size={10} /> {orden.supervisor.split(' ')[0]}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     );
   };
@@ -538,140 +246,140 @@ const CalendarioProduccion = () => {
 
   const ordenesParaSidebar = ordenes.filter(o => !o.fecha_programada && (o.estado === 'Pendiente' || o.estado === 'Pendiente Asignación'));
   const ordenesDelDiaSeleccionado = selectedDay ? ordenes.filter(o => isOrderInDay(o, selectedDay.fullDate)) : [];
+  const prefijoMes = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+  const ordenesDelMes = ordenes.filter(o => {
+    const { start, end } = getOrderDates(o);
+    return start && start.slice(0, 7) <= prefijoMes && end.slice(0, 7) >= prefijoMes;
+  });
 
   return (
-    <div style={S.root}>
+    <div className="pg-page">
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Factory size={13} /> Producción</span>
+          <h1 className="pg-title">Calendario de producción</h1>
+          <p className="pg-subtitle">
+            <b>{ordenesDelMes.length}</b> órdenes en {monthNames[currentDate.getMonth()].toLowerCase()} · <b>{ordenesParaSidebar.length}</b> por programar
+          </p>
+        </div>
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')}>
+            <ClipboardList size={16} /> Listado
+          </button>
+          <div className="pd-cal-nav">
+            <button type="button" className="pg-iconbtn" onClick={() => changeMonth(-1)} aria-label="Mes anterior"><ChevronLeft size={16} /></button>
+            <h2 className="pd-cal-month">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
+            <button type="button" className="pg-iconbtn" onClick={() => changeMonth(1)} aria-label="Mes siguiente"><ChevronRight size={16} /></button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setCurrentDate(new Date())}>Hoy</button>
+          </div>
+        </div>
+      </header>
 
       {pendingResize && (
-        <div style={S.resizeBanner}>
-          <ArrowRight size={18} />
-          <span>Selecciona el día de fin para {pendingResize.numero_orden}</span>
-          <button onClick={() => setPendingResize(null)} style={S.resizeBannerBtn}>
-            <X size={14} />
-          </button>
+        <div className="pd-resize-banner" role="status">
+          <ArrowRight size={16} />
+          Elige el día de fin para {pendingResize.numero_orden}
+          <button type="button" className="pg-iconbtn" onClick={() => setPendingResize(null)} aria-label="Cancelar"><X size={14} /></button>
         </div>
       )}
 
-      <div style={S.calPanel}>
-
-        <div style={S.calHeader}>
-          <div style={S.calTitle}>
-            <div style={S.calTitleIcon}>
-              <CalendarIcon color="var(--accent)" size={22} />
-            </div>
-            <h2 style={S.calTitleText}>
-              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-            </h2>
-          </div>
-          <div style={S.calControls}>
-            <button style={S.btnHoy} onClick={() => setCurrentDate(new Date())}>Hoy</button>
-            <button style={S.btnNav} onClick={() => changeMonth(-1)}><ChevronLeft size={16} /></button>
-            <button style={S.btnNav} onClick={() => changeMonth(1)}><ChevronRight size={16} /></button>
-          </div>
-        </div>
-
-        <div style={S.weekRow}>
-          {daysOfWeek.map(d => <div key={d} style={S.weekCell}>{d}</div>)}
-        </div>
-
-        <div style={S.daysGrid}>
-          {calendarDays.map((item, index) => {
-            if (!item.day) return <div key={`empty-${index}`} style={S.dayCellEmpty} />;
-
-            const isTodayDay = isToday(item.day);
-            const ordenesDelDia = ordenes.filter(o => isOrderInDay(o, item.fullDate));
-            const isPotentialEnd = pendingResize && item.fullDate >= pendingResize.start_date;
-
-            return (
-              <div
-                key={item.fullDate}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, item.fullDate)}
-                onClick={() => handleDayClick(item)}
-                style={S.dayCell(isTodayDay, isPotentialEnd)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', paddingLeft: '2px' }}>
-                  <span style={S.dayNumber(isTodayDay)}>{item.day}</span>
-                  {ordenesDelDia.length > 0 && (
-                    <span style={S.ordenesBadge}>{ordenesDelDia.length}</span>
-                  )}
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {ordenesDelDia.slice(0, 4).map(o => {
-                    const { start, end } = getOrderDates(o);
-                    return <OrdenCard key={o.id_orden} orden={o} compact isRangePart={start !== end} />;
-                  })}
-                  {ordenesDelDia.length > 4 && (
-                    <div style={{ fontSize: '9px', color: 'var(--text-secondary)', textAlign: 'center', fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.06em' }}>
-                      +{ordenesDelDia.length - 4} más
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="pd-legend" style={{ marginBottom: '0.75rem' }}>
+        {LEYENDA.map(estado => (
+          <span key={estado}><i style={{ '--c': ESTADOS_PRODUCCION[estado].color }} />{ESTADOS_PRODUCCION[estado].label}</span>
+        ))}
+        <span><i style={{ '--c': 'var(--accent-dim)', outline: '1px solid var(--accent-border)' }} />Varios días</span>
       </div>
 
-      <div style={S.sidebar}>
-        <div style={S.sidebarHeader}>
-          <h3 style={S.sidebarTitle}>
-            <Package size={16} /> Por Programar
-          </h3>
-          {!esComercial && <p style={S.sidebarSub}>Arrastra al día de inicio</p>}
-        </div>
-        <div style={S.sidebarBody}>
-          {ordenesParaSidebar.length === 0 ? (
-            <div style={S.emptySidebar}>
-              <CheckCircle size={28} color="var(--success)" style={{ margin: '0 auto 8px', display: 'block' }} />
-              <p style={{ margin: 0, fontFamily: "'Barlow Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '12px' }}>
-                Todo programado
-              </p>
+      <div className="pd-cal-layout">
+        <section className="pg-panel pd-cal" aria-label="Calendario">
+          <div className="pd-weekdays">
+            {daysOfWeek.map(d => <span key={d}>{d}</span>)}
+          </div>
+          <div className="pd-days">
+            {calendarDays.map((item, index) => {
+              if (!item.day) return <div key={`empty-${index}`} className="pd-day is-blank" />;
+
+              const esHoy = isToday(item.day);
+              const ordenesDelDia = ordenes.filter(o => isOrderInDay(o, item.fullDate));
+              const esDestino = pendingResize && item.fullDate >= pendingResize.start_date;
+
+              return (
+                <div
+                  key={item.fullDate}
+                  onDragOver={(e) => { handleDragOver(e); if (diaDestino !== item.fullDate) setDiaDestino(item.fullDate); }}
+                  onDragLeave={() => setDiaDestino(null)}
+                  onDrop={(e) => { setDiaDestino(null); handleDrop(e, item.fullDate); }}
+                  onClick={() => handleDayClick(item)}
+                  className={`pd-day ${esHoy ? 'is-today' : ''} ${esDestino ? 'is-target' : ''} ${diaDestino === item.fullDate ? 'is-drop' : ''}`}
+                >
+                  <div className="pd-day-head">
+                    <span className="pd-day-num">{item.day}</span>
+                    {ordenesDelDia.length > 0 && <span className="pd-day-count">{ordenesDelDia.length}</span>}
+                  </div>
+                  <div className="pd-day-list">
+                    {ordenesDelDia.slice(0, 3).map(renderEvento)}
+                    {ordenesDelDia.length > 3 && <span className="pd-day-more">+{ordenesDelDia.length - 3} más</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <aside className="pg-panel pd-pending" aria-label="Órdenes por programar">
+          <div className="pg-panel-head">
+            <div>
+              <h2 className="pg-panel-title"><Package size={16} /> Por programar <span className="pg-count">{ordenesParaSidebar.length}</span></h2>
+              {!esComercial && <span className="pg-panel-meta">Arrastra una orden al día de inicio</span>}
             </div>
-          ) : (
-            ordenesParaSidebar.map(o => <OrdenCard key={o.id_orden} orden={o} />)
-          )}
-        </div>
+          </div>
+          <div className="pd-pending-body">
+            {ordenesParaSidebar.length === 0 ? (
+              <div className="pg-empty">
+                <CheckCircle size={26} className="text-success" />
+                <strong>Todo programado</strong>
+              </div>
+            ) : (
+              ordenesParaSidebar.map(renderTarjeta)
+            )}
+          </div>
+        </aside>
       </div>
 
       {modalOpen && selectedDay && (
-        <div style={S.modalOverlay}>
-          <div style={S.modalBox}>
-            <div style={S.modalHeader}>
-              <h3 style={S.modalTitle}>
-                {selectedDay.day} de {monthNames[currentDate.getMonth()]}
+        <div className="pd-modal-scrim" onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false); }}>
+          <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-modal-title">
+            <div className="pg-panel-head">
+              <h3 id="pd-modal-title" className="pg-panel-title">
+                <CalendarIcon size={16} /> {selectedDay.day} de {monthNames[currentDate.getMonth()].toLowerCase()}
+                <span className="pg-count">{ordenesDelDiaSeleccionado.length}</span>
               </h3>
-              <button
-                onClick={() => setModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}
-              >
-                <X size={20} />
-              </button>
+              <button type="button" className="pg-iconbtn" onClick={() => setModalOpen(false)} aria-label="Cerrar" autoFocus><X size={16} /></button>
             </div>
-
-            <div style={S.modalBody}>
+            <div className="pd-modal-body">
               {ordenesDelDiaSeleccionado.length === 0 ? (
-                <div style={S.emptyModal}>Sin órdenes programadas para este día.</div>
+                <div className="pg-empty">
+                  <CalendarIcon size={26} />
+                  <strong>Sin órdenes este día</strong>
+                  {!esComercial && <span>Arrastra una orden desde «Por programar» para agendarla.</span>}
+                </div>
               ) : (
                 ordenesDelDiaSeleccionado.map(o => {
                   const { start, end } = getOrderDates(o);
-                  const colorEstado = getStatusColor(o.estado);
                   return (
-                    <div key={o.id_orden} style={S.modalOrdenWrap(colorEstado)}>
-                      <div style={S.modalOrdenStatus(colorEstado)}>{o.estado}</div>
-                      <OrdenCard orden={o} />
-                      <div style={S.modalOrdenDates}>
-                        <span><strong>Inicio:</strong> {start}</span>
-                        <span><strong>Fin:</strong> {end}</span>
+                    <div key={o.id_orden}>
+                      {renderTarjeta(o)}
+                      <div className="pd-range" style={{ padding: '0.35rem 0.2rem 0' }}>
+                        <span>Inicio <b>{fechaCorta(start)}</b></span>
+                        <span>Fin <b>{fechaCorta(end)}</b></span>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
-
-            <div style={S.modalFooter}>
-              <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cerrar</button>
+            <div className="pd-modal-foot">
+              <button type="button" className="btn btn-outline" onClick={() => setModalOpen(false)}>Cerrar</button>
             </div>
           </div>
         </div>

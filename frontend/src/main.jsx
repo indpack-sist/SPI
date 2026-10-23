@@ -15,6 +15,7 @@ import '@fontsource/barlow-condensed/latin-700.css'
 import '@fontsource/barlow-condensed/latin-800.css'
 
 import './index.css'
+import './styles/paginas.css'
 import ResponsiveTables from './components/UI/ResponsiveTables.jsx'
 
 const PRELOAD_RELOAD_KEY = 'indpack_preload_reload_at'

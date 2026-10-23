@@ -1,36 +1,71 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import XLSX from 'xlsx-js-style';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell, Area, AreaChart
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
 import {
   Calendar, Search, Filter, Download, FileSpreadsheet,
-  DollarSign, TrendingUp, PieChart as PieIcon,
-  FileText, CheckCircle, AlertCircle, Truck, User, X,
+  DollarSign, TrendingUp, FileText, CheckCircle, AlertCircle, Truck, X,
   Eye, Package, MapPin, Phone, Mail, CreditCard, FileCheck,
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
-  RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp,
-  ShieldCheck, ShieldAlert, ShieldOff, Trash2
+  RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  ShieldCheck, ShieldAlert, ShieldOff, Trash2, XCircle, Ban, Receipt, FileCode,
+  FileArchive, Users, Wallet, ExternalLink, ClipboardList, BarChart3
 } from 'lucide-react';
-import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI, archivosAPI } from '../../config/api';
+import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI, archivosAPI, sunatAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
-import { generarReporteVentasPDF } from './reporteVentasPDF'; 
-
-const COLORS_PIE = {
-  'Pagado': '#10B981',
-  'Parcial': '#F59E0B',
-  'Pendiente': '#EF4444',
-  'Pagado USD': '#059669',
-  'Parcial USD': '#D97706',
-  'Pendiente USD': '#DC2626'
-};
+import { generarReporteVentasPDF } from './reporteVentasPDF';
+import './ReporteVentas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
+
+const ESTADOS_SEE = {
+  ACEPTADO:   { label: 'Aceptada',    badge: 'badge-success',   icon: CheckCircle,   color: 'var(--success)' },
+  OBSERVADO:  { label: 'Observada',   badge: 'badge-warning',   icon: AlertTriangle, color: 'var(--warning)' },
+  RECHAZADO:  { label: 'Rechazada',   badge: 'badge-danger',    icon: XCircle,       color: 'var(--danger)' },
+  EN_PROCESO: { label: 'En proceso',  badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
+  PENDIENTE:  { label: 'Pendiente',   badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
+  ENVIADO:    { label: 'Enviada',     badge: 'badge-info',      icon: Clock,         color: 'var(--info)' },
+  ERROR:      { label: 'Error',       badge: 'badge-danger',    icon: XCircle,       color: 'var(--danger)' },
+  SIN_EMITIR: { label: 'Sin emitir',  badge: 'badge-secondary', icon: Receipt,       color: 'var(--steel-light)' },
+  ANULADA:    { label: 'Anulada',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
+  BAJA:       { label: 'De baja',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
+  NO_APLICA:  { label: 'No aplica',   badge: 'badge-secondary', icon: FileText,      color: 'var(--steel-light)' }
+};
+
+const TILES_SEE = ['ACEPTADO', 'OBSERVADO', 'EN_PROCESO', 'RECHAZADO', 'SIN_EMITIR', 'ANULADA'];
+
+const CLASE_COMPROBANTE = { FACTURA: 'Factura', NOTA_CREDITO: 'Nota de crédito', NOTA_DEBITO: 'Nota de débito' };
+
+const ESTADOS_PAGO = [
+  { id: 'Pagado', badge: 'badge-success', color: 'var(--success)' },
+  { id: 'Parcial', badge: 'badge-warning', color: 'var(--warning)' },
+  { id: 'Pendiente', badge: 'badge-danger', color: 'var(--danger)' }
+];
+
+const BADGE_ESTADO_ORDEN = {
+  'En Espera': 'badge-secondary',
+  'En Proceso': 'badge-info',
+  'Atendido por Produccion': 'badge-primary',
+  'Despacho Parcial': 'badge-warning',
+  'Despachada': 'badge-success',
+  'Entregada': 'badge-success',
+  'Cancelada': 'badge-danger'
+};
+
+const FILAS_POR_PAGINA = 25;
+
+const BadgeSee = ({ estado }) => {
+  const cfg = ESTADOS_SEE[estado] || ESTADOS_SEE.SIN_EMITIR;
+  const Icono = cfg.icon;
+  return <span className={`badge ${cfg.badge}`}><Icono size={11} />{cfg.label}</span>;
+};
 
 const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -38,257 +73,108 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+      if (containerRef.current && !containerRef.current.contains(event.target)) setIsOpen(false);
     };
+    const handleEscape = (event) => { if (event.key === 'Escape') setIsOpen(false); };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
-  const handleToggle = (e, value) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const newValues = selectedValues.includes(value)
+  const toggle = (value) => {
+    onChange(selectedValues.includes(value)
       ? selectedValues.filter(v => v !== value)
-      : [...selectedValues, value];
-    onChange(newValues);
+      : [...selectedValues, value]);
   };
 
-  return (
-    <div className="form-group mb-0 flex flex-col justify-end" ref={containerRef} style={{ zIndex: isOpen ? 100 : 10 }}>
-      <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
-      <div className="relative w-full">
-        <div 
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
-          className="form-input flex justify-between items-center transition-all bg-carbon-mid"
-style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--accent)' : 'var(--steel)', color: 'var(--text-primary)', height: '38px', width: '100%', backgroundColor: 'var(--carbon-mid)' }}
-        >
-          <span className="text-xs font-bold truncate pr-2" style={{ color: 'var(--text-primary)' }}>
-            {selectedValues.length === 0 ? 'Todos' : 
-             selectedValues.length === 1 ? selectedValues[0] : 
-             `${selectedValues.length} seleccionados`}
-          </span>
-          <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-300'} />
-        </div>
+  const resumen = selectedValues.length === 0
+    ? 'Todos'
+    : selectedValues.length === 1
+      ? (options.find(o => o.value === selectedValues[0])?.label || selectedValues[0])
+      : `${selectedValues.length} seleccionados`;
 
-        {isOpen && (
-          <div className="absolute left-0 right-0 w-full border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
-               style={{ top: '100%', marginTop: '4px', backgroundColor: 'var(--carbon)', zIndex: 1000 }}>
-            <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
-              {options.map((opt) => (
-                <div 
-                  key={opt.value} 
-                  className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md transition-colors"
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => handleToggle(e, opt.value)}
-                >
-                  <div className="relative flex items-center pointer-events-none">
-                    <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                      selectedValues.includes(opt.value) 
-                      ? 'bg-primary border-primary' 
-                      : 'bg-transparent border-steel group-hover:border-wire'
-                    }`}>
-                      {selectedValues.includes(opt.value) && <CheckCircle size={10} className="text-carbon font-bold" />}
-                    </div>
-                  </div>
-                  <span className={`ml-3 text-xs font-medium transition-colors pointer-events-none ${
-                    selectedValues.includes(opt.value) ? 'text-primary' : 'text-mist'
-                  }`}>
-                    {opt.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {selectedValues.length > 0 && (
-              <div className="border-t border-steel/20 mt-2 pt-2 px-3">
-                <button 
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
-                  className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1 w-full"
-                  style={{ cursor: 'pointer' }}
-                >
-                  <X size={10} /> Limpiar Selección
-                </button>
-              </div>
-            )}
+  return (
+    <div className="pg-field rv-ms" ref={containerRef}>
+      <span className="pg-field-label">{label}</span>
+      <button
+        type="button"
+        className={`rv-ms-trigger ${selectedValues.length > 0 ? 'has-value' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{resumen}</span>
+        <ChevronDown size={14} />
+      </button>
+      {isOpen && (
+        <div className="rv-ms-menu" role="listbox" aria-multiselectable="true">
+          <div className="rv-ms-list">
+            {options.map(opt => (
+              <label key={opt.value} className="rv-ms-option">
+                <input
+                  type="checkbox"
+                  className="checkbox"
+                  checked={selectedValues.includes(opt.value)}
+                  onChange={() => toggle(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
           </div>
-        )}
-      </div>
+          {selectedValues.length > 0 && (
+            <button type="button" className="rv-ms-clear" onClick={() => onChange([])}>
+              <X size={12} /> Limpiar selección
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
 const ModalTC = ({ mostrarModalTC, tcVenta, setMostrarModalTC, aplicarModoUnificacion }) => {
+  useEffect(() => {
+    if (!mostrarModalTC) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMostrarModalTC(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mostrarModalTC, setMostrarModalTC]);
+
   if (!mostrarModalTC) return null;
 
   return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(2px)',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) setMostrarModalTC(false); }}
-    >
-      <div
-        style={{
-          width: '90%',
-          maxWidth: '420px',
-          borderRadius: '16px',
-          overflow: 'hidden',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
-          backgroundColor: 'var(--bg-card, #1a1f2e)',
-          border: '1px solid var(--border-color, rgba(255,255,255,0.08))',
-        }}
-      >
-        <div
-          style={{
-            borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.08))',
-            padding: '16px 20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: 'var(--bg-secondary, #12161f)',
-          }}
-        >
-          <h3
-            style={{
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '15px',
-              margin: 0,
-              color: 'var(--text-primary, #f1f5f9)',
-            }}
-          >
-            <ArrowRightLeft size={18} style={{ color: 'var(--primary)' }} />
-            Opciones de Unificación
-          </h3>
-          <button
-            onClick={() => setMostrarModalTC(false)}
-            style={{
-              padding: '4px',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: 'var(--text-muted, #94a3b8)',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <X size={20} />
-          </button>
+    <div className="rv-tc-modal-scrim" onClick={(e) => { if (e.target === e.currentTarget) setMostrarModalTC(false); }}>
+      <div className="rv-tc-modal" role="dialog" aria-modal="true" aria-labelledby="rv-tc-modal-title">
+        <div className="pg-panel-head">
+          <h3 id="rv-tc-modal-title" className="pg-panel-title"><ArrowRightLeft size={16} /> Unificar a soles</h3>
+          <button type="button" className="pg-iconbtn" onClick={() => setMostrarModalTC(false)} aria-label="Cerrar" autoFocus><X size={16} /></button>
         </div>
-
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <p style={{ fontSize: '13px', marginBottom: '6px', color: 'var(--text-secondary, #cbd5e1)', margin: '0 0 10px 0' }}>
-            ¿Cómo deseas calcular el equivalente en Soles (PEN) para las órdenes en Dólares?
-          </p>
-
-          <div
-            onClick={() => aplicarModoUnificacion('sunat')}
-            style={{
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px',
-              backgroundColor: 'var(--bg-secondary, #12161f)',
-              transition: 'border-color 0.15s, background-color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.backgroundColor = 'var(--primary-dim, rgba(99,102,241,0.08))'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; e.currentTarget.style.backgroundColor = 'var(--bg-secondary, #12161f)'; }}
-          >
-            <DollarSign size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--text-muted, #94a3b8)' }} />
-            <div>
-              <h4 style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--text-primary, #f1f5f9)' }}>
-                Forzar TC SUNAT Global
-              </h4>
-              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-muted, #94a3b8)' }}>
-                Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}
-              </p>
-            </div>
-          </div>
-
-          <div
-            onClick={() => aplicarModoUnificacion('mixto')}
-            style={{
-              padding: '14px',
-              borderRadius: '10px',
-              border: '2px solid var(--primary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px',
-              backgroundColor: 'var(--primary-dim, rgba(99,102,241,0.1))',
-              position: 'relative',
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                backgroundColor: 'var(--primary)',
-                color: 'var(--text-primary)',
-                fontSize: '9px',
-                fontWeight: 700,
-                padding: '3px 8px',
-                borderRadius: '0 8px 0 8px',
-                letterSpacing: '0.05em',
-              }}
-            >
-              RECOMENDADO
-            </div>
-            <TrendingUp size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--primary)' }} />
-            <div>
-              <h4 style={{ fontWeight: 700, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--primary)' }}>
-                Híbrido / Inteligente
-              </h4>
-              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-secondary, #cbd5e1)' }}>
-                Respeta TC real ({'>'} 3). Usa SUNAT para el resto.
-              </p>
-            </div>
-          </div>
-
-          <div
-            onClick={() => aplicarModoUnificacion('historico')}
-            style={{
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px',
-              backgroundColor: 'var(--bg-secondary, #12161f)',
-              transition: 'border-color 0.15s, background-color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.backgroundColor = 'var(--primary-dim, rgba(99,102,241,0.08))'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; e.currentTarget.style.backgroundColor = 'var(--bg-secondary, #12161f)'; }}
-          >
-            <Clock size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--text-muted, #94a3b8)' }} />
-            <div>
-              <h4 style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--text-primary, #f1f5f9)' }}>
-                Estricto Histórico
-              </h4>
-              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-muted, #94a3b8)' }}>
-                Usa solo el TC guardado en la base de datos.
-              </p>
-            </div>
-          </div>
+        <div className="rv-tc-modal-body">
+          <p>¿Cómo calcular el equivalente en soles de las órdenes en dólares?</p>
+          <button type="button" className="rv-tc-option is-recommended" onClick={() => aplicarModoUnificacion('mixto')}>
+            <TrendingUp size={18} />
+            <span>
+              <strong>Híbrido <span className="rv-tag">Recomendado</span></strong>
+              <small>Respeta el TC de la orden cuando es real (mayor a 3); usa el TC SUNAT para el resto.</small>
+            </span>
+          </button>
+          <button type="button" className="rv-tc-option" onClick={() => aplicarModoUnificacion('sunat')}>
+            <DollarSign size={18} />
+            <span>
+              <strong>TC SUNAT para todo</strong>
+              <small>Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}.</small>
+            </span>
+          </button>
+          <button type="button" className="rv-tc-option" onClick={() => aplicarModoUnificacion('historico')}>
+            <Clock size={18} />
+            <span>
+              <strong>Histórico estricto</strong>
+              <small>Usa el TC SUNAT del día en que se facturó cada orden.</small>
+            </span>
+          </button>
         </div>
       </div>
     </div>,
@@ -1433,46 +1319,245 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
     }
   };
 
-  const verDetalleOrden = (orden) => { setOrdenSeleccionada(orden); setMostrarDetalleOrden(true); };
+  const navigate = useNavigate();
+  const { tienePermiso } = usePermisos();
+  const puedeVerArchivosSee = tienePermiso('facturacion') || tienePermiso('facturacionConsulta');
+  const puedeAbrirTrazabilidad = tienePermiso('facturacion');
 
-  const obtenerBadgeEstadoPago = (estado) => {
-    const estilos = { 'Pagado': 'badge badge-success', 'Parcial': 'badge badge-warning', 'Pendiente': 'badge badge-danger' };
-    return <span className={estilos[estado] || 'badge badge-secondary'}>{estado}</span>;
-  };
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [busquedaTabla, setBusquedaTabla] = useState('');
+  const [filtroSee, setFiltroSee] = useState('');
+  const [monedaGrafico, setMonedaGrafico] = useState('PEN');
+  const [pagina, setPagina] = useState(1);
 
-  const obtenerBadgeEstado = (estado) => {
-    const estilos = {
-      'En Espera': 'badge badge-secondary', 'En Proceso': 'badge badge-info',
-      'Atendido por Produccion': 'badge badge-purple-100 text-purple-900 border-purple-200',
-      'Despacho Parcial': 'badge badge-warning', 'Despachada': 'badge badge-success',
-      'Entregada': 'badge badge-success', 'Cancelada': 'badge badge-danger'
+  useEffect(() => { setPagina(1); }, [busquedaTabla, filtroSee, dataFiltrada]);
+
+  useEffect(() => {
+    if (!mostrarDetalleOrden) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !visorArchivo.open && !modalSunat.isOpen) setMostrarDetalleOrden(false);
     };
-    const claseExtra = estado === 'Atendido por Produccion' ? 'bg-purple-100 text-purple-900 border border-purple-200' : (estilos[estado] || 'badge badge-secondary');
-    return <span className={claseExtra.startsWith('badge') ? claseExtra : `badge ${claseExtra}`}>{estado}</span>;
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mostrarDetalleOrden, visorArchivo.open, modalSunat.isOpen]);
+
+  const verDetalleOrden = (orden) => { setOrdenSeleccionada(orden); setMostrarDetalleOrden(true); };
+  const cerrarDetalle = () => setMostrarDetalleOrden(false);
+
+  const unificado = convertirUSD && !!tcVenta;
+
+  const tcAplicadoOrden = (item) => {
+    if (item.moneda !== 'USD') return 1;
+    const tcOrden = parseFloat(item.tipo_cambio || 1);
+    if (!unificado) return tcOrden;
+    if (modoUnificacion === 'sunat') return tcVenta;
+    if (modoUnificacion === 'mixto') return tcOrden > 3 ? tcOrden : tcVenta;
+    return item.tc_historico ? parseFloat(item.tc_historico) : tcVenta;
   };
 
-  const obtenerBadgeVerificacion = (estado) => {
-    const estilos = { 'Pendiente': 'badge badge-warning', 'Aprobada': 'badge badge-success', 'Rechazada': 'badge badge-danger' };
-    return <span className={estilos[estado] || 'badge badge-secondary'}>{estado}</span>;
+  const enSoles = (item, prop) => parseFloat(item[prop] || 0) * tcAplicadoOrden(item);
+
+  const fmt2 = (valor) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
+  const simbolo = (moneda) => (moneda === 'USD' ? '$' : 'S/');
+  const porcentaje = (parte, total) => (total > 0 ? (parte / total) * 100 : 0);
+  const esCredito = (item) => String(item.tipo_venta || '').toLowerCase().includes('dito');
+
+  const ejecutarDescarga = async (accion, etiqueta) => {
+    try {
+      await accion();
+    } catch (err) {
+      setError(err.message || `No se pudo descargar ${etiqueta}`);
+    }
   };
 
-  const obtenerBadgeLogistica = (estado) => {
-    const estilos = { 'A tiempo': 'badge badge-info', 'En plazo': 'badge badge-info badge-outline', 'Retrasado': 'badge badge-danger', 'Vencido': 'badge badge-danger badge-outline' };
-    return <span className={estilos[estado] || 'badge badge-secondary'}>{estado}</span>;
+  const comprobantePrincipal = (item) => {
+    const facturas = (item.see?.comprobantes || []).filter(c => c.clase === 'FACTURA');
+    const vigentes = facturas.filter(c => ['ACEPTADO', 'OBSERVADO'].includes(c.estado_final));
+    if (vigentes.length > 0) return vigentes[vigentes.length - 1];
+    return facturas.length > 0 ? facturas[facturas.length - 1] : null;
   };
 
-  const obtenerIconoTipoEntrega = (tipo) => {
-    if (tipo === 'Vehiculo Empresa') return <Truck size={16} className="text-blue-600" />;
-    if (tipo === 'Transporte Privado') return <Package size={16} className="text-orange-600" />;
-    return <ShoppingCart size={16} className="text-green-600" />;
+  const numeroDocumento = (item) => {
+    const principal = comprobantePrincipal(item);
+    if (principal?.documento) return principal.documento;
+    if (item.tipo_comprobante === 'Factura') return item.facturado_sunat ? (item.numero_comprobante_sunat || '') : '';
+    return item.numero_comprobante || '';
+  };
+
+  const renderArchivosComprobante = (comprobante) => {
+    if (!puedeVerArchivosSee || !comprobante?.es_electronico) return null;
+    return (
+      <span className="rv-files" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="pg-iconbtn" title={`PDF ${comprobante.documento}`} aria-label={`Descargar PDF ${comprobante.documento}`}
+          onClick={() => ejecutarDescarga(() => sunatAPI.verPdfComprobante(comprobante.id_factura), 'el PDF')}>
+          <FileText size={13} />
+        </button>
+        <button type="button" className="pg-iconbtn" title="XML" aria-label={`Descargar XML ${comprobante.documento}`} disabled={!comprobante.xml_url}
+          onClick={() => ejecutarDescarga(() => sunatAPI.descargarArchivoUrl(comprobante.xml_url, `${comprobante.documento}.xml`), 'el XML')}>
+          <FileCode size={13} />
+        </button>
+        <button type="button" className="pg-iconbtn" title="CDR" aria-label={`Descargar CDR ${comprobante.documento}`} disabled={!comprobante.cdr_url}
+          onClick={() => ejecutarDescarga(() => sunatAPI.descargarArchivoUrl(comprobante.cdr_url, `R-${comprobante.documento}.zip`), 'el CDR')}>
+          <FileArchive size={13} />
+        </button>
+      </span>
+    );
+  };
+
+  const resumen = calcularResumenFiltrado();
+  const hayUSDenData = resumen.total_ventas_usd > 0;
+  const hayPENenData = resumen.total_ventas_pen > 0;
+
+  const ventasPrincipal = unificado ? calcularTotalUnificadoPorModo('total') : resumen.total_ventas_pen;
+  const cobradoPrincipal = unificado ? calcularTotalUnificadoPorModo('monto_pagado') : resumen.total_pagado_pen;
+  const porCobrarPrincipal = unificado ? calcularTotalUnificadoPorModo('pendiente_cobro') : resumen.total_pendiente_pen;
+  const ordenesConSaldo = dataFiltrada.filter(o => parseFloat(o.pendiente_cobro || 0) > 0.01).length;
+  const ordenesFueraPlazo = dataFiltrada.filter(o => ['Retrasado', 'Vencido'].includes(o.estado_logistico)).length;
+  const ordenesConPlazo = dataFiltrada.filter(o => o.fecha_entrega_programada).length;
+
+  const monedaVista = unificado ? 'PEN' : (!hayPENenData && hayUSDenData ? 'USD' : monedaGrafico);
+  const ordenesVista = unificado ? dataFiltrada : dataFiltrada.filter(o => o.moneda === monedaVista);
+  const valorVista = (item, prop = 'total') => (unificado ? enSoles(item, prop) : parseFloat(item[prop] || 0));
+  const totalVista = ordenesVista.reduce((s, o) => s + valorVista(o), 0);
+
+  const campoFechaActivo = {
+    fecha_emision: 'fecha_emision',
+    fecha_despacho: 'fecha_despacho',
+    fecha_sunat: 'fecha_facturacion_sunat'
+  }[filtros.filtroFecha] || 'fecha_emision';
+
+  const etiquetaFechaActiva = { fecha_emision: 'emisión', fecha_despacho: 'despacho', fecha_sunat: 'facturación SUNAT' }[filtros.filtroFecha] || 'emisión';
+
+  const serieDiaria = (() => {
+    const mapa = {};
+    ordenesVista.forEach(o => {
+      const fecha = o[campoFechaActivo];
+      if (!fecha) return;
+      const clave = String(fecha).split('T')[0];
+      mapa[clave] = (mapa[clave] || 0) + valorVista(o);
+    });
+    return Object.keys(mapa).sort().map(clave => ({
+      fecha: clave,
+      etiqueta: `${clave.slice(8, 10)}/${clave.slice(5, 7)}`,
+      total: parseFloat(mapa[clave].toFixed(2))
+    }));
+  })();
+  const mejorDia = serieDiaria.reduce((mejor, d) => (!mejor || d.total > mejor.total ? d : mejor), null);
+  const promedioDiario = serieDiaria.length > 0 ? serieDiaria.reduce((s, d) => s + d.total, 0) / serieDiaria.length : 0;
+
+  const composicionDocumento = [
+    { id: 'Factura', label: 'Factura', color: 'var(--rv-s1)' },
+    { id: 'Nota de Venta', label: 'Nota de venta', color: 'var(--rv-s2)' },
+    { id: 'Sin Comprobante', label: 'Sin comprobante', color: 'var(--rv-s3)' }
+  ].map(cat => {
+    const items = ordenesVista.filter(o => {
+      const tipo = String(o.tipo_comprobante || '').trim();
+      if (cat.id === 'Sin Comprobante') return tipo !== 'Factura' && tipo !== 'Nota de Venta';
+      return tipo === cat.id;
+    });
+    return { ...cat, total: items.reduce((s, o) => s + valorVista(o), 0), cantidad: items.length };
+  });
+
+  const totalCredito = ordenesVista.filter(esCredito).reduce((s, o) => s + valorVista(o), 0);
+  const totalContado = totalVista - totalCredito;
+
+  const composicionPago = ESTADOS_PAGO.map(est => {
+    const items = ordenesVista.filter(o => o.estado_pago === est.id);
+    return { ...est, total: items.reduce((s, o) => s + valorVista(o), 0), cantidad: items.length };
+  });
+
+  const vendedores = (() => {
+    const mapa = {};
+    ordenesVista.forEach(o => {
+      const nombre = o.vendedor || 'Sin asignar';
+      if (!mapa[nombre]) mapa[nombre] = { nombre, total: 0, cantidad: 0, comision: 0 };
+      mapa[nombre].total += valorVista(o);
+      mapa[nombre].comision += valorVista(o, 'total_comision');
+      mapa[nombre].cantidad += 1;
+    });
+    const lista = Object.values(mapa).sort((a, b) => b.total - a.total);
+    if (lista.length <= 8) return lista;
+    const resto = lista.slice(7).reduce((acc, v) => ({
+      nombre: `Otros (${lista.length - 7})`,
+      total: acc.total + v.total,
+      cantidad: acc.cantidad + v.cantidad,
+      comision: acc.comision + v.comision
+    }), { total: 0, cantidad: 0, comision: 0 });
+    return [...lista.slice(0, 7), resto];
+  })();
+  const maxVendedor = vendedores.reduce((m, v) => Math.max(m, v.total), 0);
+
+  const seeConteo = TILES_SEE.reduce((acc, k) => ({ ...acc, [k]: { cantidad: 0, PEN: 0, USD: 0 } }), {});
+  let ordenesConFactura = 0;
+  let notasCredito = 0;
+  const montoNotasCredito = { PEN: 0, USD: 0 };
+  let guiasAceptadas = 0;
+  let despachadas = 0;
+  let despachadasConGuia = 0;
+  dataFiltrada.forEach(o => {
+    const estado = o.see?.estado || 'NO_APLICA';
+    if (estado !== 'NO_APLICA') {
+      ordenesConFactura += 1;
+      if (seeConteo[estado]) {
+        seeConteo[estado].cantidad += 1;
+        seeConteo[estado][o.moneda === 'USD' ? 'USD' : 'PEN'] += parseFloat(o.total || 0);
+      }
+    }
+    notasCredito += o.see?.cantidad_nc || 0;
+    montoNotasCredito[o.moneda === 'USD' ? 'USD' : 'PEN'] += o.see?.monto_nc || 0;
+    guiasAceptadas += o.see?.guias_aceptadas || 0;
+    if (['Despacho Parcial', 'Despachada', 'Entregada'].includes(o.estado)) {
+      despachadas += 1;
+      if ((o.see?.guias_vigentes || 0) > 0) despachadasConGuia += 1;
+    }
+  });
+  const facturasAceptadas = seeConteo.ACEPTADO.cantidad + seeConteo.OBSERVADO.cantidad;
+  const facturasPorEmitir = seeConteo.SIN_EMITIR.cantidad + seeConteo.RECHAZADO.cantidad;
+
+  const textoBusqueda = busquedaTabla.trim().toLowerCase();
+  const filasTabla = dataFiltrada.filter(o => {
+    if (filtroSee && (o.see?.estado || 'NO_APLICA') !== filtroSee) return false;
+    if (!textoBusqueda) return true;
+    return [
+      o.numero, o.cliente, o.ruc, o.vendedor, o.numero_comprobante, o.numero_comprobante_sunat,
+      o.numero_cotizacion, o.orden_compra_cliente, ...(o.see?.comprobantes || []).map(c => c.documento)
+    ].some(v => String(v || '').toLowerCase().includes(textoBusqueda));
+  });
+  const totalPaginas = Math.max(1, Math.ceil(filasTabla.length / FILAS_POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const filasPagina = filasTabla.slice((paginaActual - 1) * FILAS_POR_PAGINA, paginaActual * FILAS_POR_PAGINA);
+
+  const numerosPagina = (() => {
+    if (totalPaginas <= 7) return Array.from({ length: totalPaginas }, (_, i) => i + 1);
+    const nums = new Set([1, totalPaginas, paginaActual - 1, paginaActual, paginaActual + 1]);
+    const ordenados = [...nums].filter(n => n >= 1 && n <= totalPaginas).sort((a, b) => a - b);
+    return ordenados.reduce((acc, n, i) => {
+      if (i > 0 && n - ordenados[i - 1] > 1) acc.push('…');
+      acc.push(n);
+      return acc;
+    }, []);
+  })();
+
+  const filtrosAvanzadosActivos = [filtros.estadosOrden, filtros.estadosPago, filtros.idVendedor, filtros.monedas, filtros.tiposDocumento]
+    .reduce((n, lista) => n + (lista.length > 0 ? 1 : 0), 0);
+
+  const renderTooltipGrafico = ({ active, payload }) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const punto = payload[0].payload;
+    return (
+      <div className="rv-tooltip">
+        {formatearFecha(punto.fecha)}
+        <strong>{simbolo(monedaVista)} {fmt2(punto.total)}</strong>
+      </div>
+    );
   };
 
   const renderDesgloseUnificacion = () => {
     const ordenesUSD = dataFiltrada.filter(item => item.moneda === 'USD');
     if (ordenesUSD.length === 0) return null;
 
-    let grupoSunat = [];
-    let grupoHistorico = [];
+    const grupoSunat = [];
+    const grupoHistorico = [];
 
     ordenesUSD.forEach(orden => {
       const tcOrden = parseFloat(orden.tipo_cambio || 1);
@@ -1483,247 +1568,55 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
         grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Global SUNAT' });
       } else if (modoUnificacion === 'historico') {
         const tcHist = orden.tc_historico ? parseFloat(orden.tc_historico) : tcVenta;
-        grupoHistorico.push({ ...orden, tcUsado: tcHist, valorPen: totalOrden * tcHist, tcOriginal: tcOrden, montoOriginalPEN, tipo: orden.tc_historico ? 'Estricto Histórico' : 'SUNAT Rescate' });
-      } else if (modoUnificacion === 'mixto') {
-        if (tcOrden > 3) {
-          grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Histórico Válido' });
-        } else {
-          grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'SUNAT Rescate' });
-        }
+        grupoHistorico.push({ ...orden, tcUsado: tcHist, valorPen: totalOrden * tcHist, tcOriginal: tcOrden, montoOriginalPEN, tipo: orden.tc_historico ? 'Estricto histórico' : 'SUNAT rescate' });
+      } else if (tcOrden > 3) {
+        grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Histórico válido' });
+      } else {
+        grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'SUNAT rescate' });
       }
     });
 
-    const FilaOrden = ({ o, esGrupoSunat }) => {
-      const tcCambio = o.tcUsado !== o.tcOriginal;
+    const renderFila = (o) => {
       const diferencia = o.valorPen - o.montoOriginalPEN;
-
+      const cambio = o.tcUsado !== o.tcOriginal;
       return (
-        <div style={{
-          borderRadius: '2px',
-          border: esGrupoSunat
-            ? '1px solid rgba(232,184,75,0.2)'
-            : '1px solid var(--steel)',
-          backgroundColor: esGrupoSunat
-            ? 'rgba(232,184,75,0.05)'
-            : 'var(--carbon-mid)',
-          padding: '10px 12px',
-          marginBottom: '6px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: esGrupoSunat ? 'var(--accent)' : 'var(--mist)',
-            }}>
-              {o.numero}
-            </span>
-            <span style={{
-              fontSize: '9px',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              padding: '2px 7px',
-              borderRadius: '2px',
-              backgroundColor: esGrupoSunat ? 'rgba(232,184,75,0.12)' : 'var(--carbon-light)',
-              border: esGrupoSunat ? '1px solid rgba(232,184,75,0.3)' : '1px solid var(--steel)',
-              color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
-            }}>
-              {o.tipo}
-            </span>
+        <div key={o.numero} className="rv-desglose-item">
+          <header>
+            <span className="pg-code">{o.numero}</span>
+            <span>{o.tipo}</span>
+          </header>
+          <div>
+            <small>Original · TC {o.tcOriginal.toFixed(3)}</small>
+            <strong>$ {formatearNumero(parseFloat(o.total))}</strong>
+            <small>= S/ {formatearNumero(o.montoOriginalPEN)}</small>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              backgroundColor: 'var(--carbon-light)',
-              borderRadius: '2px',
-              padding: '8px 10px',
-              border: '1px solid var(--steel)',
-            }}>
-              <div style={{
-                fontSize: '9px',
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                color: 'var(--wire)',
-                marginBottom: '4px',
-              }}>
-                Original
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--white)' }}>
-                USD {formatearNumero(parseFloat(o.total))}
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--wire)', marginTop: '3px' }}>
-                TC: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--mist)' }}>{o.tcOriginal.toFixed(3)}</span>
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--steel-light)', marginTop: '2px' }}>
-                = S/ {formatearNumero(o.montoOriginalPEN)}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-              <div style={{
-                width: '26px',
-                height: '26px',
-                borderRadius: '50%',
-                backgroundColor: tcCambio
-                  ? (esGrupoSunat ? 'rgba(232,184,75,0.12)' : 'var(--carbon-light)')
-                  : 'rgba(46,204,113,0.1)',
-                border: tcCambio
-                  ? (esGrupoSunat ? '1px solid rgba(232,184,75,0.3)' : '1px solid var(--steel)')
-                  : '1px solid rgba(46,204,113,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <ArrowRightLeft size={12} style={{
-                  color: tcCambio
-                    ? (esGrupoSunat ? 'var(--accent)' : 'var(--wire)')
-                    : '#2ecc71',
-                }} />
-              </div>
-              {tcCambio && (
-                <span style={{
-                  fontSize: '8px',
-                  fontWeight: 800,
-                  color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}>
-                  Ajuste
-                </span>
-              )}
-            </div>
-
-            <div style={{
-              borderRadius: '2px',
-              padding: '8px 10px',
-              border: esGrupoSunat
-                ? '1px solid rgba(232,184,75,0.35)'
-                : '1px solid var(--steel)',
-              backgroundColor: esGrupoSunat
-                ? 'rgba(232,184,75,0.08)'
-                : 'var(--carbon)',
-            }}>
-              <div style={{
-                fontSize: '9px',
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
-                marginBottom: '4px',
-              }}>
-                Convertido
-              </div>
-              <div style={{
-                fontSize: '13px',
-                fontWeight: 800,
-                color: esGrupoSunat ? 'var(--accent)' : 'var(--mist)',
-              }}>
-                S/ {formatearNumero(o.valorPen)}
-              </div>
-              <div style={{
-                fontSize: '10px',
-                marginTop: '3px',
-                color: esGrupoSunat ? 'rgba(232,184,75,0.7)' : 'var(--wire)',
-              }}>
-                TC: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.tcUsado.toFixed(3)}</span>
-              </div>
-              {tcCambio && (
-                <div style={{
-                  fontSize: '10px',
-                  marginTop: '3px',
-                  fontWeight: 700,
-                  color: diferencia >= 0 ? '#2ecc71' : '#e74c3c',
-                }}>
-                  {diferencia >= 0 ? '+' : ''}S/ {formatearNumero(diferencia)}
-                </div>
-              )}
-            </div>
+          <ArrowRightLeft size={14} />
+          <div>
+            <small>Convertido · TC {o.tcUsado.toFixed(3)}</small>
+            <strong>S/ {formatearNumero(o.valorPen)}</strong>
+            {cambio && (
+              <small className={diferencia >= 0 ? 'rv-delta-up' : 'rv-delta-down'}>
+                {diferencia >= 0 ? '+' : '−'} S/ {formatearNumero(Math.abs(diferencia))}
+              </small>
+            )}
           </div>
         </div>
       );
     };
 
     return (
-      <div style={{ marginTop: '16px', borderTop: '1px solid var(--steel)', paddingTop: '16px' }}>
-        <h4 style={{
-          fontSize: '10px',
-          fontWeight: 800,
-          color: 'var(--wire)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.15em',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}>
-          <FileText size={13} style={{ color: 'var(--accent)' }} />
-          Desglose de Ordenes en USD ({ordenesUSD.length})
-        </h4>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: grupoHistorico.length > 0 && grupoSunat.length > 0 ? '1fr 1fr' : '1fr',
-          gap: '16px',
-        }}>
+      <div className="rv-desglose">
+        <div className="rv-desglose-cols">
           {grupoHistorico.length > 0 && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  color: 'var(--wire)',
-                }}>
-                  Respetando TC de la Orden
-                </span>
-                <span style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '1px 8px',
-                  borderRadius: '2px',
-                  backgroundColor: 'var(--carbon-light)',
-                  border: '1px solid var(--steel)',
-                  color: 'var(--wire)',
-                }}>
-                  {grupoHistorico.length}
-                </span>
-              </div>
-              <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-                {grupoHistorico.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={false} />)}
-              </div>
+              <div className="rv-desglose-head">Respetando el TC de la orden <span className="pg-count">{grupoHistorico.length}</span></div>
+              <div className="rv-desglose-list">{grupoHistorico.map(renderFila)}</div>
             </div>
           )}
-
           {grupoSunat.length > 0 && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  color: 'var(--accent)',
-                }}>
-                  Aplicando TC SUNAT
-                </span>
-                <span style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '1px 8px',
-                  borderRadius: '2px',
-                  backgroundColor: 'rgba(232,184,75,0.1)',
-                  border: '1px solid rgba(232,184,75,0.25)',
-                  color: 'var(--accent)',
-                }}>
-                  {grupoSunat.length}
-                </span>
-              </div>
-              <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-                {grupoSunat.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={true} />)}
-              </div>
+              <div className="rv-desglose-head">Aplicando TC SUNAT <span className="pg-count">{grupoSunat.length}</span></div>
+              <div className="rv-desglose-list">{grupoSunat.map(renderFila)}</div>
             </div>
           )}
         </div>
@@ -1731,8 +1624,375 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
     );
   };
 
-  const resumen = calcularResumenFiltrado();
-  const hayUSDenData = resumen.total_ventas_usd > 0;
+  const renderMonto = (item) => {
+    const esUSD = item.moneda === 'USD';
+    const tc = tcAplicadoOrden(item);
+    return (
+      <>
+        <span className="rv-amount"><small>{simbolo(item.moneda)}</small>{formatearNumero(item.total)}</span>
+        {esUSD && tc !== 1 && (
+          <span className="rv-amount-sub">TC {tc.toFixed(3)} · <b>S/ {formatearNumero(parseFloat(item.total) * tc)}</b></span>
+        )}
+      </>
+    );
+  };
+
+  const urlsOrdenCompra = (orden) => {
+    if (!orden?.orden_compra_url) return [];
+    try {
+      const raw = orden.orden_compra_url;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return [orden.orden_compra_url];
+    }
+  };
+
+  const urlsDocumento = (doc) => {
+    try {
+      const parsed = typeof doc.archivos_url === 'string' ? JSON.parse(doc.archivos_url) : doc.archivos_url;
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [];
+    }
+  };
+
+  const renderBadgeVerificacionOC = (orden) => {
+    if (orden.estado_verificacion_oc === 'Verificado') {
+      return (
+        <span className="badge badge-success"><ShieldCheck size={11} /> Verificada
+          {orden.fecha_verificacion_oc && ` · ${new Date(orden.fecha_verificacion_oc).toLocaleDateString('es-PE')}`}
+        </span>
+      );
+    }
+    if (orden.estado_verificacion_oc === 'Omitida') return <span className="badge badge-secondary"><ShieldOff size={11} /> Omitida</span>;
+    if (orden.orden_compra_url) return <span className="badge badge-warning"><ShieldAlert size={11} /> Sin verificar</span>;
+    return <span className="pg-muted">—</span>;
+  };
+
+  const renderDrawer = () => {
+    const o = ordenSeleccionada;
+    const tc = tcAplicadoOrden(o);
+    const see = o.see || { comprobantes: [], guias: [], estado: 'NO_APLICA' };
+    const urlsOC = urlsOrdenCompra(o);
+    const docsActivos = documentosAdicionales.filter(d => !d.deleted_at);
+    const docsEliminados = documentosAdicionales.filter(d => d.deleted_at);
+
+    return createPortal(
+      <div className="pg-drawer-scrim" onClick={(e) => { if (e.target === e.currentTarget) cerrarDetalle(); }}>
+        <aside className="pg-drawer" role="dialog" aria-modal="true" aria-labelledby="rv-drawer-title">
+          <div className="pg-drawer-head">
+            <div>
+              <span className="pg-eyebrow"><ClipboardList size={12} /> Orden de venta</span>
+              <h2 id="rv-drawer-title">{o.numero}</h2>
+              <div className="pg-drawer-badges">
+                <span className={`badge ${BADGE_ESTADO_ORDEN[o.estado] || 'badge-secondary'}`}>{o.estado}</span>
+                <span className={`badge ${ESTADOS_PAGO.find(e => e.id === o.estado_pago)?.badge || 'badge-secondary'}`}><Wallet size={11} />{o.estado_pago}</span>
+                {see.estado !== 'NO_APLICA' && <BadgeSee estado={see.estado} />}
+                {['Retrasado', 'Vencido'].includes(o.estado_logistico) && (
+                  <span className="badge badge-danger"><AlertTriangle size={11} />{o.estado_logistico}</span>
+                )}
+              </div>
+            </div>
+            <button type="button" className="pg-iconbtn" onClick={cerrarDetalle} aria-label="Cerrar detalle" autoFocus><X size={16} /></button>
+          </div>
+
+          <div className="pg-drawer-body">
+            <section>
+              <h3 className="pg-section-title"><CreditCard size={14} /> Resumen financiero</h3>
+              <div className="pg-kv">
+                <div><span>Subtotal</span><strong>{simbolo(o.moneda)} {formatearNumero(o.subtotal)}</strong></div>
+                <div><span>{o.tipo_impuesto || 'IGV'} ({o.porcentaje_impuesto}%)</span><strong>{simbolo(o.moneda)} {formatearNumero(o.igv)}</strong></div>
+                <div><span>Total</span><strong className="text-primary">{simbolo(o.moneda)} {formatearNumero(o.total)}</strong></div>
+                <div><span>Pagado</span><strong className="text-success">{simbolo(o.moneda)} {formatearNumero(o.monto_pagado)}</strong></div>
+                <div><span>Por cobrar</span><strong className={parseFloat(o.pendiente_cobro) > 0.01 ? 'text-danger' : ''}>{simbolo(o.moneda)} {formatearNumero(o.pendiente_cobro)}</strong></div>
+                <div><span>Condición</span><strong>{o.tipo_venta}{esCredito(o) && o.dias_credito ? ` · ${o.dias_credito} días` : ''}</strong></div>
+                {esCredito(o) && o.fecha_vencimiento && <div><span>Vence</span><strong>{formatearFecha(o.fecha_vencimiento)}</strong></div>}
+                {parseFloat(o.total_comision) > 0 && (
+                  <div><span>Comisión ({o.porcentaje_comision_promedio}%)</span><strong>{simbolo(o.moneda)} {formatearNumero(o.total_comision)}</strong></div>
+                )}
+                {o.moneda === 'USD' && tc !== 1 && (
+                  <div className="wide"><span>Equivalente en soles · TC {tc.toFixed(3)}</span>
+                    <strong>Total S/ {formatearNumero(parseFloat(o.total) * tc)} · Pagado S/ {formatearNumero(parseFloat(o.monto_pagado) * tc)} · Pendiente S/ {formatearNumero(parseFloat(o.pendiente_cobro) * tc)}</strong>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="pg-section-title"><FileCheck size={14} /> Facturación electrónica</h3>
+              {see.comprobantes.length === 0 && see.guias.length === 0 ? (
+                <div className="pg-kv"><div className="wide"><strong className="pg-muted">
+                  {o.tipo_comprobante === 'Factura'
+                    ? (o.facturado_sunat ? `Facturada fuera del sistema: ${o.numero_comprobante_sunat || 'sin número'}` : 'Aún no se emitió la factura de esta orden.')
+                    : `${o.tipo_comprobante || 'Sin comprobante'}: no requiere comprobante electrónico.`}
+                </strong></div></div>
+              ) : (
+                <ul className="pg-list">
+                  {see.comprobantes.map(c => (
+                    <li key={`c-${c.id_factura}`} className={['ANULADA', 'RECHAZADO'].includes(c.estado_final) ? 'is-void' : ''}>
+                      <Receipt size={14} className="text-primary" />
+                      <span>
+                        <span className="pg-cell-main">{c.documento}</span>
+                        <span className="pg-cell-sub">{CLASE_COMPROBANTE[c.clase]} · {formatearFecha(c.fecha_emision)} · {simbolo(c.moneda)} {fmt2(c.total)}</span>
+                      </span>
+                      <span className="pg-list-push">
+                        <BadgeSee estado={c.estado_final} />
+                        {renderArchivosComprobante(c)}
+                      </span>
+                    </li>
+                  ))}
+                  {see.guias.map(g => (
+                    <li key={`g-${g.id_guia}`} className={['ANULADA', 'BAJA', 'RECHAZADO'].includes(g.estado_final) ? 'is-void' : ''}>
+                      <Truck size={14} className="text-primary" />
+                      <span>
+                        <span className="pg-cell-main">{g.documento}</span>
+                        <span className="pg-cell-sub">Guía de remisión · {formatearFecha(g.fecha_emision)}</span>
+                      </span>
+                      <span className="pg-list-push">
+                        <BadgeSee estado={g.estado_final} />
+                        {puedeVerArchivosSee && g.es_electronica && g.estado_final === 'ACEPTADO' && (
+                          <button type="button" className="pg-iconbtn" title="PDF de la guía" aria-label={`Descargar PDF ${g.documento}`}
+                            onClick={() => ejecutarDescarga(() => sunatAPI.verPdfGuia(g.id_guia), 'el PDF de la guía')}>
+                            <FileText size={13} />
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {o.comprobante_sunat_url && (
+                <button type="button" className="btn btn-outline btn-sm mt-1" onClick={() => abrirVisorSunat(o)}>
+                  <Eye size={14} /> Ver comprobante adjunto
+                </button>
+              )}
+            </section>
+
+            <section>
+              <h3 className="pg-section-title"><Building2 size={14} /> Cliente</h3>
+              <div className="pg-kv">
+                <div className="wide"><span>Razón social</span><strong>{o.cliente}</strong></div>
+                <div><span>RUC</span><strong>{o.ruc}</strong></div>
+                {o.telefono_cliente && <div><span><Phone size={10} /> Teléfono</span><strong>{o.telefono_cliente}</strong></div>}
+                {o.email_cliente && <div><span><Mail size={10} /> Correo</span><strong>{o.email_cliente}</strong></div>}
+                {o.direccion_cliente && <div className="wide"><span><MapPin size={10} /> Dirección</span><strong>{o.direccion_cliente}</strong></div>}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="pg-section-title"><Calendar size={14} /> Fechas</h3>
+              <div className="pg-kv">
+                <div><span>Creación</span><strong>{formatearFechaHora(o.fecha_creacion)}</strong></div>
+                <div><span>Emisión</span><strong>{formatearFecha(o.fecha_emision)}</strong></div>
+                <div><span>Facturación SUNAT</span><strong>{o.fecha_facturacion_sunat ? formatearFecha(o.fecha_facturacion_sunat) : '—'}</strong></div>
+                <div><span>Despacho</span><strong>{o.fecha_despacho ? formatearFecha(o.fecha_despacho) : 'Pendiente'}</strong></div>
+                {o.fecha_entrega_programada && <div><span>Entrega programada</span><strong>{formatearFecha(o.fecha_entrega_programada)}</strong></div>}
+                {o.fecha_entrega_real && <div><span>Entrega real</span><strong className="text-success">{formatearFecha(o.fecha_entrega_real)}</strong></div>}
+                {o.fecha_verificacion && <div><span>Verificación</span><strong>{formatearFechaHora(o.fecha_verificacion)}</strong></div>}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="pg-section-title"><Truck size={14} /> Entrega</h3>
+              <div className="pg-kv">
+                <div><span>Tipo</span><strong>{o.tipo_entrega || '—'}</strong></div>
+                {o.tipo_entrega === 'Vehiculo Empresa' && o.vehiculo_placa && (
+                  <div><span>Vehículo</span><strong>{o.vehiculo_placa}{o.vehiculo_marca ? ` · ${o.vehiculo_marca}` : ''}</strong></div>
+                )}
+                {o.tipo_entrega === 'Vehiculo Empresa' && o.conductor_nombre && (
+                  <div><span>Conductor</span><strong>{o.conductor_nombre}{o.conductor_dni ? ` · DNI ${o.conductor_dni}` : ''}</strong></div>
+                )}
+                {o.tipo_entrega === 'Transporte Privado' && o.transporte_nombre && (
+                  <div><span>Transportista</span><strong>{o.transporte_nombre}</strong></div>
+                )}
+                {o.tipo_entrega === 'Transporte Privado' && o.transporte_placa && (
+                  <div><span>Placa</span><strong>{o.transporte_placa}</strong></div>
+                )}
+                {o.tipo_entrega === 'Transporte Privado' && o.transporte_conductor && (
+                  <div><span>Conductor</span><strong>{o.transporte_conductor}{o.transporte_dni ? ` · DNI ${o.transporte_dni}` : ''}</strong></div>
+                )}
+                {o.contacto_entrega && (
+                  <div><span>Contacto</span><strong>{o.contacto_entrega}{o.telefono_entrega ? ` · ${o.telefono_entrega}` : ''}</strong></div>
+                )}
+                {o.direccion_entrega && (
+                  <div className="wide"><span><MapPin size={10} /> Dirección de entrega</span><strong>{o.direccion_entrega}{o.ciudad_entrega ? ` · ${o.ciudad_entrega}` : ''}</strong></div>
+                )}
+              </div>
+            </section>
+
+            {o.detalles && o.detalles.length > 0 && (
+              <section>
+                <h3 className="pg-section-title"><Package size={14} /> Productos <span className="pg-count">{o.detalles.length}</span></h3>
+                <div className="pg-table-wrap pg-panel">
+                  <table className="pg-table rv-prod-table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th className="num">Cantidad</th>
+                        <th className="num">P. unit.</th>
+                        <th className="num">Subtotal</th>
+                        <th>Despacho</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {o.detalles.map((det, idx) => {
+                        const avance = porcentaje(det.cantidad_despachada, det.cantidad);
+                        return (
+                          <tr key={det.id || idx}>
+                            <td>
+                              <span className="pg-cell-main">{det.producto_nombre}</span>
+                              <span className="pg-cell-sub">{det.codigo_producto}</span>
+                            </td>
+                            <td className="num">{det.cantidad} {det.unidad_medida}</td>
+                            <td className="num">{det.precio_unitario}</td>
+                            <td className="num">
+                              {det.subtotal}
+                              {parseFloat(det.descuento) > 0 && <span className="pg-cell-sub text-danger">−{det.descuento}</span>}
+                            </td>
+                            <td style={{ minWidth: 110 }}>
+                              <span className="pg-cell-sub">{det.cantidad_despachada} / {det.cantidad}</span>
+                              <div className="pg-meter" style={{ '--meter-c': avance >= 100 ? 'var(--success)' : 'var(--warning)' }}>
+                                <span style={{ width: `${Math.min(avance, 100)}%` }} />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            <section>
+              <h3 className="pg-section-title"><FileText size={14} /> Documentos y personal</h3>
+              <div className="pg-kv">
+                <div><span>Comercial</span><strong>{o.vendedor}</strong></div>
+                <div><span>Registrado por</span><strong>{o.registrador}</strong></div>
+                {o.verificador !== 'No asignado' && <div><span>Verificador</span><strong>{o.verificador}</strong></div>}
+                {o.numero_cotizacion && <div><span>Cotización</span><strong>{o.numero_cotizacion}</strong></div>}
+                {o.numero_guia_interna && <div><span>Guía interna</span><strong>{o.numero_guia_interna}</strong></div>}
+                {o.tipo_comprobante !== 'Factura' && o.numero_comprobante && (
+                  <div><span>{o.tipo_comprobante}</span><strong>{o.numero_comprobante}</strong></div>
+                )}
+                {(o.orden_compra_cliente || o.orden_compra_url) && (
+                  <div className="wide">
+                    <span>OC del cliente</span>
+                    <strong className="flex items-center gap-2 flex-wrap">
+                      {o.orden_compra_cliente || '—'} {renderBadgeVerificacionOC(o)}
+                      {urlsOC.map((url, i) => (
+                        <button key={i} type="button" className="btn btn-outline btn-xs" onClick={() => abrirVisor(url, urlsOC.length > 1 ? `OC Cliente ${i + 1}` : 'OC Cliente')}>
+                          <Eye size={11} /> {urlsOC.length > 1 ? `OC ${i + 1}` : 'Ver OC'}
+                        </button>
+                      ))}
+                    </strong>
+                  </div>
+                )}
+              </div>
+              {documentosAdicionales.length > 0 && (
+                <ul className="pg-list mt-1">
+                  {docsActivos.map(doc => (
+                    <li key={doc.id_documento}>
+                      <span className="badge badge-primary">{doc.tipo_documento}</span>
+                      {doc.correlativo && <span className="pg-code">{doc.correlativo}</span>}
+                      <span className="pg-cell-sub">{doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="pg-list-push">
+                        {urlsDocumento(doc).map((url, i, arr) => (
+                          <button key={i} type="button" className="pg-iconbtn" aria-label={`Ver ${doc.tipo_documento}`}
+                            onClick={() => abrirVisor(url, `${doc.tipo_documento}${doc.correlativo ? ' ' + doc.correlativo : ''}${arr.length > 1 ? ` (${i + 1})` : ''}`)}>
+                            <Eye size={13} />
+                          </button>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                  {docsEliminados.map(doc => (
+                    <li key={doc.id_documento} className="is-void">
+                      <Trash2 size={13} className="text-danger" />
+                      <span className="badge badge-secondary">{doc.tipo_documento}</span>
+                      {doc.correlativo && <span className="pg-muted">{doc.correlativo}</span>}
+                      <span className="pg-cell-sub">Eliminado por {doc.eliminado_por || 'Sistema'} · {new Date(doc.deleted_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="pg-list-push">
+                        {urlsDocumento(doc).map((url, i) => (
+                          <button key={i} type="button" className="pg-iconbtn" aria-label={`Ver ${doc.tipo_documento} eliminado`} onClick={() => abrirVisor(url, doc.tipo_documento)}>
+                            <Eye size={13} />
+                          </button>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {historialDespachos.length > 0 && (
+              <section>
+                <h3 className="pg-section-title"><Truck size={14} /> Despachos <span className="pg-count">{historialDespachos.length}</span></h3>
+                <ul className="pg-list">
+                  {historialDespachos.map((d, i) => (
+                    <li key={d.id_salida || i} className={d.estado === 'Activo' ? '' : 'is-void'}>
+                      <span className="pg-cell-main">Salida #{d.id_salida}</span>
+                      <span className={`badge ${d.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>{d.estado}</span>
+                      {d.observaciones && <span className="pg-cell-sub">Ref.: {d.observaciones}</span>}
+                      <span className="pg-list-push pg-muted">{d.total_items || 0} ítems</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {historialFacturasAnuladas.length > 0 && (
+              <section>
+                <h3 className="pg-section-title"><Ban size={14} /> Facturas anuladas <span className="pg-count">{historialFacturasAnuladas.length}</span></h3>
+                <ul className="pg-list">
+                  {historialFacturasAnuladas.map((f, i) => (
+                    <li key={f.id_factura_anulada || i}>
+                      <span>
+                        <span className="pg-cell-main">{f.numero_comprobante_sunat || f.numero_comprobante || `Factura ${i + 1}`}</span>
+                        <span className="pg-cell-sub">
+                          {f.fecha_anulacion ? new Date(f.fecha_anulacion).toLocaleDateString('es-PE') : '—'}
+                          {f.anulado_por ? ` · ${f.anulado_por}` : ''}
+                          {f.motivo_anulacion ? ` · ${f.motivo_anulacion}` : ''}
+                        </span>
+                      </span>
+                      {f.comprobante_sunat_url && (
+                        <span className="pg-list-push">
+                          <button type="button" className="pg-iconbtn" aria-label="Ver factura anulada"
+                            onClick={() => abrirVisor(f.comprobante_sunat_url, `Factura anulada: ${f.numero_comprobante_sunat || ''}`)}>
+                            <Eye size={13} />
+                          </button>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {(o.observaciones || o.observaciones_verificador || o.motivo_rechazo) && (
+              <section>
+                <h3 className="pg-section-title"><AlertCircle size={14} /> Observaciones</h3>
+                <div className="pg-kv rv-obs">
+                  {o.observaciones && <div className="wide"><span>Generales</span><p>{o.observaciones}</p></div>}
+                  {o.observaciones_verificador && <div className="wide"><span>Del verificador</span><p>{o.observaciones_verificador}</p></div>}
+                  {o.motivo_rechazo && <div className="wide is-danger"><span>Motivo de rechazo</span><p>{o.motivo_rechazo}</p></div>}
+                </div>
+              </section>
+            )}
+          </div>
+
+          <div className="pg-drawer-foot">
+            <button type="button" className="btn btn-outline" onClick={cerrarDetalle}>Cerrar</button>
+            <button type="button" className="btn btn-primary" onClick={() => navigate(`/ventas/ordenes/${o.id_orden_venta || o.id}`)}>
+              <ExternalLink size={16} /> Abrir orden
+            </button>
+          </div>
+        </aside>
+      </div>,
+      document.body
+    );
+  };
 
   return (
     <>
@@ -1743,902 +2003,668 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
         aplicarModoUnificacion={aplicarModoUnificacion}
       />
 
-      <div className="w-full px-6 py-8 font-sans">
-        <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <TrendingUp className="text-primary" /> Dashboard de Ventas
-          </h1>
-          <p className="text-muted text-sm">Monitor de rendimiento comercial y logistico</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={descargarExcel} disabled={loadingExcel || dataFiltrada.length === 0} className="btn btn-success">
-            {loadingExcel ? <Loading size="sm" color="white" /> : <FileSpreadsheet size={18} />}
-            Excel {convertirUSD && tcVenta ? '(TC)' : ''}
-          </button>
-          <button onClick={descargarPDF} disabled={loadingPdf} className="btn btn-danger">
-            {loadingPdf ? <Loading size="sm" color="white" /> : <Download size={18} />}
-            PDF
-          </button>
-        </div>
-      </div>
-
-      <div className="card mb-4" style={{ borderLeft: tipoCambio ? '4px solid var(--accent, #ca8a04)' : '4px solid var(--border-color, #374151)' }}>
-        <div className="card-body p-3">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg" style={{ background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)' }}>
-                <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Tipo de Cambio SUNAT</p>
-                {tipoCambio ? (
-                  <div className="flex items-center gap-4 mt-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Compra: <strong className="text-base" style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Venta: <strong className="text-base" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
-                      </span>
-                    </div>
-                    <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <Calendar size={12} /><span>SUNAT: {formatearFecha(tipoCambio.fecha)}</span>
-                      <span className="mx-1">&middot;</span>
-                      <Clock size={12} /><span>{obtenerEdadTC()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <AlertTriangle size={14} /><span>No disponible — Presione "Actualizar TC" para consultar</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {tipoCambio && hayUSDenData && (
-                <button className={`btn btn-sm ${convertirUSD ? 'btn-warning' : 'btn-outline'}`} onClick={handleToggleConvertirUSD}
-                  title={convertirUSD ? 'Mostrando totales unificados en PEN' : 'Convertir USD a PEN con TC SUNAT'}>
-                  <ArrowRightLeft size={14} />{convertirUSD ? 'Viendo en PEN' : 'Unificar a PEN'}
-                </button>
-              )}
-              <button className="btn btn-sm btn-outline" onClick={actualizarTipoCambio} disabled={loadingTC} title="Consultar TC actual desde SUNAT">
-                {loadingTC ? <RefreshCcw size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-                {loadingTC ? 'Consultando...' : 'Actualizar TC'}
-              </button>
-            </div>
+      <div className="pg-page rv-page">
+        <header className="pg-header">
+          <div>
+            <span className="pg-eyebrow"><BarChart3 size={13} /> Reportes · Ventas</span>
+            <h1 className="pg-title">Reporte de ventas</h1>
+            <p className="pg-subtitle">
+              Del <b>{formatearFecha(filtros.fechaInicio)}</b> al <b>{formatearFecha(filtros.fechaFin)}</b> por fecha de {etiquetaFechaActiva}
+              {clienteSeleccionado && <> · <b>{clienteSeleccionado.razon_social}</b></>}
+              {' '}· órdenes aprobadas, sin canceladas
+            </p>
           </div>
-          {tipoCambio && (
-            <div className="flex md:hidden items-center gap-2 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-              <Calendar size={12} /><span>SUNAT: {formatearFecha(tipoCambio.fecha)}</span>
-              <span className="mx-1">&middot;</span><Clock size={12} /><span>{obtenerEdadTC()}</span>
-            </div>
-          )}
-        </div>
-      </div>
+          <div className="pg-actions">
+            <button onClick={descargarExcel} disabled={loadingExcel || dataFiltrada.length === 0} className="btn btn-outline">
+              {loadingExcel ? <Loading size="sm" /> : <FileSpreadsheet size={16} />}
+              Excel{unificado ? ' (TC)' : ''}
+            </button>
+            <button onClick={descargarPDF} disabled={loadingPdf || dataFiltrada.length === 0} className="btn btn-outline">
+              {loadingPdf ? <Loading size="sm" /> : <Download size={16} />}
+              PDF
+            </button>
+          </div>
+        </header>
 
-      <div className="card mb-6">
-        <div className="card-body">
-          <form onSubmit={generarReporte} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-              <div className="form-group mb-0">
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-[0.2em] mb-2 block">Filtrar por:</label>
-                <div className="flex gap-3 p-2 bg-carbon-light rounded-lg border border-steel/20 h-[42px] items-center">
-                  {[
-                    { id: 'fecha_emision', label: 'Emisión' },
-                    { id: 'fecha_despacho', label: 'Despacho' },
-                    { id: 'fecha_sunat', label: 'SUNAT' }
-                  ].map(opcion => (
-                    <label key={opcion.id} className="flex items-center gap-1.5 cursor-pointer select-none group">
-                      <div className="relative">
-                        <input
-                          type="radio"
-                          className="hidden"
-                          checked={filtros.filtroFecha === opcion.id}
-                          onChange={() => setFiltros({ ...filtros, filtroFecha: opcion.id })}
-                        />
-                        <div className={`w-3.5 h-3.5 rounded-full border transition-all flex items-center justify-center ${
-                          filtros.filtroFecha === opcion.id
-                            ? 'bg-primary border-primary shadow-sm shadow-primary/20'
-                            : 'bg-transparent border-steel group-hover:border-wire'
-                        }`}>
-                          {filtros.filtroFecha === opcion.id && <div className="w-1 h-1 bg-carbon rounded-full" />}
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-black uppercase tracking-wider transition-colors ${
-                        filtros.filtroFecha === opcion.id ? 'text-primary' : 'text-wire group-hover:text-mist'
-                      }`}>
-                        {opcion.label}
-                      </span>
-                    </label>
-                  ))}
+        <div className="pg-stack">
+          <form className="pg-panel" onSubmit={generarReporte}>
+            <div className="rv-filters">
+              <div className="rv-filters-row">
+                <div className="pg-field">
+                  <span className="pg-field-label">Filtrar por fecha de</span>
+                  <div className="pg-segmented" role="radiogroup" aria-label="Campo de fecha">
+                    {[
+                      { id: 'fecha_emision', label: 'Emisión' },
+                      { id: 'fecha_despacho', label: 'Despacho' },
+                      { id: 'fecha_sunat', label: 'SUNAT' }
+                    ].map(op => (
+                      <button
+                        key={op.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={filtros.filtroFecha === op.id}
+                        className={filtros.filtroFecha === op.id ? 'active' : ''}
+                        onClick={() => setFiltros({ ...filtros, filtroFecha: op.id })}
+                      >
+                        {op.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-
-              <div className="form-group mb-0">
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Desde</label>
-                <div className="input-with-icon">
-                  <Calendar className="icon text-primary" size={14} />
-                  <input
-                    type="date"
-                    className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
-                    value={filtros.fechaInicio}
-                    max={filtros.fechaFin || undefined}
-                    onChange={handleChangeFechaInicio}
-                  />
+                <div className="pg-field rv-date">
+                  <label className="pg-field-label" htmlFor="rv-desde">Desde</label>
+                  <input id="rv-desde" type="date" className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
+                    value={filtros.fechaInicio} max={filtros.fechaFin || undefined} onChange={handleChangeFechaInicio} />
                 </div>
-              </div>
-
-              <div className="form-group mb-0">
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Hasta</label>
-                <div className="input-with-icon">
-                  <Calendar className="icon text-primary" size={14} />
-                  <input
-                    type="date"
-                    className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
-                    value={filtros.fechaFin}
-                    min={filtros.fechaInicio || undefined}
-                    onChange={handleChangeFechaFin}
-                  />
+                <div className="pg-field rv-date">
+                  <label className="pg-field-label" htmlFor="rv-hasta">Hasta</label>
+                  <input id="rv-hasta" type="date" className={`form-input ${errorFecha ? 'is-invalid' : ''}`}
+                    value={filtros.fechaFin} min={filtros.fechaInicio || undefined} onChange={handleChangeFechaFin} />
                 </div>
-              </div>
-
-              <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef} style={{ zIndex: 50 }}>
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Cliente</label>
-                <div className="search-input-wrapper relative">
-                  <Search className="search-icon text-primary" size={14} />
+                <div className="pg-field rv-cliente" ref={wrapperRef}>
+                  <label className="pg-field-label" htmlFor="rv-cliente">Cliente</label>
+                  <Search size={14} className="rv-cliente-icon" />
                   <input
+                    id="rv-cliente"
                     type="text"
-                    placeholder="Buscar cliente por nombre o RUC..."
-                    className="form-input search-input text-xs font-bold bg-carbon-mid"
-                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
+                    autoComplete="off"
+                    placeholder="Nombre o RUC"
+                    className="form-input"
                     value={busquedaCliente}
                     onChange={(e) => { setBusquedaCliente(e.target.value); if (filtros.idCliente) setFiltros({ ...filtros, idCliente: '' }); }}
                     onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
                   />
-                  {filtros.idCliente && (
-                    <button type="button" onClick={limpiarCliente} className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  {(filtros.idCliente || busquedaCliente) && (
+                    <button type="button" className="rv-cliente-clear" onClick={limpiarCliente} aria-label="Quitar cliente"><X size={14} /></button>
+                  )}
+                  {mostrarSugerencias && clientesSugeridos.length > 0 && (
+                    <ul className="rv-suggest">
+                      {clientesSugeridos.map(cliente => (
+                        <li key={cliente.id_cliente}>
+                          <button type="button" onClick={() => seleccionarCliente(cliente)}>
+                            {cliente.razon_social}
+                            <small>RUC {cliente.ruc}</small>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
-                {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                  <ul className="absolute z-[9999] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: 'var(--bg-primary)', top: '100%' }}>
-                    {clientesSugeridos.map(cliente => (
-                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-white/10 transition-colors relative z-[10000]">
-                        <div className="font-bold text-mist">{cliente.razon_social}</div>
-                        <div className="text-[10px] text-wire font-mono">RUC: {cliente.ruc}</div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <button
+                  type="button"
+                  className={`btn ${mostrarFiltros || filtrosAvanzadosActivos > 0 ? 'btn-secondary' : 'btn-outline'}`}
+                  style={{ height: 38 }}
+                  aria-expanded={mostrarFiltros}
+                  onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                >
+                  <Filter size={15} /> Filtros{filtrosAvanzadosActivos > 0 ? ` (${filtrosAvanzadosActivos})` : ''}
+                  {mostrarFiltros ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ height: 38 }} disabled={loading || !!errorFecha}>
+                  {loading ? <Loading size="sm" /> : <Search size={15} />} Buscar
+                </button>
               </div>
+
+              {errorFecha && (
+                <div className="rv-error-fecha" role="alert"><AlertCircle size={14} /> {errorFecha}</div>
+              )}
+
+              {mostrarFiltros && (
+                <div className="rv-filters-more">
+                  <FilterCheckboxGroup
+                    label="Estado de la orden"
+                    selectedValues={filtros.estadosOrden}
+                    onChange={(vals) => setFiltros({ ...filtros, estadosOrden: vals })}
+                    options={[
+                      { label: 'En Espera', value: 'En Espera' },
+                      { label: 'En Proceso', value: 'En Proceso' },
+                      { label: 'Atendido por Producción', value: 'Atendido por Produccion' },
+                      { label: 'Despacho Parcial', value: 'Despacho Parcial' },
+                      { label: 'Despachada', value: 'Despachada' },
+                      { label: 'Entregada', value: 'Entregada' }
+                    ]}
+                  />
+                  <FilterCheckboxGroup
+                    label="Estado de pago"
+                    selectedValues={filtros.estadosPago}
+                    onChange={(vals) => setFiltros({ ...filtros, estadosPago: vals })}
+                    options={[
+                      { label: 'Pendiente', value: 'Pendiente' },
+                      { label: 'Parcial', value: 'Parcial' },
+                      { label: 'Pagado', value: 'Pagado' }
+                    ]}
+                  />
+                  <FilterCheckboxGroup
+                    label="Comercial"
+                    selectedValues={filtros.idVendedor}
+                    onChange={(vals) => setFiltros({ ...filtros, idVendedor: vals })}
+                    options={vendedoresList}
+                  />
+                  <FilterCheckboxGroup
+                    label="Moneda"
+                    selectedValues={filtros.monedas}
+                    onChange={(vals) => setFiltros({ ...filtros, monedas: vals })}
+                    options={[
+                      { label: 'Soles (PEN)', value: 'PEN' },
+                      { label: 'Dólares (USD)', value: 'USD' }
+                    ]}
+                  />
+                  <FilterCheckboxGroup
+                    label="Tipo de documento"
+                    selectedValues={filtros.tiposDocumento}
+                    onChange={(vals) => setFiltros({ ...filtros, tiposDocumento: vals })}
+                    options={[
+                      { label: 'Factura', value: 'Factura' },
+                      { label: 'Nota de Venta', value: 'Nota de Venta' },
+                      { label: 'Sin Comprobante', value: 'Sin Comprobante' }
+                    ]}
+                  />
+                  <div className="pg-field">
+                    <span className="pg-field-label">Exportación</span>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <label className="rv-check">
+                        <input type="checkbox" className="checkbox" checked={incluirDetalleExcel} onChange={(e) => setIncluirDetalleExcel(e.target.checked)} />
+                        Hojas por orden (Excel)
+                      </label>
+                      <label className="rv-check">
+                        <input type="checkbox" className="checkbox" checked={incluirDetallePDF} onChange={(e) => setIncluirDetallePDF(e.target.checked)} />
+                        Detalle (PDF)
+                      </label>
+                    </div>
+                  </div>
+                  <div className="pg-field" style={{ justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-ghost" style={{ height: 38 }} onClick={limpiarFiltros}>
+                      <RefreshCw size={15} /> Reiniciar filtros
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {errorFecha && (
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl">
-                <AlertCircle size={14} className="text-red-400 shrink-0" />
-                <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
+            <div className="rv-filters-foot">
+              <div className="rv-tc">
+                <span className="rv-tc-label"><DollarSign size={13} /> TC SUNAT</span>
+                {tipoCambio ? (
+                  <>
+                    <span>Compra <b>{tipoCambio.compra.toFixed(3)}</b></span>
+                    <span>Venta <b className="is-accent">{tipoCambio.venta.toFixed(3)}</b></span>
+                    <span className="rv-tc-meta"><Calendar size={12} /> {formatearFecha(tipoCambio.fecha)}</span>
+                    <span className="rv-tc-meta"><Clock size={12} /> {obtenerEdadTC()}</span>
+                  </>
+                ) : (
+                  <span className="rv-tc-meta"><AlertTriangle size={12} /> Sin consultar hoy</span>
+                )}
               </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end border-t border-steel/20 pt-6">
-              <FilterCheckboxGroup
-                label="Estado Orden"
-                selectedValues={filtros.estadosOrden}
-                onChange={(vals) => setFiltros({ ...filtros, estadosOrden: vals })}
-                options={[
-                  { label: 'En Espera', value: 'En Espera' },
-                  { label: 'En Proceso', value: 'En Proceso' },
-                  { label: 'Atendido por Produccion', value: 'Atendido por Produccion' },
-                  { label: 'Despacho Parcial', value: 'Despacho Parcial' },
-                  { label: 'Despachada', value: 'Despachada' },
-                  { label: 'Entregada', value: 'Entregada' }
-                ]}
-              />
-              <FilterCheckboxGroup
-                label="Estado Pago"
-                selectedValues={filtros.estadosPago}
-                onChange={(vals) => setFiltros({ ...filtros, estadosPago: vals })}
-                options={[
-                  { label: 'Pendiente', value: 'Pendiente' },
-                  { label: 'Parcial', value: 'Parcial' },
-                  { label: 'Pagado', value: 'Pagado' }
-                ]}
-              />
-              <FilterCheckboxGroup
-                label="Vendedor"
-                selectedValues={filtros.idVendedor}
-                onChange={(vals) => setFiltros({ ...filtros, idVendedor: vals })}
-                options={vendedoresList}
-              />
-              <FilterCheckboxGroup
-                label="Moneda"
-                selectedValues={filtros.monedas}
-                onChange={(vals) => setFiltros({ ...filtros, monedas: vals })}
-                options={[
-                  { label: 'Soles (PEN)', value: 'PEN' },
-                  { label: 'Dólares (USD)', value: 'USD' }
-                ]}
-              />
-              <FilterCheckboxGroup
-                label="Tipo de Documento"
-                selectedValues={filtros.tiposDocumento}
-                onChange={(vals) => setFiltros({ ...filtros, tiposDocumento: vals })}
-                options={[
-                  { label: 'Factura', value: 'Factura' },
-                  { label: 'Nota de Venta', value: 'Nota de Venta' },
-                  { label: 'Sin Comprobante', value: 'Sin Comprobante' }
-                ]}
-              />
-
-              <div className="form-group mb-0">
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-2 block">Opciones Exportación:</label>
-                <div className="flex gap-4 p-2 bg-carbon-light rounded-lg border border-steel/20 h-[42px] items-center">
-                  <label className="flex items-center gap-2 cursor-pointer group select-none">
-                    <input type="checkbox" checked={incluirDetalleExcel} onChange={(e) => setIncluirDetalleExcel(e.target.checked)} className="hidden" />
-                    <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${incluirDetalleExcel ? 'bg-success border-success' : 'bg-transparent border-steel group-hover:border-wire'}`}>
-                      {incluirDetalleExcel && <CheckCircle size={10} className="text-carbon font-bold" />}
-                    </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${incluirDetalleExcel ? 'text-success' : 'text-wire'}`}>Hojas Excel</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group select-none">
-                    <input type="checkbox" checked={incluirDetallePDF} onChange={(e) => setIncluirDetallePDF(e.target.checked)} className="hidden" />
-                    <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${incluirDetallePDF ? 'bg-danger border-danger' : 'bg-transparent border-steel group-hover:border-wire'}`}>
-                      {incluirDetallePDF && <CheckCircle size={10} className="text-carbon font-bold" />}
-                    </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${incluirDetallePDF ? 'text-danger' : 'text-wire'}`}>Detalle PDF</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="lg:col-span-2 flex gap-2">
-                <button type="button" onClick={limpiarFiltros} className="btn btn-outline flex-1 border-steel/30 text-wire hover:bg-carbon-light" title="Limpiar filtros">
-                  <RefreshCw size={16} /> Reiniciar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary flex-1 shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                  disabled={loading || !!errorFecha}
-                >
-                  {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />} Buscar
+              <div className="pg-actions">
+                {tipoCambio && hayUSDenData && (
+                  <button type="button" className={`btn btn-sm ${convertirUSD ? 'btn-secondary' : 'btn-outline'}`} onClick={handleToggleConvertirUSD}>
+                    <ArrowRightLeft size={14} /> {convertirUSD ? 'Quitar unificación' : 'Unificar a soles'}
+                  </button>
+                )}
+                <button type="button" className="btn btn-sm btn-outline" onClick={actualizarTipoCambio} disabled={loadingTC}>
+                  <RefreshCcw size={14} className={loadingTC ? 'animate-spin' : ''} />
+                  {loadingTC ? 'Consultando…' : 'Actualizar TC'}
                 </button>
               </div>
             </div>
           </form>
-        </div>
-      </div>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+          {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {convertirUSD && tcVenta && hayUSDenData && (
-        <div className="card mb-4 p-4 rounded-lg" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.08))', border: '1px solid var(--accent-border, rgba(234,179,8,0.3))' }}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <ArrowRightLeft size={20} style={{ color: 'var(--accent, #ca8a04)' }} className="mt-1" />
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                  {modoUnificacion === 'sunat' ? `Totales unificados en Soles (TC Global SUNAT: S/ ${tcVenta.toFixed(3)})` : 
-                   modoUnificacion === 'mixto' ? `Totales unificados en Soles (TC Híbrido: SUNAT S/ ${tcVenta.toFixed(3)} + Históricos)` : 
-                   'Totales unificados en Soles (Respetando TC Histórico de cada orden estricto)'}
-                </p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-1">
-                  <span className="text-sm">Ventas: <strong className="text-base">S/ {formatearNumero(totalUnificadoPEN(resumen.total_ventas_pen, resumen.total_ventas_usd, 'total'))}</strong></span>
-                  <span className="text-sm text-green-700">Cobrado: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pagado_pen, resumen.total_pagado_usd, 'monto_pagado'))}</strong></span>
-                  <span className="text-sm text-red-700">Por Cobrar: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pendiente_pen, resumen.total_pendiente_usd, 'pendiente_cobro'))}</strong></span>
-                </div>
-              </div>
-            </div>
-            
-            <button 
-              onClick={() => setMostrarDesgloseUSD(!mostrarDesgloseUSD)}
-              className="btn btn-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-none whitespace-nowrap"
-            >
-              {mostrarDesgloseUSD ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {mostrarDesgloseUSD ? 'Ocultar desglose' : 'Ver desglose de órdenes afectadas'}
-            </button>
-          </div>
-          
-          {mostrarDesgloseUSD && renderDesgloseUnificacion()}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="stat-card border-l-4 border-primary">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (PEN)</p>
-            <h3 className="stat-value text-white">{formatearMoneda(resumen.factura_pen || 0, 'PEN')}</h3>
-          </div>
-          <div className="stat-icon bg-primary/10 text-primary"><FileCheck size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-primary">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (USD)</p>
-            <h3 className="stat-value text-primary">{formatearMoneda(resumen.factura_usd || 0, 'USD')}</h3>
-          </div>
-          <div className="stat-icon bg-primary/10 text-primary"><DollarSign size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-info">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (PEN)</p>
-            <h3 className="stat-value text-white">{formatearMoneda(resumen.nota_venta_pen || 0, 'PEN')}</h3>
-          </div>
-          <div className="stat-icon bg-info/10 text-info"><FileText size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-info">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (USD)</p>
-            <h3 className="stat-value text-info">{formatearMoneda(resumen.nota_venta_usd || 0, 'USD')}</h3>
-          </div>
-          <div className="stat-icon bg-info/10 text-info"><DollarSign size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-steel">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (PEN)</p>
-            <h3 className="stat-value text-white">{formatearMoneda(resumen.sin_comprobante_pen || 0, 'PEN')}</h3>
-          </div>
-          <div className="stat-icon bg-steel/10 text-wire"><ShoppingCart size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-steel">
-          <div className="stat-content">
-            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (USD)</p>
-            <h3 className="stat-value text-wire">{formatearMoneda(resumen.sin_comprobante_usd || 0, 'USD')}</h3>
-          </div>
-          <div className="stat-icon bg-steel/10 text-wire"><DollarSign size={20} /></div>
-        </div>
-        <div className="stat-card border-l-4 border-success col-span-1 lg:col-span-2">
-          <div className="stat-content flex justify-between items-center w-full">
-            <div>
-              <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Total Operaciones</p>
-              <h3 className="stat-value text-success">{resumen.cantidad_ordenes || 0} Ordenes</h3>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Ventas Totales (PEN Unif.)</p>
-              <h3 className="text-lg font-black text-white">
-                {formatearMoneda(totalUnificadoPEN(resumen.total_ventas_pen, resumen.total_ventas_usd, 'total'), 'PEN')}
-              </h3>
-            </div>
-          </div>
-          <div className="stat-icon bg-success/10 text-success ml-4"><TrendingUp size={24} /></div>
-        </div>
-      </div>
-
-      {(resumen.total_comisiones_pen > 0 || resumen.total_comisiones_usd > 0) && (
-        <div className="card mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-          <div className="card-body p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg"><Percent size={20} className="text-purple-600" /></div>
+          {unificado && hayUSDenData && (
+            <div className="rv-unif">
+              <div className="rv-unif-head">
                 <div>
-                  <p className="text-xs font-semibold text-purple-600 uppercase">Total Comisiones</p>
-                  <p className="text-lg font-bold text-purple-900">{formatearMoneda(resumen.total_comisiones_pen, 'PEN')}</p>
-                  {resumen.total_comisiones_usd > 0 && (
-                    <p className="text-sm font-semibold text-purple-700">
-                      {formatearMoneda(resumen.total_comisiones_usd, 'USD')}
-                      {convertirUSD && tcVenta && (<span className="text-xs ml-2" style={{ color: 'var(--accent, #ca8a04)' }}>= S/ {formatearNumero(resumen.total_comisiones_usd * tcVenta)}</span>)}
-                    </p>
-                  )}
+                  <p className="rv-unif-title">
+                    <ArrowRightLeft size={16} />
+                    {modoUnificacion === 'sunat' && `Totales en soles con TC SUNAT ${tcVenta.toFixed(3)} para todas las órdenes USD`}
+                    {modoUnificacion === 'mixto' && `Totales en soles · híbrido: TC de la orden o SUNAT ${tcVenta.toFixed(3)}`}
+                    {modoUnificacion === 'historico' && 'Totales en soles · TC SUNAT del día de facturación de cada orden'}
+                  </p>
+                  <div className="rv-unif-values">
+                    <span>Ventas <b>S/ {fmt2(ventasPrincipal)}</b></span>
+                    <span>Cobrado <b>S/ {fmt2(cobradoPrincipal)}</b></span>
+                    <span>Por cobrar <b>S/ {fmt2(porCobrarPrincipal)}</b></span>
+                  </div>
                 </div>
+                <button type="button" className="btn btn-sm btn-outline" onClick={() => setMostrarDesgloseUSD(!mostrarDesgloseUSD)} aria-expanded={mostrarDesgloseUSD}>
+                  {mostrarDesgloseUSD ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  {mostrarDesgloseUSD ? 'Ocultar desglose' : 'Ver órdenes convertidas'}
+                </button>
               </div>
+              {mostrarDesgloseUSD && renderDesgloseUnificacion()}
+            </div>
+          )}
+
+          <div className="pg-kpis" aria-busy={loading}>
+            <div className="pg-kpi is-accent">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Ventas{unificado ? ' (soles unificados)' : ''}</span>
+                <span className="pg-kpi-icon"><TrendingUp size={16} /></span>
+              </div>
+              <span className="pg-kpi-value"><small>S/</small>{fmt2(ventasPrincipal)}</span>
+              <span className="pg-kpi-foot">
+                {!unificado && hayUSDenData && <><b>$ {fmt2(resumen.total_ventas_usd)}</b> en dólares ·</>}
+                <b>{resumen.cantidad_ordenes}</b> órdenes
+              </span>
+            </div>
+
+            <div className="pg-kpi is-success">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Cobrado</span>
+                <span className="pg-kpi-icon"><Wallet size={16} /></span>
+              </div>
+              <span className="pg-kpi-value"><small>S/</small>{fmt2(cobradoPrincipal)}</span>
+              <span className="pg-kpi-foot">
+                <b>{porcentaje(cobradoPrincipal, ventasPrincipal).toFixed(1)}%</b> del total
+                {!unificado && hayUSDenData && <> · <b>$ {fmt2(resumen.total_pagado_usd)}</b></>}
+              </span>
+              <div className="pg-meter" style={{ '--meter-c': 'var(--success)' }}>
+                <span style={{ width: `${Math.min(porcentaje(cobradoPrincipal, ventasPrincipal), 100)}%` }} />
+              </div>
+            </div>
+
+            <div className={`pg-kpi ${porCobrarPrincipal > 0.01 ? 'is-warning' : 'is-success'}`}>
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Por cobrar</span>
+                <span className="pg-kpi-icon"><Clock size={16} /></span>
+              </div>
+              <span className="pg-kpi-value"><small>S/</small>{fmt2(porCobrarPrincipal)}</span>
+              <span className="pg-kpi-foot">
+                <b>{ordenesConSaldo}</b> órdenes con saldo
+                {!unificado && resumen.total_pendiente_usd > 0 && <> · <b>$ {fmt2(resumen.total_pendiente_usd)}</b></>}
+              </span>
+            </div>
+
+            <div className={`pg-kpi ${facturasPorEmitir > 0 ? 'is-warning' : 'is-info'}`}>
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Facturas electrónicas</span>
+                <span className="pg-kpi-icon"><FileCheck size={16} /></span>
+              </div>
+              <span className="pg-kpi-value">{facturasAceptadas}<small style={{ marginLeft: '0.3rem' }}>/ {ordenesConFactura}</small></span>
+              <span className="pg-kpi-foot">
+                aceptadas · <b>{facturasPorEmitir}</b> por emitir
+              </span>
+              <div className="pg-meter" style={{ '--meter-c': 'var(--info)' }}>
+                <span style={{ width: `${Math.min(porcentaje(facturasAceptadas, ordenesConFactura), 100)}%` }} />
+              </div>
+            </div>
+
+            <div className={`pg-kpi ${ordenesFueraPlazo > 0 ? 'is-danger' : 'is-success'}`}>
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Entregas fuera de plazo</span>
+                <span className="pg-kpi-icon"><AlertTriangle size={16} /></span>
+              </div>
+              <span className="pg-kpi-value">{ordenesFueraPlazo}</span>
+              <span className="pg-kpi-foot">de <b>{ordenesConPlazo}</b> órdenes con fecha programada</span>
             </div>
           </div>
-        </div>
-      )}
 
-      <div className="card">
-        <div className="card-header bg-gray-50 flex justify-between items-center">
-          <h3 className="card-title text-sm text-gray-800">Detalle de Transacciones</h3>
-          <span className="badge badge-secondary badge-outline">{dataFiltrada.length} Registros</span>
-        </div>
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th className="px-4 py-3">Acciones</th>
-                <th className="px-4 py-3">Orden</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Vendedor</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Emision</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>SUNAT</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Despacho</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                {convertirUSD && tcVenta && <th className="px-4 py-3 text-right">Total (PEN)</th>}
-                <th className="px-4 py-3 text-center">Estado Pago</th>
-                <th className="px-4 py-3 text-center">Estado Orden</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dataFiltrada.length > 0 ? (
-                dataFiltrada.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => verDetalleOrden(item)}>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => verDetalleOrden(item)} className="btn btn-ghost btn-xs text-primary" title="Ver detalles"><Eye size={14} /> Ver</button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-mono font-medium text-primary">{item.numero}</div>
-                      {(item.numero_comprobante || item.numero_comprobante_sunat) && (
-                        <div className="text-xs text-muted flex items-center gap-1 mt-1">
-                          {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
-                            ? (
-                              <button 
-  type="button"
-  onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}
-  className="btn btn-ghost btn-sm text-green-700 font-bold"
-  title="Ver comprobante SUNAT"
->
-  <FileCheck size={16} /> <span className="text-sm">{item.numero_comprobante_sunat}</span>
-</button>
-                            )
-                            : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : <span className="text-sm font-bold text-gray-700">{item.numero_comprobante}</span>}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-800">
-                      <div className="font-medium truncate w-32" title={item.cliente}>{item.cliente}</div>
-                      <div className="text-xs text-muted">{item.ruc}</div>
-                    </td>
-                    <td className="px-4 py-3 text-muted text-xs truncate w-24">{item.vendedor}</td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>{formatearFecha(item.fecha_emision)}</td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>
-                      {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>
-                      {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="text-gray-400 italic">Pendiente</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {item.moneda === 'USD' && parseFloat(item.tipo_cambio || 1) !== 1 ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-bold text-gray-700">
-                            <span className="text-xs text-muted mr-1">USD</span>
-                            {formatearNumero(item.total)}
-                          </span>
-                          <span className={`text-[10px] font-semibold mt-0.5 ${convertirUSD && modoUnificacion === 'historico' && item.tc_historico ? 'text-accent' : 'text-primary'}`}>
-                            TC: {
-                              (convertirUSD && modoUnificacion === 'historico' && item.tc_historico)
-                                ? parseFloat(item.tc_historico).toFixed(3)
-                                : parseFloat(item.tipo_cambio).toFixed(3)
-                            }
-                          </span>
-                          <span className="text-xs font-bold mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
-                            <span className="text-[10px] mr-1">S/</span>
-                            {formatearNumero(
-                              parseFloat(item.total) * (
-                                (convertirUSD && modoUnificacion === 'historico' && item.tc_historico)
-                                  ? parseFloat(item.tc_historico)
-                                  : (convertirUSD && modoUnificacion === 'sunat' ? tcVenta : 
-                                     convertirUSD && modoUnificacion === 'mixto' ? (parseFloat(item.tipo_cambio) > 3 ? parseFloat(item.tipo_cambio) : tcVenta) :
-                                     parseFloat(item.tipo_cambio))
-                              )
-                            )}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="font-bold text-gray-700">
-                          <span className="text-xs text-muted mr-1">{item.moneda}</span>
-                          {formatearNumero(item.total)}
-                        </span>
-                      )}
-                    </td>
-                    {convertirUSD && (
-                      <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                        S/ {formatearNumero(
-                          item.moneda === 'USD'
-                            ? (modoUnificacion === 'sunat' ? parseFloat(item.total) * tcVenta : 
-                               modoUnificacion === 'mixto' ? parseFloat(item.total) * (parseFloat(item.tipo_cambio || 1) > 3 ? parseFloat(item.tipo_cambio || 1) : tcVenta) : 
-                               parseFloat(item.total) * (item.tc_historico ? parseFloat(item.tc_historico) : tcVenta))
-                            : parseFloat(item.total)
-                        )}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-center">{obtenerBadgeEstadoPago(item.estado_pago)}</td>
-                    <td className="px-4 py-3 text-center">{obtenerBadgeEstado(item.estado)}</td>
-                  </tr>
-                ))
+          <div className="pg-grid pg-grid-2">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><TrendingUp size={16} /> Ventas por día</h2>
+                {unificado ? (
+                  <span className="pg-panel-meta">Soles unificados · fecha de {etiquetaFechaActiva}</span>
+                ) : (hayPENenData && hayUSDenData) ? (
+                  <div className="pg-segmented" role="radiogroup" aria-label="Moneda del gráfico">
+                    {['PEN', 'USD'].map(m => (
+                      <button key={m} type="button" role="radio" aria-checked={monedaVista === m}
+                        className={monedaVista === m ? 'active' : ''} onClick={() => setMonedaGrafico(m)}>
+                        {m === 'PEN' ? 'Soles' : 'Dólares'}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="pg-panel-meta">{monedaVista === 'USD' ? 'Dólares' : 'Soles'} · fecha de {etiquetaFechaActiva}</span>
+                )}
+              </div>
+              {serieDiaria.length === 0 ? (
+                <div className="pg-empty rv-chart-empty">
+                  <BarChart3 size={28} />
+                  <strong>Sin ventas para graficar</strong>
+                  <span>Ajusta el rango de fechas o los filtros y vuelve a buscar.</span>
+                </div>
               ) : (
-                <tr>
-                  <td colSpan={convertirUSD && tcVenta ? 11 : 10} className="px-4 py-12 text-center text-muted">
-                    <div className="flex flex-col items-center justify-center">
-                      <Search size={32} className="mb-2 opacity-20" />No se encontraron ventas con los filtros seleccionados.
-                    </div>
-                  </td>
-                </tr>
+                <>
+                  <div className="rv-chart">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={serieDiaria} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                        <CartesianGrid vertical={false} stroke="var(--rv-grid)" />
+                        <XAxis dataKey="etiqueta" tickLine={false} axisLine={{ stroke: 'var(--steel)' }}
+                          tick={{ fill: 'var(--rv-axis)', fontSize: 11 }} minTickGap={16} />
+                        <YAxis tickLine={false} axisLine={false} width={64}
+                          tick={{ fill: 'var(--rv-axis)', fontSize: 11 }}
+                          tickFormatter={(v) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v)} />
+                        <RechartsTooltip content={renderTooltipGrafico} cursor={{ stroke: 'var(--steel-light)', strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="total" stroke="var(--rv-s1)" strokeWidth={2}
+                          fill="var(--rv-s1)" fillOpacity={0.12}
+                          activeDot={{ r: 5, stroke: 'var(--bg-primary)', strokeWidth: 2, fill: 'var(--rv-s1)' }}
+                          dot={serieDiaria.length <= 31 ? { r: 3, strokeWidth: 0, fill: 'var(--rv-s1)' } : false}
+                          isAnimationActive={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="rv-chart-foot">
+                    <span>Total <b>{simbolo(monedaVista)} {fmt2(totalVista)}</b></span>
+                    <span>Promedio por día con venta <b>{simbolo(monedaVista)} {fmt2(promedioDiario)}</b></span>
+                    {mejorDia && <span>Mejor día <b>{formatearFecha(mejorDia.fecha)} · {simbolo(monedaVista)} {fmt2(mejorDia.total)}</b></span>}
+                  </div>
+                </>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </section>
 
-
-
-      {mostrarDetalleOrden && ordenSeleccionada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-content bg-white rounded-xl shadow-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto m-4 flex flex-col">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-start z-10">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <FileText className="text-primary" /> Detalle de Orden: {ordenSeleccionada.numero}
-                </h2>
-                <p className="text-sm text-muted mt-1">Informacion completa de la orden de venta</p>
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Receipt size={16} /> Composición</h2>
+                <span className="pg-panel-meta">{monedaVista === 'USD' ? 'Dólares' : 'Soles'}{unificado ? ' unificados' : ''}</span>
               </div>
-              <button onClick={() => setMostrarDetalleOrden(false)} className="btn btn-ghost"><X size={24} /></button>
-            </div>
+              <div className="pg-panel-body rv-mix">
+                <div className="rv-mix-block">
+                  <h4>Por tipo de documento</h4>
+                  <div className="rv-stack" role="img" aria-label="Distribución por tipo de documento">
+                    {composicionDocumento.filter(c => c.total > 0).map(c => (
+                      <span key={c.id} style={{ width: `${porcentaje(c.total, totalVista)}%`, backgroundColor: c.color }} />
+                    ))}
+                  </div>
+                  <ul className="rv-legend">
+                    {composicionDocumento.map(c => (
+                      <li key={c.id}>
+                        <i style={{ backgroundColor: c.color }} />
+                        <span>{c.label} <span className="pg-muted">· {c.cantidad}</span></span>
+                        <span className="val">{simbolo(monedaVista)} {fmt2(c.total)}</span>
+                        <span className="pct">{porcentaje(c.total, totalVista).toFixed(1)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
-            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="text-xs text-blue-600 font-semibold uppercase mb-1">Estado General</p>
-                  <div className="flex flex-col gap-2">{obtenerBadgeEstado(ordenSeleccionada.estado)}{obtenerBadgeVerificacion(ordenSeleccionada.estado_verificacion)}</div>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <p className="text-xs text-green-600 font-semibold uppercase mb-1">Estado de Pago</p>
-                  <div className="flex flex-col gap-2">
-                    {obtenerBadgeEstadoPago(ordenSeleccionada.estado_pago)}
-                    <p className="text-xs text-gray-600 mt-1">Pagado: {ordenSeleccionada.moneda} {ordenSeleccionada.monto_pagado}</p>
+                <div className="rv-mix-block">
+                  <h4>Estado de pago</h4>
+                  <div className="rv-status-rows">
+                    {composicionPago.map(p => (
+                      <div key={p.id} className="rv-status-row">
+                        <span className={`badge ${p.badge}`}>{p.id} · {p.cantidad}</span>
+                        <div className="pg-meter" style={{ '--meter-c': p.color }}>
+                          <span style={{ width: `${porcentaje(p.total, totalVista)}%` }} />
+                        </div>
+                        <span className="val">{simbolo(monedaVista)} {fmt2(p.total)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <p className="text-xs text-purple-600 font-semibold uppercase mb-1">Tipo de Venta</p>
-                  <p className="text-lg font-bold text-purple-900">{ordenSeleccionada.tipo_venta}</p>
-                  {ordenSeleccionada.tipo_venta === 'Credito' && (
-                    <div className="mt-1">
-                      <p className="text-sm font-semibold text-purple-800">Forma Pago: Credito {ordenSeleccionada.dias_credito} Dias</p>
-                      <p className="text-xs text-gray-600">Vence: {formatearFecha(ordenSeleccionada.fecha_vencimiento)}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card shadow-none">
-                  <div className="card-body p-5">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Building2 size={18} className="text-primary" /> Informacion del Cliente</h3>
-                    <div className="space-y-2 text-sm">
-                      <div><span className="text-muted">Razon Social:</span><p className="font-medium text-gray-800">{ordenSeleccionada.cliente}</p></div>
-                      <div><span className="text-muted">RUC:</span><p className="font-medium text-gray-800">{ordenSeleccionada.ruc}</p></div>
-                      {ordenSeleccionada.direccion_cliente && (<div><span className="text-muted flex items-center gap-1"><MapPin size={14} /> Direccion:</span><p className="font-medium text-gray-800">{ordenSeleccionada.direccion_cliente}</p></div>)}
-                      {ordenSeleccionada.telefono_cliente && (<div className="flex items-center gap-2"><Phone size={14} className="text-muted" /><span className="text-gray-800">{ordenSeleccionada.telefono_cliente}</span></div>)}
-                      {ordenSeleccionada.email_cliente && (<div className="flex items-center gap-2"><Mail size={14} className="text-muted" /><span className="text-gray-800">{ordenSeleccionada.email_cliente}</span></div>)}
-                    </div>
+                <div className="rv-mix-block">
+                  <h4>Condición de venta</h4>
+                  <div className="rv-stack" role="img" aria-label="Contado frente a crédito">
+                    {totalContado > 0 && <span style={{ width: `${porcentaje(totalContado, totalVista)}%`, backgroundColor: 'var(--rv-s1)' }} />}
+                    {totalCredito > 0 && <span style={{ width: `${porcentaje(totalCredito, totalVista)}%`, backgroundColor: 'var(--rv-s2)' }} />}
                   </div>
-                </div>
-                <div className="card shadow-none">
-                  <div className="card-body p-5">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Calendar size={18} className="text-success" /> Fechas Importantes</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-muted">Creacion:</span><span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_creacion)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted">Emision:</span><span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_emision)}</span></div>
-                      {ordenSeleccionada.fecha_vencimiento && (<div className="flex justify-between"><span className="text-muted">Vencimiento:</span><span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_vencimiento)}</span></div>)}
-                      {ordenSeleccionada.fecha_entrega_programada && (<div className="flex justify-between"><span className="text-muted">Entrega Programada:</span><span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_entrega_programada)}</span></div>)}
-                      {ordenSeleccionada.fecha_entrega_real && (<div className="flex justify-between"><span className="text-muted">Entrega Real:</span><span className="font-medium text-green-700">{formatearFecha(ordenSeleccionada.fecha_entrega_real)}</span></div>)}
-                      {ordenSeleccionada.fecha_verificacion && (<div className="flex justify-between"><span className="text-muted">Verificacion:</span><span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_verificacion)}</span></div>)}
-                    </div>
-                  </div>
+                  <ul className="rv-legend">
+                    <li>
+                      <i style={{ backgroundColor: 'var(--rv-s1)' }} /><span>Contado</span>
+                      <span className="val">{simbolo(monedaVista)} {fmt2(totalContado)}</span>
+                      <span className="pct">{porcentaje(totalContado, totalVista).toFixed(1)}%</span>
+                    </li>
+                    <li>
+                      <i style={{ backgroundColor: 'var(--rv-s2)' }} /><span>Crédito</span>
+                      <span className="val">{simbolo(monedaVista)} {fmt2(totalCredito)}</span>
+                      <span className="pct">{porcentaje(totalCredito, totalVista).toFixed(1)}%</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
+            </section>
+          </div>
 
-              <div className="card shadow-none">
-                <div className="card-body p-5">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">{obtenerIconoTipoEntrega(ordenSeleccionada.tipo_entrega)} Informacion de Entrega</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div><span className="text-muted">Tipo de Entrega:</span><p className="font-medium text-gray-800">{ordenSeleccionada.tipo_entrega}</p></div>
-                    {ordenSeleccionada.tipo_entrega === 'Vehiculo Empresa' && (<>
-                      {ordenSeleccionada.vehiculo_placa && (<div><span className="text-muted">Vehiculo:</span><p className="font-medium text-gray-800">{ordenSeleccionada.vehiculo_placa} - {ordenSeleccionada.vehiculo_marca}</p></div>)}
-                      {ordenSeleccionada.conductor_nombre && (<div><span className="text-muted">Conductor:</span><p className="font-medium text-gray-800">{ordenSeleccionada.conductor_nombre}</p>{ordenSeleccionada.conductor_dni && (<p className="text-xs text-muted">DNI: {ordenSeleccionada.conductor_dni}</p>)}{ordenSeleccionada.conductor_licencia && (<p className="text-xs text-muted">Licencia: {ordenSeleccionada.conductor_licencia}</p>)}</div>)}
-                    </>)}
-                    {ordenSeleccionada.tipo_entrega === 'Transporte Privado' && (<>
-                      {ordenSeleccionada.transporte_nombre && (<div><span className="text-muted">Empresa de Transporte:</span><p className="font-medium text-gray-800">{ordenSeleccionada.transporte_nombre}</p></div>)}
-                      {ordenSeleccionada.transporte_placa && (<div><span className="text-muted">Placa:</span><p className="font-medium text-gray-800">{ordenSeleccionada.transporte_placa}</p></div>)}
-                      {ordenSeleccionada.transporte_conductor && (<div><span className="text-muted">Conductor:</span><p className="font-medium text-gray-800">{ordenSeleccionada.transporte_conductor}</p>{ordenSeleccionada.transporte_dni && (<p className="text-xs text-muted">DNI: {ordenSeleccionada.transporte_dni}</p>)}</div>)}
-                    </>)}
-                    {ordenSeleccionada.direccion_entrega && (<div className="md:col-span-2"><span className="text-muted flex items-center gap-1"><MapPin size={14} /> Direccion de Entrega:</span><p className="font-medium text-gray-800">{ordenSeleccionada.direccion_entrega}</p>{ordenSeleccionada.ciudad_entrega && (<p className="text-xs text-muted">{ordenSeleccionada.ciudad_entrega}</p>)}</div>)}
-                    {ordenSeleccionada.contacto_entrega && (<div><span className="text-muted">Contacto:</span><p className="font-medium text-gray-800">{ordenSeleccionada.contacto_entrega}</p>{ordenSeleccionada.telefono_entrega && (<p className="text-xs text-muted">{ordenSeleccionada.telefono_entrega}</p>)}</div>)}
-                  </div>
-                </div>
+          <div className="pg-grid pg-grid-even">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Users size={16} /> Ventas por comercial</h2>
+                <span className="pg-panel-meta">{monedaVista === 'USD' ? 'Dólares' : 'Soles'}{unificado ? ' unificados' : ''}</span>
               </div>
-
-              {ordenSeleccionada.detalles && ordenSeleccionada.detalles.length > 0 && (
-                <div className="card shadow-none">
-                  <div className="card-body p-5">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Package size={18} className="text-purple-600" /> Productos ({ordenSeleccionada.detalles.length})</h3>
-                    <div className="table-container">
-                      <table className="table">
-                        <thead><tr>
-                          <th className="px-3 py-2 text-left">Producto</th><th className="px-3 py-2 text-center">Codigo</th>
-                          <th className="px-3 py-2 text-center">Cantidad</th><th className="px-3 py-2 text-right">P. Unitario</th>
-                          <th className="px-3 py-2 text-right">Descuento</th><th className="px-3 py-2 text-right">Subtotal</th>
-                          <th className="px-3 py-2 text-center">Despachado</th>
-                        </tr></thead>
-                        <tbody>
-                          {ordenSeleccionada.detalles.map((det, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-3 py-2"><div className="font-medium text-gray-800">{det.producto_nombre}</div>{det.descripcion && (<div className="text-xs text-muted">{det.descripcion}</div>)}</td>
-                              <td className="px-3 py-2 text-center text-muted font-mono text-xs">{det.codigo_producto}</td>
-                              <td className="px-3 py-2 text-center font-semibold text-gray-800">{det.cantidad} {det.unidad_medida}</td>
-                              <td className="px-3 py-2 text-right text-gray-700">{ordenSeleccionada.moneda} {det.precio_unitario}</td>
-                              <td className="px-3 py-2 text-right text-red-600">{parseFloat(det.descuento) > 0 ? `-${ordenSeleccionada.moneda} ${det.descuento}` : '-'}</td>
-                              <td className="px-3 py-2 text-right font-bold text-gray-800">{ordenSeleccionada.moneda} {det.subtotal}</td>
-                              <td className="px-3 py-2 text-center">
-                                <span className={`badge ${det.cantidad_despachada >= det.cantidad ? 'badge-success' : det.cantidad_despachada > 0 ? 'badge-warning' : 'badge-secondary'}`}>
-                                  {det.cantidad_despachada}/{det.cantidad}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-5">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><CreditCard size={18} className="text-primary" /> Resumen Financiero</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">Subtotal:</span><span className="font-semibold text-gray-800">{ordenSeleccionada.moneda} {ordenSeleccionada.subtotal}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">{ordenSeleccionada.tipo_impuesto} ({ordenSeleccionada.porcentaje_impuesto}%):</span><span className="font-semibold text-gray-800">{ordenSeleccionada.moneda} {ordenSeleccionada.igv}</span></div>
-                    <div className="flex justify-between text-lg border-t border-gray-300 pt-2"><span className="font-bold text-gray-800">Total:</span><span className="font-bold text-primary">{ordenSeleccionada.moneda} {ordenSeleccionada.total}</span></div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">Monto Pagado:</span><span className="font-semibold text-green-600">{ordenSeleccionada.moneda} {ordenSeleccionada.monto_pagado}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-600">Pendiente de Cobro:</span><span className="font-semibold text-red-600">{ordenSeleccionada.moneda} {ordenSeleccionada.pendiente_cobro}</span></div>
-                    {parseFloat(ordenSeleccionada.total_comision) > 0 && (
-                      <div className="flex justify-between text-sm border-t border-gray-300 pt-2"><span className="text-gray-600">Comision ({ordenSeleccionada.porcentaje_comision_promedio}%):</span><span className="font-semibold text-purple-600">{ordenSeleccionada.moneda} {ordenSeleccionada.total_comision}</span></div>
-                    )}
-                  </div>
-                </div>
-                {convertirUSD && ordenSeleccionada.moneda === 'USD' && (
-                  <div className="mt-4 pt-3 rounded-lg p-3" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.08))', border: '1px solid var(--accent-border, rgba(234,179,8,0.3))' }}>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent, #ca8a04)' }}>
-                      <ArrowRightLeft size={12} className="inline mr-1" />Equivalente en Soles 
-                      (TC Aplicado: S/ {
-                        (modoUnificacion === 'sunat' ? tcVenta : 
-                         modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : 
-                         (ordenSeleccionada.tc_historico ? parseFloat(ordenSeleccionada.tc_historico) : tcVenta)).toFixed(3)
-                      })
-                    </p>
-                    <div className="flex justify-between text-sm"><span>Total:</span><span className="font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {formatearNumero(parseFloat(ordenSeleccionada.total) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : (ordenSeleccionada.tc_historico ? parseFloat(ordenSeleccionada.tc_historico) : tcVenta)))}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pagado:</span><span className="font-semibold text-green-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.monto_pagado) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : (ordenSeleccionada.tc_historico ? parseFloat(ordenSeleccionada.tc_historico) : tcVenta)))}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pendiente:</span><span className="font-semibold text-red-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.pendiente_cobro) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : (ordenSeleccionada.tc_historico ? parseFloat(ordenSeleccionada.tc_historico) : tcVenta)))}</span></div>
+              <div className="pg-panel-body">
+                {vendedores.length === 0 ? (
+                  <div className="pg-empty"><Users size={24} /><strong>Sin ventas en el período</strong></div>
+                ) : (
+                  <ul className="rv-bars">
+                    {vendedores.map(v => (
+                      <li key={v.nombre}>
+                        <div className="rv-bars-top">
+                          <span title={v.nombre}>{obtenerNombreCorto(v.nombre) || v.nombre}</span>
+                          <b>{simbolo(monedaVista)} {fmt2(v.total)}</b>
+                        </div>
+                        <div className="pg-meter"><span style={{ width: `${porcentaje(v.total, maxVendedor)}%` }} /></div>
+                        <span className="rv-bars-meta">
+                          {v.cantidad} órdenes · {porcentaje(v.total, totalVista).toFixed(1)}% del total
+                          {v.comision > 0 && ` · comisión ${simbolo(monedaVista)} ${fmt2(v.comision)}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {(resumen.total_comisiones_pen > 0 || resumen.total_comisiones_usd > 0) && (
+                  <div className="rv-comision">
+                    <Percent size={15} />
+                    Comisiones del período
+                    <b>S/ {fmt2(resumen.total_comisiones_pen)}</b>
+                    {resumen.total_comisiones_usd > 0 && <b>$ {fmt2(resumen.total_comisiones_usd)}</b>}
                   </div>
                 )}
               </div>
+            </section>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="card shadow-none">
-                  <div className="card-body p-4">
-                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Personal Involucrado</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between"><span className="text-muted">Vendedor:</span><span className="font-medium text-gray-800">{ordenSeleccionada.vendedor}</span></div>
-                      <div className="flex justify-between"><span className="text-muted">Registrado por:</span><span className="font-medium text-gray-800">{ordenSeleccionada.registrador}</span></div>
-                      {ordenSeleccionada.verificador !== 'No asignado' && (<div className="flex justify-between"><span className="text-muted">Verificador:</span><span className="font-medium text-gray-800">{ordenSeleccionada.verificador}</span></div>)}
-                    </div>
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><FileCheck size={16} /> Facturación electrónica (SEE)</h2>
+                {puedeAbrirTrazabilidad && (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/facturacion/trazabilidad')}>
+                    Trazabilidad <ExternalLink size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="pg-panel-body">
+                <div className="rv-see-grid">
+                  {TILES_SEE.map(clave => {
+                    const cfg = ESTADOS_SEE[clave];
+                    const Icono = cfg.icon;
+                    const datos = seeConteo[clave];
+                    return (
+                      <button
+                        key={clave}
+                        type="button"
+                        className={`rv-see-tile ${filtroSee === clave ? 'on' : ''}`}
+                        style={{ '--tile-c': cfg.color }}
+                        disabled={datos.cantidad === 0 && filtroSee !== clave}
+                        aria-pressed={filtroSee === clave}
+                        onClick={() => setFiltroSee(filtroSee === clave ? '' : clave)}
+                      >
+                        <span><Icono size={12} /> {cfg.label}</span>
+                        <strong>{datos.cantidad}</strong>
+                        <small>
+                          {datos.PEN > 0 || datos.USD === 0 ? `S/ ${fmt2(datos.PEN)}` : ''}
+                          {datos.PEN > 0 && datos.USD > 0 ? ' · ' : ''}
+                          {datos.USD > 0 ? `$ ${fmt2(datos.USD)}` : ''}
+                        </small>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rv-see-extra">
+                  <div>
+                    <Receipt size={16} />
+                    <span>
+                      Notas de crédito aceptadas
+                      <b>{notasCredito}{notasCredito > 0 && ` · S/ ${fmt2(montoNotasCredito.PEN)}${montoNotasCredito.USD > 0 ? ` · $ ${fmt2(montoNotasCredito.USD)}` : ''}`}</b>
+                    </span>
+                  </div>
+                  <div>
+                    <Truck size={16} />
+                    <span>
+                      Despachos con guía GRE
+                      <b>{despachadasConGuia} de {despachadas}{guiasAceptadas > 0 && ` · ${guiasAceptadas} aceptadas`}</b>
+                    </span>
                   </div>
                 </div>
-                <div className="card shadow-none">
-                  <div className="card-body p-4">
-                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Documentos Asociados</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between items-center"><span className="text-muted">Comprobante:</span>
-                        <span className="font-bold text-gray-800 text-right">
-                          {(ordenSeleccionada.tipo_comprobante === 'Factura' && ordenSeleccionada.facturado_sunat && ordenSeleccionada.numero_comprobante_sunat) ? (
-                            <span className="text-green-700">{ordenSeleccionada.numero_comprobante_sunat} (SUNAT)</span>
-                          ) : ordenSeleccionada.numero_comprobante ? (
-                            <span>{ordenSeleccionada.tipo_comprobante}: {ordenSeleccionada.numero_comprobante}</span>
-                          ) : (
-                            <span className="text-gray-400 italic">Pendiente</span>
-                          )}
-                        </span>
-                      </div>
-                      {ordenSeleccionada.numero_cotizacion && (<div className="flex justify-between"><span className="text-muted">Cotizacion:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_cotizacion}</span></div>)}
-                      {ordenSeleccionada.numero_guia_interna && (<div className="flex justify-between"><span className="text-muted">Guia Interna:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_guia_interna}</span></div>)}
-                      {(ordenSeleccionada.orden_compra_cliente || ordenSeleccionada.orden_compra_url) && (
-                        <div className="pt-2 border-t border-gray-100 mt-1 space-y-1.5">
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted">OC Cliente:</span>
-                            <span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente || '—'}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted">Verificación OC:</span>
-                            {ordenSeleccionada.estado_verificacion_oc === 'Verificado' ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
-                                <ShieldCheck size={11} /> Verificada
-                                {ordenSeleccionada.fecha_verificacion_oc && (
-                                  <span className="font-normal ml-1">· {new Date(ordenSeleccionada.fecha_verificacion_oc).toLocaleDateString('es-PE')}</span>
-                                )}
-                              </span>
-                            ) : ordenSeleccionada.estado_verificacion_oc === 'Omitida' ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">
-                                <ShieldOff size={11} /> Omitida
-                              </span>
-                            ) : ordenSeleccionada.orden_compra_url ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
-                                <ShieldAlert size={11} /> Sin verificar
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-400 italic">—</span>
-                            )}
-                          </div>
-                          {ordenSeleccionada.orden_compra_url && (() => {
-                            let urls = [];
-                            try {
-                              const raw = ordenSeleccionada.orden_compra_url;
-                              const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                              urls = Array.isArray(parsed) ? parsed : [raw];
-                            } catch { urls = [ordenSeleccionada.orden_compra_url]; }
-                            return (
-                              <div className="flex gap-1 flex-wrap">
-                                {urls.map((url, i) => (
-                                  <button key={i} className="btn btn-xs btn-outline flex items-center gap-1" onClick={() => abrirVisor(url, urls.length > 1 ? `OC Cliente ${i + 1}` : 'OC Cliente')}>
-                                    <Eye size={11} /> {urls.length > 1 ? `Ver OC ${i + 1}` : 'Ver OC'}
-                                  </button>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <p className="rv-see-note">Pulsa un estado para filtrar la tabla. Solo cuentan las órdenes con tipo de comprobante Factura.</p>
+              </div>
+            </section>
+          </div>
+
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><ShoppingCart size={16} /> Detalle de órdenes <span className="pg-count">{filasTabla.length}</span></h2>
+              <div className="rv-table-tools">
+                {filtroSee && (
+                  <span className="rv-active-filter">
+                    SEE: {ESTADOS_SEE[filtroSee].label}
+                    <button type="button" onClick={() => setFiltroSee('')} aria-label="Quitar filtro SEE"><X size={13} /></button>
+                  </span>
+                )}
+                <div className="rv-search">
+                  <Search size={14} />
+                  <input type="search" className="form-input" placeholder="Orden, cliente, RUC, comprobante…"
+                    value={busquedaTabla} onChange={(e) => setBusquedaTabla(e.target.value)} aria-label="Buscar en la tabla" />
                 </div>
               </div>
-
-              {historialDespachos.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><Truck size={16} className="text-blue-600" /> Historial de Despachos</h4>
-                  <div className="space-y-3">
-                    {historialDespachos.map((despacho, index) => (
-                      <div key={despacho.id_salida || index} className="bg-gray-50 border border-gray-200 rounded p-3 text-sm">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-gray-800 flex items-center gap-2">
-                            Salida #{despacho.id_salida}
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${despacho.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{despacho.estado}</span>
-                          </span>
-                          <span className="text-muted font-mono text-xs"><span className="font-medium text-gray-700">Ítems:</span> {despacho.total_items || 0}</span>
-                        </div>
-                        {despacho.observaciones && (
-                          <div className="text-gray-600 mt-1">
-                            <span className="font-medium text-gray-700">Ref / Guía:</span> {despacho.observaciones}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {historialFacturasAnuladas.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-red-800 mb-3 flex items-center gap-2"><FileCheck size={16} className="text-red-600" /> Historial de Facturas Anuladas ({historialFacturasAnuladas.length})</h4>
-                  <div className="space-y-2">
-                    {historialFacturasAnuladas.map((f, i) => (
-                      <div key={f.id_factura_anulada || i} className="bg-white border border-red-200 rounded p-3 text-sm">
-                        <div className="flex justify-between items-start flex-wrap gap-1">
-                          <span className="font-bold text-red-700">{f.numero_comprobante_sunat || f.numero_comprobante || `Factura ${i + 1}`}</span>
-                          <span className="text-xs text-gray-500">{f.fecha_anulacion ? new Date(f.fecha_anulacion).toLocaleDateString('es-PE') : '—'}</span>
-                        </div>
-                        {f.motivo_anulacion && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Motivo:</span> {f.motivo_anulacion}</p>}
-                        {f.anulado_por && <p className="text-xs text-gray-500 mt-0.5">Anulado por: {f.anulado_por}</p>}
-                        {f.comprobante_sunat_url && (
-                          <button className="btn btn-xs btn-outline mt-1.5 flex items-center gap-1" onClick={() => abrirVisor(f.comprobante_sunat_url, `Factura Anulada: ${f.numero_comprobante_sunat || ''}`)}>
-                            <Eye size={11} /> Ver archivo
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {documentosAdicionales.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-blue-600" /> Documentos Adicionales</h4>
-                  {(() => {
-                    const activos   = documentosAdicionales.filter(d => !d.deleted_at);
-                    const eliminados = documentosAdicionales.filter(d =>  d.deleted_at);
-
-                    const renderDocUrls = (doc) => {
-                      let urls = [];
-                      try {
-                        const parsed = typeof doc.archivos_url === 'string' ? JSON.parse(doc.archivos_url) : doc.archivos_url;
-                        urls = Array.isArray(parsed) ? parsed : [parsed];
-                      } catch { urls = []; }
-                      return urls.map((url, i) => (
-                        <button key={i} className="btn btn-xs btn-outline flex items-center gap-1" onClick={() => abrirVisor(url, `${doc.tipo_documento}${doc.correlativo ? ' ' + doc.correlativo : ''}${urls.length > 1 ? ` (${i + 1})` : ''}`)}>
-                          <Eye size={11} /> {urls.length > 1 ? `Ver ${i + 1}` : 'Ver'}
-                        </button>
-                      ));
-                    };
-
+            </div>
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>Orden</th>
+                    <th>Cliente</th>
+                    <th>Comercial</th>
+                    <th className={`center ${filtros.filtroFecha === 'fecha_emision' ? 'is-focus' : ''}`}>Emisión</th>
+                    <th className={`center ${filtros.filtroFecha === 'fecha_sunat' ? 'is-focus' : ''}`}>SUNAT</th>
+                    <th className={`center ${filtros.filtroFecha === 'fecha_despacho' ? 'is-focus' : ''}`}>Despacho</th>
+                    <th>Comprobante</th>
+                    <th className="num">Total</th>
+                    <th className="center">Pago</th>
+                    <th className="center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasPagina.length > 0 ? filasPagina.map(item => {
+                    const principal = comprobantePrincipal(item);
+                    const documento = numeroDocumento(item);
                     return (
-                      <div className="space-y-3">
-                        {activos.length > 0 && (
-                          <div className="space-y-2">
-                            {activos.map(doc => (
-                              <div key={doc.id_documento} className="flex items-start justify-between gap-2 p-2 border border-gray-100 rounded-lg bg-gray-50 text-sm">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
-                                    {doc.correlativo && <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{doc.correlativo}</span>}
-                                  </div>
-                                  <div className="flex gap-1 mt-1.5 flex-wrap">{renderDocUrls(doc)}</div>
-                                  <p className="text-[10px] text-gray-400 mt-1">{doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {eliminados.length > 0 && (
-                          <div className="pt-2 border-t border-gray-100">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1 mb-2"><Trash2 size={11} /> Eliminados</p>
-                            <div className="space-y-2">
-                              {eliminados.map(doc => (
-                                <div key={doc.id_documento} className="p-2 border border-red-100 rounded-lg bg-red-50/40 opacity-75 text-sm">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs font-bold text-gray-400 bg-gray-200 line-through px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
-                                    {doc.correlativo && <span className="font-mono text-xs text-gray-400 line-through">{doc.correlativo}</span>}
-                                  </div>
-                                  <div className="flex gap-1 mt-1.5 flex-wrap">{renderDocUrls(doc)}</div>
-                                  <p className="text-[10px] text-red-500 mt-1">Eliminado por {doc.eliminado_por || 'Sistema'} · {new Date(doc.deleted_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                </div>
-                              ))}
+                      <tr key={item.id} className="is-clickable" onClick={() => verDetalleOrden(item)}>
+                        <td className="nowrap">
+                          <span className="pg-code">{item.numero}</span>
+                          {item.numero_cotizacion && <span className="pg-cell-sub">{item.numero_cotizacion}</span>}
+                        </td>
+                        <td>
+                          <span className="pg-cell-main pg-truncate" title={item.cliente}>{item.cliente}</span>
+                          <span className="pg-cell-sub">{item.ruc}</span>
+                        </td>
+                        <td className="nowrap pg-muted">{obtenerNombreCorto(item.vendedor)}</td>
+                        <td className={`center nowrap ${filtros.filtroFecha === 'fecha_emision' ? 'is-focus' : ''}`}>{formatearFecha(item.fecha_emision)}</td>
+                        <td className={`center nowrap ${filtros.filtroFecha === 'fecha_sunat' ? 'is-focus' : ''}`}>
+                          {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : <span className="pg-muted">—</span>}
+                        </td>
+                        <td className={`center nowrap ${filtros.filtroFecha === 'fecha_despacho' ? 'is-focus' : ''}`}>
+                          {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="pg-muted">Pendiente</span>}
+                        </td>
+                        <td>
+                          <div className="rv-doc">
+                            <div className="rv-doc-line">
+                              {documento ? <span className="rv-doc-num">{documento}</span> : <span className="pg-muted">—</span>}
+                              <span className="rv-doc-tipo">{item.tipo_comprobante || 'Sin comprobante'}</span>
                             </div>
+                            {item.see && item.see.estado !== 'NO_APLICA' && (
+                              <div className="rv-doc-line">
+                                <BadgeSee estado={item.see.estado} />
+                                {renderArchivosComprobante(principal)}
+                                {item.comprobante_sunat_url && !principal?.es_electronico && (
+                                  <button type="button" className="pg-iconbtn" title="Ver comprobante adjunto" aria-label="Ver comprobante adjunto"
+                                    onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}>
+                                    <Eye size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </td>
+                        <td className="num">{renderMonto(item)}</td>
+                        <td className="center">
+                          <span className={`badge ${ESTADOS_PAGO.find(e => e.id === item.estado_pago)?.badge || 'badge-secondary'}`}>{item.estado_pago}</span>
+                          {parseFloat(item.pendiente_cobro) > 0.01 && item.estado_pago !== 'Pendiente' && (
+                            <span className="pg-cell-sub">Saldo {simbolo(item.moneda)} {formatearNumero(item.pendiente_cobro)}</span>
+                          )}
+                        </td>
+                        <td className="center">
+                          <span className={`badge ${BADGE_ESTADO_ORDEN[item.estado] || 'badge-secondary'}`}>{item.estado}</span>
+                          {['Retrasado', 'Vencido'].includes(item.estado_logistico) && (
+                            <span className="pg-cell-sub text-danger">{item.estado_logistico}</span>
+                          )}
+                        </td>
+                      </tr>
                     );
-                  })()}
-                </div>
-              )}
-
-              {(ordenSeleccionada.observaciones || ordenSeleccionada.observaciones_verificador || ordenSeleccionada.motivo_rechazo) && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><FileCheck size={16} className="text-yellow-600" /> Observaciones</h4>
-                  <div className="space-y-2 text-sm">
-                    {ordenSeleccionada.observaciones && (<div><span className="font-medium text-gray-700">Observaciones generales:</span><p className="text-gray-600 mt-1">{ordenSeleccionada.observaciones}</p></div>)}
-                    {ordenSeleccionada.observaciones_verificador && (<div><span className="font-medium text-gray-700">Observaciones del verificador:</span><p className="text-gray-600 mt-1">{ordenSeleccionada.observaciones_verificador}</p></div>)}
-                    {ordenSeleccionada.motivo_rechazo && (<div className="bg-red-50 border border-red-200 rounded p-2"><span className="font-medium text-red-700">Motivo de rechazo:</span><p className="text-red-600 mt-1">{ordenSeleccionada.motivo_rechazo}</p></div>)}
-                  </div>
-                </div>
-              )}
+                  }) : (
+                    <tr>
+                      <td colSpan={10}>
+                        <div className="pg-empty">
+                          <Search size={28} />
+                          <strong>{loading ? 'Cargando reporte…' : 'No hay órdenes con estos filtros'}</strong>
+                          {!loading && <span>Cambia el rango de fechas, quita filtros o limpia la búsqueda.</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
+            {filasTabla.length > FILAS_POR_PAGINA && (
+              <div className="pg-pager">
+                <span>
+                  <b>{(paginaActual - 1) * FILAS_POR_PAGINA + 1}</b>–<b>{Math.min(paginaActual * FILAS_POR_PAGINA, filasTabla.length)}</b> de <b>{filasTabla.length}</b> órdenes
+                </span>
+                <div className="pg-pager-nav">
+                  <button type="button" className="pagination-nav-btn" disabled={paginaActual === 1} onClick={() => setPagina(paginaActual - 1)}>
+                    <ChevronLeft size={15} /> Anterior
+                  </button>
+                  {numerosPagina.map((n, i) => (
+                    n === '…'
+                      ? <span key={`e-${i}`} className="pg-muted">…</span>
+                      : <button key={n} type="button" className={`pagination-page-btn ${n === paginaActual ? 'active' : ''}`} onClick={() => setPagina(n)}>{n}</button>
+                  ))}
+                  <button type="button" className="pagination-nav-btn" disabled={paginaActual === totalPaginas} onClick={() => setPagina(paginaActual + 1)}>
+                    Siguiente <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
 
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end rounded-b-xl">
-              <button onClick={() => setMostrarDetalleOrden(false)} className="btn btn-secondary">Cerrar</button>
-            </div>
+        {mostrarDetalleOrden && ordenSeleccionada && renderDrawer()}
+
+        <Modal isOpen={visorArchivo.open} onClose={cerrarVisor} title={visorArchivo.titulo} size="2xl">
+          <div className="flex justify-center items-center p-4 min-h-[50vh]" style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: 2 }}>
+            {visorArchivo.tipo === 'pdf' ? (
+              <iframe src={visorArchivo.url} className="w-full h-[70vh]" style={{ border: 0 }} title="Visor de archivo" />
+            ) : (
+              <img src={visorArchivo.url} alt={visorArchivo.titulo || 'Archivo adjunto'} className="rv-visor-img" />
+            )}
           </div>
-        </div>
-      )}
-      <Modal
-        isOpen={visorArchivo.open}
-        onClose={cerrarVisor}
-        title={visorArchivo.titulo}
-        size="2xl"
-      >
-        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
-          {visorArchivo.tipo === 'pdf' ? (
-            <iframe src={visorArchivo.url} className="w-full h-[70vh] border-0 rounded" title="Visor de archivo" />
-          ) : (
-            <img src={visorArchivo.url} alt="Visualización de archivo" className="max-w-full max-h-[70vh] object-contain rounded shadow-lg" />
-          )}
-        </div>
-        <div className="flex justify-end mt-4">
-          <button className="btn btn-primary" onClick={cerrarVisor}>Cerrar Visor</button>
-        </div>
-      </Modal>
+          <div className="flex justify-end mt-2">
+            <button className="btn btn-primary" onClick={cerrarVisor}>Cerrar</button>
+          </div>
+        </Modal>
 
-      {modalSunat.isOpen && (
-        <ModalValidacionSunat
-          isOpen={modalSunat.isOpen}
-          onClose={() => setModalSunat({ isOpen: false, orden: null })}
-          orden={modalSunat.orden}
-          file={null}
-          readOnly={true}
-          existingData={modalSunat.orden}
-          onConfirm={() => {}}
-        />
-      )}
+        {modalSunat.isOpen && (
+          <ModalValidacionSunat
+            isOpen={modalSunat.isOpen}
+            onClose={() => setModalSunat({ isOpen: false, orden: null })}
+            orden={modalSunat.orden}
+            file={null}
+            readOnly={true}
+            existingData={modalSunat.orden}
+            onConfirm={() => {}}
+          />
+        )}
       </div>
     </>
   );

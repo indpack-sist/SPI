@@ -24,7 +24,7 @@ const ESTADOS_META = {
 const estadoMeta = (e) => ESTADOS_META[String(e || '').toUpperCase()] || { label: e || '—', color: '#94a3b8' };
 
 const CLASES = {
-  FACTURA:      { label: 'Factura',          sigla: 'FAC', color: '#6366f1' },
+  FACTURA:      { label: 'Factura',          sigla: 'FAC', color: 'var(--accent)' },
   NOTA_CREDITO: { label: 'Nota de Crédito',  sigla: 'N/C', color: '#f59e0b' },
   NOTA_DEBITO:  { label: 'Nota de Débito',   sigla: 'N/D', color: '#0ea5e9' },
   GUIA:         { label: 'Guía de Remisión', sigla: 'GRE', color: '#14b8a6' },
@@ -836,7 +836,7 @@ function PanelComprasSunat() {
                 <tr key={`${r.rucProveedor}-${r.tipoCP}-${r.documento}-${i}`} className="tz-dm-row" style={{ '--i': Math.min(i, 24) }}>
                   <td className="tz-nowrap">{r.fechaEmision || '—'}</td>
                   <td>
-                    <div className="tz-doc"><span className="tz-tipo" style={{ '--c': '#6366f1' }}>{tipoCpLabel(r.tipoCP)}</span><b>{r.documento}</b></div>
+                    <div className="tz-doc"><span className="tz-tipo" style={{ '--c': 'var(--accent)' }}>{tipoCpLabel(r.tipoCP)}</span><b>{r.documento}</b></div>
                   </td>
                   <td><div className="tz-cli"><b>{r.razonSocial || '—'}</b><small>{r.rucProveedor || ''}</small></div></td>
                   <td className="tz-num tz-nowrap">{fmtMoneda(r.igv, r.moneda)}</td>

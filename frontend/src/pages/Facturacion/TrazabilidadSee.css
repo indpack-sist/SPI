@@ -24,7 +24,7 @@
 
 .tz-refresh {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: .5rem;
-  padding: .55rem .9rem; border-radius: 9px; cursor: pointer;
+  padding: .55rem .9rem; border-radius: 4px; cursor: pointer;
   background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary);
   font-size: .82rem; font-weight: 600; transition: border-color .15s, background .15s;
 }
@@ -39,7 +39,7 @@
   border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
 }
 .tz-tab:hover { color: var(--text-primary); }
-.tz-tab.active { color: var(--text-primary); border-bottom-color: #6366f1; }
+.tz-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
 
 .tz-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
@@ -47,10 +47,10 @@
 }
 .tz-search {
   display: flex; align-items: center; gap: .5rem; flex: 1 1 280px; min-width: 240px;
-  padding: .55rem .75rem; border-radius: 9px;
+  padding: .55rem .75rem; border-radius: 4px;
   background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary);
 }
-.tz-search:focus-within { border-color: #6366f1; }
+.tz-search:focus-within { border-color: var(--accent); }
 .tz-search input {
   flex: 1; border: none; background: none; outline: none;
   color: var(--text-primary); font-size: .88rem;
@@ -65,10 +65,10 @@
 .tz-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .tz-field {
   display: inline-flex; align-items: center; gap: .4rem;
-  padding: .5rem .65rem; border-radius: 9px;
+  padding: .5rem .65rem; border-radius: 4px;
   background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary);
 }
-.tz-field:focus-within { border-color: #6366f1; }
+.tz-field:focus-within { border-color: var(--accent); }
 .tz-field select, .tz-field input {
   border: none; background: none; outline: none; color: var(--text-primary);
   font-size: .84rem; font-weight: 500; cursor: pointer;
@@ -81,37 +81,37 @@
 
 .tz-btn {
   display: inline-flex; align-items: center; gap: .45rem;
-  padding: .55rem .9rem; border-radius: 9px; cursor: pointer;
+  padding: .55rem .9rem; border-radius: 4px; cursor: pointer;
   font-size: .82rem; font-weight: 600; border: 1px solid transparent; transition: all .15s;
 }
 .tz-btn-ghost { background: var(--bg-primary); border-color: var(--border); color: var(--text-secondary); }
 .tz-btn-ghost:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-secondary); }
 .tz-btn-ghost:disabled { opacity: .45; cursor: default; }
-.tz-btn-primary { background: #6366f1; color: #fff; }
-.tz-btn-primary:hover { background: #4f52e0; }
+.tz-btn-primary { background: var(--accent); color: #1a1a1a; }
+.tz-btn-primary:hover { background: var(--primary-dark); }
 
 .tz-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
 .tz-chip {
   display: inline-flex; align-items: center; gap: .45rem; cursor: pointer;
-  padding: .38rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 600;
+  padding: .38rem .7rem; border-radius: 2px; font-size: .8rem; font-weight: 600;
   background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary);
   transition: all .15s;
 }
 .tz-chip b { color: var(--text-primary); font-weight: 700; }
 .tz-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--text-secondary)); }
 .tz-chip:hover { border-color: var(--text-secondary); }
-.tz-chip.on { border-color: var(--c, #6366f1); background: color-mix(in srgb, var(--c, #6366f1) 12%, var(--bg-primary)); color: var(--text-primary); }
-.tz-chip.total.on { border-color: #6366f1; background: color-mix(in srgb, #6366f1 12%, var(--bg-primary)); }
+.tz-chip.on { border-color: var(--c, var(--accent)); background: color-mix(in srgb, var(--c, var(--accent)) 12%, var(--bg-primary)); color: var(--text-primary); }
+.tz-chip.total.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg-primary)); }
 
 .tz-toast {
   display: flex; align-items: center; gap: .5rem; cursor: pointer;
-  padding: .6rem .85rem; margin-bottom: 1rem; border-radius: 9px; font-size: .84rem;
+  padding: .6rem .85rem; margin-bottom: 1rem; border-radius: 4px; font-size: .84rem;
   background: color-mix(in srgb, #ef4444 12%, var(--bg-primary));
   border: 1px solid color-mix(in srgb, #ef4444 40%, var(--border)); color: var(--text-primary);
 }
 
 .tz-table-wrap {
-  background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px;
   overflow: auto; box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 .tz-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
@@ -128,7 +128,7 @@
 .tz-row { cursor: pointer; transition: background .12s; border-bottom: 1px solid var(--border); }
 .tz-row td { padding: .7rem 1rem; vertical-align: middle; color: var(--text-primary); }
 .tz-row:hover { background: var(--bg-secondary); }
-.tz-row.open { background: color-mix(in srgb, #6366f1 6%, var(--bg-primary)); }
+.tz-row.open { background: color-mix(in srgb, var(--accent) 6%, var(--bg-primary)); }
 .tz-nowrap { white-space: nowrap; }
 .tz-muted { color: var(--text-secondary); }
 
@@ -136,14 +136,14 @@
 .tz-doc b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .tz-tipo {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 34px; padding: .15rem .35rem; border-radius: 6px;
+  min-width: 34px; padding: .15rem .35rem; border-radius: 2px;
   font-size: .64rem; font-weight: 800; letter-spacing: .03em;
   color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
 }
 .tz-tag-manual, .tz-tag-exp {
   display: inline-block; margin-top: .25rem; margin-right: .3rem;
-  font-size: .64rem; font-weight: 600; padding: .1rem .4rem; border-radius: 5px;
+  font-size: .64rem; font-weight: 600; padding: .1rem .4rem; border-radius: 2px;
   color: var(--text-secondary); background: var(--bg-tertiary);
 }
 .tz-tag-exp { color: #0ea5e9; background: color-mix(in srgb, #0ea5e9 14%, transparent); }
@@ -154,14 +154,14 @@
 
 .tz-link {
   display: inline-flex; align-items: center; gap: .3rem; cursor: pointer;
-  background: none; border: none; padding: .2rem .4rem; border-radius: 6px;
-  color: #6366f1; font-weight: 600; font-size: .82rem; font-family: inherit;
+  background: none; border: none; padding: .2rem .4rem; border-radius: 2px;
+  color: var(--accent); font-weight: 600; font-size: .82rem; font-family: inherit;
 }
-.tz-link:hover { background: color-mix(in srgb, #6366f1 12%, transparent); }
+.tz-link:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 .tz-badge {
   display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
-  padding: .25rem .6rem; border-radius: 999px; font-size: .74rem; font-weight: 600;
+  padding: .25rem .6rem; border-radius: 2px; font-size: .74rem; font-weight: 600;
   color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 32%, transparent);
 }
@@ -176,7 +176,7 @@
 .tz-acc { display: inline-flex; gap: .3rem; }
 .tz-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 2px; cursor: pointer;
   background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary);
   transition: all .13s;
 }
@@ -204,7 +204,7 @@
 .tz-state .tz-btn { margin-top: .5rem; }
 .tz-inline-error {
   display: flex; align-items: center; gap: .5rem; margin: 1rem 1.35rem;
-  padding: .6rem .8rem; border-radius: 8px; font-size: .82rem;
+  padding: .6rem .8rem; border-radius: 2px; font-size: .82rem;
   background: color-mix(in srgb, #ef4444 12%, var(--bg-primary));
   border: 1px solid color-mix(in srgb, #ef4444 40%, var(--border)); color: var(--text-primary);
 }
@@ -227,7 +227,7 @@
 }
 .tz-drawer-head h2 { margin: .2rem 0 0; font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
 .tz-drawer-close {
-  display: inline-flex; padding: .4rem; border-radius: 7px; cursor: pointer;
+  display: inline-flex; padding: .4rem; border-radius: 2px; cursor: pointer;
   background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary);
 }
 .tz-drawer-close:hover { color: var(--text-primary); }
@@ -236,7 +236,7 @@
 
 .tz-drawer-card {
   display: grid; grid-template-columns: 1fr 1fr; gap: .7rem 1rem;
-  padding: 1rem; border-radius: 10px; background: var(--bg-secondary); border: 1px solid var(--border);
+  padding: 1rem; border-radius: 4px; background: var(--bg-secondary); border: 1px solid var(--border);
 }
 .tz-kv { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
 .tz-kv span { font-size: .65rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-secondary); }
@@ -246,9 +246,9 @@
   display: flex; align-items: center; gap: .45rem; margin-bottom: .6rem;
   font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary);
 }
-.tz-drawer-subtitle b { color: var(--text-primary); background: var(--bg-tertiary); border-radius: 20px; padding: 0 .45rem; font-size: .72rem; }
+.tz-drawer-subtitle b { color: var(--text-primary); background: var(--bg-tertiary); border-radius: 2px; padding: 0 .45rem; font-size: .72rem; }
 
-.tz-mini-table { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.tz-mini-table { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .tz-mini-head, .tz-mini-row {
   display: grid; grid-template-columns: 2fr .8fr 1fr 1fr; gap: .5rem; align-items: center;
   padding: .5rem .7rem; font-size: .8rem;
@@ -264,7 +264,7 @@
 .tz-doc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .45rem; }
 .tz-doc-list li {
   display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 2px; background: var(--bg-secondary);
 }
 .tz-doc-id { font-weight: 600; font-size: .83rem; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .tz-doc-monto { margin-left: auto; font-size: .82rem; font-weight: 600; color: var(--text-primary); }
@@ -282,7 +282,7 @@
 
 .tz-dm-consulta {
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem;
-  padding: 1.1rem 1.25rem; border-radius: 12px;
+  padding: 1.1rem 1.25rem; border-radius: 4px;
   background: var(--bg-primary); border: 1px solid var(--border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
 }
@@ -292,7 +292,7 @@
 .tz-dm-actionbar {
   position: sticky; top: .5rem; z-index: 3;
   display: flex; align-items: center; gap: .8rem;
-  padding: .7rem 1rem; border-radius: 11px;
+  padding: .7rem 1rem; border-radius: 4px;
   background: var(--bg-secondary); border: 1px solid var(--border);
   transition: border-color .18s, background .18s, box-shadow .18s;
 }
@@ -304,7 +304,7 @@
 .tz-dm-count b { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
 .tz-dm-clear {
   background: none; border: none; cursor: pointer; font-size: .8rem; font-weight: 600;
-  color: var(--text-secondary); padding: .3rem .5rem; border-radius: 7px; transition: color .14s, background .14s;
+  color: var(--text-secondary); padding: .3rem .5rem; border-radius: 2px; transition: color .14s, background .14s;
 }
 .tz-dm-clear:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
@@ -314,7 +314,7 @@
 
 .tz-descarga-nota {
   display: flex; align-items: center; gap: .55rem;
-  font-size: .8rem; padding: .6rem .85rem; border-radius: 9px;
+  font-size: .8rem; padding: .6rem .85rem; border-radius: 4px;
   background: color-mix(in srgb, #f59e0b 12%, var(--bg-primary));
   border: 1px solid color-mix(in srgb, #f59e0b 32%, var(--border)); color: var(--text-primary);
 }
@@ -341,7 +341,7 @@
 }
 
 .tz-anulado-si {
-  display: inline-block; font-size: .74rem; font-weight: 600; padding: .12rem .5rem; border-radius: 999px;
+  display: inline-block; font-size: .74rem; font-weight: 600; padding: .12rem .5rem; border-radius: 2px;
   color: #a855f7; background: color-mix(in srgb, #a855f7 14%, transparent);
   border: 1px solid color-mix(in srgb, #a855f7 32%, transparent);
 }

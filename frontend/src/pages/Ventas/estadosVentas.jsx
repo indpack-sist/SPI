@@ -1,6 +1,7 @@
 import {
   Clock, PlayCircle, Factory, Truck, PackageCheck, CheckCircle, XCircle, AlertTriangle,
-  Receipt, Ban, FileText, CreditCard, Hourglass, ShieldCheck, ShieldX, Route, Car, Store
+  Receipt, Ban, FileText, CreditCard, Hourglass, ShieldCheck, ShieldX, Route, Car, Store,
+  FileEdit, Send, ArrowRightCircle, CalendarX
 } from 'lucide-react';
 
 export const ESTADOS_ORDEN = {
@@ -21,6 +22,26 @@ export const configEstadoOrden = (estado) => (
 
 export function BadgeEstadoOrden({ estado }) {
   const cfg = configEstadoOrden(estado);
+  const Icono = cfg.icon;
+  return <span className={`badge ${cfg.badge}`}><Icono size={11} />{cfg.label}</span>;
+}
+
+export const ESTADOS_COTIZACION = {
+  'Borrador':   { label: 'Borrador',   badge: 'badge-secondary', tono: '',           color: 'var(--steel-light)', icon: FileEdit },
+  'Pendiente':  { label: 'Pendiente',  badge: 'badge-warning',   tono: 'is-warning', color: 'var(--warning)',     icon: Clock },
+  'Enviada':    { label: 'Enviada',    badge: 'badge-info',      tono: 'is-info',    color: 'var(--info)',        icon: Send },
+  'Aprobada':   { label: 'Aprobada',   badge: 'badge-success',   tono: 'is-success', color: 'var(--success)',     icon: CheckCircle },
+  'Rechazada':  { label: 'Rechazada',  badge: 'badge-danger',    tono: 'is-danger',  color: 'var(--danger)',      icon: XCircle },
+  'Convertida': { label: 'Convertida', badge: 'badge-primary',   tono: 'is-accent',  color: 'var(--accent)',      icon: ArrowRightCircle },
+  'Vencida':    { label: 'Vencida',    badge: 'badge-secondary', tono: '',           color: 'var(--steel-light)', icon: CalendarX }
+};
+
+export const configEstadoCotizacion = (estado) => (
+  ESTADOS_COTIZACION[estado] || { label: estado || 'Sin estado', badge: 'badge-secondary', tono: '', color: 'var(--steel-light)', icon: FileText }
+);
+
+export function BadgeEstadoCotizacion({ estado }) {
+  const cfg = configEstadoCotizacion(estado);
   const Icono = cfg.icon;
   return <span className={`badge ${cfg.badge}`}><Icono size={11} />{cfg.label}</span>;
 }

@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, Edit, Download, FileText, Calendar,
   Building, AlertCircle,
-  CheckCircle, XCircle, Calculator, Percent, TrendingUp,
+  CheckCircle, XCircle, Calculator, Percent,
   AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock,
-  ChevronLeft, ChevronRight, Save, FlaskConical,
+  ChevronLeft, ChevronRight, Save, FlaskConical, Flag,
   DollarSign, ArrowRightLeft, RefreshCcw, Clock
 } from 'lucide-react';
-import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { cotizacionesAPI, clientesAPI, tipoCambioAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
+import { BadgeEstadoCotizacion, configEstadoCotizacion } from './estadosVentas';
+import './Ventas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
@@ -394,193 +395,8 @@ function DetalleCotizacion() {
     return valor;
   };
 
-  const getEstadoConfig = (estado) => {
-    const configs = {
-      'Pendiente': { 
-        icono: Calculator, 
-        clase: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        badge: 'badge-warning'
-      },
-      'Enviada': { 
-        icono: FileText, 
-        clase: 'bg-blue-100 text-blue-800 border-blue-200',
-        badge: 'badge-info'
-      },
-      'Aprobada': { 
-        icono: CheckCircle, 
-        clase: 'bg-green-100 text-green-800 border-green-200',
-        badge: 'badge-success'
-      },
-      'Rechazada': { 
-        icono: XCircle, 
-        clase: 'bg-red-100 text-red-800 border-red-200',
-        badge: 'badge-danger'
-      },
-      'Convertida': { 
-        icono: CheckCircle, 
-        clase: 'bg-primary/10 text-primary border-primary/20',
-        badge: 'badge-primary'
-      },
-      'Vencida': { 
-        icono: AlertCircle, 
-        clase: 'bg-gray-100 text-gray-800 border-gray-200',
-        badge: 'badge-secondary'
-      }
-    };
-    return configs[estado] || configs['Pendiente'];
-  };
-
   const esUSD = cotizacion?.moneda === 'USD';
   const tcVenta = tipoCambio?.venta || null;
-
-  const columns = [
-    {
-      header: 'Producto',
-      accessor: 'producto',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted font-mono">{row.codigo_producto || row.codigo_producto_libre}</div>
-          {row.es_producto_libre ? (
-            <div className="text-xs text-amber-600 flex items-center gap-1 mt-1"
-              style={{ backgroundColor: '#fffbeb', padding: '2px 6px', borderRadius: '4px', width: 'fit-content' }}
-            >
-              <FlaskConical size={10} />
-              Producto muestra
-            </div>
-          ) : (
-            parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
-              <div className="text-xs text-warning flex items-center gap-1 mt-1">
-                <AlertTriangle size={12} />
-                Stock insuficiente ({parseFloat(parseFloat(row.stock_disponible || 0).toFixed(4))} {row.unidad_medida})
-              </div>
-            )
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Cantidad',
-      accessor: 'cantidad',
-      width: '100px',
-      align: 'right',
-      render: (value, row) => (
-        <div className="text-right">
-          <div className="font-bold">{parseFloat(parseFloat(value).toFixed(4))}</div>
-          <div className="text-xs text-muted">{row.unidad_medida}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Peso',
-      accessor: 'peso_unitario',
-      width: '100px',
-      align: 'right',
-      render: (value, row) => {
-        const peso = parseFloat(value || 0);
-        if (peso === 0) return <span className="text-muted">—</span>;
-        const pesoTotal = parseFloat(row.cantidad) * peso;
-        return (
-          <div className="text-right">
-            <span className="font-bold text-sm">{formatearPeso(pesoTotal)}</span>
-            <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'P. Base',
-      accessor: 'precio_base',
-      width: '110px',
-      align: 'right',
-      render: (value) => (
-        <span className="text-muted font-mono text-sm">{formatearMoneda(value)}</span>
-      )
-    },
-    {
-      header: 'P. Venta',
-      accessor: 'precio_unitario',
-      width: '120px',
-      align: 'right',
-      render: (value) => (
-        <div className="text-right">
-          <span className="font-medium text-primary">{formatearMonedaPrecio(value)}</span>
-          {esUSD && tcVenta && (
-            <div className="text-[10px] mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
-              S/ {formatearNumeroPrecio(parseFloat(value) * tcVenta)}
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Margen %', 
-      accessor: 'descuento_porcentaje',
-      width: '80px',
-      align: 'center',
-      render: (value) => {
-        const porcentaje = parseFloat(value || 0);
-        const colorClass = porcentaje < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-medium';
-        
-        return (
-          <span className={`text-sm ${colorClass}`}>
-            {porcentaje > 0 ? '+' : ''}{porcentaje.toFixed(2)}%
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Subtotal',
-      accessor: 'valor_venta',
-      width: '150px',
-      align: 'right',
-      render: (value, row) => {
-        const subtotalCalculado = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
-        return (
-          <div className="text-right">
-            <span className="font-bold text-lg">{formatearMoneda(subtotalCalculado)}</span>
-            {esUSD && tcVenta && (
-              <div className="mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold inline-block"
-                style={{ 
-                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
-                  color: 'var(--accent, #ca8a04)',
-                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
-                }}>
-                <ArrowRightLeft size={9} className="inline mr-0.5" />
-                S/ {formatearNumero(subtotalCalculado * tcVenta)}
-              </div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_producto',
-      width: '80px',
-      align: 'center',
-      render: (value, row) => {
-        if (row.es_producto_libre) return null;
-        return (
-          <button
-            className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
-            onClick={() => {
-              setProductoRectificar(row);
-              setRectificarForm({ 
-                nueva_cantidad: row.cantidad, 
-                motivo: '' 
-              });
-              setModalRectificarOpen(true);
-            }}
-            disabled={procesando}
-            title="Rectificar Cantidad"
-          >
-            <Edit size={14} />
-          </button>
-        );
-      }
-    }
-  ];
 
   if (loading && !cotizacion) {
     return <Loading variant="detail" />;
@@ -588,15 +404,20 @@ function DetalleCotizacion() {
 
   if (!cotizacion) {
     return (
-      <div className="p-6">
-        <Alert type="error" message="Cotizacion no encontrada" />
-        <button 
-          className="btn btn-outline mt-4"
-          onClick={handleVolverListado}
-        >
-          <ArrowLeft size={20} />
-          Volver a Cotizaciones
-        </button>
+      <div className="pg-page vt-page">
+        <div className="pg-stack">
+          <Alert type="error" message="Cotizacion no encontrada" />
+          <div>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleVolverListado}
+            >
+              <ArrowLeft size={16} />
+              Volver a Cotizaciones
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -628,8 +449,8 @@ function DetalleCotizacion() {
 
   const { sub: subtotalReal, tax: igvReal, tot: totalReal, pesoTotal } = calcularTotalesReales();
 
-  const estadoConfig = getEstadoConfig(cotizacion.estado);
-  const IconoEstado = estadoConfig.icono;
+  const estadoConfig = configEstadoCotizacion(cotizacion.estado);
+  const IconoEstado = estadoConfig.icon;
   const diasVencimiento = cotizacion.fecha_vencimiento 
     ? Math.ceil((new Date(cotizacion.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
@@ -639,577 +460,531 @@ function DetalleCotizacion() {
   const disponible = estadoCredito ? (cotizacion.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible) : 0;
   const creditoInsuficiente = estadoCredito?.usar_limite_credito && cotizacion.plazo_pago !== 'Contado' && totalReal > parseFloat(disponible);
 
+  const clasePrioridad = cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info';
+  const columnasTabla = esAdmin ? 8 : 7;
+
   return (
-    <div className="p-6">
-      <div className="sticky top-0 bg-white z-10 pb-4 mb-6" style={{ borderBottom: '1px solid #e2e8f0' }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button 
-              className="btn btn-outline"
+    <div className="pg-page vt-page">
+      <header className="pg-header">
+        <div>
+          <div className="vt-detail-nav">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
               onClick={handleVolverListado}
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={15} /> Volver
             </button>
-            
-            <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
-              <button 
-                className="btn btn-sm btn-ghost p-1" 
-                disabled={!navInfo.prev} 
+            <div className="vt-pager-mini">
+              <button
+                type="button"
+                className="pg-iconbtn"
+                disabled={!navInfo.prev}
                 onClick={() => handleNavegar(navInfo.prev)}
                 title="Cotizacion anterior"
+                aria-label="Cotizacion anterior"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={16} />
               </button>
-              <span className="text-xs font-medium text-gray-500 mx-2">
-                {navInfo.current} / {navInfo.total}
-              </span>
-              <button 
-                className="btn btn-sm btn-ghost p-1" 
-                disabled={!navInfo.next} 
+              <span>{navInfo.current} / {navInfo.total}</span>
+              <button
+                type="button"
+                className="pg-iconbtn"
+                disabled={!navInfo.next}
                 onClick={() => handleNavegar(navInfo.next)}
                 title="Cotizacion siguiente"
+                aria-label="Cotizacion siguiente"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={16} />
               </button>
-            </div>
-
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <FileText size={32} className="text-primary" />
-                {cotizacion.numero_cotizacion}
-                {esMuestra && (
-                  <span
-                    className="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded-full flex items-center gap-1"
-                    style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
-                  >
-                    <FlaskConical size={12} />
-                    Muestra
-                  </span>
-                )}
-                {estaConvertida && (
-                  <span className="badge badge-primary ml-2">
-                    <Lock size={14} className="inline mr-1" />
-                    Convertida
-                  </span>
-                )}
-              </h1>
-              <p className="text-sm text-muted">
-                Emitida el {formatearFecha(cotizacion.fecha_emision)}
-                {diasVencimiento !== null && diasVencimiento > 0 && !estaConvertida && (
-                  <span className="ml-2 text-warning">
-                    Vence en {diasVencimiento} dia(s)
-                  </span>
-                )}
-              </p>
             </div>
           </div>
-          
-          <div className="flex gap-2">
-            <button className="btn btn-outline" onClick={handleDescargarPDF}>
-              <Download size={18} /> PDF
-            </button>
-            
-            <button className="btn btn-info" onClick={handleDuplicar}>
-              <Copy size={18} /> Duplicar
-            </button>
-            
-            {!estaConvertida && cotizacion.estado !== 'Vencida' && (
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => navigate(`/ventas/cotizaciones/${id}/editar`)}
-              >
-                <Edit size={18} /> Editar
-              </button>
+          <span className="pg-eyebrow"><FileText size={13} /> Cotización</span>
+          <h1 className="pg-title">{cotizacion.numero_cotizacion}</h1>
+          <div className="pg-drawer-badges">
+            <BadgeEstadoCotizacion estado={cotizacion.estado} />
+            {esMuestra && (
+              <span className="badge badge-warning"><FlaskConical size={11} />Muestra</span>
+            )}
+            {estaConvertida && (
+              <span className="badge badge-primary"><Lock size={11} />Convertida</span>
             )}
           </div>
+          <p className="pg-subtitle">
+            <b>{cotizacion.cliente}</b> · Emitida el {formatearFecha(cotizacion.fecha_emision)}
+            {diasVencimiento !== null && diasVencimiento > 0 && !estaConvertida && (
+              <span className="vt-text-warning"> · Vence en {diasVencimiento} dia(s)</span>
+            )}
+          </p>
         </div>
-      </div>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline" onClick={handleDescargarPDF}>
+            <Download size={16} /> PDF
+          </button>
 
-      {esUSD && (
-        <div className="rounded-lg mb-6 p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
-          style={{ 
-            background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.08))' : 'var(--bg-tertiary, #f9fafb)',
-            border: tipoCambio ? '1px solid var(--accent-border, rgba(234,179,8,0.3))' : '1px solid #e2e8f0'
-          }}>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg" style={{ 
-              background: tipoCambio ? 'rgba(234,179,8,0.15)' : '#f3f4f6'
-            }}>
-              <DollarSign size={18} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-secondary)' }} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                Tipo de Cambio SUNAT — Conversión referencial
-              </p>
+          <button type="button" className="btn btn-outline" onClick={handleDuplicar}>
+            <Copy size={16} /> Duplicar
+          </button>
+
+          {!estaConvertida && cotizacion.estado !== 'Vencida' && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate(`/ventas/cotizaciones/${id}/editar`)}
+            >
+              <Edit size={16} /> Editar
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+        {esUSD && (
+          <section className={`pg-panel vt-tc-panel ${tipoCambio ? 'is-on' : ''}`}>
+            <div className="vt-tc">
+              <span className="vt-tc-label"><DollarSign size={14} /> Tipo de cambio SUNAT — conversión referencial</span>
               {tipoCambio ? (
-                <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-sm">
-                    Compra: <strong style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
-                  </span>
-                  <span className="text-sm">
-                    Venta: <strong style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <Calendar size={11} className="inline mr-1" />
-                    SUNAT: {formatearFecha(tipoCambio.fecha)}
-                    <span className="mx-1">·</span>
-                    <Clock size={11} className="inline mr-1" />
-                    {obtenerEdadTC()}
-                  </span>
-                </div>
+                <>
+                  <span>Compra <b>S/ {tipoCambio.compra.toFixed(3)}</b></span>
+                  <span>Venta <b className="is-accent">S/ {tipoCambio.venta.toFixed(3)}</b></span>
+                  <span className="vt-tc-meta"><Calendar size={12} /> SUNAT: {formatearFecha(tipoCambio.fecha)}</span>
+                  <span className="vt-tc-meta"><Clock size={12} /> {obtenerEdadTC()}</span>
+                </>
               ) : (
-                <div className="flex items-center gap-2 mt-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  <AlertTriangle size={13} />
-                  <span>No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
-                </div>
+                <span className="vt-tc-meta"><AlertTriangle size={14} /> No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
               )}
             </div>
-          </div>
-          <button
-            className="btn btn-sm btn-outline shrink-0"
-            onClick={actualizarTipoCambio}
-            disabled={loadingTC}
-            title="Consultar TC actual desde SUNAT"
-          >
-            {loadingTC ? <RefreshCcw size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-            {loadingTC ? 'Consultando...' : 'Actualizar TC'}
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={actualizarTipoCambio}
+              disabled={loadingTC}
+              title="Consultar TC actual desde SUNAT"
+            >
+              <RefreshCcw size={14} className={loadingTC ? 'animate-spin' : ''} />
+              {loadingTC ? 'Consultando...' : 'Actualizar TC'}
+            </button>
+          </section>
+        )}
 
-      {esMuestra && (
-        <div
-          className="rounded-lg p-4 mb-6 flex items-start gap-3"
-          style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d' }}
-        >
-          <FlaskConical size={20} style={{ color: '#b45309', flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <p className="font-bold text-sm" style={{ color: '#92400e' }}>Cotizacion de Muestra</p>
-            <p className="text-sm" style={{ color: '#b45309' }}>
-              Esta cotizacion es de tipo muestra y no puede ser convertida en Orden de Venta. 
-              Puede editarla, descargar el PDF o duplicarla para generar una cotizacion regular.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {estaConvertida && cotizacion.id_orden_venta && (
-        <Alert 
-          type="info"
-          message={
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={20} />
-                <span>Esta cotizacion fue convertida a Orden de Venta</span>
-              </div>
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => navigate(`/ventas/ordenes/${cotizacion.id_orden_venta}`)}
-              >
-                Ver Orden de Venta <ExternalLink size={14} className="inline ml-1" />
-              </button>
+        {esMuestra && (
+          <div className="vt-note is-warning">
+            <FlaskConical size={18} />
+            <div>
+              <strong>Cotizacion de Muestra</strong>
+              <p>
+                Esta cotizacion es de tipo muestra y no puede ser convertida en Orden de Venta.
+                Puede editarla, descargar el PDF o duplicarla para generar una cotizacion regular.
+              </p>
             </div>
-          }
-        />
-      )}
+          </div>
+        )}
 
-      <div className="card mb-6 cotizacion-status-panel" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : 'var(--border)' }}>
-        <div className={`card-body rounded-lg border-2 ${estadoConfig.clase}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className={`p-4 rounded-xl ${estadoConfig.clase}`}>
-                <IconoEstado size={40} />
-              </div>
+        {estaConvertida && cotizacion.id_orden_venta && (
+          <div className="vt-note is-info">
+            <CheckCircle size={18} />
+            <div>
+              <strong>Esta cotizacion fue convertida a Orden de Venta</strong>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => navigate(`/ventas/ordenes/${cotizacion.id_orden_venta}`)}
+            >
+              Ver Orden de Venta <ExternalLink size={14} />
+            </button>
+          </div>
+        )}
+
+        <section className="pg-panel cotizacion-status-panel">
+          <div className="pg-panel-head">
+            <div className="vt-status">
+              <span className="vt-status-icon" style={{ '--status-c': estadoConfig.color }}><IconoEstado size={22} /></span>
               <div>
-                <p className="text-sm uppercase font-semibold cotizacion-status-label mb-1">Estado Actual</p>
-                <h3 className="text-3xl font-bold">{cotizacion.estado}</h3>
+                <span className="pg-field-label cotizacion-status-label">Estado actual</span>
+                <strong>{cotizacion.estado}</strong>
                 {cotizacion.fecha_vencimiento && cotizacion.estado === 'Pendiente' && (
-                  <p className="text-sm mt-1 opacity-70">
-                    Valida hasta: {formatearFecha(cotizacion.fecha_vencimiento)}
-                  </p>
+                  <small>Valida hasta: {formatearFecha(cotizacion.fecha_vencimiento)}</small>
                 )}
               </div>
             </div>
-            
-            <div className="text-right">
-              <p className="text-sm uppercase font-semibold cotizacion-status-label mb-2">Prioridad</p>
-              <button 
-                className={`badge cotizacion-priority ${cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info'} text-lg px-4 py-2`}
+            <div className="vt-status-prio">
+              <span className="pg-field-label cotizacion-status-label">Prioridad</span>
+              <button
+                type="button"
+                className={`badge cotizacion-priority vt-prio-btn ${clasePrioridad}`}
                 onClick={() => !estaConvertida && cotizacion.estado !== 'Vencida' && setModalPrioridadOpen(true)}
                 disabled={estaConvertida || cotizacion.estado === 'Vencida'}
+                title={estaConvertida || cotizacion.estado === 'Vencida' ? undefined : 'Cambiar prioridad'}
               >
-                {cotizacion.prioridad}
+                <Flag size={12} />{cotizacion.prioridad}
               </button>
             </div>
           </div>
-          
+
           {!estaConvertida && cotizacion.estado !== 'Vencida' && (
-            <div className="border-t border-black/10 pt-4 mt-2">
-              <p className="text-xs font-bold uppercase cotizacion-status-label mb-3">Cambiar Estado:</p>
-              <div className="flex gap-3 flex-wrap">
+            <div className="pg-panel-body">
+              <span className="pg-field-label cotizacion-status-label">Cambiar estado</span>
+              <div className="vt-estado-actions">
                 <button
-                  className={`btn btn-sm ${
-                    cotizacion.estado === 'Pendiente' 
-                      ? 'btn-warning cursor-not-allowed opacity-60' 
-                      : 'btn-outline btn-warning hover:btn-warning'
-                  }`}
+                  type="button"
+                  className={`btn btn-sm ${cotizacion.estado === 'Pendiente' ? 'btn-warning' : 'btn-outline btn-warning'}`}
                   onClick={() => handleCambiarEstado('Pendiente')}
                   disabled={cotizacion.estado === 'Pendiente' || loading}
                 >
-                  <Calculator size={16} className="mr-1.5" />
+                  <Calculator size={15} />
                   Pendiente
                 </button>
 
                 <button
-                  className={`btn btn-sm ${
-                    cotizacion.estado === 'Enviada' 
-                      ? 'btn-info cursor-not-allowed opacity-60' 
-                      : 'btn-outline btn-info hover:btn-info'
-                  }`}
+                  type="button"
+                  className={`btn btn-sm ${cotizacion.estado === 'Enviada' ? 'btn-info' : 'btn-outline btn-info'}`}
                   onClick={() => handleCambiarEstado('Enviada')}
                   disabled={cotizacion.estado === 'Enviada' || loading}
                 >
-                  <FileText size={16} className="mr-1.5" />
+                  <FileText size={15} />
                   Enviada
                 </button>
 
                 {esMuestra ? (
                   <button
-                    className="btn btn-sm btn-outline cursor-not-allowed opacity-50"
+                    type="button"
+                    className="btn btn-sm btn-outline"
                     disabled
                     title="Las cotizaciones de muestra no pueden convertirse en Orden de Venta"
                   >
-                    <Lock size={16} className="mr-1.5" />
+                    <Lock size={15} />
                     Aprobar (Nueva OV)
                   </button>
                 ) : (
                   <button
-                    className={`btn btn-sm ${
-                      cotizacion.estado === 'Aprobada' || creditoInsuficiente
-                        ? 'btn-success cursor-not-allowed opacity-60' 
-                        : 'btn-outline btn-success hover:btn-success'
-                    }`}
+                    type="button"
+                    className={`btn btn-sm ${cotizacion.estado === 'Aprobada' || creditoInsuficiente ? 'btn-success' : 'btn-outline btn-success'}`}
                     onClick={() => !creditoInsuficiente && handleCambiarEstado('Aprobada')}
                     disabled={cotizacion.estado === 'Aprobada' || loading || creditoInsuficiente}
                     title={creditoInsuficiente ? "Credito insuficiente para aprobar" : ""}
                   >
-                    {creditoInsuficiente ? <Lock size={16} className="mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
+                    {creditoInsuficiente ? <Lock size={15} /> : <CheckCircle size={15} />}
                     Aprobar (Nueva OV)
                   </button>
                 )}
 
                 <button
-                  className={`btn btn-sm ${
-                    cotizacion.estado === 'Rechazada' 
-                      ? 'btn-danger cursor-not-allowed opacity-60' 
-                      : 'btn-outline btn-danger hover:btn-danger'
-                  }`}
+                  type="button"
+                  className={`btn btn-sm ${cotizacion.estado === 'Rechazada' ? 'btn-danger' : 'btn-outline btn-danger'}`}
                   onClick={() => handleCambiarEstado('Rechazada')}
                   disabled={cotizacion.estado === 'Rechazada' || loading}
                 >
-                  <XCircle size={16} className="mr-1.5" />
+                  <XCircle size={15} />
                   Rechazar
                 </button>
               </div>
 
               {esMuestra ? (
-                <div className="mt-3 text-xs rounded p-2 flex items-center gap-2"
-                  style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}
-                >
-                  <FlaskConical size={12} />
-                  Las cotizaciones de tipo muestra no pueden convertirse en Orden de Venta.
+                <div className="vt-note is-warning is-compact">
+                  <FlaskConical size={14} />
+                  <span>Las cotizaciones de tipo muestra no pueden convertirse en Orden de Venta.</span>
                 </div>
               ) : creditoInsuficiente ? (
-                <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 flex items-center gap-2">
+                <div className="vt-note is-danger is-compact">
                   <AlertTriangle size={14} />
-                  <strong>Bloqueado:</strong> El total de la cotizacion excede el credito disponible del cliente. No se puede aprobar.
+                  <span><strong>Bloqueado:</strong> El total de la cotizacion excede el credito disponible del cliente. No se puede aprobar.</span>
                 </div>
               ) : (
-                <div className="mt-3 text-xs text-muted bg-blue-50 border border-blue-200 rounded p-2">
-                  <AlertCircle size={12} className="inline mr-1" />
-                  <strong>Nota:</strong> Al aprobar, se abrira el formulario de Nueva Orden de Venta con los datos de esta cotizacion precargados.
+                <div className="vt-note is-info is-compact">
+                  <AlertCircle size={14} />
+                  <span><strong>Nota:</strong> Al aprobar, se abrira el formulario de Nueva Orden de Venta con los datos de esta cotizacion precargados.</span>
                 </div>
               )}
             </div>
           )}
-        </div>
-      </div>
+        </section>
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
-        <div className="card">
-          <div className="card-header bg-gradient-to-r from-blue-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <h2 className="card-title text-blue-900">
-              <Building size={20} />
-              Cliente
-            </h2>
-          </div>
-          <div className="card-body space-y-3">
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold mb-1">Razon Social</p>
-              <p className="font-bold text-lg">{cotizacion.cliente}</p>
+        <div className="vt-cards-3">
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><Building size={16} /> Cliente</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">RUC</p>
-                <p className="font-mono font-medium">{cotizacion.ruc_cliente}</p>
-              </div>
-              {cotizacion.telefono_cliente && (
-                <div>
-                  <p className="text-xs text-muted uppercase font-semibold mb-1">Telefono</p>
-                  <p className="font-medium">{cotizacion.telefono_cliente}</p>
-                </div>
-              )}
-            </div>
-            {cotizacion.direccion_cliente && (
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
-                  <MapPin size={12} />
-                  Direccion
-                </p>
-                <p className="text-sm">{cotizacion.direccion_cliente}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header bg-gradient-to-r from-green-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <h2 className="card-title text-green-900">
-              <CreditCard size={20} />
-              Condiciones Comerciales
-            </h2>
-          </div>
-          <div className="card-body space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Moneda</p>
-                <span className={`badge ${cotizacion.moneda === 'USD' ? 'badge-success' : 'badge-primary'}`}>
-                  {cotizacion.moneda === 'USD' ? '$ USD' : 'S/ PEN'}
-                </span>
-              </div>
-              {cotizacion.moneda === 'USD' && (
-                <div>
-                  <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
-                    <TrendingUp size={12} />
-                    T.C. Cotización
-                  </p>
-                  <p className="font-bold text-primary">
-                    S/ {parseFloat(cotizacion.tipo_cambio || 1).toFixed(4)}
-                  </p>
-                </div>
-              )}
-            </div>
-            
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
-                <Percent size={12} />
-                Impuesto
-              </p>
-              <p className="font-bold text-blue-900">
-                {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Plazo Pago</p>
-                {cotizacion.plazo_pago && cotizacion.plazo_pago !== 'Contado' ? (
-                  <span className="badge badge-warning">{cotizacion.plazo_pago}</span>
-                ) : (
-                  <span className="badge badge-success">Contado</span>
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div className="wide"><span>Razon social</span><strong>{cotizacion.cliente}</strong></div>
+                <div><span>RUC</span><strong className="pg-code">{cotizacion.ruc_cliente}</strong></div>
+                {cotizacion.telefono_cliente && (
+                  <div><span>Telefono</span><strong>{cotizacion.telefono_cliente}</strong></div>
+                )}
+                {cotizacion.direccion_cliente && (
+                  <div className="wide"><span>Direccion</span><strong>{cotizacion.direccion_cliente}</strong></div>
                 )}
               </div>
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1">Forma Pago</p>
-                <p className="font-medium">{cotizacion.forma_pago || '-'}</p>
-              </div>
             </div>
-          </div>
-        </div>
+          </section>
 
-        <div className="card">
-          <div className="card-header bg-gradient-to-r from-purple-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <h2 className="card-title text-purple-900">
-              <User size={20} />
-              Informacion Adicional
-            </h2>
-          </div>
-          <div className="card-body space-y-3">
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold mb-1">Comercial Responsable</p>
-              <p className="font-medium text-lg">{cotizacion.comercial || 'Sin asignar'}</p>
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><CreditCard size={16} /> Condiciones comerciales</h2>
             </div>
-            
-            {cotizacion.plazo_entrega && (
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
-                  <Calendar size={12} />
-                  Plazo de Entrega
-                </p>
-                <p className="font-medium">{cotizacion.plazo_entrega}</p>
-              </div>
-            )}
-            
-            {cotizacion.lugar_entrega && (
-              <div className="bg-orange-50 p-2 rounded border border-orange-100">
-                <p className="text-xs text-orange-800 uppercase font-semibold mb-1 flex items-center gap-1">
-                  <MapPin size={12} />
-                  Lugar de Entrega
-                </p>
-                <p className="text-sm font-medium text-gray-800">{cotizacion.lugar_entrega}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="card mb-6">
-        <div className="card-header bg-gradient-to-r from-gray-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
-          <h2 className="card-title">
-            <Package size={20} />
-            Productos Cotizados
-            <span className="badge badge-primary ml-2">{cotizacion.detalle?.length || 0}</span>
-            {esMuestra && (
-              <span
-                className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
-                style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
-              >
-                <FlaskConical size={11} />
-                Muestra
-              </span>
-            )}
-          </h2>
-        </div>
-        <div className="card-body p-0">
-          <Table
-            columns={columns.filter((c) => esAdmin || c.accessor !== 'descuento_porcentaje')}
-            data={cotizacion.detalle || []}
-            emptyMessage="No hay productos en esta cotizacion"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        {cotizacion.observaciones && (
-          <div className="col-span-2 card">
-            <div className="card-header" style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <h3 className="card-title">Observaciones</h3>
-            </div>
-            <div className="card-body">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{cotizacion.observaciones}</p>
-            </div>
-          </div>
-        )}
-
-        <div className={`card ${!cotizacion.observaciones ? 'col-span-3 ml-auto w-full max-w-md' : ''}`}>
-          <div className="card-header bg-gradient-to-r from-primary/5 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <h3 className="card-title">
-              <Calculator size={20} />
-              Resumen
-            </h3>
-          </div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {pesoTotal > 0 && (
-                <div className="flex justify-between py-2 border-b items-center" style={{ borderBottomColor: 'var(--border)' }}>
-                  <span className="text-muted flex items-center gap-1">
-                    <Package size={14} /> Peso Total:
-                  </span>
-                  <span className="font-bold text-lg text-primary">{formatearPeso(pesoTotal)}</span>
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div>
+                  <span>Moneda</span>
+                  <strong><span className={`badge ${cotizacion.moneda === 'USD' ? 'badge-success' : 'badge-primary'}`}>{cotizacion.moneda === 'USD' ? '$ USD' : 'S/ PEN'}</span></strong>
                 </div>
-              )}
-              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: 'var(--border)' }}>
-                <span className="text-muted">Sub Total:</span>
-                <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: 'var(--border)' }}>
-                <span className="text-muted">
-                  {['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes((cotizacion.tipo_impuesto || 'IGV').toUpperCase())
-                    ? (String(cotizacion.tipo_impuesto).toUpperCase().startsWith('EXO') ? 'Exonerado (0%):' : 'Inafecto (0%):')
-                    : `IGV (${parseFloat(cotizacion.porcentaje_impuesto || 18)}%):`}
-                </span>
-                <span className="font-bold text-lg">{formatearMoneda(igvReal)}</span>
-              </div>
-              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-none">
-                <span className="font-bold text-xl">TOTAL:</span>
-                <span className="font-bold text-3xl">{formatearMoneda(totalReal)}</span>
-              </div>
-              
-              {esUSD && tcVenta && (
-                <div className="rounded-lg p-3 text-sm" style={{
-                  background: 'var(--accent-dim, rgba(234,179,8,0.08))',
-                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
-                }}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-medium flex items-center gap-1" style={{ color: 'var(--accent, #ca8a04)' }}>
-                      <ArrowRightLeft size={14} />
-                      Equivalente en Soles (TC SUNAT):
-                    </span>
-                    <span className="font-bold text-lg" style={{ color: 'var(--accent, #ca8a04)' }}>
-                      S/ {formatearNumero(totalReal * tcVenta)}
-                    </span>
+                {cotizacion.moneda === 'USD' && (
+                  <div>
+                    <span>T.C. cotización</span>
+                    <strong>S/ {parseFloat(cotizacion.tipo_cambio || 1).toFixed(4)}</strong>
                   </div>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    TC Venta: S/ {tcVenta.toFixed(3)} — SUNAT: {formatearFecha(tipoCambio.fecha)}
-                  </p>
-                  {parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
-                    <div className="mt-2 pt-2 flex justify-between items-center" style={{ borderTop: '1px solid var(--accent-border, rgba(234,179,8,0.2))' }}>
-                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        Equiv. con TC de cotización (S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
-                      </span>
-                      <span className="font-semibold text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}
-                      </span>
+                )}
+                <div><span>Impuesto</span><strong><Percent size={12} className="pg-muted" /> {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}</strong></div>
+                <div>
+                  <span>Plazo pago</span>
+                  <strong>
+                    {cotizacion.plazo_pago && cotizacion.plazo_pago !== 'Contado' ? (
+                      <span className="badge badge-warning">{cotizacion.plazo_pago}</span>
+                    ) : (
+                      <span className="badge badge-success">Contado</span>
+                    )}
+                  </strong>
+                </div>
+                <div><span>Forma pago</span><strong>{cotizacion.forma_pago || '-'}</strong></div>
+              </div>
+            </div>
+          </section>
+
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><User size={16} /> Información adicional</h2>
+            </div>
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div className="wide"><span>Comercial responsable</span><strong>{cotizacion.comercial || 'Sin asignar'}</strong></div>
+                {cotizacion.fecha_vencimiento && (
+                  <div><span>Valida hasta</span><strong>{formatearFecha(cotizacion.fecha_vencimiento)}</strong></div>
+                )}
+                {cotizacion.plazo_entrega && (
+                  <div><span>Plazo de entrega</span><strong>{cotizacion.plazo_entrega}</strong></div>
+                )}
+                {cotizacion.lugar_entrega && (
+                  <div className="wide"><span>Lugar de entrega</span><strong><MapPin size={12} className="pg-muted" /> {cotizacion.lugar_entrega}</strong></div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title">
+              <Package size={16} /> Productos cotizados <span className="pg-count">{cotizacion.detalle?.length || 0}</span>
+            </h2>
+            {esMuestra && <span className="badge badge-warning"><FlaskConical size={11} />Muestra</span>}
+          </div>
+          <div className="pg-table-wrap">
+            <table className="pg-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="num">Cantidad</th>
+                  <th className="num">Peso</th>
+                  <th className="num">P. Base</th>
+                  <th className="num">P. Venta</th>
+                  {esAdmin && <th className="center">Margen %</th>}
+                  <th className="num">Subtotal</th>
+                  <th className="center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(cotizacion.detalle || []).length > 0 ? cotizacion.detalle.map((row, idx) => {
+                  const peso = parseFloat(row.peso_unitario || 0);
+                  const pesoTotalLinea = parseFloat(row.cantidad) * peso;
+                  const porcentaje = parseFloat(row.descuento_porcentaje || 0);
+                  const subtotalCalculado = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
+                  return (
+                    <tr key={row.id_detalle || idx}>
+                      <td>
+                        <span className="pg-cell-main">{row.producto}</span>
+                        <span className="pg-cell-sub">{row.codigo_producto || row.codigo_producto_libre}</span>
+                        {row.es_producto_libre ? (
+                          <span className="pg-tags"><span className="pg-tag is-warning"><FlaskConical size={10} />Producto muestra</span></span>
+                        ) : (
+                          parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
+                            <span className="pg-tags">
+                              <span className="pg-tag is-warning">
+                                <AlertTriangle size={11} />
+                                Stock insuficiente ({parseFloat(parseFloat(row.stock_disponible || 0).toFixed(4))} {row.unidad_medida})
+                              </span>
+                            </span>
+                          )
+                        )}
+                      </td>
+                      <td className="num">
+                        <b>{parseFloat(parseFloat(row.cantidad).toFixed(4))}</b>
+                        <span className="pg-cell-sub">{row.unidad_medida}</span>
+                      </td>
+                      <td className="num">
+                        {peso === 0 ? <span className="pg-muted">—</span> : (
+                          <>
+                            <b>{formatearPeso(pesoTotalLinea)}</b>
+                            <span className="pg-cell-sub">{formatearPeso(peso)}/u</span>
+                          </>
+                        )}
+                      </td>
+                      <td className="num pg-muted">{formatearMoneda(row.precio_base)}</td>
+                      <td className="num">
+                        <span className="vt-lp-price">{formatearMonedaPrecio(row.precio_unitario)}</span>
+                        {esUSD && tcVenta && (
+                          <span className="pg-cell-sub vt-text-accent">S/ {formatearNumeroPrecio(parseFloat(row.precio_unitario) * tcVenta)}</span>
+                        )}
+                      </td>
+                      {esAdmin && (
+                        <td className="center">
+                          <span className={porcentaje < 0 ? 'vt-delta-down' : 'vt-delta-up'}>
+                            {porcentaje > 0 ? '+' : ''}{porcentaje.toFixed(2)}%
+                          </span>
+                        </td>
+                      )}
+                      <td className="num">
+                        <span className="vt-amount">{formatearMoneda(subtotalCalculado)}</span>
+                        {esUSD && tcVenta && (
+                          <span className="pg-tags">
+                            <span className="pg-tag is-accent"><ArrowRightLeft size={10} />S/ {formatearNumero(subtotalCalculado * tcVenta)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="center">
+                        {!row.es_producto_libre && (
+                          <button
+                            type="button"
+                            className="pg-iconbtn"
+                            onClick={() => {
+                              setProductoRectificar(row);
+                              setRectificarForm({
+                                nueva_cantidad: row.cantidad,
+                                motivo: ''
+                              });
+                              setModalRectificarOpen(true);
+                            }}
+                            disabled={procesando}
+                            title="Rectificar Cantidad"
+                            aria-label={`Rectificar cantidad de ${row.producto}`}
+                          >
+                            <Edit size={15} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={columnasTabla}>
+                      <div className="pg-empty">
+                        <Package size={28} />
+                        <strong>No hay productos en esta cotizacion</strong>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div className={`vt-detail-bottom ${cotizacion.observaciones ? '' : 'is-solo'}`}>
+          {cotizacion.observaciones && (
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h3 className="pg-panel-title"><FileText size={16} /> Observaciones</h3>
+              </div>
+              <div className="pg-panel-body">
+                <p className="vt-pre">{cotizacion.observaciones}</p>
+              </div>
+            </section>
+          )}
+
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h3 className="pg-panel-title"><Calculator size={16} /> Resumen</h3>
+            </div>
+            <div className="pg-panel-body">
+              <dl className="vt-sum">
+                {pesoTotal > 0 && (
+                  <div>
+                    <dt><Package size={13} /> Peso total</dt>
+                    <dd className="vt-text-accent">{formatearPeso(pesoTotal)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Sub total</dt>
+                  <dd>{formatearMoneda(subtotalReal)}</dd>
+                </div>
+                <div>
+                  <dt>
+                    {['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes((cotizacion.tipo_impuesto || 'IGV').toUpperCase())
+                      ? (String(cotizacion.tipo_impuesto).toUpperCase().startsWith('EXO') ? 'Exonerado (0%)' : 'Inafecto (0%)')
+                      : `IGV (${parseFloat(cotizacion.porcentaje_impuesto || 18)}%)`}
+                  </dt>
+                  <dd>{formatearMoneda(igvReal)}</dd>
+                </div>
+                <div className="vt-sum-total">
+                  <dt>Total</dt>
+                  <dd>{formatearMoneda(totalReal)}</dd>
+                </div>
+              </dl>
+
+              {esUSD && tcVenta && (
+                <div className="vt-note is-accent">
+                  <ArrowRightLeft size={16} />
+                  <div>
+                    <div className="vt-note-line">
+                      <span>Equivalente en Soles (TC SUNAT)</span>
+                      <b>S/ {formatearNumero(totalReal * tcVenta)}</b>
                     </div>
-                  )}
+                    <p>TC Venta: S/ {tcVenta.toFixed(3)} — SUNAT: {formatearFecha(tipoCambio.fecha)}</p>
+                    {parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
+                      <div className="vt-note-line is-sub">
+                        <span>Equiv. con TC de cotización (S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)})</span>
+                        <b>S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}</b>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               {esUSD && !tcVenta && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                  <div className="flex justify-between items-center text-blue-900">
-                    <span className="font-medium">Equiv. con TC de cotización:</span>
-                    <span className="font-bold text-blue-900 text-lg">
-                      S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}
-                    </span>
+                <div className="vt-note is-info">
+                  <ArrowRightLeft size={16} />
+                  <div>
+                    <div className="vt-note-line">
+                      <span>Equiv. con TC de cotización</span>
+                      <b>S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}</b>
+                    </div>
+                    <p>TC: S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)}</p>
                   </div>
-                  <p className="text-xs text-blue-700 mt-1">
-                    TC: S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)}
-                  </p>
+                </div>
+              )}
+
+              {estadoCredito && estadoCredito.usar_limite_credito && !esMuestra && (
+                <div className="vt-credito">
+                  <h4 className="pg-section-title"><CreditCard size={14} /> Saldo de credito del cliente</h4>
+                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'is-danger' : 'is-ok'}`}>
+                    <span>PEN disponible</span>
+                    <b>S/ {formatearNumero(parseFloat(estadoCredito.credito_pen.disponible))}</b>
+                  </div>
+                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_usd.disponible) < totalReal && cotizacion.moneda === 'USD' ? 'is-danger' : 'is-ok'}`}>
+                    <span>USD disponible</span>
+                    <b>$ {formatearNumero(parseFloat(estadoCredito.credito_usd.disponible))}</b>
+                  </div>
+                  {creditoInsuficiente && (
+                    <p className="vt-error"><AlertTriangle size={12} /> No podra convertirse a OV: saldo insuficiente.</p>
+                  )}
                 </div>
               )}
             </div>
-
-            {estadoCredito && estadoCredito.usar_limite_credito && !esMuestra && (
-              <div className="mt-6 pt-4 border-t" style={{ borderTopColor: 'var(--border)' }}>
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                  <CreditCard size={14} /> Saldo de Credito del Cliente
-                </h4>
-                <div className="grid grid-cols-1 gap-2">
-                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium text-gray-600">PEN Disponible:</span>
-                      <span className="font-bold text-gray-800">S/ {formatearNumero(parseFloat(estadoCredito.credito_pen.disponible))}</span>
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_usd.disponible) < totalReal && cotizacion.moneda === 'USD' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium text-gray-600">USD Disponible:</span>
-                      <span className="font-bold text-gray-800">$ {formatearNumero(parseFloat(estadoCredito.credito_usd.disponible))}</span>
-                    </div>
-                  </div>
-                </div>
-                {creditoInsuficiente && (
-                  <p className="text-[10px] text-red-600 mt-2 font-bold flex items-center gap-1">
-                    <AlertTriangle size={10} /> No podra convertirse a OV: saldo insuficiente.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          </section>
         </div>
       </div>
 
@@ -1219,27 +994,29 @@ function DetalleCotizacion() {
         title="Cambiar Prioridad"
         size="md"
       >
-        <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-sm text-muted">Prioridad actual:</p>
-            <p className="font-bold text-lg">{cotizacion.prioridad}</p>
+        <div className="pg-stack">
+          <div className="pg-kv">
+            <div><span>Prioridad actual</span><strong>{cotizacion.prioridad}</strong></div>
           </div>
-          
-          <div className="space-y-2">
+
+          <div className="vt-prio-list">
             {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
               <button
                 key={prioridad}
-                className={`btn btn-outline w-full justify-start ${cotizacion.prioridad === prioridad ? 'opacity-50' : ''}`}
+                type="button"
+                className="btn btn-outline"
                 onClick={() => handleCambiarPrioridad(prioridad)}
                 disabled={cotizacion.prioridad === prioridad}
               >
+                <Flag size={14} />
                 {prioridad}
+                {cotizacion.prioridad === prioridad && <span className="pg-muted"> · actual</span>}
               </button>
             ))}
           </div>
-          
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalPrioridadOpen(false)}>
+
+          <div className="vt-lp-modal-foot">
+            <button type="button" className="btn btn-outline" onClick={() => setModalPrioridadOpen(false)}>
               Cancelar
             </button>
           </div>
@@ -1254,64 +1031,60 @@ function DetalleCotizacion() {
       >
         {productoRectificar && (
           <form onSubmit={handleRectificarCantidad}>
-            <div className="space-y-4">
-              <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
-                <div className="flex gap-2">
-                  <AlertTriangle className="text-orange-500 shrink-0" size={20} />
-                  <div className="text-sm text-orange-800">
-                    <p className="font-bold">{productoRectificar.producto}</p>
-                    <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
-                    <p className="text-xs mt-1">
-                      Si esta cotizacion ya fue convertida, se actualizara tambien la Orden de Venta.
-                    </p>
-                  </div>
-                </div>
+            <div className="vt-note is-warning">
+              <AlertTriangle size={18} />
+              <div>
+                <strong>{productoRectificar.producto}</strong>
+                <p>Cantidad actual: <b>{formatearNumero(productoRectificar.cantidad)}</b></p>
+                <p>Si esta cotizacion ya fue convertida, se actualizara tambien la Orden de Venta.</p>
               </div>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">Nueva Cantidad *</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  className="form-input"
-                  value={rectificarForm.nueva_cantidad}
-                  onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
-                  required
-                  autoFocus
-                  onWheel={handleWheelDisable}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="vt-rect-cantidad">Nueva Cantidad *</label>
+              <input
+                id="vt-rect-cantidad"
+                type="number"
+                step="0.001"
+                min="0"
+                className="form-input"
+                value={rectificarForm.nueva_cantidad}
+                onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
+                required
+                autoFocus
+                onWheel={handleWheelDisable}
+              />
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">Motivo del Cambio *</label>
-                <textarea
-                  className="form-textarea"
-                  rows={2}
-                  value={rectificarForm.motivo}
-                  onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
-                  placeholder="Ej: Error de digitacion, cambio de requerimiento, etc."
-                  required
-                ></textarea>
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="vt-rect-motivo">Motivo del Cambio *</label>
+              <textarea
+                id="vt-rect-motivo"
+                className="form-textarea"
+                rows={2}
+                value={rectificarForm.motivo}
+                onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
+                placeholder="Ej: Error de digitacion, cambio de requerimiento, etc."
+                required
+              ></textarea>
+            </div>
 
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setModalRectificarOpen(false)}
-                  disabled={procesando}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-warning text-white"
-                  disabled={procesando}
-                >
-                  <Save size={16} className="mr-1" /> Confirmar Rectificacion
-                </button>
-              </div>
+            <div className="vt-lp-modal-foot">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setModalRectificarOpen(false)}
+                disabled={procesando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-warning"
+                disabled={procesando}
+              >
+                <Save size={16} /> Confirmar Rectificacion
+              </button>
             </div>
           </form>
         )}

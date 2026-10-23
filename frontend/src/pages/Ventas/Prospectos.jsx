@@ -3,21 +3,24 @@ import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
   UserPlus, Trash2, Eye, AlertTriangle, Activity, Zap, FileSpreadsheet,
-  EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight,
-  ExternalLink, RefreshCw, ShieldCheck, Compass, MapPin
+  EyeOff, RotateCcw, Lock, Unlock, Clock, History,
+  ExternalLink, RefreshCw, ShieldCheck, Compass, MapPin, AlertCircle, MessageSquare, XCircle
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { prospectosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
+import PgDrawer from '../../components/UI/PgDrawer';
+import PgPager from '../../components/UI/PgPager';
+import './Ventas.css';
 import './Prospectos.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const SCORE_CALIENTE = 75;
 const SCORE_TIBIO = 45;
-const colorScore = (s) => (s >= SCORE_CALIENTE ? '#2ecc71' : s >= SCORE_TIBIO ? '#e8b84b' : '#e74c3c');
+const colorScore = (s) => (s >= SCORE_CALIENTE ? 'var(--success)' : s >= SCORE_TIBIO ? 'var(--warning)' : 'var(--danger)');
 const bandaScore = (s) => (s >= SCORE_CALIENTE ? 'Caliente' : s >= SCORE_TIBIO ? 'Tibio' : 'Frío');
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
@@ -102,11 +105,18 @@ const ACCION_LOTE = {
 };
 
 const ESTADO_CHIP = {
-  Nuevo:      { cls: 'chip-nuevo', label: 'Nuevo' },
-  En_gestion: { cls: 'chip-gestion', label: 'En gestión' },
-  Contactado: { cls: 'chip-contact', label: 'Contactado' },
-  Convertido: { cls: 'chip-conv', label: 'Convertido' },
-  Descartado: { cls: 'chip-desc', label: 'Descartado' },
+  Nuevo:      { badge: 'badge-info',      icon: Sparkles,      label: 'Nuevo' },
+  En_gestion: { badge: 'badge-primary',   icon: Activity,      label: 'En gestión' },
+  Contactado: { badge: 'badge-warning',   icon: MessageSquare, label: 'Contactado' },
+  Convertido: { badge: 'badge-success',   icon: UserCheck,     label: 'Convertido' },
+  Descartado: { badge: 'badge-secondary', icon: XCircle,       label: 'Descartado' },
+};
+
+const JOB_BADGE = {
+  pendiente:  { badge: 'badge-secondary', icon: Clock },
+  procesando: { badge: 'badge-info',      icon: Loader },
+  completado: { badge: 'badge-success',   icon: CheckCircle2 },
+  error:      { badge: 'badge-danger',    icon: AlertTriangle },
 };
 
 function ScoreRing({ score }) {
@@ -117,14 +127,14 @@ function ScoreRing({ score }) {
       style={{ background: `conic-gradient(${c} ${score * 3.6}deg, var(--steel) 0deg)` }}
       title={`Potencial ${score}/100 · ${bandaScore(score)}`}
     >
-      <span style={{ color: c }}>{score}</span>
+      <span>{score}</span>
     </div>
   );
 }
 
 function DupBadge({ flag }) {
-  if (flag === 'Ya_cliente') return <span className="pros-chip chip-yacli"><UserCheck size={11} /> Ya cliente</span>;
-  if (flag === 'Posible_duplicado') return <span className="pros-chip chip-posdup"><AlertTriangle size={11} /> Posible dup.</span>;
+  if (flag === 'Ya_cliente') return <span className="badge badge-success"><UserCheck size={11} /> Ya cliente</span>;
+  if (flag === 'Posible_duplicado') return <span className="badge badge-warning"><AlertTriangle size={11} /> Posible dup.</span>;
   return null;
 }
 
@@ -652,30 +662,31 @@ export default function Prospectos() {
   const puedeLiberar = !!detalleDueno && (!bloqueado || esAdmin);
   const ACCION_LABEL = { estado: 'Cambió estado', liberar: 'Liberó la gestión', convertido: 'Convirtió a cliente' };
 
-  return (
-    <div className="pros-wrap">
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+  const hayFiltros = !!(search || fSegmento || fEstado || fFlag || fSector || fBusqueda || fMinScore);
 
-      <div className="pros-head">
+  return (
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <div className="pros-title">
-            <Radar size={26} /> Prospección de Ventas
+          <span className="pg-eyebrow">
+            <Radar size={13} /> Ventas
             <span className={`pros-live ${enVivo ? 'on' : 'off'}`} title={enVivo ? 'Actualización en vivo activa: verás los cambios de otros usuarios sin recargar' : 'Sin conexión en vivo (se reintenta automáticamente)'}>
               <span className="pros-live-dot" /> {enVivo ? 'En vivo' : 'Sin conexión'}
             </span>
-          </div>
-          <div className="pros-subtitle">Captación por RUC + enriquecimiento verificado (datos anclados al RUC) · scoring y anti-duplicados</div>
+          </span>
+          <h1 className="pg-title">Prospección de ventas</h1>
+          <p className="pg-subtitle">Captación por RUC + enriquecimiento verificado (datos anclados al RUC) · scoring y anti-duplicados</p>
         </div>
-        <div className="pros-head-actions">
-          <button className="btn btn-outline pros-activity-btn" onClick={() => setJobsOpen((v) => !v)} title="Actividad de búsquedas">
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline pros-activity-btn" onClick={() => setJobsOpen((v) => !v)} title="Actividad de búsquedas" aria-expanded={jobsOpen}>
             <Activity size={16} /> Actividad
             {jobsActivos > 0 && <span className="pros-activity-dot">{jobsActivos}</span>}
           </button>
-          <button className="btn btn-outline" onClick={abrirDescubrir} title="Descubrir empresas reales del Padrón SUNAT por departamento y sector">
+          <button type="button" className="btn btn-outline" onClick={abrirDescubrir} title="Descubrir empresas reales del Padrón SUNAT por departamento y sector">
             <Compass size={16} /> Descubrir
           </button>
           <button
+            type="button"
             className="btn btn-outline"
             onClick={enriquecerTodo}
             disabled={enriqMasivoLoading}
@@ -684,6 +695,7 @@ export default function Prospectos() {
             {enriqMasivoLoading ? <Loader size={16} className="pros-spin" /> : <Zap size={16} />} Enriquecer todo
           </button>
           <button
+            type="button"
             className="btn btn-outline"
             onClick={redescubrirTodo}
             disabled={redescMasivoLoading}
@@ -691,529 +703,386 @@ export default function Prospectos() {
           >
             {redescMasivoLoading ? <Loader size={16} className="pros-spin" /> : <ShieldCheck size={16} />} Rebuscar todo
           </button>
-          <button className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
+          <button type="button" className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
             <FileSpreadsheet size={16} /> Excel
           </button>
-          <button className="btn btn-primary" onClick={() => { setIngestaOpen(true); setIngestaRes(null); setIngestaTexto(''); }}>
+          <button type="button" className="btn btn-primary" onClick={() => { setIngestaOpen(true); setIngestaRes(null); setIngestaTexto(''); }}>
             <Upload size={16} /> Ingresar RUCs
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="pros-stats">
-        <div className="pros-stat">
-          <div className="pros-stat-ico ico-total"><Users size={20} /></div>
-          <div><div className="pros-stat-val">{stats.total || 0}</div><div className="pros-stat-lbl">Prospectos</div></div>
-        </div>
-        <div className="pros-stat">
-          <div className="pros-stat-ico ico-hot"><Flame size={20} /></div>
-          <div><div className="pros-stat-val">{stats.calientes || 0}</div><div className="pros-stat-lbl">Calientes (≥75)</div></div>
-        </div>
-        <div className="pros-stat">
-          <div className="pros-stat-ico ico-new"><Sparkles size={20} /></div>
-          <div><div className="pros-stat-val">{stats.nuevos || 0}</div><div className="pros-stat-lbl">Nuevos</div></div>
-        </div>
-        <div className="pros-stat">
-          <div className="pros-stat-ico ico-client"><UserCheck size={20} /></div>
-          <div><div className="pros-stat-val">{stats.ya_clientes || 0}</div><div className="pros-stat-lbl">Ya clientes</div></div>
-        </div>
-        <div className="pros-stat">
-          <div className="pros-stat-ico ico-score"><Gauge size={20} /></div>
-          <div><div className="pros-stat-val">{stats.score_promedio || 0}</div><div className="pros-stat-lbl">Score prom.</div></div>
-        </div>
-      </div>
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {lotesActivos.length > 0 && (
-        <div className="pros-lotes">
-          {lotesActivos.map((l) => (
-            <div className="pros-lote" key={l.lote}>
-              <div className="pros-lote-head">
-                <span className="pros-lote-title">
-                  <Loader size={15} className="pros-spin" />
-                  {ACCION_LOTE[l.accion]?.label || 'Procesando'}
-                  <span className="pros-lote-user">· {l.usuario}</span>
-                </span>
-                <span className="pros-lote-pct">{l.porcentaje}%</span>
-              </div>
-              <div className="pros-lote-track">
-                <div className="pros-lote-fill" style={{ width: `${l.porcentaje}%` }} />
-              </div>
-              <div className="pros-lote-sub">
-                {l.hechos}/{l.total} listos
-                {l.en_proceso ? ` · ${l.en_proceso} en curso` : ''}
-                {l.pendientes ? ` · ${l.pendientes} en cola` : ''}
-                {l.errores ? ` · ${l.errores} con error` : ''}
-              </div>
+        <div className="pg-kpis">
+          <div className="pg-kpi is-accent">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Prospectos</span>
+              <span className="pg-kpi-icon"><Users size={16} /></span>
             </div>
-          ))}
-        </div>
-      )}
-
-      {jobsOpen && (
-        <div className="pros-jobs">
-          <div className="pros-jobs-head">
-            <span><Activity size={13} style={{ verticalAlign: -2 }} /> Actividad de búsquedas y enriquecimiento</span>
-            <button className="btn btn-ghost btn-xs" onClick={() => setJobsOpen(false)}><X size={14} /></button>
+            <span className="pg-kpi-value">{stats.total || 0}</span>
+            <span className="pg-kpi-foot">En la bandeja</span>
           </div>
-          {jobs.length === 0 ? (
-            <div style={{ padding: '0.9rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Sin trabajos todavía.</div>
-          ) : (
-            jobs.slice(0, 10).map((j) => {
-              const par = typeof j.parametros === 'string' ? safeParse(j.parametros) : (j.parametros || {});
-              const rez = typeof j.resultado === 'string' ? safeParse(j.resultado) : (j.resultado || {});
-              return (
-                <div className="pros-job-row" key={j.id_job}>
-                  <Zap size={15} style={{ color: 'var(--accent)' }} />
-                  <div className="pros-job-desc">
-                    {j.tipo === 'google_places'
-                      ? <>Descubrir “{par.query}” · <small>{par.zona} · histórico</small></>
-                      : <>Buscar web y contactos · <small>prospecto #{par.id_prospecto}</small></>}
-                    {j.estado === 'completado' && (
-                      <div><small>
-                        {j.tipo === 'google_places'
-                          ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes${rez.irrelevantes ? ` · ${rez.irrelevantes} descartados` : ''}`
-                          : rez.rechazada
-                            ? `Web descartada: no publica el RUC del prospecto · score ${rez.score ?? '—'}`
-                            : rez.purgado
-                              ? `Datos no verificables removidos · sin web que publique el RUC · score ${rez.score ?? '—'}`
-                              : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
-                      </small></div>
-                    )}
-                    {j.estado === 'error' && <div><small style={{ color: '#e74c3c' }}>{j.error}</small></div>}
-                  </div>
-                  <span className={`job-badge job-${j.estado}`}>
-                    {j.estado === 'procesando' && <Loader size={10} className="pros-spin" style={{ verticalAlign: -1, marginRight: 3 }} />}
-                    {j.estado}
+          <div className="pg-kpi is-success">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Calientes (≥75)</span>
+              <span className="pg-kpi-icon"><Flame size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{stats.calientes || 0}</span>
+            <span className="pg-kpi-foot">Alto potencial, aún no clientes</span>
+          </div>
+          <button type="button" className={`pg-kpi is-info ${fEstado === 'Nuevo' ? 'on' : ''}`} aria-pressed={fEstado === 'Nuevo'}
+            onClick={() => setFEstado(fEstado === 'Nuevo' ? '' : 'Nuevo')}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Nuevos</span>
+              <span className="pg-kpi-icon"><Sparkles size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{stats.nuevos || 0}</span>
+            <span className="pg-kpi-foot">{fEstado === 'Nuevo' ? 'Filtro activo · pulsa para quitar' : 'Pulsa para filtrar'}</span>
+          </button>
+          <button type="button" className={`pg-kpi is-warning ${fFlag === 'Ya_cliente' ? 'on' : ''}`} aria-pressed={fFlag === 'Ya_cliente'}
+            onClick={() => setFFlag(fFlag === 'Ya_cliente' ? '' : 'Ya_cliente')}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Ya clientes</span>
+              <span className="pg-kpi-icon"><UserCheck size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{stats.ya_clientes || 0}</span>
+            <span className="pg-kpi-foot">{fFlag === 'Ya_cliente' ? 'Filtro activo · pulsa para quitar' : 'Pulsa para filtrar'}</span>
+          </button>
+          <div className="pg-kpi">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Score promedio</span>
+              <span className="pg-kpi-icon"><Gauge size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{stats.score_promedio || 0}</span>
+            <div className="pg-meter" style={{ '--meter-c': colorScore(Number(stats.score_promedio || 0)) }}>
+              <span style={{ width: `${Math.min(100, Number(stats.score_promedio || 0))}%` }} />
+            </div>
+            <span className="pg-kpi-foot">{bandaScore(Number(stats.score_promedio || 0))}</span>
+          </div>
+        </div>
+
+        {lotesActivos.length > 0 && (
+          <div className="pros-lotes">
+            {lotesActivos.map((l) => (
+              <div className="pg-panel pros-lote" key={l.lote}>
+                <div className="pros-lote-head">
+                  <span className="pros-lote-title">
+                    <Loader size={15} className="pros-spin" />
+                    {ACCION_LOTE[l.accion]?.label || 'Procesando'}
+                    <span className="pros-lote-user">· {l.usuario}</span>
                   </span>
+                  <span className="pros-lote-pct">{l.porcentaje}%</span>
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      <div className="pros-toolbar">
-        <div className="pros-search">
-          <Search size={16} />
-          <input className="form-input" placeholder="Buscar por nombre o documento…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <select className="form-select" style={{ maxWidth: 160 }} value={fSegmento} onChange={(e) => setFSegmento(e.target.value)}>
-          <option value="">Todo segmento</option>
-          <option value="Formal">Formal</option>
-          <option value="Pequeno">Pequeño</option>
-          <option value="Informal">Informal</option>
-        </select>
-        <select className="form-select" style={{ maxWidth: 160 }} value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
-          <option value="">Todo estado</option>
-          <option value="Nuevo">Nuevo</option>
-          <option value="En_gestion">En gestión</option>
-          <option value="Contactado">Contactado</option>
-          <option value="Convertido">Convertido</option>
-          <option value="Descartado">Descartado</option>
-        </select>
-        <select className="form-select" style={{ maxWidth: 170 }} value={fFlag} onChange={(e) => setFFlag(e.target.value)}>
-          <option value="">Nuevos y clientes</option>
-          <option value="Ninguno">Solo nuevos</option>
-          <option value="Ya_cliente">Ya clientes</option>
-          <option value="Posible_duplicado">Posibles duplicados</option>
-        </select>
-        {facetas.busquedas.length > 0 && (
-          <select className="form-select" style={{ maxWidth: 220 }} value={fBusqueda} onChange={(e) => setFBusqueda(e.target.value)} title="Filtrar por la búsqueda que originó el prospecto">
-            <option value="">Toda búsqueda</option>
-            {facetas.busquedas.map((b) => (
-              <option key={b.valor} value={b.valor}>{b.valor} ({b.total})</option>
-            ))}
-          </select>
-        )}
-        {facetas.sectores.length > 0 && (
-          <select className="form-select" style={{ maxWidth: 200 }} value={fSector} onChange={(e) => setFSector(e.target.value)} title="Filtrar por sector detectado">
-            <option value="">Todo sector</option>
-            {facetas.sectores.map((s) => (
-              <option key={s.valor} value={s.valor}>{s.valor} ({s.total})</option>
-            ))}
-          </select>
-        )}
-        <select className="form-select" style={{ maxWidth: 170 }} value={fMinScore} onChange={(e) => setFMinScore(e.target.value)} title="Mostrar solo prospectos con este potencial o más">
-          <option value="">Todo potencial</option>
-          <option value="75">Caliente · ≥ 75%</option>
-          <option value="45">Tibio · ≥ 45%</option>
-        </select>
-        <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
-          <option value="recientes">Más recientes</option>
-          <option value="score">Mayor score</option>
-          <option value="nombre">Nombre A-Z</option>
-        </select>
-        <button
-          className={`btn btn-sm ${vista === 'excluidos' ? 'btn-warning' : 'btn-outline'}`}
-          onClick={() => setVista((v) => (v === 'excluidos' ? 'activos' : 'excluidos'))}
-          title="Ver la lista de excluidos"
-        >
-          {vista === 'excluidos' ? <><RotateCcw size={15} /> Ver activos</> : <><EyeOff size={15} /> Excluidos</>}
-        </button>
-      </div>
-
-      <div className="pros-table-wrap">
-        {loading ? (
-          <div className="pros-empty"><Loader size={28} className="pros-spin" /><div>Cargando prospectos…</div></div>
-        ) : prospectos.length === 0 ? (
-          <div className="pros-empty">
-            <Radar size={40} />
-            <div style={{ fontWeight: 600, color: 'var(--white)' }}>Aún no hay prospectos</div>
-            <div>Usa “Ingresar RUCs” para captar empresas y enriquecerlas con SUNAT.</div>
-          </div>
-        ) : (
-          <table className="pros-table">
-            <thead>
-              <tr>
-                <th style={{ width: 60 }}>Score</th>
-                <th>Empresa</th>
-                <th className="pros-hide-sm">Sector</th>
-                <th className="pros-hide-sm">Ubicación</th>
-                <th>Descubierto</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {prospectos.map((p, i) => {
-                const ec = ESTADO_CHIP[p.estado_workflow] || ESTADO_CHIP.Nuevo;
-                return (
-                  <tr key={p.id_prospecto} style={{ animationDelay: `${Math.min(i * 0.025, 0.5)}s` }} onClick={() => verDetalle(p.id_prospecto)}>
-                    <td><ScoreRing score={p.score} /></td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Thumb p={p} />
-                        <div style={{ minWidth: 0 }}>
-                          <span className="pros-empresa-nom">{p.razon_social}</span>
-                          <span className="pros-empresa-doc">
-                            {p.documento
-                              ? `${p.tipo_documento || 'RUC'} ${p.documento}`
-                              : <span className="pros-sin-doc">Sin RUC</span>} · {p.segmento}
-                          </span>
-                          <div className="pros-contact-mini">
-                            {p.emails ? (
-                              <span title={p.emails}><Mail size={11} /> {p.emails.split(' / ')[0]}</span>
-                            ) : (
-                              <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin correo</span>
-                            )}
-                            {p.telefonos ? (
-                              <span title={p.telefonos}><Phone size={11} /> {p.telefonos.split(' / ')[0]}</span>
-                            ) : (
-                              <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin teléfono</span>
-                            )}
-                          </div>
-                          <div style={{ marginTop: 4 }}><DupBadge flag={p.flag_duplicado} /></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="pros-hide-sm">{p.sector || <span style={{ color: 'var(--text-secondary)' }}>—</span>}</td>
-                    <td className="pros-hide-sm" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                      {[p.distrito, p.provincia].filter(Boolean).join(', ') || '—'}
-                    </td>
-                    <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                      {fechaCorta(p.fecha_captura)}
-                      {etiquetaRecencia(p.fecha_captura) && (
-                        <span className="pros-nuevo-badge">{etiquetaRecencia(p.fecha_captura)}</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`pros-chip ${ec.cls}`}>{ec.label}</span>
-                      {p.id_gestor && Number(p.id_gestor) !== Number(user?.id) && (
-                        <span title="Gestionado por otro usuario" style={{ marginLeft: 6, color: '#e74c3c', verticalAlign: 'middle', display: 'inline-flex' }}>
-                          <Lock size={13} />
-                        </span>
-                      )}
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="pros-actions-cell">
-                        <button className="btn btn-ghost btn-sm" title="Ver detalle" onClick={() => verDetalle(p.id_prospecto)}><Eye size={15} /></button>
-                        {!p.documento && (
-                          <button className="btn btn-ghost btn-sm" title="Buscar RUC por nombre (ruc.pe)" disabled={buscandoRuc === p.id_prospecto} onClick={() => buscarRuc(p.id_prospecto)}>
-                            {buscandoRuc === p.id_prospecto ? <Loader size={15} className="pros-spin" /> : <Search size={15} />}
-                          </button>
-                        )}
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          title={p.web ? "Enriquecer desde su web" : "Buscar datos de contacto (web y redes)"}
-                          onClick={() => enriquecer(p.id_prospecto, p.web)}
-                        >
-                          <Zap size={15} />
-                        </button>
-                        {vista === 'excluidos' ? (
-                          <button className="btn btn-outline btn-sm" title="Cancelar exclusión" onClick={() => excluir(p.id_prospecto, false)}><RotateCcw size={15} /></button>
-                        ) : (
-                          <button className="btn btn-ghost btn-sm" title="Excluir del descubrimiento" onClick={() => excluir(p.id_prospecto, true)}><EyeOff size={15} /></button>
-                        )}
-                        {p.estado_workflow !== 'Convertido' && (
-                          <button className="btn btn-success btn-sm" title="Crear cliente" onClick={() => abrirConvertir(p)}><UserPlus size={15} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {!loading && totalRegistros > 0 && (
-        <div className="pros-pagination">
-          <div className="pros-pag-info">
-            {((page - 1) * POR_PAGINA) + 1}–{Math.min(page * POR_PAGINA, totalRegistros)} de {totalRegistros.toLocaleString('es-PE')}
-          </div>
-          <div className="pros-pag-controls">
-            <button className="pros-pag-btn" disabled={page <= 1} onClick={() => irAPagina(page - 1)} title="Anterior">
-              <ChevronLeft size={16} />
-            </button>
-            {construirPaginas(page, totalPaginas).map((n) =>
-              typeof n === 'string' ? (
-                <span key={n} className="pros-pag-ellipsis">…</span>
-              ) : (
-                <button
-                  key={n}
-                  className={`pros-pag-btn ${n === page ? 'active' : ''}`}
-                  onClick={() => irAPagina(n)}
-                >
-                  {n}
-                </button>
-              )
-            )}
-            <button className="pros-pag-btn" disabled={page >= totalPaginas} onClick={() => irAPagina(page + 1)} title="Siguiente">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {detalle && (
-        <>
-          <div className="pros-overlay" onClick={() => setDetalle(null)} />
-          <aside className="pros-panel">
-            <div className="pros-panel-head">
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Thumb p={detalle} size={48} />
-                  <ScoreRing score={detalle.score || 0} />
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--white)', fontSize: '1rem' }}>{detalle.razon_social || 'Cargando…'}</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{detalle.documento || 'Sin documento'} · {detalle.segmento}</div>
-                  </div>
+                <div className="pg-meter pros-lote-track">
+                  <span style={{ width: `${l.porcentaje}%` }} />
                 </div>
-                <div style={{ marginTop: 8 }}><DupBadge flag={detalle.flag_duplicado} /></div>
+                <div className="pros-lote-sub">
+                  {l.hechos}/{l.total} listos
+                  {l.en_proceso ? ` · ${l.en_proceso} en curso` : ''}
+                  {l.pendientes ? ` · ${l.pendientes} en cola` : ''}
+                  {l.errores ? ` · ${l.errores} con error` : ''}
+                </div>
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setDetalle(null)}><X size={18} /></button>
+            ))}
+          </div>
+        )}
+
+        {jobsOpen && (
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><Activity size={16} /> Actividad de búsquedas y enriquecimiento</h2>
+              <button type="button" className="pg-iconbtn" onClick={() => setJobsOpen(false)} aria-label="Cerrar actividad"><X size={15} /></button>
             </div>
-
-            <div className="pros-panel-body">
-              {detalleLoading ? (
-                <div className="pros-loading-inline"><Loader size={16} className="pros-spin" /> Cargando…</div>
-              ) : (
-                <>
-                  {detalleDueno && (
-                    <div className={`pros-lock ${bloqueado ? 'pros-lock-blocked' : 'pros-lock-mine'}`}>
-                      {bloqueado ? <Lock size={15} /> : <UserCheck size={15} />}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--white)' }}>
-                          {bloqueado ? `Gestionado por ${detalle.gestor_nombre || 'otro usuario'}` : 'Lo estás gestionando tú'}
-                        </div>
-                        {detalle.fecha_gestion && (
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                            Desde {String(detalle.fecha_gestion).slice(0, 16).replace('T', ' ')}
-                          </div>
+            {jobs.length === 0 ? (
+              <p className="pg-empty-line pros-jobs-empty">Sin trabajos todavía.</p>
+            ) : (
+              <ul className="pros-jobs">
+                {jobs.slice(0, 10).map((j) => {
+                  const par = typeof j.parametros === 'string' ? safeParse(j.parametros) : (j.parametros || {});
+                  const rez = typeof j.resultado === 'string' ? safeParse(j.resultado) : (j.resultado || {});
+                  const jb = JOB_BADGE[j.estado] || JOB_BADGE.pendiente;
+                  return (
+                    <li className="pros-job-row" key={j.id_job}>
+                      <Zap size={15} className="pros-job-icon" />
+                      <div className="pros-job-desc">
+                        {j.tipo === 'google_places'
+                          ? <>Descubrir “{par.query}” · <small>{par.zona} · histórico</small></>
+                          : <>Buscar web y contactos · <small>prospecto #{par.id_prospecto}</small></>}
+                        {j.estado === 'completado' && (
+                          <div><small>
+                            {j.tipo === 'google_places'
+                              ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes${rez.irrelevantes ? ` · ${rez.irrelevantes} descartados` : ''}`
+                              : rez.rechazada
+                                ? `Web descartada: no publica el RUC del prospecto · score ${rez.score ?? '—'}`
+                                : rez.purgado
+                                  ? `Datos no verificables removidos · sin web que publique el RUC · score ${rez.score ?? '—'}`
+                                  : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
+                          </small></div>
                         )}
-                        {bloqueado && (
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                            No puedes editarlo hasta que lo libere{esAdmin ? ' (o libéralo tú como administrador)' : ''}.
-                          </div>
-                        )}
+                        {j.estado === 'error' && <div><small className="pros-text-danger">{j.error}</small></div>}
                       </div>
-                      {puedeLiberar && (
-                        <button className="btn btn-outline btn-sm" onClick={() => liberar(detalle.id_prospecto)}>
-                          <Unlock size={14} /> Liberar
-                        </button>
-                      )}
-                    </div>
-                  )}
+                      <span className={`badge ${jb.badge}`}>
+                        {j.estado === 'procesando' ? <Loader size={10} className="pros-spin" /> : <jb.icon size={10} />}
+                        {j.estado}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
 
-                  {detalleWhy && (
-                    <div className="pros-why">
-                      <div className="pros-why-title">¿Por qué contactarlo?</div>
-                      {detalleWhy}
-                    </div>
-                  )}
+        <section className="pg-panel">
+          <div className="pg-filters">
+            <div className="pg-filters-row">
+              <div className="pg-field pg-field-grow pg-search">
+                <label className="pg-field-label" htmlFor="pros-busqueda">Buscar</label>
+                <Search size={14} />
+                <input id="pros-busqueda" type="search" className="form-input" placeholder="Nombre o documento" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="pros-segmento">Segmento</label>
+                <select id="pros-segmento" className="form-select" value={fSegmento} onChange={(e) => setFSegmento(e.target.value)}>
+                  <option value="">Todo segmento</option>
+                  <option value="Formal">Formal</option>
+                  <option value="Pequeno">Pequeño</option>
+                  <option value="Informal">Informal</option>
+                </select>
+              </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="pros-estado">Estado</label>
+                <select id="pros-estado" className="form-select" value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
+                  <option value="">Todo estado</option>
+                  <option value="Nuevo">Nuevo</option>
+                  <option value="En_gestion">En gestión</option>
+                  <option value="Contactado">Contactado</option>
+                  <option value="Convertido">Convertido</option>
+                  <option value="Descartado">Descartado</option>
+                </select>
+              </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="pros-flag">Relación</label>
+                <select id="pros-flag" className="form-select" value={fFlag} onChange={(e) => setFFlag(e.target.value)}>
+                  <option value="">Nuevos y clientes</option>
+                  <option value="Ninguno">Solo nuevos</option>
+                  <option value="Ya_cliente">Ya clientes</option>
+                  <option value="Posible_duplicado">Posibles duplicados</option>
+                </select>
+              </div>
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="pros-score">Potencial</label>
+                <select id="pros-score" className="form-select" value={fMinScore} onChange={(e) => setFMinScore(e.target.value)} title="Mostrar solo prospectos con este potencial o más">
+                  <option value="">Todo potencial</option>
+                  <option value="75">Caliente · ≥ 75%</option>
+                  <option value="45">Tibio · ≥ 45%</option>
+                </select>
+              </div>
+            </div>
+            <div className="pg-filters-row">
+              {facetas.busquedas.length > 0 && (
+                <div className="pg-field">
+                  <label className="pg-field-label" htmlFor="pros-origen">Búsqueda de origen</label>
+                  <select id="pros-origen" className="form-select" value={fBusqueda} onChange={(e) => setFBusqueda(e.target.value)} title="Filtrar por la búsqueda que originó el prospecto">
+                    <option value="">Toda búsqueda</option>
+                    {facetas.busquedas.map((b) => (
+                      <option key={b.valor} value={b.valor}>{b.valor} ({b.total})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {facetas.sectores.length > 0 && (
+                <div className="pg-field">
+                  <label className="pg-field-label" htmlFor="pros-sector">Sector</label>
+                  <select id="pros-sector" className="form-select" value={fSector} onChange={(e) => setFSector(e.target.value)} title="Filtrar por sector detectado">
+                    <option value="">Todo sector</option>
+                    {facetas.sectores.map((s) => (
+                      <option key={s.valor} value={s.valor}>{s.valor} ({s.total})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="pg-field">
+                <label className="pg-field-label" htmlFor="pros-orden">Orden</label>
+                <select id="pros-orden" className="form-select" value={orden} onChange={(e) => setOrden(e.target.value)}>
+                  <option value="recientes">Más recientes</option>
+                  <option value="score">Mayor score</option>
+                  <option value="nombre">Nombre A-Z</option>
+                </select>
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label">Vista</span>
+                <div className="pg-segmented" role="group" aria-label="Vista de prospectos">
+                  <button type="button" className={vista !== 'excluidos' ? 'active' : ''} aria-pressed={vista !== 'excluidos'}
+                    onClick={() => { if (vista === 'excluidos') setVista((v) => (v === 'excluidos' ? 'activos' : 'excluidos')); }}>
+                    <Eye size={13} /> Activos
+                  </button>
+                  <button type="button" className={vista === 'excluidos' ? 'active' : ''} aria-pressed={vista === 'excluidos'}
+                    onClick={() => { if (vista !== 'excluidos') setVista((v) => (v === 'excluidos' ? 'activos' : 'excluidos')); }}
+                    title="Ver la lista de excluidos">
+                    <EyeOff size={13} /> Excluidos
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-                  {detalleSignals.length > 0 && (
-                    <ul className="pros-signals">
-                      {detalleSignals.map((s, i) => <li key={i}><CheckCircle2 size={14} /> {s}</li>)}
-                    </ul>
-                  )}
-
-                  {!detalle.documento && (
-                    <button
-                      className="btn btn-outline btn-sm"
-                      style={{ width: '100%', marginTop: 10 }}
-                      disabled={buscandoRuc === detalle.id_prospecto}
-                      onClick={() => buscarRuc(detalle.id_prospecto)}
-                      title="Consulta ruc.pe por el nombre y completa el RUC si coincide (gratis)"
-                    >
-                      {buscandoRuc === detalle.id_prospecto
-                        ? <><Loader size={14} className="pros-spin" /> Buscando RUC en ruc.pe…</>
-                        : <><Search size={14} /> Buscar RUC por nombre</>}
-                    </button>
-                  )}
-
-                  <div className="pros-section-title">Datos</div>
-                  {detalle.sector && <div className="pros-field"><div className="pros-field-lbl">Sector</div><div className="pros-field-val">{detalle.sector}</div></div>}
-                  {detalle.direccion && <div className="pros-field"><div className="pros-field-lbl">Dirección</div><div className="pros-field-val">{detalle.direccion}</div></div>}
-                  {(detalle.distrito || detalle.provincia || detalle.departamento) && (
-                    <div className="pros-field"><div className="pros-field-lbl">Ubicación</div>
-                      <div className="pros-field-val">{[detalle.distrito, detalle.provincia, detalle.departamento].filter(Boolean).join(', ')}</div></div>
-                  )}
-                  {detalle.web && (
-                    <div className="pros-field"><div className="pros-field-lbl">Sitio web</div>
-                      <div className="pros-field-val">
-                        <a href={detalle.web} target="_blank" rel="noopener noreferrer"
-                           title={`Abrir ${detalle.web}`}
-                           style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, wordBreak: 'break-all' }}>
-                          {hostFromUrl(detalle.web)} <ExternalLink size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {(detalle.fuentes || []).length > 0 && (
-                    <div className="pros-field">
-                      <div className="pros-field-lbl"><ShieldCheck size={12} style={{ verticalAlign: -2 }} /> Fuentes de datos</div>
-                      <div className="pros-field-val" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        {detalle.fuentes.map((f) => (
-                          f.url ? (
-                            <a key={f.id_fuente} href={f.url} target="_blank" rel="noopener noreferrer"
-                               title={`Verificar la fuente:\n${f.url}`}
-                               style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', wordBreak: 'break-all' }}>
-                              <ExternalLink size={11} style={{ flexShrink: 0, opacity: 0.75 }} />
-                              <span>{FUENTE_LABEL[f.fuente] || f.fuente} · {hostFromUrl(f.url)}</span>
-                              <small style={{ color: 'var(--text-secondary)' }}>{String(f.fecha_scraping || '').slice(0, 10)}</small>
-                            </a>
-                          ) : (
-                            <span key={f.id_fuente} style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-                              {FUENTE_LABEL[f.fuente] || f.fuente} <small>{String(f.fecha_scraping || '').slice(0, 10)}</small>
-                            </span>
-                          )
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pros-section-title">Contactos</div>
-                  {(() => {
-                    const orden = { Email: 0, Telefono: 1, Celular: 1, Whatsapp: 1, Web: 2, RedSocial: 3 };
-                    const esMovil = (c) => /^9\d{8}$/.test(c.valor_normalizado || '');
-                    const cts = [...(detalle.contactos || [])].sort((a, b) => {
-                      const d = (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9);
-                      return d !== 0 ? d : (esMovil(a) ? 0 : 1) - (esMovil(b) ? 0 : 1);
-                    });
-                    const tieneTel = cts.some((c) => ['Telefono', 'Celular', 'Whatsapp'].includes(c.tipo));
-                    const tieneEmail = cts.some((c) => c.tipo === 'Email');
-                    if (cts.length === 0) {
-                      return <div className="pros-nocontact"><AlertTriangle size={14} /> Sin datos de contacto todavía.</div>;
-                    }
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title">
+              <Radar size={16} /> {vista === 'excluidos' ? 'Prospectos excluidos' : 'Bandeja de prospectos'} <span className="pg-count">{totalRegistros.toLocaleString('es-PE')}</span>
+            </h2>
+            <span className="pg-panel-meta">Pulsa una fila para ver el detalle</span>
+          </div>
+          {loading ? (
+            <div className="pg-loading"><Loader size={24} className="pros-spin" /><span>Cargando prospectos…</span></div>
+          ) : prospectos.length === 0 ? (
+            <div className="pg-empty">
+              <Radar size={28} />
+              <strong>{hayFiltros || vista === 'excluidos' ? 'Ningún prospecto coincide' : 'Aún no hay prospectos'}</strong>
+              <span>{hayFiltros || vista === 'excluidos' ? 'Cambia los filtros o la vista.' : 'Usa “Ingresar RUCs” para captar empresas y enriquecerlas con SUNAT.'}</span>
+            </div>
+          ) : (
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>Score</th>
+                    <th>Empresa</th>
+                    <th className="pros-hide-sm">Sector</th>
+                    <th className="pros-hide-sm">Ubicación</th>
+                    <th>Descubierto</th>
+                    <th>Estado</th>
+                    <th className="num">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prospectos.map((p) => {
+                    const ec = ESTADO_CHIP[p.estado_workflow] || ESTADO_CHIP.Nuevo;
                     return (
-                      <>
-                        {cts.map((c) => (
-                          <div className="pros-contact-row" key={c.id_contacto}>
-                            {c.tipo === 'Email' ? <Mail size={15} /> : c.tipo === 'Web' ? <Globe size={15} /> : c.tipo === 'RedSocial' ? <Globe size={15} /> : <Phone size={15} />}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: 'var(--white)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                {c.fuente_url ? (
-                                  <a
-                                    href={c.fuente_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={`Verificar en la fuente:\n${c.fuente_url}\n(clic para abrir en otra pestaña)`}
-                                    style={{ wordBreak: 'break-all', color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                  >
-                                    {c.valor} <ExternalLink size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
-                                  </a>
+                      <tr key={p.id_prospecto} className="is-clickable" onClick={() => verDetalle(p.id_prospecto)}>
+                        <td>
+                          <ScoreRing score={p.score} />
+                          <span className="pg-cell-sub pros-banda">{bandaScore(p.score)}</span>
+                        </td>
+                        <td>
+                          <div className="pros-empresa">
+                            <Thumb p={p} />
+                            <div>
+                              <span className="pg-cell-main">{p.razon_social}</span>
+                              <span className="pg-cell-sub">
+                                {p.documento
+                                  ? `${p.tipo_documento || 'RUC'} ${p.documento}`
+                                  : <span className="pros-sin-doc">Sin RUC</span>} · {p.segmento}
+                              </span>
+                              <div className="pros-contact-mini">
+                                {p.emails ? (
+                                  <span title={p.emails}><Mail size={11} /> {p.emails.split(' / ')[0]}</span>
                                 ) : (
-                                  <span
-                                    style={{ wordBreak: 'break-all' }}
-                                    title={c.fuente === 'manual' ? 'Ingresado a mano (sin fuente web)' : 'Sin URL de origen registrada'}
-                                  >
-                                    {c.valor}
-                                  </span>
+                                  <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin correo</span>
                                 )}
-                                {c.area && <span className="pros-area-badge">{c.area}</span>}
+                                {p.telefonos ? (
+                                  <span title={p.telefonos}><Phone size={11} /> {p.telefonos.split(' / ')[0]}</span>
+                                ) : (
+                                  <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin teléfono</span>
+                                )}
                               </div>
-                              {c.fuente_url ? (
-                                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }} title={c.fuente_url}>
-                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente} · {hostFromUrl(c.fuente_url)}
-                                </div>
-                              ) : c.fuente && c.fuente !== 'manual' ? (
-                                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
-                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente}
-                                </div>
-                              ) : null}
-                              {(c.nombre_persona || c.cargo) && (
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                                  {c.nombre_persona}{c.nombre_persona && c.cargo ? ' · ' : ''}{c.cargo}
-                                </div>
+                              {p.flag_duplicado && p.flag_duplicado !== 'Ninguno' && (
+                                <div className="pg-tags"><DupBadge flag={p.flag_duplicado} /></div>
                               )}
                             </div>
                           </div>
-                        ))}
-                        {!tieneTel && (
-                          <div className="pros-nocontact"><AlertTriangle size={14} /> Sin número de contacto.</div>
-                        )}
-                        {!tieneEmail && (
-                          <div className="pros-nocontact"><AlertTriangle size={14} /> Sin correo de contacto.</div>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  <div className="pros-section-title">Estado comercial</div>
-                  <select
-                    className="form-select"
-                    value={detalle.estado_workflow || 'Nuevo'}
-                    disabled={bloqueado}
-                    title={bloqueado ? 'Bloqueado: lo gestiona otro usuario' : undefined}
-                    onChange={(e) => cambiarEstado(detalle.id_prospecto, e.target.value)}
-                  >
-                    <option value="Nuevo">Nuevo</option>
-                    <option value="En_gestion">En gestión</option>
-                    <option value="Contactado">Contactado</option>
-                    <option value="Descartado">Descartado</option>
-                  </select>
-
-                  <div className="pros-section-title"><History size={13} style={{ verticalAlign: -2 }} /> Historial de gestión</div>
-                  {(detalle.historial || []).length === 0 ? (
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Sin movimientos registrados aún.</div>
-                  ) : (
-                    <ul className="pros-historial">
-                      {(detalle.historial || []).map((h) => (
-                        <li key={h.id_historial}>
-                          <Clock size={13} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ color: 'var(--white)', fontSize: '0.82rem' }}>
-                              {ACCION_LABEL[h.accion] || h.accion}
-                              {h.valor_nuevo && <span style={{ color: 'var(--text-secondary)' }}> → {ESTADO_CHIP[h.valor_nuevo]?.label || h.valor_nuevo}</span>}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                              {h.usuario || 'Sistema'} · {h.fecha}
-                            </div>
+                        </td>
+                        <td className="pros-hide-sm">{p.sector || <span className="pg-muted">—</span>}</td>
+                        <td className="pros-hide-sm pg-muted">
+                          {[p.distrito, p.provincia].filter(Boolean).join(', ') || '—'}
+                        </td>
+                        <td className="nowrap">
+                          <span className="pg-cell-main">{fechaCorta(p.fecha_captura)}</span>
+                          {etiquetaRecencia(p.fecha_captura) && (
+                            <span className="pg-tags"><span className="pg-tag is-success"><Sparkles size={10} />{etiquetaRecencia(p.fecha_captura)}</span></span>
+                          )}
+                        </td>
+                        <td className="nowrap">
+                          <span className={`badge ${ec.badge}`}><ec.icon size={11} />{ec.label}</span>
+                          {p.id_gestor && Number(p.id_gestor) !== Number(user?.id) && (
+                            <span className="pros-lock-icon" title="Gestionado por otro usuario" aria-label="Gestionado por otro usuario">
+                              <Lock size={13} />
+                            </span>
+                          )}
+                        </td>
+                        <td className="num" onClick={(e) => e.stopPropagation()}>
+                          <div className="pg-rowactions">
+                            <button type="button" className="pg-iconbtn" title="Ver detalle" aria-label={`Ver detalle de ${p.razon_social}`} onClick={() => verDetalle(p.id_prospecto)}><Eye size={15} /></button>
+                            {!p.documento && (
+                              <button type="button" className="pg-iconbtn" title="Buscar RUC por nombre (ruc.pe)" aria-label="Buscar RUC por nombre" disabled={buscandoRuc === p.id_prospecto} onClick={() => buscarRuc(p.id_prospecto)}>
+                                {buscandoRuc === p.id_prospecto ? <Loader size={15} className="pros-spin" /> : <Search size={15} />}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="pg-iconbtn"
+                              title={p.web ? "Enriquecer desde su web" : "Buscar datos de contacto (web y redes)"}
+                              aria-label={p.web ? "Enriquecer desde su web" : "Buscar datos de contacto"}
+                              onClick={() => enriquecer(p.id_prospecto, p.web)}
+                            >
+                              <Zap size={15} />
+                            </button>
+                            {vista === 'excluidos' ? (
+                              <button type="button" className="pg-iconbtn is-on" title="Cancelar exclusión" aria-label="Cancelar exclusión" onClick={() => excluir(p.id_prospecto, false)}><RotateCcw size={15} /></button>
+                            ) : (
+                              <button type="button" className="pg-iconbtn" title="Excluir del descubrimiento" aria-label="Excluir del descubrimiento" onClick={() => excluir(p.id_prospecto, true)}><EyeOff size={15} /></button>
+                            )}
+                            {p.estado_workflow !== 'Convertido' && (
+                              <button type="button" className="pg-iconbtn pros-iconbtn-ok" title="Crear cliente" aria-label={`Crear cliente desde ${p.razon_social}`} onClick={() => abrirConvertir(p)}><UserPlus size={15} /></button>
+                            )}
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          )}
 
-            <div className="pros-panel-foot">
-              <button className="btn btn-danger btn-sm" disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => descartar(detalle.id_prospecto)}><Trash2 size={15} /> Descartar</button>
+          {!loading && totalRegistros > 0 && (
+            <PgPager
+              currentPage={page}
+              totalPages={totalPaginas}
+              totalItems={totalRegistros}
+              itemsPerPage={POR_PAGINA}
+              setCurrentPage={irAPagina}
+              sustantivo="prospectos"
+            />
+          )}
+        </section>
+      </div>
+
+      {detalle && (
+        <PgDrawer
+          eyebrow={<><Radar size={12} /> Prospecto</>}
+          title={detalle.razon_social || 'Cargando…'}
+          badges={(
+            <>
+              <span className="pros-drawer-id">
+                <Thumb p={detalle} size={40} />
+                <ScoreRing score={detalle.score || 0} />
+                <span className="pg-cell-sub">{detalle.documento || 'Sin documento'} · {detalle.segmento}</span>
+              </span>
+              <DupBadge flag={detalle.flag_duplicado} />
+            </>
+          )}
+          onClose={() => setDetalle(null)}
+          footer={(
+            <div className="pros-drawer-foot">
+              <button type="button" className="btn btn-danger btn-sm" disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => descartar(detalle.id_prospecto)}><Trash2 size={15} /> Descartar</button>
               <button
+                type="button"
                 className="btn btn-outline btn-sm"
                 title={detalle.web ? "Enriquecer desde su web" : "Buscar datos de contacto (web y redes)"}
                 onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}
@@ -1222,6 +1091,7 @@ export default function Prospectos() {
               </button>
               {detalle.estado_workflow !== 'Convertido' && detalle.flag_duplicado !== 'Ya_cliente' && (
                 <button
+                  type="button"
                   className="btn btn-outline btn-sm"
                   disabled={bloqueado && !esAdmin}
                   title={bloqueado
@@ -1235,36 +1105,244 @@ export default function Prospectos() {
                 </button>
               )}
               {vista === 'excluidos' ? (
-                <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>
               ) : (
-                <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, true)}><EyeOff size={15} /> Excluir</button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, true)}><EyeOff size={15} /> Excluir</button>
               )}
               {detalle.estado_workflow !== 'Convertido' ? (
-                <button className="btn btn-success" style={{ flex: 1 }} disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => abrirConvertir(detalle)}><UserPlus size={16} /> Crear cliente</button>
+                <button type="button" className="btn btn-success" disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => abrirConvertir(detalle)}><UserPlus size={16} /> Crear cliente</button>
               ) : (
-                <span className="pros-chip chip-conv" style={{ alignSelf: 'center' }}><CheckCircle2 size={12} /> Convertido en cliente</span>
+                <span className="badge badge-success"><CheckCircle2 size={12} /> Convertido en cliente</span>
               )}
             </div>
-          </aside>
-        </>
+          )}
+        >
+          {detalleLoading ? (
+            <div className="pg-loading"><Loader size={20} className="pros-spin" /><span>Cargando…</span></div>
+          ) : (
+            <>
+              {detalleDueno && (
+                <div className={`vt-note ${bloqueado ? 'is-danger' : 'is-info'}`}>
+                  {bloqueado ? <Lock size={16} /> : <UserCheck size={16} />}
+                  <div>
+                    <strong>{bloqueado ? `Gestionado por ${detalle.gestor_nombre || 'otro usuario'}` : 'Lo estás gestionando tú'}</strong>
+                    {detalle.fecha_gestion && (
+                      <p>Desde {String(detalle.fecha_gestion).slice(0, 16).replace('T', ' ')}</p>
+                    )}
+                    {bloqueado && (
+                      <p>No puedes editarlo hasta que lo libere{esAdmin ? ' (o libéralo tú como administrador)' : ''}.</p>
+                    )}
+                  </div>
+                  {puedeLiberar && (
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => liberar(detalle.id_prospecto)}>
+                      <Unlock size={14} /> Liberar
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(detalleWhy || detalleSignals.length > 0) && (
+                <section>
+                  <h3 className="pg-section-title"><Sparkles size={14} /> ¿Por qué contactarlo?</h3>
+                  {detalleWhy && <div className="vt-note is-accent"><div><p className="pros-why-text">{detalleWhy}</p></div></div>}
+                  {detalleSignals.length > 0 && (
+                    <ul className="pros-signals">
+                      {detalleSignals.map((s, i) => <li key={i}><CheckCircle2 size={14} /> {s}</li>)}
+                    </ul>
+                  )}
+                </section>
+              )}
+
+              {!detalle.documento && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm pros-full"
+                  disabled={buscandoRuc === detalle.id_prospecto}
+                  onClick={() => buscarRuc(detalle.id_prospecto)}
+                  title="Consulta ruc.pe por el nombre y completa el RUC si coincide (gratis)"
+                >
+                  {buscandoRuc === detalle.id_prospecto
+                    ? <><Loader size={14} className="pros-spin" /> Buscando RUC en ruc.pe…</>
+                    : <><Search size={14} /> Buscar RUC por nombre</>}
+                </button>
+              )}
+
+              <section>
+                <h3 className="pg-section-title"><Building2 size={14} /> Datos</h3>
+                <div className="pg-kv">
+                  {detalle.sector && <div><span>Sector</span><strong>{detalle.sector}</strong></div>}
+                  {(detalle.distrito || detalle.provincia || detalle.departamento) && (
+                    <div><span>Ubicación</span><strong>{[detalle.distrito, detalle.provincia, detalle.departamento].filter(Boolean).join(', ')}</strong></div>
+                  )}
+                  {detalle.direccion && <div className="wide"><span>Dirección</span><strong>{detalle.direccion}</strong></div>}
+                  {detalle.web && (
+                    <div className="wide">
+                      <span>Sitio web</span>
+                      <strong>
+                        <a className="pros-link" href={detalle.web} target="_blank" rel="noopener noreferrer" title={`Abrir ${detalle.web}`}>
+                          {hostFromUrl(detalle.web)} <ExternalLink size={11} />
+                        </a>
+                      </strong>
+                    </div>
+                  )}
+                  {!detalle.sector && !detalle.direccion && !detalle.web && !(detalle.distrito || detalle.provincia || detalle.departamento) && (
+                    <div className="wide"><strong className="pg-muted">Sin datos registrados</strong></div>
+                  )}
+                </div>
+
+                {(detalle.fuentes || []).length > 0 && (
+                  <div className="pros-fuentes">
+                    <span className="pg-field-label"><ShieldCheck size={12} /> Fuentes de datos</span>
+                    {detalle.fuentes.map((f) => (
+                      f.url ? (
+                        <a key={f.id_fuente} className="pros-link" href={f.url} target="_blank" rel="noopener noreferrer"
+                           title={`Verificar la fuente:\n${f.url}`}>
+                          <ExternalLink size={11} />
+                          <span>{FUENTE_LABEL[f.fuente] || f.fuente} · {hostFromUrl(f.url)}</span>
+                          <small>{String(f.fecha_scraping || '').slice(0, 10)}</small>
+                        </a>
+                      ) : (
+                        <span key={f.id_fuente} className="pg-muted">
+                          {FUENTE_LABEL[f.fuente] || f.fuente} <small>{String(f.fecha_scraping || '').slice(0, 10)}</small>
+                        </span>
+                      )
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="pg-section-title"><Phone size={14} /> Contactos</h3>
+                {(() => {
+                  const orden = { Email: 0, Telefono: 1, Celular: 1, Whatsapp: 1, Web: 2, RedSocial: 3 };
+                  const esMovil = (c) => /^9\d{8}$/.test(c.valor_normalizado || '');
+                  const cts = [...(detalle.contactos || [])].sort((a, b) => {
+                    const d = (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9);
+                    return d !== 0 ? d : (esMovil(a) ? 0 : 1) - (esMovil(b) ? 0 : 1);
+                  });
+                  const tieneTel = cts.some((c) => ['Telefono', 'Celular', 'Whatsapp'].includes(c.tipo));
+                  const tieneEmail = cts.some((c) => c.tipo === 'Email');
+                  if (cts.length === 0) {
+                    return <div className="vt-note is-warning is-compact"><AlertTriangle size={14} /><span>Sin datos de contacto todavía.</span></div>;
+                  }
+                  return (
+                    <>
+                      <ul className="pg-list">
+                        {cts.map((c) => (
+                          <li className="pros-contact-row" key={c.id_contacto}>
+                            {c.tipo === 'Email' ? <Mail size={15} /> : c.tipo === 'Web' ? <Globe size={15} /> : c.tipo === 'RedSocial' ? <Globe size={15} /> : <Phone size={15} />}
+                            <div className="pros-contact-main">
+                              <div className="pros-contact-val">
+                                {c.fuente_url ? (
+                                  <a
+                                    className="pros-link"
+                                    href={c.fuente_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Verificar en la fuente:\n${c.fuente_url}\n(clic para abrir en otra pestaña)`}
+                                  >
+                                    {c.valor} <ExternalLink size={11} />
+                                  </a>
+                                ) : (
+                                  <span
+                                    className="pros-break"
+                                    title={c.fuente === 'manual' ? 'Ingresado a mano (sin fuente web)' : 'Sin URL de origen registrada'}
+                                  >
+                                    {c.valor}
+                                  </span>
+                                )}
+                                {c.area && <span className="pg-tag is-accent">{c.area}</span>}
+                              </div>
+                              {c.fuente_url ? (
+                                <span className="pg-cell-sub" title={c.fuente_url}>
+                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente} · {hostFromUrl(c.fuente_url)}
+                                </span>
+                              ) : c.fuente && c.fuente !== 'manual' ? (
+                                <span className="pg-cell-sub">
+                                  Fuente: {FUENTE_LABEL[c.fuente] || c.fuente}
+                                </span>
+                              ) : null}
+                              {(c.nombre_persona || c.cargo) && (
+                                <span className="pg-cell-sub">
+                                  {c.nombre_persona}{c.nombre_persona && c.cargo ? ' · ' : ''}{c.cargo}
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      {!tieneTel && (
+                        <div className="vt-note is-warning is-compact"><AlertTriangle size={14} /><span>Sin número de contacto.</span></div>
+                      )}
+                      {!tieneEmail && (
+                        <div className="vt-note is-warning is-compact"><AlertTriangle size={14} /><span>Sin correo de contacto.</span></div>
+                      )}
+                    </>
+                  );
+                })()}
+              </section>
+
+              <section>
+                <h3 className="pg-section-title"><Gauge size={14} /> Estado comercial</h3>
+                <select
+                  className="form-select"
+                  aria-label="Estado comercial"
+                  value={detalle.estado_workflow || 'Nuevo'}
+                  disabled={bloqueado}
+                  title={bloqueado ? 'Bloqueado: lo gestiona otro usuario' : undefined}
+                  onChange={(e) => cambiarEstado(detalle.id_prospecto, e.target.value)}
+                >
+                  <option value="Nuevo">Nuevo</option>
+                  <option value="En_gestion">En gestión</option>
+                  <option value="Contactado">Contactado</option>
+                  <option value="Descartado">Descartado</option>
+                </select>
+              </section>
+
+              <section>
+                <h3 className="pg-section-title"><History size={14} /> Historial de gestión</h3>
+                {(detalle.historial || []).length === 0 ? (
+                  <p className="pg-empty-line">Sin movimientos registrados aún.</p>
+                ) : (
+                  <ul className="pros-historial">
+                    {(detalle.historial || []).map((h) => (
+                      <li key={h.id_historial}>
+                        <Clock size={13} />
+                        <div>
+                          <span className="pg-cell-main">
+                            {ACCION_LABEL[h.accion] || h.accion}
+                            {h.valor_nuevo && <span className="pg-muted"> → {ESTADO_CHIP[h.valor_nuevo]?.label || h.valor_nuevo}</span>}
+                          </span>
+                          <span className="pg-cell-sub">{h.usuario || 'Sistema'} · {h.fecha}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
+        </PgDrawer>
       )}
 
       <Modal isOpen={ingestaOpen} onClose={() => setIngestaOpen(false)} title="Ingresar empresas por RUC" size="md">
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.8rem' }}>
+        <p className="pros-modal-intro">
           Pega uno o varios RUCs (separados por espacio, coma o salto de línea). Se consultan en <b>fuentes públicas de SUNAT</b> (razón social, estado, dirección, <b>actividad CIIU</b> y representantes) y <b>se buscan sus datos de contacto automáticamente</b> (web, correos, teléfonos y redes) anclados al RUC. Se calcula su score y se marcan los que ya son clientes. Máx. 50 por lote.
         </p>
-        <label className="form-label">RUCs</label>
-        <textarea
-          className="form-input"
-          rows={5}
-          placeholder="20512345678, 20487654321…"
-          value={ingestaTexto}
-          onChange={(e) => setIngestaTexto(e.target.value)}
-          style={{ resize: 'vertical', fontFamily: 'monospace' }}
-        />
-        <div style={{ marginTop: '0.8rem' }}>
-          <label className="form-label">Segmento</label>
-          <select className="form-select" value={ingestaSegmento} onChange={(e) => setIngestaSegmento(e.target.value)}>
+        <div className="form-group">
+          <label className="form-label" htmlFor="pros-ingesta-rucs">RUCs</label>
+          <textarea
+            id="pros-ingesta-rucs"
+            className="form-input pros-mono"
+            rows={5}
+            placeholder="20512345678, 20487654321…"
+            value={ingestaTexto}
+            onChange={(e) => setIngestaTexto(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="pros-ingesta-segmento">Segmento</label>
+          <select id="pros-ingesta-segmento" className="form-select" value={ingestaSegmento} onChange={(e) => setIngestaSegmento(e.target.value)}>
             <option value="Formal">Formal (empresa con factura)</option>
             <option value="Pequeno">Pequeño (compra libre / sin IGV)</option>
           </select>
@@ -1272,134 +1350,136 @@ export default function Prospectos() {
 
         {ingestaRes && (
           <div className="pros-ingesta-res">
-            <div className="pros-ingesta-box"><b style={{ color: '#2ecc71' }}>{ingestaRes.creados}</b><span>Creados</span></div>
-            <div className="pros-ingesta-box"><b style={{ color: '#e8b84b' }}>{ingestaRes.ya_cliente}</b><span>Ya clientes</span></div>
-            <div className="pros-ingesta-box"><b style={{ color: 'var(--wire)' }}>{ingestaRes.ya_prospecto}</b><span>Ya existían</span></div>
+            <div className="pros-ingesta-box is-success"><b>{ingestaRes.creados}</b><span>Creados</span></div>
+            <div className="pros-ingesta-box is-warning"><b>{ingestaRes.ya_cliente}</b><span>Ya clientes</span></div>
+            <div className="pros-ingesta-box"><b>{ingestaRes.ya_prospecto}</b><span>Ya existían</span></div>
           </div>
         )}
         {ingestaRes?.errores?.length > 0 && (
-          <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#e74c3c' }}>{ingestaRes.errores.length} RUC(s) con error o no encontrados en las fuentes públicas.</div>
+          <p className="vt-error pros-mt">{ingestaRes.errores.length} RUC(s) con error o no encontrados en las fuentes públicas.</p>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.2rem' }}>
-          <button className="btn btn-outline" onClick={() => setIngestaOpen(false)}>Cerrar</button>
-          <button className="btn btn-primary" onClick={hacerIngesta} disabled={ingestaLoading || !ingestaTexto.trim()}>
+        <div className="vt-lp-modal-foot pros-mt-lg">
+          <button type="button" className="btn btn-outline" onClick={() => setIngestaOpen(false)}>Cerrar</button>
+          <button type="button" className="btn btn-primary" onClick={hacerIngesta} disabled={ingestaLoading || !ingestaTexto.trim()}>
             {ingestaLoading ? <><Loader size={16} className="pros-spin" /> Procesando…</> : <><Upload size={16} /> Procesar</>}
           </button>
         </div>
       </Modal>
 
       <Modal isOpen={exportOpen} onClose={() => setExportOpen(false)} title="Exportar prospectos a Excel" size="sm">
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+        <p className="pros-modal-intro">
           Se exportan los prospectos con los <b>filtros actuales</b> ({totalRegistros.toLocaleString('es-PE')} registros · {totalPaginas.toLocaleString('es-PE')} hojas de 50). El archivo se genera en el servidor y se descarga directo.
         </p>
 
-        <label className="pros-radio" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.6rem', cursor: 'pointer' }}>
-          <input type="radio" name="export-modo" checked={exportModo === 'todo'} onChange={() => setExportModo('todo')} style={{ marginTop: 3 }} />
-          <span><b>Exportar todo</b><br /><small style={{ color: 'var(--text-secondary)' }}>Los {totalRegistros.toLocaleString('es-PE')} registros del filtro actual en un solo archivo.</small></span>
-        </label>
+        <div className="pros-radios">
+          <label className="pg-check">
+            <input type="radio" name="export-modo" checked={exportModo === 'todo'} onChange={() => setExportModo('todo')} />
+            <div><span>Exportar todo</span><small>Los {totalRegistros.toLocaleString('es-PE')} registros del filtro actual en un solo archivo.</small></div>
+          </label>
 
-        <label className="pros-radio" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.6rem', cursor: 'pointer' }}>
-          <input type="radio" name="export-modo" checked={exportModo === 'rango'} onChange={() => setExportModo('rango')} style={{ marginTop: 3 }} />
-          <span><b>Rango de hojas</b><br /><small style={{ color: 'var(--text-secondary)' }}>Elige desde y hasta qué hoja abarcar (50 registros por hoja).</small></span>
-        </label>
+          <label className="pg-check">
+            <input type="radio" name="export-modo" checked={exportModo === 'rango'} onChange={() => setExportModo('rango')} />
+            <div><span>Rango de hojas</span><small>Elige desde y hasta qué hoja abarcar (50 registros por hoja).</small></div>
+          </label>
+        </div>
 
         {exportModo === 'rango' && (
-          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-end', margin: '0.4rem 0 0.2rem 1.6rem' }}>
-            <div>
-              <label className="form-label">Desde hoja</label>
-              <input type="number" className="form-input" min={1} max={totalPaginas}
+          <div className="pros-rango">
+            <div className="pg-field">
+              <label className="pg-field-label" htmlFor="pros-export-desde">Desde hoja</label>
+              <input id="pros-export-desde" type="number" className="form-input pros-num" min={1} max={totalPaginas}
                 value={exportDesde}
-                onChange={(e) => setExportDesde(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))}
-                style={{ width: 100 }} />
+                onChange={(e) => setExportDesde(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))} />
             </div>
-            <div>
-              <label className="form-label">Hasta hoja</label>
-              <input type="number" className="form-input" min={1} max={totalPaginas}
+            <div className="pg-field">
+              <label className="pg-field-label" htmlFor="pros-export-hasta">Hasta hoja</label>
+              <input id="pros-export-hasta" type="number" className="form-input pros-num" min={1} max={totalPaginas}
                 value={exportHasta}
-                onChange={(e) => setExportHasta(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))}
-                style={{ width: 100 }} />
+                onChange={(e) => setExportHasta(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))} />
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', paddingBottom: 8 }}>
+            <span className="pg-hint">
               ≈ {(Math.max(0, Math.min(exportHasta, totalPaginas) - Math.min(exportDesde, totalPaginas) + 1) * POR_PAGINA).toLocaleString('es-PE')} registros
             </span>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.2rem' }}>
-          <button className="btn btn-outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>Cancelar</button>
-          <button className="btn btn-primary" onClick={exportarExcel} disabled={exportLoading}>
+        <div className="vt-lp-modal-foot pros-mt-lg">
+          <button type="button" className="btn btn-outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>Cancelar</button>
+          <button type="button" className="btn btn-primary" onClick={exportarExcel} disabled={exportLoading}>
             {exportLoading ? <><Loader size={16} className="pros-spin" /> Generando…</> : <><FileSpreadsheet size={16} /> Descargar</>}
           </button>
         </div>
       </Modal>
 
       <Modal isOpen={descubrirOpen} onClose={() => setDescubrirOpen(false)} title="Descubrir empresas por departamento y sector" size="md">
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+        <p className="pros-modal-intro">
           Trae empresas <b>reales del Padrón de SUNAT</b> (personas jurídicas activas) de los sectores que compran empaque, filtradas por departamento. Se crean como prospectos con razón social, estado y ubicación oficiales, y se les busca web/contactos anclados al RUC. <b>No duplica</b> lo que ya tienes ni toca a tus clientes.
         </p>
 
         {padron === null ? (
-          <div className="pros-loading-inline"><Loader size={16} className="pros-spin" /> Cargando disponibilidad del padrón…</div>
+          <div className="pg-loading"><Loader size={18} className="pros-spin" /><span>Cargando disponibilidad del padrón…</span></div>
         ) : padron.total === 0 ? (
-          <div style={{ fontSize: '0.82rem', background: 'rgba(232,184,75,0.12)', border: '1px solid rgba(232,184,75,0.5)', borderRadius: 8, padding: '0.7rem 0.8rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e8b84b', fontWeight: 700, marginBottom: 4 }}>
-              <AlertTriangle size={15} /> El padrón aún no está cargado
-            </div>
-            <div style={{ color: 'var(--text-secondary)' }}>
-              Un administrador debe importarlo una vez con:<br />
-              <code style={{ color: 'var(--white)' }}>npm run import:padron -- --file=padron_reducido_ruc.zip</code><br />
-              (descarga el Padrón Reducido RUC del portal de SUNAT). Luego vuelve aquí.
+          <div className="vt-note is-warning">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>El padrón aún no está cargado</strong>
+              <p>
+                Un administrador debe importarlo una vez con:<br />
+                <code className="pros-code">npm run import:padron -- --file=padron_reducido_ruc.zip</code><br />
+                (descarga el Padrón Reducido RUC del portal de SUNAT). Luego vuelve aquí.
+              </p>
             </div>
           </div>
         ) : (
           <>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-              <b style={{ color: 'var(--white)' }}>{Number(padron.total).toLocaleString('es-PE')}</b> empresas objetivo en el padrón
+            <p className="pg-hint pros-mb">
+              <b>{Number(padron.total).toLocaleString('es-PE')}</b> empresas objetivo en el padrón
               {padron.ultima_import ? ` · actualizado ${String(padron.ultima_import).slice(0, 10)}` : ''}.
-            </div>
+            </p>
 
-            <label className="form-label"><MapPin size={13} style={{ verticalAlign: -2 }} /> Departamentos</label>
+            <span className="form-label"><MapPin size={13} /> Departamentos</span>
             <div className="pros-zonas-grid">
               {(padron.departamentos || []).map((d) => {
                 const on = padronSel.departamentos.includes(d.valor);
                 return (
                   <label key={d.valor} className={`pros-zona-chk ${on ? 'on' : ''}`}>
                     <input type="checkbox" checked={on} onChange={() => togglePadron('departamentos', d.valor)} />
-                    <span>{d.valor} <small style={{ opacity: 0.7 }}>({Number(d.total).toLocaleString('es-PE')})</small></span>
+                    <span>{d.valor} <small>({Number(d.total).toLocaleString('es-PE')})</small></span>
                   </label>
                 );
               })}
             </div>
 
-            <label className="form-label" style={{ marginTop: '0.7rem' }}>Sectores <small style={{ color: 'var(--text-secondary)' }}>(vacío = todos)</small></label>
+            <span className="form-label pros-mt">Sectores <small className="pg-muted">(vacío = todos)</small></span>
             <div className="pros-zonas-grid">
               {(padron.sectores || []).map((s) => {
                 const on = padronSel.sectores.includes(s.valor);
                 return (
                   <label key={s.valor} className={`pros-zona-chk ${on ? 'on' : ''}`}>
                     <input type="checkbox" checked={on} onChange={() => togglePadron('sectores', s.valor)} />
-                    <span>{s.valor} <small style={{ opacity: 0.7 }}>({Number(s.total).toLocaleString('es-PE')})</small></span>
+                    <span>{s.valor} <small>({Number(s.total).toLocaleString('es-PE')})</small></span>
                   </label>
                 );
               })}
             </div>
 
-            <div style={{ marginTop: '0.7rem', maxWidth: 260 }}>
-              <label className="form-label">Cuántas crear por vez (máx. {Number(padron.max_por_lote || 2000).toLocaleString('es-PE')})</label>
-              <input type="number" className="form-input" min={1} max={padron.max_por_lote || 2000} value={padronSel.limite}
+            <div className="form-group pros-mt pros-limite">
+              <label className="form-label" htmlFor="pros-padron-limite">Cuántas crear por vez (máx. {Number(padron.max_por_lote || 2000).toLocaleString('es-PE')})</label>
+              <input id="pros-padron-limite" type="number" className="form-input" min={1} max={padron.max_por_lote || 2000} value={padronSel.limite}
                 onChange={(e) => setPadronSel({ ...padronSel, limite: Math.max(1, Math.min(parseInt(e.target.value) || 1, padron.max_por_lote || 2000)) })} />
             </div>
 
-            <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-              Se crean solo empresas que aún no tienes (ni prospecto ni cliente). Es un tope <b>por vez</b> (puedes repetir). Cada una encola un enriquecimiento (web/correos/teléfonos por RUC) que corre en segundo plano; por eso no conviene crear decenas de miles de golpe. Lotes grandes tardan un poco en crearse.
+            <div className="vt-note is-compact">
+              <AlertCircle size={14} />
+              <span>Se crean solo empresas que aún no tienes (ni prospecto ni cliente). Es un tope <b>por vez</b> (puedes repetir). Cada una encola un enriquecimiento (web/correos/teléfonos por RUC) que corre en segundo plano; por eso no conviene crear decenas de miles de golpe. Lotes grandes tardan un poco en crearse.</span>
             </div>
           </>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
-          <button className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
-          <button className="btn btn-primary" onClick={hacerDescubrir}
+        <div className="vt-lp-modal-foot pros-mt-lg">
+          <button type="button" className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
+          <button type="button" className="btn btn-primary" onClick={hacerDescubrir}
             disabled={descubrirLoading || !padron || padron.total === 0 || padronSel.departamentos.length === 0}>
             {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Creando…</> : <><Compass size={16} /> Descubrir</>}
           </button>
@@ -1409,44 +1489,45 @@ export default function Prospectos() {
       <Modal isOpen={convertOpen} onClose={() => setConvertOpen(false)} title="Crear cliente desde prospecto" size="md">
         {convertData && (
           <>
-            <div style={{ marginBottom: '0.9rem', padding: '0.6rem 0.8rem', background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', borderRadius: 8 }}>
-              <Building2 size={15} style={{ verticalAlign: -2, color: 'var(--accent)' }} /> <b style={{ color: 'var(--white)' }}>{convertData.razon_social}</b>
+            <div className="vt-note is-accent pros-mb">
+              <Building2 size={16} />
+              <div><strong>{convertData.razon_social}</strong></div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.6rem' }}>
-              <div>
-                <label className="form-label">Tipo doc.</label>
-                <select className="form-select" value={convertData.tipo_documento} onChange={(e) => setConvertData({ ...convertData, tipo_documento: e.target.value })}>
+            <div className="pros-conv-doc">
+              <div className="form-group">
+                <label className="form-label" htmlFor="pros-conv-tipo">Tipo doc.</label>
+                <select id="pros-conv-tipo" className="form-select" value={convertData.tipo_documento} onChange={(e) => setConvertData({ ...convertData, tipo_documento: e.target.value })}>
                   <option value="RUC">RUC</option>
                   <option value="DNI">DNI</option>
                 </select>
               </div>
-              <div>
-                <label className="form-label">Documento *</label>
-                <input className="form-input" value={convertData.documento} onChange={(e) => setConvertData({ ...convertData, documento: e.target.value })} placeholder="RUC o DNI" />
+              <div className="form-group">
+                <label className="form-label" htmlFor="pros-conv-doc">Documento *</label>
+                <input id="pros-conv-doc" className="form-input" value={convertData.documento} onChange={(e) => setConvertData({ ...convertData, documento: e.target.value })} placeholder="RUC o DNI" />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }}>
-              <div><label className="form-label">Teléfono</label><input className="form-input" value={convertData.telefono} onChange={(e) => setConvertData({ ...convertData, telefono: e.target.value })} /></div>
-              <div><label className="form-label">Email</label><input className="form-input" value={convertData.email} onChange={(e) => setConvertData({ ...convertData, email: e.target.value })} /></div>
+            <div className="pg-form-grid">
+              <div className="form-group"><label className="form-label" htmlFor="pros-conv-tel">Teléfono</label><input id="pros-conv-tel" className="form-input" value={convertData.telefono} onChange={(e) => setConvertData({ ...convertData, telefono: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label" htmlFor="pros-conv-email">Email</label><input id="pros-conv-email" className="form-input" value={convertData.email} onChange={(e) => setConvertData({ ...convertData, email: e.target.value })} /></div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }}>
-              <div>
-                <label className="form-label">Condición</label>
-                <select className="form-select" value={convertData.condicion_pago} onChange={(e) => setConvertData({ ...convertData, condicion_pago: e.target.value })}>
+            <div className="pg-form-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="pros-conv-cond">Condición</label>
+                <select id="pros-conv-cond" className="form-select" value={convertData.condicion_pago} onChange={(e) => setConvertData({ ...convertData, condicion_pago: e.target.value })}>
                   <option value="Contado">Contado</option>
                   <option value="Credito">Crédito</option>
                 </select>
               </div>
               {convertData.condicion_pago === 'Credito' && (
-                <div><label className="form-label">Días crédito</label><input type="number" className="form-input" value={convertData.dias_credito} onChange={(e) => setConvertData({ ...convertData, dias_credito: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label" htmlFor="pros-conv-dias">Días crédito</label><input id="pros-conv-dias" type="number" className="form-input" value={convertData.dias_credito} onChange={(e) => setConvertData({ ...convertData, dias_credito: e.target.value })} /></div>
               )}
             </div>
-            <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.7rem' }}>
+            <p className="pg-hint">
               Se creará en tu tabla de clientes. Si el documento ya existe, se enlaza sin duplicar.
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
-              <button className="btn btn-outline" onClick={() => setConvertOpen(false)}>Cancelar</button>
-              <button className="btn btn-success" onClick={confirmarConvertir} disabled={convertLoading || !convertData.documento}>
+            <div className="vt-lp-modal-foot pros-mt-lg">
+              <button type="button" className="btn btn-outline" onClick={() => setConvertOpen(false)}>Cancelar</button>
+              <button type="button" className="btn btn-success" onClick={confirmarConvertir} disabled={convertLoading || !convertData.documento}>
                 {convertLoading ? <><Loader size={16} className="pros-spin" /> Creando…</> : <><UserPlus size={16} /> Crear cliente</>}
               </button>
             </div>

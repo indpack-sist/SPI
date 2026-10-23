@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Plus, Eye, Download, Filter, FileText, Search,
-  ChevronLeft, ChevronRight, RefreshCw, Calendar,
-  TrendingUp, DollarSign, Edit, Copy, ExternalLink, CheckCircle2,
+import {
+  Plus, Eye, Download, Filter, FileText, Search, RefreshCw, Calendar, CalendarDays,
+  DollarSign, Edit, Copy, ExternalLink, CheckCircle2,
   ArrowUpDown, RefreshCcw, AlertTriangle, Clock, ArrowRightLeft
 } from 'lucide-react';
-import Table from '../../components/UI/Table';
 import Pagination from '../../components/UI/Pagination';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { cotizacionesAPI, tipoCambioAPI } from '../../config/api';
+import { BadgeEstadoCotizacion, configEstadoCotizacion } from './estadosVentas';
+import { diasDesde } from '../Maestros/formatoMaestros';
+import './Ventas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
@@ -227,18 +228,6 @@ function Cotizaciones() {
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
-  const getEstadoBadge = (estado) => {
-    const badges = {
-      'Pendiente': 'badge-warning',
-      'Enviada': 'badge-info',
-      'Aprobada': 'badge-success',
-      'Rechazada': 'badge-danger',
-      'Convertida': 'badge-primary',
-      'Vencida': 'badge-secondary'
-    };
-    return badges[estado] || 'badge-secondary';
-  };
-
   const formatearFechaVisual = (fechaStr) => {
     if (!fechaStr) return '-';
     const partes = fechaStr.split('T')[0].split('-');
@@ -327,398 +316,175 @@ function Cotizaciones() {
     navigate(`/ventas/cotizaciones/${id}${queryString ? `?${queryString}` : ''}`);
   };
 
-  const columns = [
-    {
-      header: 'N° Cotización',
-      accessor: 'numero_cotizacion',
-      width: '160px',
-      render: (value, row) => (
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-primary">{value}</span>
-            {!!row.convertida_venta && (
-              <CheckCircle2 size={16} className="text-success" title="Convertida a Orden de Venta" />
-            )}
-          </div>
-          <div className="text-xs text-muted font-medium">
-            {formatearFechaVisual(row.fecha_emision)}
-          </div>
-          {!!row.convertida_venta && !!row.id_orden_venta && (
-            <button
-              className="flex items-center gap-1 mt-1"
-              style={{
-                background: 'var(--accent-dim)',
-                border: '1px solid var(--accent-border)',
-                borderRadius: '2px',
-                cursor: 'pointer',
-                padding: '2px 7px',
-                fontSize: '10px',
-                color: 'var(--accent)',
-                fontFamily: "'Barlow Condensed', sans-serif",
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/ventas/ordenes/${row.id_orden_venta}`);
-              }}
-            >
-              <ExternalLink size={10} /> Ver OV
-            </button>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Cliente',
-      accessor: 'cliente',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted">RUC: {row.ruc_cliente}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Total',
-      accessor: 'total',
-      align: 'right',
-      width: '170px',
-      render: (value, row) => {
-        const esUSD = row.moneda === 'USD';
-        const conversionPEN = esUSD && mostrarConversion && tipoCambio
-          ? convertirUSDaPEN(value)
-          : null;
-
-        return (
-          <div className="text-right">
-            <div className="font-bold text-lg text-gray-800">
-              {formatearMoneda(value, row.moneda)}
-            </div>
-            {esUSD && parseFloat(row.tipo_cambio || 0) > 1 && (
-              <div className="text-xs text-muted">
-                TC Cot: S/ {formatearNumero(parseFloat(row.tipo_cambio))}
-              </div>
-            )}
-            {conversionPEN !== null && (
-              <div className="mt-1 px-2 py-0.5 rounded text-xs font-semibold inline-block"
-                style={{ 
-                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
-                  color: 'var(--accent, #ca8a04)',
-                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
-                }}>
-                <ArrowRightLeft size={10} className="inline mr-1" />
-                S/ {formatearNumero(conversionPEN)}
-              </div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Estado',
-      accessor: 'estado',
-      width: '120px',
-      align: 'center',
-      render: (value) => (
-        <span className={`badge ${getEstadoBadge(value)}`}>{value}</span>
-      )
-    },
-    {
-      header: 'Comercial',
-      accessor: 'comercial',
-      width: '160px',
-      render: (value) => (
-        <div className="text-sm">
-          {value || <span className="text-muted italic">Sin asignar</span>}
-        </div>
-      )
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_cotizacion',
-      width: '180px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="flex gap-1 justify-center">
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleVerDetalle(value);
-            }}
-            title="Ver detalle"
-          >
-            <Eye size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/ventas/cotizaciones/${value}/editar`);
-            }}
-            title="Editar"
-          >
-            <Edit size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-info"
-            onClick={(e) => handleDuplicar(value, e)}
-            title="Duplicar cotización"
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-outline"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDescargarPDF(value, row.numero_cotizacion, row.cliente, row.estado);
-            }}
-            title="Descargar PDF"
-          >
-            <Download size={14} />
-          </button>
-        </div>
-      )
-    }
-  ];
-
   if (loading) return <Loading variant="table" />;
 
+  const filtrosEstado = [
+    { valor: '', label: 'Todos' },
+    { valor: 'Pendiente', label: 'Pendiente' },
+    { valor: 'Aprobada', label: 'Aprobada' },
+    { valor: 'Convertida', label: 'Convertida' }
+  ];
+
+  const kpisEstado = [
+    { valor: '', label: 'Total', cantidad: estadisticas.total, tono: '', icon: FileText },
+    { valor: 'Pendiente', label: 'Pendientes', cantidad: estadisticas.pendientes, tono: configEstadoCotizacion('Pendiente').tono, icon: configEstadoCotizacion('Pendiente').icon },
+    { valor: 'Aprobada', label: 'Aprobadas', cantidad: estadisticas.aprobadas, tono: configEstadoCotizacion('Aprobada').tono, icon: configEstadoCotizacion('Aprobada').icon },
+    { valor: 'Convertida', label: 'Convertidas', cantidad: estadisticas.convertidas, tono: configEstadoCotizacion('Convertida').tono, icon: configEstadoCotizacion('Convertida').icon }
+  ];
+
+  const vigenciaVencida = (row) => ['Pendiente', 'Enviada'].includes(row.estado)
+    && row.fecha_vencimiento && diasDesde(row.fecha_vencimiento) > 0;
+
   return (
-    <div className="p-4 md:p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText size={32} className="text-primary" />
-            Cotizaciones
-          </h1>
-          <p className="text-muted">Gestión de cotizaciones de venta</p>
+          <span className="pg-eyebrow"><FileText size={13} /> Ventas</span>
+          <h1 className="pg-title">Cotizaciones</h1>
+          <p className="pg-subtitle">Gestión de cotizaciones de venta · <b>{pagination.total}</b> {filtroEstado || busquedaAplicada ? 'coinciden con los filtros' : 'registradas'}</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button 
+        <div className="pg-actions">
+          <button
+            type="button"
             className="btn btn-outline"
             onClick={() => cargarDatos(true)}
             disabled={refreshing}
             title="Actualizar datos"
           >
-            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Actualizar
           </button>
-          <button 
-            className="btn btn-primary flex-1 md:flex-none justify-center"
+          <button
+            type="button"
+            className="btn btn-primary"
             onClick={() => navigate('/ventas/cotizaciones/nueva')}
           >
-            <Plus size={20} />
-            Nueva Cotización
+            <Plus size={16} /> Nueva cotización
           </button>
         </div>
-      </div>
+      </header>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
-      <div className="card mb-4 shadow-sm" style={{ 
-        borderLeft: tipoCambio ? '4px solid var(--accent, #ca8a04)' : '4px solid var(--border-color, #374151)'
-      }}>
-        <div className="card-body p-3">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-sm" style={{
-                background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)'
-              }}>
-                <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Tipo de Cambio SBS (USD → PEN)
-                </p>
-                {tipoCambio ? (
-                  <div className="flex items-center gap-4 mt-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Compra: <strong className="text-base" style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Venta: <strong className="text-base" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
-                      </span>
-                    </div>
-                    <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <Calendar size={12} />
-                      <span>Fecha SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
-                      <span className="mx-1">·</span>
-                      <Clock size={12} />
-                      <span>{obtenerEdadTC()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <AlertTriangle size={14} />
-                    <span>No disponible — Presione "Actualizar TC" para consultar</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {tipoCambio && (
-                <button
-                  className={`btn btn-sm ${mostrarConversion ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setMostrarConversion(!mostrarConversion)}
-                  title={mostrarConversion ? 'Ocultar conversiones USD → PEN' : 'Mostrar conversiones USD → PEN'}
-                >
-                  <ArrowRightLeft size={14} />
-                  {mostrarConversion ? 'Ocultar PEN' : 'Ver en PEN'}
-                </button>
-              )}
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={actualizarTipoCambio}
-                disabled={loadingTC}
-                title="Consulta el TC actual desde la SBS (consume 1 token)"
-              >
-                {loadingTC ? (
-                  <RefreshCcw size={14} className="animate-spin" />
-                ) : (
-                  <RefreshCcw size={14} />
-                )}
-                {loadingTC ? 'Consultando...' : 'Actualizar TC'}
-              </button>
-            </div>
+        <section className={`pg-panel vt-tc-panel ${tipoCambio ? 'is-on' : ''}`}>
+          <div className="vt-tc">
+            <span className="vt-tc-label"><DollarSign size={14} /> Tipo de cambio SBS (USD → PEN)</span>
+            {tipoCambio ? (
+              <>
+                <span>Compra <b>S/ {tipoCambio.compra.toFixed(3)}</b></span>
+                <span>Venta <b className="is-accent">S/ {tipoCambio.venta.toFixed(3)}</b></span>
+                <span className="vt-tc-meta"><Calendar size={12} /> Fecha SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
+                <span className="vt-tc-meta"><Clock size={12} /> {obtenerEdadTC()}</span>
+              </>
+            ) : (
+              <span className="vt-tc-meta"><AlertTriangle size={14} /> No disponible — Presione "Actualizar TC" para consultar</span>
+            )}
           </div>
-          {tipoCambio && (
-            <div className="flex md:hidden items-center gap-2 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-              <Calendar size={12} />
-              <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
-              <span className="mx-1">·</span>
-              <Clock size={12} />
-              <span>{obtenerEdadTC()}</span>
+          <div className="pg-actions">
+            {tipoCambio && (
+              <button
+                type="button"
+                className={`btn btn-sm ${mostrarConversion ? 'btn-secondary' : 'btn-outline'}`}
+                onClick={() => setMostrarConversion(!mostrarConversion)}
+                aria-pressed={mostrarConversion}
+                title={mostrarConversion ? 'Ocultar conversiones USD → PEN' : 'Mostrar conversiones USD → PEN'}
+              >
+                <ArrowRightLeft size={14} />
+                {mostrarConversion ? 'Ocultar PEN' : 'Ver en PEN'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={actualizarTipoCambio}
+              disabled={loadingTC}
+              title="Consulta el TC actual desde la SBS (consume 1 token)"
+            >
+              <RefreshCcw size={14} className={loadingTC ? 'animate-spin' : ''} />
+              {loadingTC ? 'Consultando...' : 'Actualizar TC'}
+            </button>
+          </div>
+        </section>
+
+        <div className="pg-kpis">
+          {kpisEstado.map(k => {
+            const activo = filtroEstado === k.valor;
+            const visible = !filtroEstado || activo || k.valor === '';
+            return (
+              <button key={k.label} type="button" className={`pg-kpi ${k.tono} ${activo && k.valor ? 'on' : ''}`} aria-pressed={activo}
+                onClick={() => setFiltroEstado(activo ? '' : k.valor)}>
+                <div className="pg-kpi-top">
+                  <span className="pg-kpi-label">{k.label}</span>
+                  <span className="pg-kpi-icon"><k.icon size={16} /></span>
+                </div>
+                <span className="pg-kpi-value">{visible ? k.cantidad : '—'}</span>
+                <span className="pg-kpi-foot">
+                  {k.valor === '' ? (filtroEstado ? 'Con el filtro actual' : 'Todas las cotizaciones') : activo ? 'Filtro activo · pulsa para quitar' : 'Pulsa para filtrar'}
+                </span>
+              </button>
+            );
+          })}
+          <div className="pg-kpi is-accent">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Monto total · PEN</span>
+              <span className="pg-kpi-icon"><DollarSign size={16} /></span>
+            </div>
+            <span className="pg-kpi-value"><small>S/</small>{formatearNumero(estadisticas.montoTotalPEN)}</span>
+          </div>
+          {estadisticas.montoTotalUSD > 0 && (
+            <div className="pg-kpi is-accent">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Monto total · USD</span>
+                <span className="pg-kpi-icon"><DollarSign size={16} /></span>
+              </div>
+              <span className="pg-kpi-value"><small>$</small>{formatearNumero(estadisticas.montoTotalUSD)}</span>
+              {tipoCambio && estadisticas.montoUSDenPEN > 0 && (
+                <span className="pg-kpi-foot"><ArrowRightLeft size={11} /> Equiv. <b>S/ {formatearNumero(estadisticas.montoUSDenPEN)}</b></span>
+              )}
             </div>
           )}
         </div>
-      </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-content">
-            <p className="stat-label">Total</p>
-            <p className="stat-value">{estadisticas.total}</p>
-          </div>
-          <div className="stat-icon">
-            <FileText size={24} />
-          </div>
-        </div>
-
-        <div className="stat-card border-l-4 border-warning">
-          <div className="stat-content">
-            <p className="stat-label">Pendientes</p>
-            <p className="stat-value text-warning">{estadisticas.pendientes}</p>
-          </div>
-          <div className="stat-icon">
-            <Calendar size={24} className="text-warning" />
-          </div>
-        </div>
-
-        <div className="stat-card border-l-4 border-success">
-          <div className="stat-content">
-            <p className="stat-label">Aprobadas</p>
-            <p className="stat-value text-success">{estadisticas.aprobadas}</p>
-          </div>
-          <div className="stat-icon">
-            <TrendingUp size={24} className="text-success" />
-          </div>
-        </div>
-
-        <div className="stat-card border-l-4 border-primary">
-          <div className="stat-content">
-            <p className="stat-label">Convertidas</p>
-            <p className="stat-value text-primary">{estadisticas.convertidas}</p>
-          </div>
-          <div className="stat-icon">
-            <CheckCircle2 size={24} className="text-primary" />
-          </div>
-        </div>
-
-        <div className="stat-card bg-gradient-to-br from-primary to-blue-600 text-white">
-          <div className="stat-content">
-            <p className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Monto Total (PEN)</p>
-            <p className="stat-value text-white">S/ {formatearNumero(estadisticas.montoTotalPEN)}</p>
-          </div>
-          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-            <DollarSign size={24} />
-          </div>
-        </div>
-
-        {estadisticas.montoTotalUSD > 0 && (
-          <div className="stat-card border-l-4" style={{ borderColor: 'var(--accent, #ca8a04)' }}>
-            <div className="stat-content">
-              <p className="stat-label">Monto Total (USD)</p>
-              <p className="stat-value" style={{ color: 'var(--accent, #ca8a04)' }}>
-                $ {formatearNumero(estadisticas.montoTotalUSD)}
-              </p>
-              {tipoCambio && estadisticas.montoUSDenPEN > 0 && (
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  <ArrowRightLeft size={10} className="inline mr-1" />
-                  Equiv: S/ {formatearNumero(estadisticas.montoUSDenPEN)}
-                </p>
-              )}
-            </div>
-            <div className="stat-icon" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
-              <DollarSign size={24} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="card mb-4 shadow-sm">
-        <div className="card-body">
-          <div className="flex flex-col md:flex-row gap-4">
-            
-            <div className="search-input-wrapper flex-1">
-              <Search size={20} className="search-icon" />
-              <input
-                type="text"
-                className="form-input search-input"
-                placeholder="Buscar por N°, cliente, RUC o comercial..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-              <Filter size={18} className="text-muted shrink-0" />
-              <div className="flex gap-2">
+        <section className="pg-panel">
+          <div className="pg-filters">
+            <div className="pg-filters-row">
+              <div className="pg-field pg-field-grow pg-search">
+                <label className="pg-field-label" htmlFor="vt-cot-busqueda">Buscar</label>
+                <Search size={14} />
+                <input
+                  id="vt-cot-busqueda"
+                  type="search"
+                  className="form-input"
+                  placeholder="N°, cliente, RUC o comercial"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label"><Filter size={11} /> Estado</span>
+                <div className="pg-segmented" role="group" aria-label="Filtrar por estado">
+                  {filtrosEstado.map(f => (
+                    <button
+                      key={f.label}
+                      type="button"
+                      className={filtroEstado === f.valor ? 'active' : ''}
+                      aria-pressed={filtroEstado === f.valor}
+                      onClick={() => setFiltroEstado(f.valor)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="pg-field">
+                <span className="pg-field-label">Orden</span>
                 <button
-                  className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('')}
-                >
-                  Todos
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Pendiente')}
-                >
-                  Pendiente
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Aprobada' ? 'btn-success' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Aprobada')}
-                >
-                  Aprobada
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Convertida' ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Convertida')}
-                >
-                  Convertida
-                </button>
-
-                <div className="border-l h-6 self-center mx-1"></div>
-                <button
-                  className={`btn btn-sm ${ordenAscendente ? 'btn-secondary' : 'btn-outline'}`}
+                  type="button"
+                  className={`btn ${ordenAscendente ? 'btn-secondary' : 'btn-outline'}`}
+                  style={{ height: 38 }}
                   onClick={() => setOrdenAscendente(prev => !prev)}
+                  aria-pressed={ordenAscendente}
                   title={ordenAscendente ? 'Mostrando: más antiguos primero' : 'Mostrando: más recientes primero'}
                 >
                   <ArrowUpDown size={14} />
@@ -727,38 +493,162 @@ function Cotizaciones() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="card list-panel" ref={tablaRef}>
-        <div className="card-header">
-          <div className="flex items-center gap-2">
-            <h2 className="card-title">Lista de Cotizaciones</h2>
-            <span className="badge badge-info">{pagination.total}</span>
+        <section className="pg-panel" ref={tablaRef}>
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title"><FileText size={16} /> Lista de cotizaciones <span className="pg-count">{pagination.total}</span></h2>
+            <span className="pg-panel-meta">
+              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, pagination.total)} · pulsa una fila para ver el detalle
+            </span>
           </div>
-          <div className="text-sm text-muted">
-            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, pagination.total)}
+          <div className="pg-table-wrap">
+            <table className="pg-table">
+              <thead>
+                <tr>
+                  <th>N° Cotización</th>
+                  <th>Cliente</th>
+                  <th>Vigencia</th>
+                  <th className="num">Total</th>
+                  <th className="center">Estado</th>
+                  <th>Comercial</th>
+                  <th className="center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.length > 0 ? currentItems.map(row => {
+                  const value = row.id_cotizacion;
+                  const esUSD = row.moneda === 'USD';
+                  const conversionPEN = esUSD && mostrarConversion && tipoCambio
+                    ? convertirUSDaPEN(row.total)
+                    : null;
+                  return (
+                    <tr key={value} className="is-clickable" onClick={() => handleVerDetalle(value)}>
+                      <td className="nowrap">
+                        <span className="pg-cell-main">
+                          <span className="pg-code">{row.numero_cotizacion}</span>
+                          {!!row.convertida_venta && (
+                            <CheckCircle2 size={14} className="vt-ok-icon" aria-label="Convertida a Orden de Venta" />
+                          )}
+                        </span>
+                        <span className="pg-cell-sub">{formatearFechaVisual(row.fecha_emision)} · {row.total_items || 0} ítems</span>
+                        {!!row.convertida_venta && !!row.id_orden_venta && (
+                          <button
+                            type="button"
+                            className="vt-link-chip"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/ventas/ordenes/${row.id_orden_venta}`);
+                            }}
+                          >
+                            <ExternalLink size={10} /> Ver OV
+                          </button>
+                        )}
+                      </td>
+                      <td>
+                        <span className="pg-cell-main pg-truncate" title={row.cliente}>{row.cliente}</span>
+                        <span className="pg-cell-sub">RUC {row.ruc_cliente}</span>
+                      </td>
+                      <td className="nowrap">
+                        {row.fecha_vencimiento ? (
+                          <>
+                            <span className="pg-cell-main"><CalendarDays size={12} className="pg-muted" />{formatearFechaVisual(row.fecha_vencimiento)}</span>
+                            {vigenciaVencida(row) && (
+                              <span className="pg-tags"><span className="pg-tag is-warning"><AlertTriangle size={11} />Vigencia superada</span></span>
+                            )}
+                          </>
+                        ) : <span className="pg-muted">—</span>}
+                      </td>
+                      <td className="num">
+                        <span className="vt-amount">{formatearMoneda(row.total, row.moneda)}</span>
+                        {esUSD && parseFloat(row.tipo_cambio || 0) > 1 && (
+                          <span className="pg-cell-sub">TC Cot: S/ {formatearNumero(parseFloat(row.tipo_cambio))}</span>
+                        )}
+                        {conversionPEN !== null && (
+                          <span className="pg-tags">
+                            <span className="pg-tag is-accent"><ArrowRightLeft size={10} />S/ {formatearNumero(conversionPEN)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="center"><BadgeEstadoCotizacion estado={row.estado} /></td>
+                      <td>{row.comercial || <span className="pg-muted">Sin asignar</span>}</td>
+                      <td className="center" onClick={(e) => e.stopPropagation()}>
+                        <div className="pg-rowactions">
+                          <button
+                            type="button"
+                            className="pg-iconbtn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVerDetalle(value);
+                            }}
+                            title="Ver detalle"
+                            aria-label={`Ver detalle de ${row.numero_cotizacion}`}
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="pg-iconbtn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/ventas/cotizaciones/${value}/editar`);
+                            }}
+                            title="Editar"
+                            aria-label={`Editar ${row.numero_cotizacion}`}
+                          >
+                            <Edit size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="pg-iconbtn"
+                            onClick={(e) => handleDuplicar(value, e)}
+                            title="Duplicar cotización"
+                            aria-label={`Duplicar ${row.numero_cotizacion}`}
+                          >
+                            <Copy size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="pg-iconbtn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDescargarPDF(value, row.numero_cotizacion, row.cliente, row.estado);
+                            }}
+                            title="Descargar PDF"
+                            aria-label={`Descargar PDF de ${row.numero_cotizacion}`}
+                          >
+                            <Download size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="pg-empty">
+                        <FileText size={28} />
+                        <strong>{filtroEstado || busquedaAplicada ? 'Ninguna cotización coincide con los filtros' : 'No hay cotizaciones registradas'}</strong>
+                        <span>{filtroEstado || busquedaAplicada ? 'Cambia el estado o la búsqueda.' : 'Crea la primera para enviarla al cliente.'}</span>
+                        {!(filtroEstado || busquedaAplicada) && (
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/ventas/cotizaciones/nueva')}><Plus size={14} /> Nueva cotización</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-        
-        <div className="card-body p-0">
-          <div className="table-container">
-            <Table
-              columns={columns}
-              data={currentItems}
-              emptyMessage="No hay cotizaciones registradas"
-              onRowClick={(row) => handleVerDetalle(row.id_cotizacion)}
-            />
-          </div>
-        </div>
 
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={pagination.total}
-          itemsPerPage={itemsPerPage}
-          setCurrentPage={setCurrentPage}
-        />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={pagination.total}
+            itemsPerPage={itemsPerPage}
+            setCurrentPage={setCurrentPage}
+          />
+        </section>
       </div>
     </div>
   );

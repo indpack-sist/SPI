@@ -7,6 +7,7 @@ import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import UbigeoSelector from '../../common/UbigeoSelector';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../../config/api';
+import '../../../pages/Ventas/Ventas.css';
 
 const MODO_LABEL = {
   tercero: 'Transporte público / tercero',
@@ -238,13 +239,13 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
   const pesoBrutoDerivado = pesoBrutoDe(form?.lineas);
 
   return (
-    <div className="card mb-4">
-      <div className="card-header flex items-center justify-between">
-        <h2 className="card-title">
-          <Truck size={20} />
+    <div className="pg-panel mb-4">
+      <div className="pg-panel-head">
+        <h2 className="pg-panel-title">
+          <Truck size={16} />
           Datos de la guía · lo que se enviará a SUNAT
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="pg-rowactions">
           <span className="badge badge-info">{MODO_LABEL[modo]}</span>
           {puedeEditar && (
             <button className="btn btn-outline btn-sm" onClick={abrirEdicion}>
@@ -254,10 +255,10 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
         </div>
       </div>
 
-      <div className="card-body space-y-6">
+      <div className="pg-panel-body vt-sy-6">
         {bloqueada && (
           <div className="flex items-start gap-2 text-sm text-muted">
-            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <AlertCircle size={16} className="vt-mt-05 flex-shrink-0" />
             <span>
               {guia?.sunat_estado === 'ACEPTADO'
                 ? 'La GRE fue aceptada por SUNAT: los datos quedan en solo lectura.'
@@ -271,7 +272,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
         )}
 
         {modo === 'tercero' && (
-          <div className="space-y-4">
+          <div className="vt-sy-4">
             <div className="grid grid-cols-3 gap-4">
               <Dato etiqueta="Transportista" valor={guia.transportista_razon} />
               <Dato etiqueta="RUC" valor={guia.transportista_ruc} mono />
@@ -346,7 +347,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Editar datos de la guía" size="lg">
         {form && (
-          <div className="space-y-5" style={{ overscrollBehavior: 'contain' }}>
+          <div className="vt-sy-5" style={{ overscrollBehavior: 'contain' }}>
             {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
             <div className="form-group">
@@ -359,7 +360,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
             </div>
 
             {form.modo === 'tercero' && (
-              <div className="space-y-4 border rounded-lg p-4">
+              <div className="vt-sy-4 border rounded-lg p-4">
                 <div className="flex items-center gap-2">
                   <Building2 size={16} className="text-muted" />
                   <span className="font-semibold">Transportista</span>
@@ -375,7 +376,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                         </option>
                       ))}
                     </select>
-                    <button type="button" className="btn btn-link btn-sm mt-1" onClick={() => set('nuevo_transportista', true)}>
+                    <button type="button" className="btn vt-btn-link btn-sm mt-1" onClick={() => set('nuevo_transportista', true)}>
                       Corregir / registrar un transportista por RUC
                     </button>
                   </div>
@@ -393,8 +394,8 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                       <label className="form-label">N° MTC (opcional)</label>
                       <input className="form-input" value={form.transportista_mtc} onChange={(e) => set('transportista_mtc', e.target.value)} />
                     </div>
-                    <div className="col-span-3">
-                      <button type="button" className="btn btn-link btn-sm" onClick={() => set('nuevo_transportista', false)}>
+                    <div className="vt-span-full">
+                      <button type="button" className="btn vt-btn-link btn-sm" onClick={() => set('nuevo_transportista', false)}>
                         Elegir uno existente
                       </button>
                     </div>
@@ -407,7 +408,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                 </label>
 
                 {Number(form.transporte_registrar) === 1 && (
-                  <div className="space-y-3">
+                  <div className="vt-sy-3">
                     <div className="grid grid-cols-3 gap-3">
                       <div className="form-group"><label className="form-label">Placa</label><input className="form-input" value={form.transporte_placa} onChange={(e) => set('transporte_placa', e.target.value)} /></div>
                       <div className="form-group"><label className="form-label">TUC / Habilitación</label><input className="form-input" value={form.transporte_tuc} onChange={(e) => set('transporte_tuc', e.target.value)} /></div>
@@ -474,7 +475,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
               </div>
             )}
 
-            <div className="border rounded-lg p-4 space-y-3">
+            <div className="border rounded-lg p-4 vt-sy-3">
               <div className="flex items-center gap-2">
                 <MapPin size={16} className="text-muted" />
                 <span className="font-semibold">Punto de llegada y carga</span>
@@ -505,7 +506,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
             </div>
 
             {editarLineas && form.lineas && (
-              <div className="border rounded-lg p-4 space-y-3">
+              <div className="border rounded-lg p-4 vt-sy-3">
                 <div className="flex items-center gap-2">
                   <Package size={16} className="text-muted" />
                   <span className="font-semibold">Productos de la guía</span>
@@ -535,7 +536,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                         const hayError = excedeTope || excedeStock;
                         return (
                           <tr key={l.id_detalle} className={hayError ? 'bg-red-50' : cant === 0 ? 'bg-yellow-50' : ''}>
-                            <td className="font-mono text-sm">{l.es_libre ? <span className="badge badge-warning text-[10px]">LIBRE</span> : l.codigo}</td>
+                            <td className="font-mono text-sm">{l.es_libre ? <span className="badge badge-warning vt-fs-10">LIBRE</span> : l.codigo}</td>
                             <td>
                               <div className="font-medium">{l.producto}</div>
                               {excedeTope && <div className="text-xs text-danger mt-1">Excede lo pendiente en la orden ({Math.max(0, tope).toFixed(2)})</div>}
@@ -551,7 +552,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                             </td>
                             <td className="text-right font-bold">{(cant * pu).toFixed(2)}</td>
                             <td className="text-center">
-                              {hayError ? <span className="badge badge-danger text-xs">Error</span> : cant === 0 ? <span className="text-muted text-xs">No se incluye</span> : <CheckCircle size={16} className="text-success mx-auto" />}
+                              {hayError ? <span className="badge badge-danger text-xs">Error</span> : cant === 0 ? <span className="text-muted text-xs">No se incluye</span> : <CheckCircle size={16} className="text-success vt-mx-auto" />}
                             </td>
                           </tr>
                         );

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Truck, Package, PackageCheck, CalendarDays, Clock, CheckCircle, XCircle, MapPin
+  ArrowLeft, Truck, Package, PackageCheck, CalendarDays, Clock, CheckCircle, XCircle, MapPin, FileCheck
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { ordenesVentaAPI } from '../../config/api';
-import { BadgeEstadoOrden, configTipoEntrega } from './estadosVentas';
+import { BadgeEstadoOrden, BadgeSee, configTipoEntrega } from './estadosVentas';
 import './Ventas.css';
 
 function SeguimientoVentaDetalle() {
@@ -149,6 +149,23 @@ function SeguimientoVentaDetalle() {
                   {orden.transporte_nombre && <div><span>Transportista</span><strong>{orden.transporte_nombre}</strong></div>}
                   <div className="wide"><span>Dirección de entrega</span><strong>{orden.direccion_entrega || '—'}</strong></div>
                 </div>
+
+                <h3 className="pg-section-title vt-mt"><FileCheck size={14} /> Guías de remisión <span className="pg-count">{(orden.guias_resumen || []).length}</span></h3>
+                {(orden.guias_resumen || []).length > 0 ? (
+                  <ul className="pg-list">
+                    {orden.guias_resumen.map(g => (
+                      <li key={g.id_guia}>
+                        <span className="pg-code">{g.serie_sunat && g.numero_sunat ? `${g.serie_sunat}-${g.numero_sunat}` : g.numero_guia}</span>
+                        <span className="pg-cell-sub"><CalendarDays size={11} />Traslado {formatearFechaVisual(g.fecha_traslado || g.fecha_emision)}</span>
+                        <span className="pg-list-push">
+                          <BadgeSee estado={g.sunat_estado} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="pg-empty-line">Esta orden aún no tiene guías de remisión.</p>
+                )}
               </div>
             </section>
 

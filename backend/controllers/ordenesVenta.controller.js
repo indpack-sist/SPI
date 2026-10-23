@@ -300,7 +300,7 @@ export async function getAllOrdenesVenta(req, res) {
     const idsPagina = (result.data || []).map(o => o.id_orden_venta).filter(Boolean);
     if (idsPagina.length > 0) {
       const placeholders = idsPagina.map(() => '?').join(',');
-      const [guiasResult, salidasResult] = await Promise.all([
+      const [guiasResult, salidasResult, facturasSeeResult] = await Promise.all([
         executeQuery(
           `SELECT id_orden_venta, numero_guia, serie_sunat, numero_sunat, sunat_estado
              FROM guias_remision
@@ -316,8 +316,28 @@ export async function getAllOrdenesVenta(req, res) {
               AND estado = 'Activo'
             ORDER BY id_salida`,
           idsPagina
+        ),
+        executeQuery(
+          `SELECT id_orden_venta, serie, numero, numero_factura, estado, sunat_estado
+             FROM facturas_venta
+            WHERE id_orden_venta IN (${placeholders})
+              AND estado <> 'Eliminada'
+              AND sunat_estado IS NOT NULL
+              AND (codigo_tipo_sunat IS NULL OR codigo_tipo_sunat NOT IN ('07','08'))
+            ORDER BY id_factura`,
+          idsPagina
         )
       ]);
+
+      const facturaSeePorOrden = new Map();
+      if (facturasSeeResult.success) {
+        for (const f of facturasSeeResult.data) {
+          facturaSeePorOrden.set(f.id_orden_venta, {
+            documento: f.serie && f.numero ? `${f.serie}-${f.numero}` : f.numero_factura,
+            sunat_estado: f.estado === 'Anulada' ? 'ANULADA' : f.sunat_estado
+          });
+        }
+      }
 
       const guiasPorOrden = new Map();
       if (guiasResult.success) {
@@ -345,6 +365,7 @@ export async function getAllOrdenesVenta(req, res) {
       for (const orden of result.data) {
         orden.guias = guiasPorOrden.get(orden.id_orden_venta) || [];
         orden.salidas_guia = salidasPorOrden.get(orden.id_orden_venta) || [];
+        orden.factura_see = facturaSeePorOrden.get(orden.id_orden_venta) || null;
       }
     }
 
@@ -450,7 +471,15 @@ export async function getOrdenVentaById(req, res) {
       ORDER BY COALESCE(NULLIF(dov.orden, 0), dov.id_detalle), dov.id_detalle
     `, [id, id]);
 
-    const [ordenResult, detalleResult] = await Promise.all([ordenPromise, detallePromise]);
+    const guiasPromise = executeQuery(`
+      SELECT id_guia, numero_guia, serie_sunat, numero_sunat, sunat_estado, estado, fecha_emision, fecha_traslado
+        FROM guias_remision
+       WHERE id_orden_venta = ?
+         AND estado <> 'Anulada'
+       ORDER BY id_guia
+    `, [id]);
+
+    const [ordenResult, detalleResult, guiasResult] = await Promise.all([ordenPromise, detallePromise, guiasPromise]);
 
     if (!ordenResult.success) {
       return res.status(500).json({
@@ -490,6 +519,7 @@ export async function getOrdenVentaById(req, res) {
       };
     });
     orden.mostrar_alerta_stock = mostrarAlertaStock;
+    orden.guias_resumen = guiasResult.success ? guiasResult.data : [];
 
     revisarPreciosFueraDeLista(id, { io: getIO(req), actorId: req.user?.id_empleado || null })
       .catch(error => console.error('Error al revisar precios fuera de lista:', error.message));

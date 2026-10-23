@@ -1,44 +1,36 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  Eye, 
+import {
+  Plus,
+  Eye,
   Edit,
-  ShoppingCart, 
-  Filter, 
-  TrendingUp, 
+  ShoppingCart,
+  Filter,
+  TrendingUp,
   Clock,
-  Truck, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  Download, 
-  User, 
-  UserCheck,
+  Truck,
+  Download,
   Search,
   ChevronLeft,
   ChevronRight,
   DollarSign,
-  CreditCard,
-  PlayCircle,
-  Factory,
   Shield,
   BadgeCheck,
   RefreshCcw,
   Calendar,
-  ArrowRightLeft,
   FileText,
   X,
   ChevronDown,
   Check
 } from 'lucide-react';
-import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
+import { BadgeEstadoOrden, BadgeEstadoPago, BadgeVerificacion, BadgeSee } from './estadosVentas';
+import './Ventas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
@@ -76,76 +68,49 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
   const active = selectedValues.length > 0;
 
   return (
-    <div className="form-group mb-0" ref={dropdownRef}>
-      <label className="form-label mb-1.5">{label}</label>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-10 px-3 text-sm border rounded-sm ${active ? 'font-bold' : ''}`}
-          style={{
-            backgroundColor: active ? 'rgba(232,184,75,0.1)' : 'var(--carbon-mid)',
-            borderColor: active ? 'var(--primary)' : 'var(--steel)',
-            color: active ? 'var(--primary)' : 'var(--mist)',
-            transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease'
-          }}
-        >
-          <span className="truncate mr-2 font-medium">{getLabelText()}</span>
-          <ChevronDown size={16} style={{ color: active ? 'var(--primary)' : 'var(--wire)', transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
-        </button>
+    <div className="pg-field vt-ms" ref={dropdownRef}>
+      <span className="pg-field-label">{label}</span>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`vt-ms-trigger ${active ? 'has-value' : ''}`}
+        aria-expanded={isOpen}
+      >
+        <span>{getLabelText()}</span>
+        <ChevronDown size={15} className={isOpen ? 'is-open' : ''} />
+      </button>
 
-        {isOpen && (
-          <div
-            className="absolute z-50 w-full mt-2 border rounded-sm overflow-hidden min-w-[220px]"
-            style={{ backgroundColor: 'var(--carbon-light)', borderColor: 'var(--steel)', boxShadow: 'var(--shadow-lg)' }}
-          >
-            <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
-              {options.map((opt) => {
-                const isSelected = selectedValues.includes(opt.value);
-                return (
-                  <div
-                    key={opt.value}
-                    onClick={(e) => handleToggle(e, opt.value)}
-                    className="flex items-center px-3 py-2.5 rounded-sm cursor-pointer transition-colors"
-                    style={{
-                      backgroundColor: isSelected ? 'rgba(232,184,75,0.1)' : undefined,
-                      color: isSelected ? 'var(--primary)' : 'var(--mist)'
-                    }}
-                  >
-                    <div className="flex items-center justify-center mr-3">
-                      <div
-                        className="w-5 h-5 border-2 rounded-sm flex items-center justify-center"
-                        style={{
-                          backgroundColor: isSelected ? 'var(--primary)' : 'var(--carbon)',
-                          borderColor: isSelected ? 'var(--primary)' : 'var(--steel)',
-                          transition: 'background-color 0.15s ease, border-color 0.15s ease'
-                        }}
-                      >
-                        {isSelected && <Check size={14} style={{ color: 'var(--carbon)' }} className="stroke-[4px]" />}
-                      </div>
-                    </div>
-                    <span className={`text-sm select-none ${isSelected ? 'font-bold' : 'font-medium'}`}>
-                      {opt.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {selectedValues.length > 0 && (
-              <div className="p-1 border-t" style={{ backgroundColor: 'var(--carbon)', borderColor: 'var(--steel)' }}>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onChange([]); }}
-                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger rounded-sm font-bold transition-colors flex items-center justify-center gap-2"
+      {isOpen && (
+        <div className="vt-ms-menu">
+          <div className="vt-ms-list">
+            {options.map((opt) => {
+              const isSelected = selectedValues.includes(opt.value);
+              return (
+                <div
+                  key={opt.value}
+                  onClick={(e) => handleToggle(e, opt.value)}
+                  className={`vt-ms-option ${isSelected ? 'on' : ''}`}
+                  role="checkbox"
+                  aria-checked={isSelected}
                 >
-                  <RefreshCcw size={12} />
-                  Limpiar selección
-                </button>
-              </div>
-            )}
+                  <span className="vt-ms-box">{isSelected && <Check size={12} />}</span>
+                  <span>{opt.label}</span>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+          {selectedValues.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange([]); }}
+              className="vt-ms-clear"
+            >
+              <RefreshCcw size={12} />
+              Limpiar selección
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 });
@@ -574,28 +539,6 @@ function OrdenesVenta() {
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
-  const getEstadoVerificacionConfig = (estadoVerif) => {
-    const configs = {
-      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pend. Verif.' },
-      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Aprobada' },
-      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada' }
-    };
-    return configs[estadoVerif] || configs['Pendiente'];
-  };
-
-  const getEstadoConfig = (estado) => {
-    const configs = {
-      'En Espera': { icono: Clock, clase: 'badge-warning', texto: 'En Espera' },
-      'En Proceso': { icono: PlayCircle, clase: 'badge-info', texto: 'En Proceso' },
-      'Atendido por Producción': { icono: Factory, clase: 'badge-primary', texto: 'Atendido' },
-      'Despacho Parcial': { icono: Truck, clase: 'badge-warning', texto: 'Desp. Parcial' },
-      'Despachada': { icono: Truck, clase: 'badge-primary', texto: 'Despachada' },
-      'Entregada': { icono: CheckCircle, clase: 'badge-success', texto: 'Entregada' },
-      'Cancelada': { icono: XCircle, clase: 'badge-danger', texto: 'Cancelada' }
-    };
-    return configs[estado] || configs['En Espera'];
-  };
-
   const getPrioridadConfig = (prioridad) => {
     const configs = {
       'Baja': { clase: 'badge-secondary' },
@@ -606,516 +549,436 @@ function OrdenesVenta() {
     return configs[prioridad] || configs['Media'];
   };
 
-  const getEstadoPagoConfig = (estadoPago) => {
-    const configs = {
-      'Pendiente': { clase: 'badge-warning', icono: Clock },
-      'Parcial': { clase: 'badge-info', icono: CreditCard },
-      'Pagado': { clase: 'badge-success', icono: CheckCircle }
-    };
-    return configs[estadoPago] || configs['Pendiente'];
+  const renderSunat = (row) => {
+    const value = row.facturado_sunat;
+    const tipo = String(row.tipo_comprobante || '').trim();
+
+    if (tipo === 'Nota de Venta' || tipo === 'Sin Comprobante' || tipo === '') {
+      return <span className="badge badge-secondary"><FileText size={11} />No amerita</span>;
+    }
+
+    if (value === 1) {
+      const numFacturas = Number(row.total_facturas || 0);
+      const totalFacturado = Number(row.total_facturado || 0);
+      const esSinImpuestoSunat = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
+        || Number(row.es_exportacion) === 1;
+      const totalParaCmp = esSinImpuestoSunat ? parseFloat(row.subtotal || 0) : parseFloat(row.total || 0);
+      const esParcial = totalFacturado > 0 && (totalParaCmp - totalFacturado) > 1;
+      return (
+        <div className="vt-sunat">
+          <span className={`badge ${esParcial ? 'badge-warning' : 'badge-success'}`}>
+            <BadgeCheck size={11} />
+            {esParcial ? 'Parcial' : 'Facturado'}
+          </span>
+          {row.factura_see && (
+            <span className="vt-see-line" title={`Último comprobante electrónico ${row.factura_see.documento || ''}`}>
+              <BadgeSee estado={row.factura_see.sunat_estado} />
+            </span>
+          )}
+          {numFacturas > 1 ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
+              className="vt-link-chip"
+              title="Ver todas las facturas de esta orden"
+            >
+              <FileText size={10} /> {numFacturas} facturas
+            </button>
+          ) : (
+            row.numero_comprobante_sunat && (
+              <span className="pg-code vt-sunat-num">{row.numero_comprobante_sunat}</span>
+            )
+          )}
+          {(numFacturas > 1 || row.comprobante_sunat_url) && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
+              className="vt-link-chip"
+              title={numFacturas > 1 ? 'Ver todas las facturas de esta orden' : 'Ver Detalle Factura SUNAT'}
+            >
+              <Eye size={10} /> {numFacturas > 1 ? 'Ver facturas' : 'Ver PDF'}
+            </button>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="vt-sunat">
+        <span className="badge badge-warning">
+          <Clock size={11} />
+          Pendiente
+        </span>
+        {row.factura_see && (
+          <span className="vt-see-line" title="Último comprobante electrónico">
+            <BadgeSee estado={row.factura_see.sunat_estado} />
+            {row.factura_see.documento && <span className="pg-code vt-sunat-num">{row.factura_see.documento}</span>}
+          </span>
+        )}
+      </div>
+    );
   };
 
-  const columns = [
-    {
-      header: 'Verificación',
-      accessor: 'estado_verificacion',
-      width: '120px',
-      align: 'center',
-      render: (value, row) => {
-        const config = getEstadoVerificacionConfig(value);
-        const Icono = config.icono;
-        return (
-          <div>
-            <span className={`badge ${config.clase} text-xs`}>
-              <Icono size={12} />
-              {config.texto}
-            </span>
-            {value === 'Aprobada' && row.verificado_por && (
-              <div className="text-[10px] text-muted mt-1">{row.verificado_por}</div>
-            )}
-            {value === 'Rechazada' && (
-              <div className="text-[10px] text-danger mt-1 font-semibold">Corregir</div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Comprobante / Orden',
-      accessor: 'numero_orden',
-      width: '200px',
-      render: (value, row) => {
-        const tipoRaw = row.tipo_comprobante || '';
-        const esFactura = tipoRaw.toLowerCase().includes('factura');
-        return (
-          <div>
-            <div className="flex items-center gap-1 mb-1.5">
-              <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
-                {tipoRaw || 'Sin Tipo'}
-              </span>
-              {!esFactura && row.numero_comprobante && (
-                <span className="font-mono text-xs text-mist bg-carbon-mid px-1.5 py-0.5 rounded border border-steel">
-                  {row.numero_comprobante}
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-muted">Ord: <span className="font-mono text-mist font-medium">{value}</span></div>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Fecha',
-      accessor: 'fecha_emision',
-      width: '110px',
-      render: (value) => <div className="font-medium text-mist">{formatearFechaVisual(value)}</div>
-    },
-    {
-      header: 'Cliente',
-      accessor: 'cliente',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium text-mist">{value}</div>
-          <div className="text-xs text-wire">RUC: {row.ruc_cliente}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Vendedor',
-      accessor: 'comercial',
-      width: '150px',
-      render: (value) => <div className="text-xs text-mist">{value || 'Sin asignar'}</div>
-    },
-    {
-      header: 'Total / Pagado',
-      accessor: 'total',
-      align: 'right',
-      width: '170px',
-      render: (value, row) => {
-        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
-          || Number(row.es_exportacion) === 1;
-        const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
-        const pagado = parseFloat(row.monto_pagado || 0);
-        const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
+  const correlativosGuia = (row) => {
+    const esFactura = String(row.tipo_comprobante || '').toLowerCase().includes('factura');
+    return esFactura
+      ? (row.guias || [])
+          .map((g) => (
+            String(g.sunat_estado || '').toUpperCase() === 'ACEPTADO' && g.serie_sunat && g.numero_sunat
+              ? `${g.serie_sunat}-${g.numero_sunat}`
+              : null
+          ))
+          .filter(Boolean)
+      : (row.salidas_guia || [])
+          .map((s) => s.guia_interna || null)
+          .filter(Boolean);
+  };
 
-        return (
-          <div>
-            <div className="font-bold text-mist">{formatearMoneda(total, row.moneda)}</div>
-            <div className="text-[10px] text-wire">PAGADO: {formatearMoneda(pagado, row.moneda)}</div>
-            <div className="w-full bg-carbon-mid rounded-full h-1 mt-1 overflow-hidden">
-              <div 
-                className={`h-full ${porcentaje >= 99 ? 'bg-success' : porcentaje > 0 ? 'bg-primary' : 'bg-steel'}`}
-                style={{ width: `${porcentaje}%` }}
-              ></div>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Pago',
-      accessor: 'estado_pago',
-      width: '100px',
-      align: 'center',
-      render: (value) => {
-        const config = getEstadoPagoConfig(value);
-        return <span className={`badge ${config.clase} text-[10px]`}>{value}</span>;
-      }
-    },
-    {
-      header: 'SUNAT',
-      accessor: 'facturado_sunat',
-      width: '100px',
-      align: 'center',
-      render: (value, row) => {
-        const tipo = String(row.tipo_comprobante || '').trim();
-        
-        if (tipo === 'Nota de Venta' || tipo === 'Sin Comprobante' || tipo === '') {
-           return <span className="text-[9px] font-black text-carbon-light uppercase tracking-widest bg-steel-light px-2 py-0.5 rounded">No amerita</span>;
-        }
-
-        if (value === 1) {
-          const numFacturas = Number(row.total_facturas || 0);
-          const totalFacturado = Number(row.total_facturado || 0);
-          const esSinImpuestoSunat = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
-            || Number(row.es_exportacion) === 1;
-          const totalParaCmp = esSinImpuestoSunat ? parseFloat(row.subtotal || 0) : parseFloat(row.total || 0);
-          const esParcial = totalFacturado > 0 && (totalParaCmp - totalFacturado) > 1;
-          return (
-            <div className="flex flex-col items-center gap-1.5">
-              <span className={`flex items-center gap-1 font-black text-[9px] uppercase tracking-widest ${esParcial ? 'text-warning' : 'text-success'}`}>
-                <BadgeCheck size={12} className={esParcial ? 'text-warning' : 'text-success'} />
-                {esParcial ? 'Parcial' : 'Facturado'}
-              </span>
-              {numFacturas > 1 ? (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
-                  className="badge badge-info cursor-pointer text-sm"
-                  title="Ver todas las facturas de esta orden"
-                >
-                  {numFacturas} facturas
-                </button>
-              ) : (
-                row.numero_comprobante_sunat && (
-                  <span className="font-mono text-[9px] text-mist">
-                    {row.numero_comprobante_sunat}
-                  </span>
-                )
-              )}
-              {(numFacturas > 1 || row.comprobante_sunat_url) && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
-                  className="mt-1.5 flex items-center justify-center btn-sunat-viewer px-3 py-1 rounded shadow-sm group"
-                  title={numFacturas > 1 ? 'Ver todas las facturas de esta orden' : 'Ver Detalle Factura SUNAT'}
-                >
-                  <Eye size={12} className="group-hover:scale-110 transition-transform" />
-                  <span className="ml-1 text-[8px] font-bold uppercase tracking-tighter">{numFacturas > 1 ? 'Ver facturas' : 'Ver PDF'}</span>
-                </button>
-              )}
-            </div>
-          );
-        }
-        return (
-          <span className="flex items-center justify-center gap-1 text-warning text-[9px] font-black uppercase tracking-widest">
-            <Clock size={11} />
-            Pendiente
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Logística',
-      accessor: 'estado',
-      width: '170px',
-      align: 'center',
-      render: (value, row) => {
-        const config = getEstadoConfig(value);
-        const esFactura = String(row.tipo_comprobante || '').toLowerCase().includes('factura');
-        const correlativos = esFactura
-          ? (row.guias || [])
-              .map((g) => (
-                String(g.sunat_estado || '').toUpperCase() === 'ACEPTADO' && g.serie_sunat && g.numero_sunat
-                  ? `${g.serie_sunat}-${g.numero_sunat}`
-                  : null
-              ))
-              .filter(Boolean)
-          : (row.salidas_guia || [])
-              .map((s) => s.guia_interna || null)
-              .filter(Boolean);
-
-        return (
-          <div className="flex flex-col items-center justify-center gap-1.5 h-full">
-            <span className={`badge ${config.clase} text-[10px]`}>{config.texto}</span>
-            {correlativos.length > 0 && (
-              <div className="flex flex-col items-center gap-0.5">
-                {correlativos.map((c, i) => (
-                  <span key={i} className="flex items-center gap-1 font-mono text-[9px] text-mist" title="Guía de remisión">
-                    <Truck size={10} className="text-wire" />
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_orden_venta',
-      width: '120px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="flex gap-1 justify-center">
-          <button className="btn btn-xs btn-primary p-1.5" onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }} title="Ver"><Eye size={14} /></button>
-          <button className="btn btn-xs btn-outline p-1.5 border-steel" onClick={(e) => { e.stopPropagation(); navigate(`/ventas/ordenes/${value}/editar`); }} title="Editar" disabled={row.estado_verificacion === 'Pendiente'}><Edit size={14} /></button>
-          <button className="btn btn-xs btn-outline p-1.5 border-steel" onClick={(e) => { e.stopPropagation(); handleDescargarPDF(value, row.numero_orden, row.cliente); }} disabled={descargandoPDF === value} title="PDF">
-            {descargandoPDF === value ? <RefreshCcw size={14} className="animate-spin" /> : <Download size={14} />}
-          </button>
-        </div>
-      )
-    }
-  ];
-
-  const columnasFinancieras = ['total', 'estado_pago', 'facturado_sunat'];
-  const columnasVisibles = verFinanzas
-    ? columns
-    : columns
-        .filter((c) => !columnasFinancieras.includes(c.accessor))
-        .map((c) =>
-          c.accessor === 'id_orden_venta'
-            ? {
-                ...c,
-                render: (value) => (
-                  <div className="flex gap-1 justify-center">
-                    <button
-                      className="btn btn-xs btn-primary p-1.5"
-                      onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }}
-                      title="Ver"
-                    >
-                      <Eye size={14} />
-                    </button>
-                  </div>
-                )
-              }
-            : c
-        );
+  const totalColumnas = verFinanzas ? 10 : 7;
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="pg-page vt-page">
       {loading && <Loading variant="table" />}
-      
-      <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
 
-        <div className="flex flex-row justify-between items-start gap-4 mb-6">
-          <div className="flex flex-col gap-3">
-            <div>
-              <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                <div className="p-2 bg-primary/10 rounded-sm"><ShoppingCart size={28} className="text-primary" /></div>
-                <span className="uppercase font-barlow text-heading">Órdenes de Venta</span>
-              </h1>
-              <p className="text-[0.7rem] uppercase tracking-[0.2em] mt-1" style={{ color: 'var(--wire)' }}>Gestión de operaciones comerciales</p>
+      <div className={`vt-fade ${loading ? 'is-hidden' : ''}`}>
+        <header className="pg-header">
+          <div>
+            <span className="pg-eyebrow"><ShoppingCart size={13} /> Ventas</span>
+            <h1 className="pg-title">Órdenes de venta</h1>
+            <p className="pg-subtitle">
+              Gestión de operaciones comerciales · <Calendar size={12} className="vt-inline-icon" /> Período: <b>{textoFechaPeriodo}</b>
+            </p>
+          </div>
+          {!soloLectura && (
+            <div className="pg-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => navigate('/ventas/ordenes/verificacion')}
+              >
+                <Shield size={16} /> Verificación
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => navigate('/ventas/ordenes/nueva')}
+              >
+                <Plus size={16} /> Nueva orden
+              </button>
             </div>
-            {!soloLectura && (
-              <div className="flex gap-3">
+          )}
+        </header>
+
+        <div className="pg-stack">
+          {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+          {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+          {verFinanzas && estadisticas && (
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><TrendingUp size={16} /> Resumen general</h2>
                 <button
-                  className="btn btn-outline font-black text-sm tracking-widest h-12 px-6 shadow-xl"
-                  style={{ borderColor: 'var(--steel)', color: 'var(--mist)' }}
-                  onClick={() => navigate('/ventas/ordenes/verificacion')}
+                  type="button"
+                  onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
+                  className="btn btn-outline btn-sm"
+                  aria-expanded={mostrarEstadisticas}
                 >
-                  <Shield size={20} /> VERIFICACIÓN
+                  {mostrarEstadisticas ? 'Ocultar resumen' : 'Ver resumen general'}
+                  <ChevronDown size={14} className={`vt-chevron ${mostrarEstadisticas ? 'is-open' : ''}`} />
                 </button>
+              </div>
+
+              {mostrarEstadisticas && (
+                <div className="pg-panel-body">
+                  <div className="pg-kpis">
+                    {[
+                      { label: 'Facturas · PEN', valor: estadisticas.facturas_pen, moneda: 'PEN', tono: 'is-accent', icon: FileText },
+                      { label: 'Facturas · USD', valor: estadisticas.facturas_usd, moneda: 'USD', tono: 'is-accent', icon: FileText },
+                      { label: 'N. venta · PEN', valor: estadisticas.notas_venta_pen, moneda: 'PEN', tono: 'is-info', icon: FileText },
+                      { label: 'N. venta · USD', valor: estadisticas.notas_venta_usd, moneda: 'USD', tono: 'is-info', icon: FileText },
+                      { label: 'Sin compr. · PEN', valor: estadisticas.sin_comprobante_pen, moneda: 'PEN', tono: 'is-warning', icon: DollarSign },
+                      { label: 'Sin compr. · USD', valor: estadisticas.sin_comprobante_usd, moneda: 'USD', tono: 'is-warning', icon: DollarSign }
+                    ].map(k => (
+                      <div key={k.label} className={`pg-kpi ${k.tono}`}>
+                        <div className="pg-kpi-top">
+                          <span className="pg-kpi-label">{k.label}</span>
+                          <span className="pg-kpi-icon"><k.icon size={16} /></span>
+                        </div>
+                        <span className="pg-kpi-value">{formatearMoneda(k.valor || 0, k.moneda)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="pg-panel">
+            <div className="pg-filters">
+              <div className="pg-filters-row">
+                <div className="pg-field pg-field-grow pg-search">
+                  <label className="pg-field-label" htmlFor="vt-ov-busqueda">Buscar</label>
+                  <Search size={14} />
+                  <input id="vt-ov-busqueda" type="search" className="form-input" placeholder="N°, cliente, RUC" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                </div>
+                <div className="pg-field">
+                  <label className="pg-field-label" htmlFor="vt-ov-desde">Desde</label>
+                  <input
+                    id="vt-ov-desde"
+                    type="date"
+                    className="form-input vt-date"
+                    value={fechaInicio}
+                    onChange={handleFechaInicioChange}
+                  />
+                </div>
+                <div className="pg-field">
+                  <label className="pg-field-label" htmlFor="vt-ov-hasta">Hasta</label>
+                  <input
+                    id="vt-ov-hasta"
+                    type="date"
+                    className="form-input vt-date"
+                    value={fechaFin}
+                    onChange={handleFechaFinChange}
+                  />
+                </div>
                 <button
-                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl btn-press"
-                  onClick={() => navigate('/ventas/ordenes/nueva')}
+                  type="button"
+                  onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)}
+                  className={`btn ${mostrarFiltrosAvanzados ? 'btn-secondary' : 'btn-outline'}`}
+                  style={{ height: 38 }}
+                  aria-expanded={mostrarFiltrosAvanzados}
                 >
-                  <Plus size={22} /> NUEVA ORDEN
+                  <Filter size={15} /> {mostrarFiltrosAvanzados ? 'Cerrar filtros' : 'Más filtros'}
+                </button>
+                <button type="button" onClick={limpiarFiltros} className="btn btn-ghost" style={{ height: 38 }} title="Limpiar todos los filtros">
+                  <X size={15} /> Limpiar
                 </button>
               </div>
-            )}
-          </div>
 
-          <div className="flex flex-col items-end gap-1 shrink-0 pt-1">
-            <span className="text-[0.55rem] font-black uppercase tracking-[0.25em]" style={{ color: 'var(--wire)' }}>Período filtrado</span>
-            <div className="flex items-center gap-2 px-4 py-2.5 border rounded-sm shadow-inner" style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.5)' }}>
-              <Calendar size={16} className="text-primary" />
-              <span className="text-sm font-black tracking-widest uppercase" style={{ color: 'var(--mist)' }}>
-                {textoFechaPeriodo}
-              </span>
+              {mostrarFiltrosAvanzados && (
+                <div className="vt-filters-grid vt-filters-more">
+                  <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
+                    { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
+                  ]} />
+                  {verFinanzas && (
+                    <FilterCheckboxGroup label="Estado Pago" selectedValues={filtroEstadoPago} onChange={setFiltroEstadoPago} options={[
+                      { label: 'Sin Pagar', value: 'Pendiente' }, { label: 'Pago Parcial', value: 'Parcial' }, { label: 'Pagado', value: 'Pagado' }
+                    ]} />
+                  )}
+                  <FilterCheckboxGroup label="Verificación" selectedValues={filtroVerificacion} onChange={setFiltroVerificacion} options={[
+                    { label: 'Aprobadas', value: 'Aprobada' }, { label: 'Pendientes', value: 'Pendiente' }, { label: 'Rechazadas', value: 'Rechazada' }
+                  ]} />
+                  <FilterCheckboxGroup label="Documento" selectedValues={filtroTipoComprobante} onChange={setFiltroTipoComprobante} options={[
+                    { label: 'Facturas', value: 'Factura' }, { label: 'Notas de Venta', value: 'Nota de Venta' }, { label: 'Sin Comprobante', value: 'Sin Comprobante' }
+                  ]} />
+                  {verFinanzas && (
+                    <FilterCheckboxGroup label="Estado SUNAT" selectedValues={filtroEstadoSunat} onChange={setFiltroEstadoSunat} options={[
+                      { label: 'Facturado', value: 'Facturado' }, { label: 'Pendiente', value: 'Pendiente' }, { label: 'No amerita', value: 'No Amerita' }
+                    ]} />
+                  )}
+                  <FilterCheckboxGroup label="Vendedor" selectedValues={filtroVendedor} onChange={setFiltroVendedor} options={[
+                    { label: 'JOHANNA VALLE TORRES', value: '12' }, { label: 'YESSICA GABY ORDOÑEZ PEREZ', value: '13' }, { label: 'VALESHKA BETSABETH LAZARO COLMENARES', value: '20' }
+                  ]} />
+                  <FilterCheckboxGroup label="Moneda" selectedValues={filtroMoneda} onChange={setFiltroMoneda} options={[
+                    { label: 'Soles (PEN)', value: 'PEN' }, { label: 'Dólares (USD)', value: 'USD' }
+                  ]} />
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+          </section>
 
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
-
-        {verFinanzas && estadisticas && (
-          <div className="flex flex-col items-center mb-6">
-            <button
-  onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
-  className="flex items-center gap-2 h-11 px-6 btn btn-outline font-black text-[0.7rem] tracking-widest"
-  style={{ borderColor: 'var(--steel)', color: 'var(--mist)', transition: 'border-color 0.15s ease, color 0.15s ease' }}
->
-  <TrendingUp size={16} className={mostrarEstadisticas ? 'text-primary' : ''} />
-  {mostrarEstadisticas ? 'OCULTAR RESUMEN' : 'VER RESUMEN GENERAL'}
-  <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarEstadisticas ? 'rotate-180 text-primary' : ''}`} />
-</button>
-
-            {mostrarEstadisticas && (
-              <div className="stats-grid mt-4 w-full" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(46,204,113,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">FACTURAS (PEN)</p>
-                    <p className="stat-value text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(232,184,75,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">FACTURAS (USD)</p>
-                    <p className="stat-value text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(93,173,226,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">N. VENTA (PEN)</p>
-                    <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(93,173,226,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">N. VENTA (USD)</p>
-                    <p className="stat-value text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(243,156,18,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">SIN COMPR. (PEN)</p>
-                    <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid rgba(243,156,18,0.5)' }}>
-                  <div className="stat-content">
-                    <p className="stat-label">SIN COMPR. (USD)</p>
-                    <p className="stat-value text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="card mb-4 shadow-xl" style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.3)' }}>
-          <div className="card-body p-4">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--wire)' }} />
-                <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-              </div>
-
-              <div className="flex gap-2">
-                <input 
-                  type="date" 
-                  className="form-input text-xs h-11 w-36" 
-                  value={fechaInicio} 
-                  onChange={handleFechaInicioChange} 
-                />
-                <input 
-                  type="date" 
-                  className="form-input text-xs h-11 w-36" 
-                  value={fechaFin} 
-                  onChange={handleFechaFinChange} 
-                />
-                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline'}`} style={{ borderColor: mostrarFiltrosAvanzados ? undefined : 'var(--steel)', transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease' }}>
-                  <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
-                </button>
-                <button onClick={limpiarFiltros} className="btn btn-outline text-danger h-11 px-3" style={{ borderColor: 'var(--steel)' }} title="Limpiar todos los filtros"><X size={18} /></button>
-              </div>
+          <section className="pg-panel vt-busy-host" ref={tablaRef}>
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><ShoppingCart size={16} /> Lista de órdenes <span className="pg-count">{pagination.total}</span></h2>
+              <span className="pg-panel-meta">Mostrando {currentItems.length} registros · pulsa una fila para ver el detalle</span>
             </div>
 
-            {mostrarFiltrosAvanzados && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'rgba(58,58,58,0.2)' }}>
-                <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
-                  { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
-                ]} />
-                {verFinanzas && (
-                  <FilterCheckboxGroup label="Estado Pago" selectedValues={filtroEstadoPago} onChange={setFiltroEstadoPago} options={[
-                    { label: 'Sin Pagar', value: 'Pendiente' }, { label: 'Pago Parcial', value: 'Parcial' }, { label: 'Pagado', value: 'Pagado' }
-                  ]} />
-                )}
-                <FilterCheckboxGroup label="Verificación" selectedValues={filtroVerificacion} onChange={setFiltroVerificacion} options={[
-                  { label: 'Aprobadas', value: 'Aprobada' }, { label: 'Pendientes', value: 'Pendiente' }, { label: 'Rechazadas', value: 'Rechazada' }
-                ]} />
-                <FilterCheckboxGroup label="Documento" selectedValues={filtroTipoComprobante} onChange={setFiltroTipoComprobante} options={[
-                  { label: 'Facturas', value: 'Factura' }, { label: 'Notas de Venta', value: 'Nota de Venta' }, { label: 'Sin Comprobante', value: 'Sin Comprobante' }
-                ]} />
-                {verFinanzas && (
-                  <FilterCheckboxGroup label="Estado SUNAT" selectedValues={filtroEstadoSunat} onChange={setFiltroEstadoSunat} options={[
-                    { label: 'Facturado', value: 'Facturado' }, { label: 'Pendiente', value: 'Pendiente' }, { label: 'No amerita', value: 'No Amerita' }
-                  ]} />
-                )}
-                <FilterCheckboxGroup label="Vendedor" selectedValues={filtroVendedor} onChange={setFiltroVendedor} options={[
-                  { label: 'JOHANNA VALLE TORRES', value: '12' }, { label: 'YESSICA GABY ORDOÑEZ PEREZ', value: '13' }, { label: 'VALESHKA BETSABETH LAZARO COLMENARES', value: '20' }
-                ]} />
-                <FilterCheckboxGroup label="Moneda" selectedValues={filtroMoneda} onChange={setFiltroMoneda} options={[
-                  { label: 'Soles (PEN)', value: 'PEN' }, { label: 'Dólares (USD)', value: 'USD' }
-                ]} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="card list-panel relative" ref={tablaRef}>
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-sm text-xs">{pagination.total}</span></h2>
-            <div className="text-[0.6rem] font-bold uppercase tracking-widest" style={{ color: 'var(--wire)' }}>Mostrando {currentItems.length} registros</div>
-          </div>
-
-          <div className="card-body p-0 relative">
             {isFiltering && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,15,15,0.8)', backdropFilter: 'blur(4px)', transition: 'opacity 0.3s ease' }}>
-                <div className="flex flex-col items-center gap-3 p-8 rounded-sm" style={{ backgroundColor: 'var(--carbon-light)', border: '1px solid var(--steel)', boxShadow: 'var(--shadow-lg)' }}>
-                  <RefreshCcw size={32} className="animate-spin text-primary" />
-                  <span className="text-[0.6rem] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--wire)' }}>Procesando</span>
-                </div>
+              <div className="vt-busy" role="status">
+                <RefreshCcw size={24} className="animate-spin" />
+                <span>Procesando</span>
               </div>
             )}
-            <div className="table-container">
-              <Table columns={columnasVisibles} data={currentItems} emptyMessage="No hay registros con los filtros aplicados" onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)} />
+
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th className="center">Verificación</th>
+                    <th>Comprobante / Orden</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Vendedor</th>
+                    {verFinanzas && <th className="num">Total / Pagado</th>}
+                    {verFinanzas && <th className="center">Pago</th>}
+                    {verFinanzas && <th className="center">SUNAT</th>}
+                    <th className="center">Logística</th>
+                    <th className="center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.length > 0 ? currentItems.map(row => {
+                    const value = row.id_orden_venta;
+                    const tipoRaw = row.tipo_comprobante || '';
+                    const esFactura = tipoRaw.toLowerCase().includes('factura');
+                    const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase())
+                      || Number(row.es_exportacion) === 1;
+                    const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(row.total || 0);
+                    const pagado = parseFloat(row.monto_pagado || 0);
+                    const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
+                    const correlativos = correlativosGuia(row);
+                    return (
+                      <tr key={value} className="is-clickable" onClick={() => handleNavegaDetalle(value)}>
+                        <td className="center">
+                          <BadgeVerificacion estado={row.estado_verificacion} />
+                          {row.estado_verificacion === 'Aprobada' && row.verificado_por && (
+                            <span className="pg-cell-sub">{row.verificado_por}</span>
+                          )}
+                          {row.estado_verificacion === 'Rechazada' && (
+                            <span className="pg-cell-sub vt-text-danger">Corregir</span>
+                          )}
+                        </td>
+                        <td className="nowrap">
+                          <span className="pg-cell-main">
+                            <span className={`badge badge-sm ${esFactura ? 'badge-success' : 'badge-info'}`}>
+                              {tipoRaw || 'Sin Tipo'}
+                            </span>
+                            {!esFactura && row.numero_comprobante && (
+                              <span className="pg-tag vt-ml">{row.numero_comprobante}</span>
+                            )}
+                          </span>
+                          <span className="pg-cell-sub">Ord: <span className="pg-code">{row.numero_orden}</span></span>
+                        </td>
+                        <td className="nowrap">{formatearFechaVisual(row.fecha_emision)}</td>
+                        <td>
+                          <span className="pg-cell-main pg-truncate" title={row.cliente}>{row.cliente}</span>
+                          <span className="pg-cell-sub">RUC {row.ruc_cliente}</span>
+                        </td>
+                        <td>{row.comercial || <span className="pg-muted">Sin asignar</span>}</td>
+                        {verFinanzas && (
+                          <td className="num">
+                            <span className="vt-amount">{formatearMoneda(total, row.moneda)}</span>
+                            <span className="pg-cell-sub">Pagado {formatearMoneda(pagado, row.moneda)}</span>
+                            <div className="pg-meter" style={{ '--meter-c': porcentaje >= 99 ? 'var(--success)' : 'var(--accent)' }} title={`${porcentaje.toFixed(0)}% pagado`}>
+                              <span style={{ width: `${Math.min(100, porcentaje)}%` }} />
+                            </div>
+                          </td>
+                        )}
+                        {verFinanzas && (
+                          <td className="center"><BadgeEstadoPago estado={row.estado_pago} /></td>
+                        )}
+                        {verFinanzas && (
+                          <td className="center" onClick={(e) => e.stopPropagation()}>{renderSunat(row)}</td>
+                        )}
+                        <td className="center">
+                          <BadgeEstadoOrden estado={row.estado} />
+                          {correlativos.length > 0 && (
+                            <div className="vt-guias vt-guias-center">
+                              {correlativos.map((c, i) => (
+                                <span key={i} className="vt-guia" title="Guía de remisión">
+                                  <Truck size={10} className="pg-muted" />
+                                  <span className="pg-code">{c}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="center" onClick={(e) => e.stopPropagation()}>
+                          <div className="pg-rowactions">
+                            <button type="button" className="pg-iconbtn" onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }} title="Ver" aria-label={`Ver ${row.numero_orden}`}><Eye size={15} /></button>
+                            {verFinanzas && (
+                              <>
+                                <button type="button" className="pg-iconbtn" onClick={(e) => { e.stopPropagation(); navigate(`/ventas/ordenes/${value}/editar`); }} title="Editar" aria-label={`Editar ${row.numero_orden}`} disabled={row.estado_verificacion === 'Pendiente'}><Edit size={15} /></button>
+                                <button type="button" className="pg-iconbtn" onClick={(e) => { e.stopPropagation(); handleDescargarPDF(value, row.numero_orden, row.cliente); }} disabled={descargandoPDF === value} title="PDF" aria-label={`Descargar PDF de ${row.numero_orden}`}>
+                                  {descargandoPDF === value ? <RefreshCcw size={15} className="animate-spin" /> : <Download size={15} />}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={totalColumnas}>
+                        <div className="pg-empty">
+                          <ShoppingCart size={28} />
+                          <strong>No hay registros con los filtros aplicados</strong>
+                          <span>Cambia la búsqueda, las fechas o los filtros avanzados.</span>
+                          <button type="button" className="btn btn-outline btn-sm" onClick={limpiarFiltros}><X size={14} /> Limpiar filtros</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
 
-          {pagination.total > itemsPerPage && (
-            <div className="px-4 sm:px-6 py-4 border-t flex flex-col lg:flex-row items-center justify-between gap-4 relative z-20"
-              style={{ backgroundColor: 'var(--carbon-mid)', borderColor: 'rgba(58,58,58,0.3)' }}>
-              <div className="text-[0.7rem] font-medium tracking-wide order-2 lg:order-1 flex items-center gap-1.5" style={{ color: 'var(--wire)' }}>
-                <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + 1}</span>
-                <span style={{ color: 'var(--steel)' }}>–</span>
-                <span className="text-primary font-bold">{(currentPage - 1) * itemsPerPage + currentItems.length}</span>
-                <span style={{ color: 'var(--steel)' }}>de</span>
-                <span className="font-bold" style={{ color: 'var(--mist)' }}>{pagination.total}</span>
-                <span className="uppercase tracking-widest text-[0.6rem]">ordenes</span>
-              </div>
+            {pagination.total > itemsPerPage && (
+              <div className="pg-pager">
+                <span>
+                  <b>{(currentPage - 1) * itemsPerPage + 1}</b>–<b>{(currentPage - 1) * itemsPerPage + currentItems.length}</b> de <b>{pagination.total}</b> órdenes
+                </span>
 
-              <div className="flex items-center gap-1.5 order-1 lg:order-2">
-                <button
-                  className="pagination-nav-btn"
-                  onClick={goToPrevPage}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft size={16} /> <span className="hidden sm:inline">ANTERIOR</span>
-                </button>
-                <div className="flex items-center gap-1 mx-1">
+                <div className="pg-pager-nav">
+                  <button
+                    type="button"
+                    className="pagination-nav-btn"
+                    onClick={goToPrevPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft size={15} /> Anterior
+                  </button>
                   {getPageNumbers().map((num, idx) => (
                     num === '...'
-                      ? <span key={`ell-${idx}`} className="w-8 h-9 flex items-center justify-center font-bold select-none" style={{ color: 'var(--steel)' }}>···</span>
+                      ? <span key={`ell-${idx}`} className="pg-muted">…</span>
                       : (
                         <button
+                          type="button"
                           key={`pg-${num}`}
                           onClick={() => setCurrentPage(num)}
                           className={`pagination-page-btn ${currentPage === num ? 'active' : ''}`}
+                          aria-current={currentPage === num ? 'page' : undefined}
                         >
                           {num}
                         </button>
                       )
                   ))}
+                  <button
+                    type="button"
+                    className="pagination-nav-btn"
+                    onClick={goToNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente <ChevronRight size={15} />
+                  </button>
                 </div>
-                <button
-                  className="pagination-nav-btn"
-                  onClick={goToNextPage}
-                  disabled={currentPage === totalPages}
-                >
-                  <span className="hidden sm:inline">SIGUIENTE</span> <ChevronRight size={16} />
-                </button>
-              </div>
 
-              <div className="flex items-center gap-2 order-3">
-                <span className="text-[0.6rem] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--wire)' }}>Ir a</span>
-                <input
-                  type="number" min="1" max={totalPages} value={inputPage}
-                  onChange={(e) => setInputPage(e.target.value)}
-                  onKeyDown={handlePageJump}
-                  onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }}
-                  className="form-input w-14 h-9 text-center text-sm font-bold text-primary rounded-sm"
-                />
-                <span className="text-[0.6rem] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--wire)' }}>/ {totalPages}</span>
+                <label className="vt-page-jump">
+                  Ir a
+                  <input
+                    type="number" min="1" max={totalPages} value={inputPage}
+                    onChange={(e) => setInputPage(e.target.value)}
+                    onKeyDown={handlePageJump}
+                    onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }}
+                    className="form-input"
+                  />
+                  / {totalPages}
+                </label>
               </div>
-            </div>
-          )}
+            )}
+          </section>
         </div>
       </div>
 
       <Modal isOpen={visorArchivo.isOpen} onClose={() => setVisorArchivo({ isOpen: false, url: null, titulo: '' })} title={visorArchivo.titulo}>
-        <div className="flex flex-col h-[75vh]">
+        <div className="vt-visor">
           {visorArchivo.url ? (
             <iframe
               src={visorArchivo.url}
               title={visorArchivo.titulo}
-              className="w-full h-full border-0 rounded"
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-wire">Documento no disponible</div>
+            <div className="pg-empty">Documento no disponible</div>
           )}
         </div>
       </Modal>

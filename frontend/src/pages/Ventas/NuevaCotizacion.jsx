@@ -5,7 +5,7 @@ import {
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
   Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin, 
-  Package, Check, ChevronDown, ChevronUp, GripVertical
+  Package, Check, ChevronDown, ChevronUp, GripVertical, FlaskConical
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -15,6 +15,7 @@ import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, tipoCambioAPI, listasPreciosAPI } from '../../config/api';
 
 import { useAuth } from '../../context/AuthContext';
+import './Ventas.css';
 import useReordenarFilas from '../../hooks/useReordenarFilas';
 
 const TIPOS_IMPUESTO = [
@@ -892,31 +893,33 @@ setFormCabecera(prev => ({
   const subtituloFormulario = modoEdicion ? 'Modificar cotizacion existente' : modoDuplicar ? 'Crear nueva cotizacion basada en una existente' : 'Emitir cotizacion de venta al cliente';
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-4 mb-6">
-        <button className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
-          <ArrowLeft size={20} />
-        </button>
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText size={32} />
-            {tituloFormulario}
-            {esMuestra && (
-              <span className="badge badge-warning ml-2 text-xs font-bold uppercase tracking-wide">
-                Muestra
-              </span>
-            )}
-            {cotizacionConvertida && (
-              <span className="badge badge-primary ml-2">
-                <Lock size={14} className="inline mr-1" />
-                Convertida
-              </span>
-            )}
-          </h1>
-          <p className="text-muted">{subtituloFormulario}</p>
+          <button type="button" className="btn btn-ghost btn-sm vt-back" onClick={() => navigate('/ventas/cotizaciones')}>
+            <ArrowLeft size={15} /> Volver a cotizaciones
+          </button>
+          <span className="pg-eyebrow"><FileText size={13} /> Cotizaciones</span>
+          <h1 className="pg-title">{tituloFormulario}</h1>
+          {(esMuestra || cotizacionConvertida) && (
+            <div className="pg-drawer-badges">
+              {esMuestra && (
+                <span className="badge badge-warning">
+                  <FlaskConical size={11} />Muestra
+                </span>
+              )}
+              {cotizacionConvertida && (
+                <span className="badge badge-primary">
+                  <Lock size={11} />Convertida
+                </span>
+              )}
+            </div>
+          )}
+          <p className="pg-subtitle">{subtituloFormulario}</p>
         </div>
-      </div>
+      </header>
 
+      <div className="pg-stack">
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
@@ -939,15 +942,15 @@ setFormCabecera(prev => ({
         />
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <Building size={20} />
+      <form onSubmit={handleSubmit} className="pg-stack">
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title">
+              <Building size={16} />
               Cliente *
             </h2>
           </div>
-          <div className="card-body">
+          <div className="pg-panel-body">
             {clienteSeleccionado ? (
               <div className="flex flex-col gap-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -989,7 +992,7 @@ setFormCabecera(prev => ({
                       <div className="grid grid-cols-2 gap-1 text-xs">
                         <span className="text-muted">Limite:</span> <span className="font-bold text-right">S/ {formatearNumero(estadoCredito.credito_pen.limite)}</span>
                         <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">S/ {formatearNumero(estadoCredito.credito_pen.utilizado)}</span>
-                        <div className="col-span-2 border-t my-1"></div>
+                        <div className="vt-span-full vt-divider"></div>
                         <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">S/ {formatearNumero(estadoCredito.credito_pen.disponible)}</span>
                       </div>
                     </div>
@@ -1000,7 +1003,7 @@ setFormCabecera(prev => ({
                       <div className="grid grid-cols-2 gap-1 text-xs">
                         <span className="text-muted">Limite:</span> <span className="font-bold text-right">$ {formatearNumero(estadoCredito.credito_usd.limite)}</span>
                         <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">$ {formatearNumero(estadoCredito.credito_usd.utilizado)}</span>
-                        <div className="col-span-2 border-t my-1"></div>
+                        <div className="vt-span-full vt-divider"></div>
                         <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">$ {formatearNumero(estadoCredito.credito_usd.disponible)}</span>
                       </div>
                     </div>
@@ -1025,17 +1028,17 @@ setFormCabecera(prev => ({
               </button>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <Calendar size={20} />
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title">
+              <Calendar size={16} />
               Datos de la Cotizacion
             </h2>
           </div>
-          <div className="card-body">
-            <div className="grid grid-cols-3 gap-4">
+          <div className="pg-panel-body">
+            <div className="vt-form-grid">
               <div className="form-group">
                 <label className="form-label">Fecha de Emision *</label>
                 <input
@@ -1069,7 +1072,6 @@ setFormCabecera(prev => ({
                       className="form-input"
                       value={fechaVencimientoCalculada}
                       readOnly
-                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                     />
                     <small className="text-muted block mt-1">
                       <Info size={12} className="inline" /> Se calcula automaticamente
@@ -1226,7 +1228,7 @@ setFormCabecera(prev => ({
                   ))}
                 </select>
               </div>
-              <div className="form-group col-span-3">
+              <div className="form-group vt-span-full">
                 <label className="form-label">Vendedor/Comercial</label>
                 <select
                   className="form-select"
@@ -1301,45 +1303,49 @@ setFormCabecera(prev => ({
 
             {esMuestra && (
               <div className="form-group mt-2">
-                <div className="px-4 py-3 rounded-lg border-2 border-amber-300 bg-amber-50 text-sm text-amber-800">
-                  <span className="font-semibold">Cotización de Muestra (histórica).</span>{' '}
-                  Las nuevas muestras se crean desde <span className="font-semibold">Órdenes de Venta → Orden de Muestra</span>.
+                <div className="vt-note is-warning">
+                  <FlaskConical size={16} />
+                  <div>
+                    <strong>Cotización de Muestra (histórica).</strong>
+                    <p>Las nuevas muestras se crean desde <b>Órdenes de Venta → Orden de Muestra</b>.</p>
+                  </div>
                 </div>
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {listasPreciosCliente.length > 0 && !cotizacionConvertida && (
-          <div className="card mb-4 animate-fadeIn">
-            <div className="card-header flex justify-between items-center">
-              <h2 className="card-title text-primary">
-                <Package size={20} /> Listas de Precios
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title">
+                <Package size={16} /> Listas de Precios
               </h2>
-              <div className="relative w-64">
-                <input 
-                  type="text" 
-                  className="form-input form-input-sm pl-8" 
-                  placeholder="Buscar lista..." 
+              <div className="pg-search vt-lista-search">
+                <Search size={14} />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Buscar lista..."
+                  aria-label="Buscar lista de precios"
                   value={busquedaLista}
                   onChange={(e) => setBusquedaLista(e.target.value)}
                 />
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               </div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-b-lg">
+            <div className="pg-panel-body vt-listas-body">
               <div className="flex gap-4 overflow-x-auto pb-2">
                 {listasPreciosCliente
                   .filter(l => l.nombre_lista.toLowerCase().includes(busquedaLista.toLowerCase()))
                   .map(lista => (
-                  <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col transition-all duration-200">
-                    <div 
-                      className="p-3 border-b bg-white flex justify-between items-center rounded-t-lg cursor-pointer hover:bg-gray-50"
+                  <div key={lista.id_lista} className="vt-lista-card">
+                    <div
+                      className="vt-lista-card-head"
                       onClick={() => toggleListaDesplegada(lista.id_lista)}
                     >
-                      <div className="flex flex-col">
-                        <span className="font-bold text-sm text-gray-800">{lista.nombre_lista}</span>
-                        <span className="text-xs text-muted">{lista.total_productos} productos</span>
+                      <div>
+                        <span className="pg-cell-main">{lista.nombre_lista}</span>
+                        <span className="pg-cell-sub">{lista.total_productos} productos</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="badge badge-sm badge-outline">{lista.moneda}</span>
@@ -1348,7 +1354,7 @@ setFormCabecera(prev => ({
                     </div>
                     
                     {listasDesplegadas[lista.id_lista] && (
-                      <div className="p-0 flex-1 max-h-60 overflow-y-auto animate-fadeIn border-t">
+                      <div className="vt-lista-card-body">
                         {detallesListas[lista.id_lista] ? (
                           <table className="table w-full text-xs">
                             <tbody>
@@ -1357,19 +1363,19 @@ setFormCabecera(prev => ({
                                 return (
                                   <tr
                                     key={prod.id_producto}
-                                    className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                                    className={isSelected ? 'is-selected' : ''}
                                     onClick={() => toggleProductoDesdeLista(prod, lista.moneda, lista.id_lista)}
                                   >
-                                    <td className="p-2 cursor-pointer border-b border-gray-100 last:border-0">
-                                      <div className="flex items-center gap-3">
-                                        <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
-                                          {isSelected && <Check size={10} className="text-white" />}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium truncate text-gray-700" title={prod.producto}>{prod.producto}</p>
-                                          <div className="flex justify-between items-center mt-1">
-                                            <span className="text-gray-400 font-mono text-[10px]">{prod.codigo}</span>
-                                            <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
+                                    <td className="vt-lista-td">
+                                      <div className="vt-lista-item">
+                                        <span className={`vt-ms-box ${isSelected ? 'is-on' : ''}`}>
+                                          {isSelected && <Check size={10} />}
+                                        </span>
+                                        <div className="vt-grow">
+                                          <span className="pg-cell-main pg-truncate" title={prod.producto}>{prod.producto}</span>
+                                          <div className="vt-lista-item-meta">
+                                            <span className="pg-cell-sub">{prod.codigo}</span>
+                                            <span className="pg-tag is-accent">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -1389,24 +1395,24 @@ setFormCabecera(prev => ({
                   </div>
                 ))}
                 {listasPreciosCliente.length === 0 && (
-                  <div className="w-full text-center py-4 text-muted text-sm italic">
+                  <p className="pg-empty-line">
                     No se encontraron listas de precios para este cliente.
-                  </div>
+                  </p>
                 )}
               </div>
             </div>
-          </div>
+          </section>
         )}
 
-        <div className="card mb-4">
-          <div className="card-header">
-            <div className="flex justify-between items-center">
-              <h2 className="card-title">
-                <Calculator size={20} />
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <div className="vt-head-row">
+              <h2 className="pg-panel-title">
+                <Calculator size={16} />
                 Productos *
                 {esMuestra && (
-                  <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                    Modo Muestra — MUE-YYYY-XXXX
+                  <span className="badge badge-warning">
+                    <FlaskConical size={11} />Modo Muestra — MUE-YYYY-XXXX
                   </span>
                 )}
               </h2>
@@ -1415,10 +1421,9 @@ setFormCabecera(prev => ({
                   <>
                     <button
                       type="button"
-                      className="btn btn-outline"
-                      style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                      className="btn btn-outline btn-warning"
                       onClick={handleAgregarProductoLibre}
-                      
+
                     >
                       <Plus size={18} /> Producto Muestra
                     </button>
@@ -1444,7 +1449,7 @@ setFormCabecera(prev => ({
               </div>
             </div>
           </div>
-          <div className="card-body">
+          <div className="pg-panel-body">
             {detalle.length > 0 ? (
               <div>
                 {modoEdicion && detalle.length > 1 && (
@@ -1459,7 +1464,7 @@ setFormCabecera(prev => ({
                 <table className="table">
                   <thead>
   <tr>
-    {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
+    {modoEdicion && <th aria-label="Reordenar"></th>}
     <th>Codigo</th>
     <th>Descripcion</th>
     <th className="text-right">Cantidad</th>
@@ -1491,7 +1496,7 @@ setFormCabecera(prev => ({
                                 tabIndex={0}
                                 title="Arrastrar para reordenar"
                                 aria-label={`Mover ${item.producto || 'producto'}`}
-                                className="inline-flex cursor-grab rounded p-1 text-gray-500 hover:bg-blue-100 hover:text-blue-700 active:cursor-grabbing"
+                                className="pg-iconbtn vt-drag"
                                 onDragStart={(event) => iniciarArrastre(event, index)}
                                 onDragEnd={cancelarArrastre}
                               >
@@ -1503,8 +1508,7 @@ setFormCabecera(prev => ({
                             {item.es_producto_libre ? (
                               <input
                                 type="text"
-                                className="form-input font-mono text-sm"
-                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}
+                                className="form-input font-mono text-sm vt-input-muestra"
                                 value={item.codigo_producto_libre || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'codigo_producto_libre', e.target.value)}
                                 placeholder="Cod. muestra"
@@ -1519,8 +1523,8 @@ setFormCabecera(prev => ({
                             {item.es_producto_libre ? (
                               <input
                                 type="text"
-                                className="form-input"
-                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb', minWidth: '220px' }}
+                                className="form-input vt-input-muestra"
+                                style={{ minWidth: '220px' }}
                                 value={item.nombre_producto_libre || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'nombre_producto_libre', e.target.value)}
                                 placeholder="Nombre del producto muestra"
@@ -1549,8 +1553,8 @@ setFormCabecera(prev => ({
                             {item.es_producto_libre ? (
                               <input
                                 type="text"
-                                className="form-input text-sm"
-                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb', width: '80px' }}
+                                className="form-input text-sm vt-input-muestra"
+                                style={{ width: '80px' }}
                                 value={item.unidad_medida || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'unidad_medida', e.target.value)}
                                 placeholder="UM"
@@ -1568,7 +1572,7 @@ setFormCabecera(prev => ({
     return (
       <div>
         <span className="font-bold">{formatearPeso(pesoTotal)}</span>
-        <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+        <div className="pg-cell-sub">{formatearPeso(peso)}/u</div>
       </div>
     );
   })()}
@@ -1576,14 +1580,13 @@ setFormCabecera(prev => ({
                           <td>
                             <input
                               type="number"
-                              className="form-input text-right bg-gray-100"
+                              className={`form-input text-right ${item.es_producto_libre ? 'vt-input-muestra' : 'bg-gray-100'}`}
                               value={item.precio_base}
                               readOnly={!item.es_producto_libre}
                               onChange={item.es_producto_libre ? (e) => handleProductoLibreChange(index, 'precio_base', parseFloat(e.target.value) || 0) : undefined}
                               min="0"
                               step="0.001"
-                              
-                              style={item.es_producto_libre ? { backgroundColor: '#fffbeb', borderColor: '#fcd34d' } : {}}
+
                             />
                           </td>
                           <td>
@@ -1632,18 +1635,17 @@ setFormCabecera(prev => ({
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <Calculator size={64} className="mx-auto text-muted mb-4" style={{ opacity: 0.3 }} />
-                <p className="text-muted font-bold mb-2">No hay productos agregados</p>
-                <div className="flex gap-2 justify-center">
+              <div className="pg-empty vt-empty-dashed">
+                <Calculator size={28} />
+                <strong>No hay productos agregados</strong>
+                <div className="pg-rowactions">
                   {esMuestra ? (
                     <>
                       <button
                         type="button"
-                        className="btn btn-outline"
-                        style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                        className="btn btn-outline btn-warning"
                         onClick={handleAgregarProductoLibre}
-                        
+
                       >
                         <Plus size={20} /> Producto Muestra
                       </button>
@@ -1670,39 +1672,33 @@ setFormCabecera(prev => ({
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {detalle.length > 0 && (
-          <div className="card mb-4">
-            <div className="card-body">
-              <div className="flex justify-end">
-                <div className="w-80">
-  {totales.pesoTotal > 0 && (
-    <div className="flex justify-between py-2 border-b items-center">
-      <span className="font-medium flex items-center gap-1">
-        <Package size={14} /> Peso Total:
-      </span>
-      <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
-    </div>
-  )}
-  <div className="flex justify-between py-2 border-b">
-    <span className="font-medium">Sub Total:</span>
-    <span className="font-bold">{formatearMonedaGral(totales.subtotal)}</span>
-  </div>
-  <div className="flex justify-between py-2 border-b">
-    <span className="font-medium">
-      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
-    </span>
-    <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
-  </div>
-  <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg mt-2 shadow-sm border border-gray-200">
-    <span className="font-bold text-lg">TOTAL:</span>
-    <span className="font-bold text-2xl text-primary">{formatearMonedaGral(totales.total)}</span>
-  </div>
-</div>
-              </div>
+          <section className="pg-panel">
+            <div className="pg-panel-body">
+              <dl className="vt-sum vt-sum-side">
+                {totales.pesoTotal > 0 && (
+                  <div>
+                    <dt><Package size={13} /> Peso total</dt>
+                    <dd className="vt-text-accent">{formatearPeso(totales.pesoTotal)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Sub total</dt>
+                  <dd>{formatearMonedaGral(totales.subtotal)}</dd>
+                </div>
+                <div>
+                  <dt>{TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}</dt>
+                  <dd>{formatearMonedaGral(totales.impuesto)}</dd>
+                </div>
+                <div className="vt-sum-total">
+                  <dt>Total</dt>
+                  <dd>{formatearMonedaGral(totales.total)}</dd>
+                </div>
+              </dl>
             </div>
-          </div>
+          </section>
         )}
 
         <div className="flex gap-3 justify-end">
@@ -1719,20 +1715,27 @@ setFormCabecera(prev => ({
           </button>
         </div>
       </form>
+      </div>
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
-        <div className="flex gap-2 mb-4 border-b">
+        <div className="pg-segmented vt-modal-tabs" role="tablist">
           <button
-            className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            type="button"
+            role="tab"
+            aria-selected={tabCliente === 'lista'}
+            className={tabCliente === 'lista' ? 'active' : ''}
             onClick={() => setTabCliente('lista')}
           >
-            Buscar en Lista
+            <Search size={13} /> Buscar en Lista
           </button>
           <button
-            className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            type="button"
+            role="tab"
+            aria-selected={tabCliente === 'nuevo'}
+            className={tabCliente === 'nuevo' ? 'active' : ''}
             onClick={() => setTabCliente('nuevo')}
           >
-            Nuevo / Validar
+            <Plus size={13} /> Nuevo / Validar
           </button>
         </div>
         {tabCliente === 'lista' ? (
@@ -1768,13 +1771,13 @@ setFormCabecera(prev => ({
             </div>
             <div className="max-h-96 overflow-y-auto">
               {clientesFiltrados.length > 0 ? (
-                <div className="space-y-2 pr-2">
+                <div className="vt-stack-sm">
                   {clientesFiltrados.map(cliente => {
                     const asignado = esClienteAsignado(cliente.id_cliente);
                     return (
                     <div
                       key={cliente.id_cliente}
-                      className={`p-4 border rounded-lg transition flex justify-between items-center group ${asignado ? 'hover:border-primary hover:bg-blue-50 cursor-pointer' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
+                      className={`p-4 border rounded-lg transition flex justify-between items-center group ${asignado ? 'hover:border-primary hover:bg-blue-50 cursor-pointer' : 'opacity-60 vt-cursor-na bg-gray-50'}`}
                       onClick={() => asignado ? handleSelectCliente(cliente) : setError('Este cliente no forma parte de tu cartera asignada.')}
                       title={asignado ? '' : 'Cliente no asignado a tu cartera'}
                     >
@@ -1784,23 +1787,23 @@ setFormCabecera(prev => ({
                       </div>
                       <div className="text-right flex flex-col items-end gap-1">
                         {!asignado && (
-                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5">
+                          <span className="badge badge-secondary">
                             <Lock size={10}/> No asignado
-                          </div>
+                          </span>
                         )}
                         {cliente.usar_limite_credito === 1 ? (
                           <>
-                            <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5">
+                            <span className="badge badge-success">
                               <CheckCircle size={10}/> Credito Activo
-                            </div>
-                            <div className="text-[10px] font-bold text-muted">
+                            </span>
+                            <div className="pg-cell-sub">
                               S/ {formatearNumero(parseFloat(cliente.limite_credito_pen))} | $ {formatearNumero(parseFloat(cliente.limite_credito_usd))}
                             </div>
                           </>
                         ) : (
-                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5">
+                          <span className="badge badge-secondary">
                             <Lock size={10}/> Solo Contado
-                          </div>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1813,7 +1816,7 @@ setFormCabecera(prev => ({
             </div>
           </>
         ) : (
-          <div className="space-y-4">
+          <div className="pg-stack">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1847,7 +1850,7 @@ setFormCabecera(prev => ({
                 />
                 <button
                   type="button"
-                  className="btn btn-outline min-w-[120px]"
+                  className="btn btn-outline vt-minw-btn"
                   onClick={validarClienteExterno}
                   disabled={loadingApi || !nuevoClienteDoc.numero}
                 >
@@ -1893,7 +1896,7 @@ setFormCabecera(prev => ({
         </div>
         <div className="max-h-96 overflow-y-auto">
           {productosFiltrados.length > 0 ? (
-            <div className="space-y-2">
+            <div className="vt-stack-sm">
               {productosFiltrados.map(producto => (
                 <div
                   key={producto.id_producto}
@@ -1923,7 +1926,7 @@ setFormCabecera(prev => ({
       </Modal>
 
       <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Direccion de Entrega" size="md">
-        <div className="space-y-4">
+        <div className="pg-stack">
           <div className="form-group">
             <label className="form-label">Direccion *</label>
             <textarea

@@ -21,7 +21,7 @@ import Alert from '../../components/UI/Alert';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { generarReporteVentasPDF } from './reporteVentasPDF';
-import { ESTADOS_SEE, BadgeSee, BadgeEstadoOrden } from './estadosVentas';
+import { ESTADOS_SEE, ESTADOS_PAGO_OV, BadgeSee, BadgeEstadoOrden, BadgeEstadoPago } from './estadosVentas';
 import './ReporteVentas.css';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -30,11 +30,7 @@ const TILES_SEE = ['ACEPTADO', 'OBSERVADO', 'EN_PROCESO', 'RECHAZADO', 'SIN_EMIT
 
 const CLASE_COMPROBANTE = { FACTURA: 'Factura', NOTA_CREDITO: 'Nota de crédito', NOTA_DEBITO: 'Nota de débito' };
 
-const ESTADOS_PAGO = [
-  { id: 'Pagado', badge: 'badge-success', color: 'var(--success)' },
-  { id: 'Parcial', badge: 'badge-warning', color: 'var(--warning)' },
-  { id: 'Pendiente', badge: 'badge-danger', color: 'var(--danger)' }
-];
+const ESTADOS_PAGO = ['Pagado', 'Parcial', 'Pendiente'].map(id => ({ id, ...ESTADOS_PAGO_OV[id] }));
 
 const FILAS_POR_PAGINA = 25;
 
@@ -1658,7 +1654,7 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
               <h2 id="rv-drawer-title">{o.numero}</h2>
               <div className="pg-drawer-badges">
                 <BadgeEstadoOrden estado={o.estado} />
-                <span className={`badge ${ESTADOS_PAGO.find(e => e.id === o.estado_pago)?.badge || 'badge-secondary'}`}><Wallet size={11} />{o.estado_pago}</span>
+                <BadgeEstadoPago estado={o.estado_pago} />
                 {see.estado !== 'NO_APLICA' && <BadgeSee estado={see.estado} />}
                 {['Retrasado', 'Vencido'].includes(o.estado_logistico) && (
                   <span className="badge badge-danger"><AlertTriangle size={11} />{o.estado_logistico}</span>
@@ -2560,7 +2556,7 @@ else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 5;
                         </td>
                         <td className="num">{renderMonto(item)}</td>
                         <td className="center">
-                          <span className={`badge ${ESTADOS_PAGO.find(e => e.id === item.estado_pago)?.badge || 'badge-secondary'}`}>{item.estado_pago}</span>
+                          <BadgeEstadoPago estado={item.estado_pago} />
                           {parseFloat(item.pendiente_cobro) > 0.01 && item.estado_pago !== 'Pendiente' && (
                             <span className="pg-cell-sub">Saldo {simbolo(item.moneda)} {formatearNumero(item.pendiente_cobro)}</span>
                           )}

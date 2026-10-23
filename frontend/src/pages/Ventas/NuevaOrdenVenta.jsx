@@ -15,6 +15,7 @@ import UbigeoSelector from '../../components/common/UbigeoSelector';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import useReordenarFilas from '../../hooks/useReordenarFilas';
+import './Ventas.css';
 
 const TIPOS_IMPUESTO = [
   { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
@@ -977,42 +978,41 @@ useEffect(() => {
   const colCountItems = 4 + (modoEdicion ? 1 : 0) + (esMuestra ? 1 : (3 + (esAdmin ? 1 : 0)));
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-4 mb-6">
-        <button className="btn btn-outline" onClick={() => navigate('/ventas/ordenes')}>
-          <ArrowLeft size={20} />
-        </button>
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingCart size={32} />
-            {tituloFormulario}
-          </h1>
-          <p className="text-muted">{modoEdicion ? 'Modificar orden existente' : 'Crear orden manual o desde cotización'}</p>
+          <button type="button" className="btn btn-ghost btn-sm vt-back" onClick={() => navigate('/ventas/ordenes')}>
+            <ArrowLeft size={15} /> Volver a órdenes
+          </button>
+          <span className="pg-eyebrow"><ShoppingCart size={13} /> Órdenes de venta</span>
+          <h1 className="pg-title">{tituloFormulario}</h1>
+          <p className="pg-subtitle">{modoEdicion ? 'Modificar orden existente' : 'Crear orden manual o desde cotización'}</p>
         </div>
-      </div>
+      </header>
 
+      <div className="pg-stack">
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="md:col-span-2 space-y-6">
+        <div className="vt-form-layout">
+          <div className="pg-stack">
 
-            <div className={`card border-l-4 ${esMuestra ? 'border-amber-500 shadow-md' : 'border-gray-300 opacity-90'}`}>
-              <div className="card-body flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${esMuestra ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-gray-200 text-gray-500'}`}>
-                    <Package size={22} />
-                  </div>
+            <section className={`pg-panel vt-toggle-panel ${esMuestra ? 'is-on is-warning' : ''}`}>
+              <div className="vt-toggle-row">
+                <div className="vt-toggle-info">
+                  <span className="vt-toggle-icon">
+                    <Package size={20} />
+                  </span>
                   <div>
-                    <h2 className={`card-title m-0 ${esMuestra ? 'text-amber-900' : 'text-gray-600'}`}>Orden de Muestra</h2>
-                    <p className="text-[11px] text-muted m-0">Sin valor comercial · no se factura · solo Guía de Remisión (correlativo MUE-YYYY-XXXX)</p>
+                    <h2 className="pg-panel-title">Orden de Muestra</h2>
+                    <p className="pg-cell-sub">Sin valor comercial · no se factura · solo Guía de Remisión (correlativo MUE-YYYY-XXXX)</p>
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer group" title={modoEdicion ? 'No se puede cambiar el tipo de una orden existente' : ''}>
+                <label className="vt-switch is-warning" title={modoEdicion ? 'No se puede cambiar el tipo de una orden existente' : ''}>
                   <input
                     type="checkbox"
-                    className="sr-only peer"
+                    className="vt-switch-input"
                     checked={esMuestra}
                     disabled={modoEdicion}
                     onChange={(e) => {
@@ -1020,21 +1020,21 @@ useEffect(() => {
                       setFormCabecera(prev => ({ ...prev, es_muestra: on ? 1 : 0, es_exportacion: on ? 0 : prev.es_exportacion }));
                     }}
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 peer-disabled:opacity-50"></div>
-                  <span className={`ml-3 text-sm font-bold ${esMuestra ? 'text-amber-800' : 'text-gray-700'}`}>
+                  <span className="vt-switch-track" aria-hidden="true"></span>
+                  <span className="vt-switch-label">
                     {esMuestra ? 'MUESTRA' : 'VENTA'}
                   </span>
                 </label>
               </div>
-            </div>
+            </section>
 
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-blue-50 to-white">
-                <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Building size={16} /> Cliente</h2>
               </div>
-              <div className="card-body">
+              <div className="pg-panel-body">
                 {clienteSeleccionado ? (
-                  <div className="space-y-4">
+                  <div className="pg-stack">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -1050,7 +1050,7 @@ useEffect(() => {
                     {estadoCredito && estadoCredito.usar_limite_credito && (
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-3 border rounded-lg bg-white shadow-sm">
-                          <p className="text-[10px] text-muted uppercase font-bold mb-1 flex items-center gap-1">
+                          <p className="pg-field-label vt-label-icon">
                             <CreditCard size={12} /> Disponible PEN
                           </p>
                           <p className={`text-lg font-bold ${estadoCredito.credito_pen.disponible < totales.total && formCabecera.moneda === 'PEN' ? 'text-red-600' : 'text-green-600'}`}>
@@ -1058,7 +1058,7 @@ useEffect(() => {
                           </p>
                         </div>
                         <div className="p-3 border rounded-lg bg-white shadow-sm">
-                          <p className="text-[10px] text-muted uppercase font-bold mb-1 flex items-center gap-1">
+                          <p className="pg-field-label vt-label-icon">
                             <DollarSign size={12} /> Disponible USD
                           </p>
                           <p className={`text-lg font-bold ${estadoCredito.credito_usd.disponible < totales.total && formCabecera.moneda === 'USD' ? 'text-red-600' : 'text-blue-600'}`}>
@@ -1092,47 +1092,46 @@ useEffect(() => {
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
-            <div className={`card transition-all duration-300 border-l-4 ${tieneOC ? 'border-orange-500 shadow-md' : 'border-gray-300 opacity-80'}`}>
-              <div className="card-header bg-gradient-to-r from-orange-50 to-white flex justify-between items-center py-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${tieneOC ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-gray-200 text-gray-500'}`}>
-                    <FileText size={22} />
-                  </div>
+            <section className={`pg-panel vt-toggle-panel ${tieneOC ? 'is-on is-accent' : ''}`}>
+              <div className="vt-toggle-row">
+                <div className="vt-toggle-info">
+                  <span className="vt-toggle-icon">
+                    <FileText size={20} />
+                  </span>
                   <div>
-                    <h2 className={`card-title m-0 ${tieneOC ? 'text-orange-900' : 'text-gray-500'}`}>Orden de Compra</h2>
-                    <p className="text-[10px] text-muted m-0 uppercase font-bold tracking-wider">Documento del Cliente</p>
+                    <h2 className="pg-panel-title">Orden de Compra</h2>
+                    <p className="pg-cell-sub">Documento del Cliente</p>
                   </div>
                 </div>
-                
-                <label className="relative inline-flex items-center cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer"
+
+                <label className="vt-switch is-accent">
+                  <input
+                    type="checkbox"
+                    className="vt-switch-input"
                     checked={tieneOC}
                     onChange={(e) => setTieneOC(e.target.checked)}
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-                  <span className="ml-3 text-sm font-bold text-gray-700 group-hover:text-orange-600 transition-colors">
+                  <span className="vt-switch-track" aria-hidden="true"></span>
+                  <span className="vt-switch-label">
                     {tieneOC ? 'CON O.C.' : 'SIN O.C.'}
                   </span>
                 </label>
               </div>
-              
+
               {tieneOC && (
-                  <div className="card-body space-y-5 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="relative group">
-                        <label className="form-label text-xs font-bold text-orange-800 mb-1.5 flex items-center gap-1">
+                  <div className="pg-panel-body pg-stack vt-oc-body">
+                    <div className="form-group">
+                        <label className="form-label vt-label-icon" htmlFor="vt-ov-oc">
                           <Info size={14} /> N° Orden de Compra (Correlativo) *
                         </label>
-                        <div className="relative">
-                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500 group-focus-within:scale-110 transition-transform">
-                            <Lock size={18} />
-                          </div>
+                        <div className="vt-input-icon">
+                          <Lock size={16} />
                           <input
+                            id="vt-ov-oc"
                             type="text"
-                            className="form-input text-lg font-mono pl-10 border-orange-200 focus:border-orange-500 focus:ring-orange-500/20 bg-orange-50/30"
+                            className="form-input font-mono"
                             placeholder="Ej: OC-2025-001234"
                             value={formCabecera.orden_compra_cliente}
                             onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
@@ -1142,57 +1141,50 @@ useEffect(() => {
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="form-label text-xs font-bold text-orange-800 mb-1 flex items-center gap-1">
+                    <div className="form-group">
+                        <label className="form-label vt-label-icon">
                             <Box size={14} /> Archivo Adjunto (PDF o Imagen) *
                         </label>
-                        <div className="flex gap-3 items-stretch">
-                            <div 
-                                className={`flex-1 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all relative overflow-hidden group
-                                  ${archivos.orden_compra && archivos.orden_compra.length > 0 
-                                    ? 'border-green-500 bg-green-50 shadow-inner' 
-                                    : 'border-orange-200 bg-orange-50/50 hover:bg-orange-50 hover:border-orange-400'}`}
+                        <div className="vt-drop-row">
+                            <div
+                                className={`vt-dropzone ${archivos.orden_compra && archivos.orden_compra.length > 0 ? 'is-ready' : ''}`}
                                 tabIndex="0"
                                 onPaste={(e) => handlePaste(e, 'orden_compra')}
                                 title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                             >
                                 {archivos.orden_compra && archivos.orden_compra.length > 0 ? (
-                                    <div className="flex flex-col items-center justify-center gap-1 animate-in zoom-in duration-300">
-                                        <div className="p-2 bg-green-500 text-white rounded-full shadow-lg">
-                                          <CheckCircle size={20} />
-                                        </div>
-                                        <span className="font-bold text-green-700 text-sm truncate max-w-[180px]">{archivos.orden_compra.length} archivo(s)</span>
-                                        <span className="text-[10px] text-green-600 uppercase font-bold">Listos para enviar</span>
+                                    <div className="vt-dropzone-msg">
+                                        <CheckCircle size={22} className="vt-ok-icon" />
+                                        <strong>{archivos.orden_compra.length} archivo(s)</strong>
+                                        <span>Listos para enviar</span>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center py-1">
-                                        <div className="text-orange-400 mb-2 group-hover:scale-110 transition-transform">
-                                          <FilePlus size={28} />
-                                        </div>
-                                        <p className="text-xs text-orange-800 font-medium">Haz click y pulsa <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm border border-orange-200 text-orange-600 font-bold">Ctrl+V</kbd></p>
-                                        <p className="text-[10px] text-orange-600 mt-1">para pegar una captura de pantalla</p>
+                                    <div className="vt-dropzone-msg">
+                                        <FilePlus size={26} />
+                                        <strong>Haz click y pulsa <kbd className="vt-kbd">Ctrl+V</kbd></strong>
+                                        <span>para pegar una captura de pantalla</span>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="flex flex-col gap-2">
-                              <button 
-                                  type="button" 
-                                  className="btn btn-outline border-2 border-orange-200 hover:border-orange-500 hover:bg-orange-50 px-4 py-0 flex-1 flex flex-col items-center justify-center gap-1 transition-all"
+                            <div className="vt-drop-actions">
+                              <button
+                                  type="button"
+                                  className="btn btn-outline vt-drop-btn"
                                   onClick={() => document.getElementById('file-upload-oc').click()}
                                   title="Abrir explorador de archivos"
                               >
-                                  <FileText size={20} className="text-orange-600" />
-                                  <span className="text-[10px] uppercase font-black text-orange-700">Explorar</span>
+                                  <FileText size={18} />
+                                  <span>Explorar</span>
                               </button>
 
                               {archivosPrevios.orden_compra_url && (
-                                  <div className="flex flex-col gap-1 w-full mt-2">
+                                  <div className="vt-stack-sm">
                                       {getArrayFromUrls(archivosPrevios.orden_compra_url).map((url, idx) => (
-                                          <div key={idx} className="flex gap-1 w-full">
+                                          <div key={idx} className="pg-rowactions">
                                             <button
                                                 type="button"
-                                                className="btn btn-sm btn-primary px-3 shadow-lg shadow-blue-200 flex-1"
+                                                className="btn btn-sm btn-primary"
                                                 onClick={() => verArchivo(url)}
                                                 title={`Ver archivo ${idx + 1}`}
                                             >
@@ -1200,7 +1192,8 @@ useEffect(() => {
                                             </button>
                                             <button
                                                 type="button"
-                                                className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3"
+                                                className="pg-iconbtn is-danger"
+                                                aria-label={`Eliminar archivo ${idx + 1}`}
                                                 onClick={() => handleEliminarArchivoPrevio('orden_compra_url', idx)}
                                                 title={`Eliminar archivo ${idx + 1}`}
                                             >
@@ -1222,14 +1215,15 @@ useEffect(() => {
                             />
                         </div>
                         {archivosPrevios.orden_compra_url && !archivos.orden_compra && (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 mt-2 relative">
-                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight flex-1">
+                            <div className="vt-note is-info is-compact">
+                                <Info size={14} />
+                                <span className="vt-grow">
                                   Documentos guardados previamente.
-                                </p>
+                                </span>
                                 <button
                                     type="button"
-                                    className="btn btn-xs btn-outline border-red-200 hover:bg-red-50 hover:border-red-400 text-red-600 absolute right-2"
+                                    className="pg-iconbtn is-danger"
+                                    aria-label="Eliminar documentos adjuntos previamente"
                                     onClick={() => setArchivosPrevios({...archivosPrevios, orden_compra_url: null})}
                                     title="Eliminar documentos adjuntos previamente"
                                 >
@@ -1240,49 +1234,49 @@ useEffect(() => {
                     </div>
                   </div>
               )}
-            </div>
+            </section>
 
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
-                <h2 className="card-title"><Calculator size={20} /> {esMuestra ? 'Ítems de Muestra' : 'Productos'}</h2>
-                <div className="flex gap-2">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Calculator size={16} /> {esMuestra ? 'Ítems de Muestra' : 'Productos'} <span className="pg-count">{detalle.length}</span></h2>
+                <div className="pg-rowactions">
                   <button type="button" className="btn btn-sm btn-primary" onClick={() => setModalProductoOpen(true)}>
                     <Plus size={16} /> {esMuestra ? 'Del catálogo' : 'Agregar'}
                   </button>
                   {esMuestra && (
-                    <button type="button" className="btn btn-sm btn-outline border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleAgregarItemLibre}>
+                    <button type="button" className="btn btn-sm btn-outline btn-warning" onClick={handleAgregarItemLibre}>
                       <Plus size={16} /> Ítem libre
                     </button>
                   )}
                 </div>
               </div>
               {modoEdicion && detalle.length > 1 && (
-                <div className={`product-reorder-help mx-4 mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'is-active' : ''}`}>
+                <div className={`product-reorder-help vt-reorder-help flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${indiceArrastrado !== null ? 'is-active' : ''}`}>
                   <GripVertical size={17} />
                   {indiceArrastrado !== null
                     ? <>Moviendo <strong>{detalle[indiceArrastrado]?.producto || 'producto'}</strong> · Posición {indiceArrastrado + 1} de {detalle.length}</>
                     : <>Arrastra cada producto desde el asa para cambiar el orden que tendrá en el PDF.</>}
                 </div>
               )}
-              <div className="card-body p-0 overflow-x-auto">
+              <div className="pg-table-wrap">
                 <table className="table">
                   <thead>
   <tr>
-    {modoEdicion && <th className="w-10" aria-label="Reordenar"></th>}
+    {modoEdicion && <th aria-label="Reordenar"></th>}
     <th>{esMuestra ? 'Ítem / Descripción' : 'Producto'}</th>
-    {esMuestra && <th className="w-40">Cód. Bien</th>}
+    {esMuestra && <th className="vt-col-md">Cód. Bien</th>}
     <th className="text-right w-24">Cant.</th>
     <th className="text-right w-24">Peso</th>
     {!esMuestra && <th className="text-right w-28">P. Base</th>}
     {!esMuestra && <th className="text-right w-28">P. Venta</th>}
     {!esMuestra && esAdmin && <th className="text-center w-20">Margen %</th>}
     {!esMuestra && <th className="text-right w-28">Subtotal</th>}
-    <th className="w-10"></th>
+    <th aria-label="Acciones"></th>
   </tr>
 </thead>
                   <tbody>
                     {detalle.length === 0 ? (
-                      <tr><td colSpan={colCountItems} className="text-center py-8 text-muted">{esMuestra ? 'No hay ítems de muestra agregados' : 'No hay productos agregados'}</td></tr>
+                      <tr><td colSpan={colCountItems}><div className="pg-empty"><Calculator size={28} /><strong>{esMuestra ? 'No hay ítems de muestra agregados' : 'No hay productos agregados'}</strong><span>Usa el botón Agregar para incluirlos en la orden.</span></div></td></tr>
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -1305,7 +1299,7 @@ useEffect(() => {
                                   tabIndex={0}
                                   title="Arrastrar para reordenar"
                                   aria-label={`Mover ${item.producto || 'producto'}`}
-                                  className="inline-flex cursor-grab rounded p-1 text-gray-500 hover:bg-blue-100 hover:text-blue-700 active:cursor-grabbing"
+                                  className="pg-iconbtn vt-drag"
                                   onDragStart={(event) => iniciarArrastre(event, index)}
                                   onDragEnd={cancelarArrastre}
                                 >
@@ -1315,17 +1309,17 @@ useEffect(() => {
                             )}
                             <td>
                               {item.es_producto_libre ? (
-                                <div className="space-y-1">
+                                <div className="vt-stack-sm">
                                   <input
                                     type="text"
-                                    className="form-input p-1 h-8"
+                                    className="form-input vt-input-sm"
                                     placeholder="Descripción del bien (ej. test muestra)"
                                     value={item.producto}
                                     onChange={(e) => handleItemCampoChange(index, 'producto', e.target.value)}
                                   />
                                   <input
                                     type="text"
-                                    className="form-input p-1 h-7 w-24 text-xs"
+                                    className="form-input vt-input-sm vt-input-um"
                                     placeholder="Unid. (NIU)"
                                     value={item.unidad_medida}
                                     onChange={(e) => handleItemCampoChange(index, 'unidad_medida', e.target.value.toUpperCase())}
@@ -1344,7 +1338,7 @@ useEffect(() => {
                               <td>
                                 <input
                                   type="text"
-                                  className="form-input p-1 h-8 font-mono text-xs"
+                                  className="form-input vt-input-sm font-mono"
                                   placeholder="Opcional (13 díg.)"
                                   value={item.codigo_bien || ''}
                                   onChange={(e) => handleItemCampoChange(index, 'codigo_bien', e.target.value.replace(/[^0-9]/g, ''))}
@@ -1356,7 +1350,7 @@ useEffect(() => {
                               <input
   type="text"
   inputMode="decimal"
-  className="form-input text-right p-1 h-8"
+  className="form-input text-right vt-input-sm"
   value={item.cantidad}
   onChange={(e) => {
     const val = e.target.value.replace(',', '.');
@@ -1372,7 +1366,7 @@ useEffect(() => {
     return (
       <div>
         <span className="font-bold">{formatearPeso(pesoTotalItem)}</span>
-        <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+        <div className="pg-cell-sub">{formatearPeso(peso)}/u</div>
       </div>
     );
   })()}
@@ -1381,7 +1375,7 @@ useEffect(() => {
                             <td>
                               <input
   type="text"
-  className="form-input text-right p-1 h-8 bg-gray-100"
+  className="form-input text-right vt-input-sm bg-gray-100"
   value={item.precio_base}
   readOnly
   tabIndex={-1}
@@ -1394,7 +1388,7 @@ useEffect(() => {
                               <input
   type="text"
   inputMode="decimal"
-  className="form-input text-right p-1 h-8 bg-blue-50"
+  className="form-input text-right vt-input-sm bg-blue-50"
   value={item.precio_venta}
   onChange={(e) => {
     const val = e.target.value.replace(',', '.');
@@ -1408,7 +1402,7 @@ useEffect(() => {
                             <td>
                               <input
   type="text"
-  className={`form-input text-center p-1 h-8 bg-gray-100 ${margenColor}`}
+  className={`form-input text-center vt-input-sm bg-gray-100 ${margenColor}`}
   value={parseFloat(item.descuento_porcentaje).toFixed(2)}
   readOnly
   tabIndex={-1}
@@ -1418,7 +1412,7 @@ useEffect(() => {
                             )}
                             {!esMuestra && <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>}
                             <td>
-                              <button type="button" className="text-danger hover:bg-red-50 p-1 rounded" onClick={() => handleEliminarItem(index)}>
+                              <button type="button" className="pg-iconbtn is-danger" aria-label="Quitar ítem" onClick={() => handleEliminarItem(index)}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -1429,27 +1423,28 @@ useEffect(() => {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </section>
 
-            <div className="card">
-              <div className="card-body">
-                <label className="form-label">Observaciones</label>
-                <textarea 
+            <section className="pg-panel">
+              <div className="pg-panel-body">
+                <label className="form-label" htmlFor="vt-ov-observaciones">Observaciones</label>
+                <textarea
+                  id="vt-ov-observaciones" 
                   className="form-textarea" 
                   rows="2"
                   value={formCabecera.observaciones}
                   onChange={(e) => setFormCabecera({...formCabecera, observaciones: e.target.value})}
                 ></textarea>
               </div>
-            </div>
+            </section>
           </div>
 
-          <div className="space-y-6">
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-purple-50 to-white">
-                <h2 className="card-title text-purple-900"><Info size={20} /> Datos Generales</h2>
+          <div className="pg-stack">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Info size={16} /> Datos Generales</h2>
               </div>
-              <div className="card-body space-y-4">
+              <div className="pg-panel-body pg-stack">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="form-label">Fecha Emisión</label>
@@ -1483,11 +1478,11 @@ useEffect(() => {
                       <option value="USD">Dólares</option>
                     </select>
                   </div>
-                  <div className="relative">
+                  <div>
                     <label className="form-label">Tipo Cambio</label>
-                    <input 
-                      type="number" 
-                      className={`form-input transition-all duration-300 ${formCabecera.moneda === 'USD' ? 'border-warning ring-2 ring-warning/20 animate-pulse-border' : ''}`}
+                    <input
+                      type="number"
+                      className={`form-input ${formCabecera.moneda === 'USD' ? 'vt-input-warning' : ''}`}
                       value={formCabecera.tipo_cambio}
                       onChange={(e) => setFormCabecera({...formCabecera, tipo_cambio: e.target.value})}
                       disabled={formCabecera.moneda === 'PEN'}
@@ -1495,36 +1490,15 @@ useEffect(() => {
                       onWheel={handleWheelDisable}
                     />
                     
-                    {formCabecera.moneda === 'USD' && (
-                      <div className="absolute -top-14 right-0 z-20 pointer-events-none w-full flex justify-end">
-                        <div className="relative bg-orange-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl animate-warning-blink whitespace-nowrap border border-white/20">
-                          <div className="flex items-center gap-1">
-                            <Info size={14} className="animate-bounce" />
-                            <span>¡ASIGNAR T.C. UTILIZADO!</span>
-                          </div>
-                          <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-orange-500 rotate-45 border-r border-b border-white/10"></div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                <style dangerouslySetInnerHTML={{ __html: `
-                  @keyframes warning-blink {
-                    0%, 100% { background-color: #f39c12; transform: translateY(0) scale(1); }
-                    50% { background-color: #e74c3c; transform: translateY(-3px) scale(1.03); }
-                  }
-                  @keyframes pulse-border {
-                    0%, 100% { border-color: #f39c12; box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.2); }
-                    50% { border-color: #e74c3c; box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.4); }
-                  }
-                  .animate-warning-blink {
-                    animation: warning-blink 1.5s infinite ease-in-out;
-                  }
-                  .animate-pulse-border {
-                    animation: pulse-border 1.5s infinite ease-in-out;
-                  }
-                `}} />
+                {formCabecera.moneda === 'USD' && (
+                  <div className="vt-note is-warning is-compact vt-tc-alert" role="alert">
+                    <Info size={14} />
+                    <strong>¡ASIGNAR T.C. UTILIZADO!</strong>
+                  </div>
+                )}
 
                 <div>
                   <label className="form-label">Comercial</label>
@@ -1556,13 +1530,13 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-indigo-50 to-white">
-                <h2 className="card-title text-indigo-900"><Truck size={20} /> Logística y Transporte</h2>
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Truck size={16} /> Logística y Transporte</h2>
               </div>
-              <div className="card-body space-y-4">
+              <div className="pg-panel-body pg-stack">
                 <div>
                   <label className="form-label">Tipo de Entrega</label>
                   <select 
@@ -1617,7 +1591,7 @@ useEffect(() => {
                 )}
 
                 {formCabecera.tipo_entrega === 'Transporte Privado' && (
-                  <div className="space-y-3 bg-gray-50 p-3 rounded-md border border-gray-200">
+                  <div className="vt-subbox vt-stack-sm">
                     <div>
                         <label className="form-label text-xs">Empresa de Transporte</label>
                         <input 
@@ -1676,19 +1650,19 @@ useEffect(() => {
                 )}
 
                 {formCabecera.tipo_entrega === 'Recojo Tienda' && (
-                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800 flex items-center gap-2">
-                        <Box size={16} />
-                        El cliente recogerá los productos en las instalaciones de la empresa.
+                    <div className="vt-note is-info is-compact">
+                        <Box size={14} />
+                        <span>El cliente recogerá los productos en las instalaciones de la empresa.</span>
                     </div>
                 )}
               </div>
-            </div>
+            </section>
 
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title"><CreditCard size={20} /> Pago y Crédito</h2>
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><CreditCard size={16} /> Pago y Crédito</h2>
               </div>
-              <div className="card-body space-y-4">
+              <div className="pg-panel-body pg-stack">
                 <div>
                   <label className="form-label">Condición de Pago</label>
                   {clienteSeleccionado?.condicion_pago ? (
@@ -1727,14 +1701,14 @@ useEffect(() => {
                       </div>
 
                       {formCabecera.tipo_venta === 'Crédito' && (
-                        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300 mt-3">
-                          <label className="form-label text-orange-800">Días de Crédito</label>
+                        <div className="vt-subbox vt-mt">
+                          <label className="form-label">Días de Crédito</label>
                           <div className="grid grid-cols-3 gap-2 mb-2">
                             {DIAS_CREDITO_OPCIONES.map(dias => (
                               <button
                                 key={dias}
                                 type="button"
-                                className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
+                                className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'btn-outline'}`}
                                 onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
                               >
                                 {dias} días
@@ -1750,7 +1724,7 @@ useEffect(() => {
                               onChange={(e) => setFormCabecera({...formCabecera, dias_credito: e.target.value})}
                               onWheel={handleWheelDisable}
                             />
-                            <span className="text-xs font-bold text-orange-700 ml-auto">
+                            <span className="text-xs font-bold vt-text-warning ml-auto">
                               Vence: {new Date(formCabecera.fecha_vencimiento).toLocaleDateString()}
                             </span>
                           </div>
@@ -1814,26 +1788,31 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="card bg-gray-50 border-t-4 border-primary">
-              <div className="card-body space-y-2">
+            <section className="pg-panel vt-resumen-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Calculator size={16} /> Resumen</h2>
+              </div>
+              <div className="pg-panel-body">
+                <dl className="vt-sum">
                 {totales.pesoTotal > 0 && (
-                  <div className="flex justify-between text-sm items-center pb-2 border-b mb-2">
-                    <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
-                    <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
+                  <div>
+                    <dt><Package size={13} /> Peso total</dt>
+                    <dd className="vt-text-accent">{formatearPeso(totales.pesoTotal)}</dd>
                   </div>
                 )}
-                <div className="flex justify-between text-sm">
-                  <span>Sub Total:</span>
-                  <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
+                <div>
+                  <dt>Sub total</dt>
+                  <dd>{formatearMoneda(totales.subtotal)}</dd>
                 </div>
-                
-                <div className="flex justify-between text-sm">
-                  <span>
+
+                <div className="vt-sum-impuesto">
+                  <dt>
                     <div>
-                      <label className="form-label">Tipo de Impuesto</label>
+                      <label className="form-label" htmlFor="vt-ov-impuesto">Tipo de Impuesto</label>
                       <select
+                        id="vt-ov-impuesto"
                         className="form-select"
                         value={formCabecera.tipo_impuesto}
                         onChange={(e) => handleTipoImpuestoChange(e.target.value)}
@@ -1846,77 +1825,70 @@ useEffect(() => {
                         ))}
                       </select>
                     </div>
-                  </span>
-                  <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
+                  </dt>
+                  <dd>{formatearMoneda(totales.impuesto)}</dd>
                 </div>
+                </dl>
 
                 {!esMuestra && (
-                <label className="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                <label className="pg-check vt-mt">
                   <input
                     type="checkbox"
                     checked={Number(formCabecera.es_exportacion) === 1}
                     onChange={(e) => handleExportacionChange(e.target.checked)}
                   />
-                  <span>Factura de exportación <span className="text-muted">(IGV 0%)</span></span>
+                  <div><span>Factura de exportación</span><small>IGV 0%</small></div>
                 </label>
                 )}
-                <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2 text-primary">
-                  <span>TOTAL:</span>
-                  <span>{formatearMoneda(totales.total)}</span>
-                </div>
-                
-                <div className="bg-white border-2 border-blue-100 rounded-xl p-4 mt-6 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-1.5 bg-blue-500 text-white rounded-lg shadow-sm">
-                        <FileText size={18} />
-                      </div>
-                      <label className="form-label m-0 font-bold text-blue-900 text-sm">
-                        Comprobante / Voucher <span className="text-[10px] text-blue-500 font-normal ml-1">(Opcional)</span>
-                      </label>
-                    </div>
+                <dl className="vt-sum">
+                  <div className="vt-sum-total">
+                    <dt>Total</dt>
+                    <dd>{formatearMoneda(totales.total)}</dd>
+                  </div>
+                </dl>
 
-                    <div className="flex gap-3 items-stretch">
-                        <div 
-                            className={`flex-1 border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all group relative
-                              ${archivos.comprobante && archivos.comprobante.length > 0
-                                ? 'border-green-500 bg-green-50' 
-                                : 'border-blue-100 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300'}`}
+                <div className="vt-subbox vt-mt-lg">
+                    <h3 className="pg-section-title"><FileText size={14} /> Comprobante / Voucher <small className="pg-muted">(Opcional)</small></h3>
+
+                    <div className="vt-drop-row">
+                        <div
+                            className={`vt-dropzone is-compact ${archivos.comprobante && archivos.comprobante.length > 0 ? 'is-ready' : ''}`}
                             tabIndex="0"
                             onPaste={(e) => handlePaste(e, 'comprobante')}
                             title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                             onClick={() => document.getElementById('file-upload-comp').click()}
                         >
                             {archivos.comprobante && archivos.comprobante.length > 0 ? (
-                                <div className="flex flex-col items-center justify-center animate-in zoom-in duration-300">
-                                    <CheckCircle size={18} className="text-green-500 mb-1" />
-                                    <span className="font-bold text-green-700 text-[11px] truncate max-w-[150px]">{archivos.comprobante.length} archivo(s)</span>
+                                <div className="vt-dropzone-msg">
+                                    <CheckCircle size={18} className="vt-ok-icon" />
+                                    <strong>{archivos.comprobante.length} archivo(s)</strong>
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-0.5">
-                                    <p className="text-[11px] text-blue-800 font-medium">Click y <kbd className="bg-white px-1 py-0.5 rounded shadow-sm border border-blue-200 text-blue-600 font-bold mx-1">Ctrl+V</kbd></p>
-                                    <p className="text-[9px] text-blue-500 mt-0.5 font-semibold">para pegar voucher</p>
+                                <div className="vt-dropzone-msg">
+                                    <strong>Click y <kbd className="vt-kbd">Ctrl+V</kbd></strong>
+                                    <span>para pegar voucher</span>
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <button 
-                              type="button" 
-                              className="btn btn-sm btn-outline border-blue-200 hover:border-blue-500 hover:bg-blue-50 px-3 flex-1 flex items-center justify-center gap-2 transition-all"
+                        <div className="vt-drop-actions">
+                          <button
+                              type="button"
+                              className="btn btn-sm btn-outline vt-drop-btn"
                               onClick={() => document.getElementById('file-upload-comp').click()}
                               title="Subir archivo"
                           >
-                              <FilePlus size={16} className="text-blue-600" />
-                              <span className="text-[10px] uppercase font-black text-blue-700">Subir</span>
+                              <FilePlus size={16} />
+                              <span>Subir</span>
                           </button>
 
                           {archivosPrevios.comprobante_url && (
-                              <div className="flex flex-col gap-1 w-full mt-2">
+                              <div className="vt-stack-sm">
                                   {getArrayFromUrls(archivosPrevios.comprobante_url).map((url, idx) => (
-                                      <div key={idx} className="flex gap-1 w-full">
+                                      <div key={idx} className="pg-rowactions">
                                         <button
                                             type="button"
-                                            className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100 flex-1"
+                                            className="btn btn-sm btn-primary"
                                             onClick={() => verArchivo(url)}
                                             title={`Ver comprobante ${idx + 1}`}
                                         >
@@ -1924,7 +1896,8 @@ useEffect(() => {
                                         </button>
                                         <button
                                             type="button"
-                                            className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3"
+                                            className="pg-iconbtn is-danger"
+                                            aria-label={`Eliminar comprobante ${idx + 1}`}
                                             onClick={() => handleEliminarArchivoPrevio('comprobante_url', idx)}
                                             title={`Eliminar comprobante ${idx + 1}`}
                                         >
@@ -1948,11 +1921,11 @@ useEffect(() => {
                 </div>
 
                 {tieneArchivosOC ? (
-                  <div className="flex gap-3 mt-6">
+                  <div className="vt-save-row">
                     <button
                       type="button"
                       onClick={handleAbrirVerificacion}
-                      className={`btn flex-1 py-4 text-sm font-black tracking-tight shadow-xl transition-all active:scale-95 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 ${loading || cooldownActivo ? 'opacity-70 grayscale' : ''}`}
+                      className="btn btn-warning vt-save-btn"
                       disabled={loading || cooldownActivo}
                     >
                       <ShieldCheck size={20} className={loading ? 'animate-spin' : ''} />
@@ -1961,7 +1934,7 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={handleGuardarDirecto}
-                      className={`btn btn-primary flex-1 py-4 text-sm font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
+                      className="btn btn-primary vt-save-btn"
                       disabled={loading || cooldownActivo}
                     >
                       <Save size={20} className={loading ? 'animate-spin' : ''} />
@@ -1972,7 +1945,7 @@ useEffect(() => {
                   <button
                     type="button"
                     onClick={handleGuardarDirecto}
-                    className={`btn btn-primary w-full py-4 mt-6 text-lg font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
+                    className="btn btn-primary vt-save-btn is-full"
                     disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
                   >
                     <Save size={24} className={loading ? 'animate-spin' : ''} />
@@ -1980,10 +1953,11 @@ useEffect(() => {
                   </button>
                 )}
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </form>
+      </div>
 
       <ModalVerificacionOC
         isOpen={modalVerificacionOCOpen}
@@ -2035,13 +2009,13 @@ useEffect(() => {
             autoFocus
           />
         </div>
-        <div className="max-h-96 overflow-y-auto space-y-2">
+        <div className="max-h-96 overflow-y-auto vt-stack-sm">
           {clientesFiltrados.map(c => {
             const asignado = esClienteAsignado(c.id_cliente);
             return (
             <div
               key={c.id_cliente}
-              className={`p-3 border rounded flex justify-between items-center ${asignado ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
+              className={`p-3 border rounded flex justify-between items-center ${asignado ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60 vt-cursor-na bg-gray-50'}`}
               onClick={() => asignado ? handleSelectCliente(c) : setError('Este cliente no forma parte de tu cartera asignada.')}
               title={asignado ? '' : 'Cliente no asignado a tu cartera'}
             >
@@ -2051,16 +2025,16 @@ useEffect(() => {
               </div>
               <div className="text-right flex flex-col items-end gap-1">
                 {!asignado && (
-                  <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
+                  <span className="badge badge-secondary">
                     <Lock size={10} /> No asignado
                   </span>
                 )}
                 {c.usar_limite_credito === 1 ? (
-                    <span className="badge badge-success flex items-center gap-1 text-[10px]">
+                    <span className="badge badge-success">
                       <CheckCircle size={10} /> Crédito Habilitado
                     </span>
                 ) : (
-                    <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
+                    <span className="badge badge-secondary">
                       <Lock size={10} /> Solo Contado
                     </span>
                 )}
@@ -2082,7 +2056,7 @@ useEffect(() => {
             autoFocus
           />
         </div>
-        <div className="max-h-96 overflow-y-auto space-y-2">
+        <div className="max-h-96 overflow-y-auto vt-stack-sm">
           {productosFiltrados.map(p => (
             <div key={p.id_producto} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between" onClick={() => handleAgregarProducto(p)}>
               <div>
@@ -2098,7 +2072,7 @@ useEffect(() => {
         </div>
       </Modal>
       <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Dirección de Entrega" size="md">
-        <div className="space-y-4">
+        <div className="pg-stack">
           <div className="form-group">
             <label className="form-label">Dirección *</label>
             <textarea

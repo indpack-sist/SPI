@@ -1663,9 +1663,9 @@ function DetalleOrdenVenta() {
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
     const configs = {
-      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pendiente Verificación', color: '#f59e0b' },
-      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Verificada y Aprobada', color: '#10b981' },
-      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada - Requiere Corrección', color: '#ef4444' }
+      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pendiente Verificación', color: 'var(--warning)' },
+      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Verificada y Aprobada', color: 'var(--success)' },
+      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada - Requiere Corrección', color: 'var(--danger)' }
     };
     return configs[estadoVerif] || configs['Pendiente'];
   };
@@ -1845,7 +1845,7 @@ function DetalleOrdenVenta() {
       render: (value, row) => (
         <div className="text-right">
           <div className="font-bold">{formatearNumero(value)}</div>
-          <div className="text-[10px] text-muted">{row.unidad_medida}</div>
+          <div className="vt-fs-10 text-muted">{row.unidad_medida}</div>
         </div>
       )
     },
@@ -1861,7 +1861,7 @@ function DetalleOrdenVenta() {
         return (
           <div className="text-right">
             <span className="font-bold text-sm">{formatearPeso(pesoTotalItem)}</span>
-            <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+            <div className="vt-fs-10 text-muted">{formatearPeso(peso)}/u</div>
           </div>
         );
       }
@@ -1900,13 +1900,13 @@ function DetalleOrdenVenta() {
         <div className="text-right">
           <span className="font-medium text-primary">{formatearMonedaPrecio(value)}</span>
           {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
-            <div className="text-[10px] mt-0.5 font-bold text-gray-500">
+            <div className="vt-fs-10 vt-mt-05 font-bold text-gray-500">
               S/ {formatearNumeroPrecio(parseFloat(value) * parseFloat(orden.tipo_cambio))}
             </div>
           )}
           {row.lista_precio_cambio && (
             <div
-              className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+              className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 vt-px-15 vt-py-05 vt-fs-10 font-semibold text-amber-700"
               title={`El precio de lista cambió desde que se usó en la cotización. Lista "${row.lista_origen_nombre || ''}": usado ${formatearNumeroPrecio(row.precio_lista_snapshot)} → actual ${formatearNumeroPrecio(row.precio_lista_actual)}.`}
             >
               <AlertTriangle size={10} />
@@ -1915,7 +1915,7 @@ function DetalleOrdenVenta() {
           )}
           {row.lista_precio_sin_referencia && (
             <div
-              className="mt-1 inline-flex items-center gap-1 rounded bg-gray-50 border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500"
+              className="mt-1 inline-flex items-center gap-1 rounded bg-gray-50 border border-gray-200 vt-px-15 vt-py-05 vt-fs-10 font-medium text-gray-500"
               title={`El producto ya no figura en la lista de precios "${row.lista_origen_nombre || ''}" con la que se cotizó (precio usado ${formatearNumeroPrecio(row.precio_lista_snapshot)}).`}
             >
               <AlertTriangle size={10} />
@@ -2007,7 +2007,7 @@ function DetalleOrdenVenta() {
                     <Factory size={12} />
                     En producción
                 </span>
-                <span className="text-[10px] text-danger text-center">
+                <span className="vt-fs-10 text-danger text-center">
                     Falta: {parseFloat(Math.max(0, cantidadRequerida - stockDisponible).toFixed(4))}
                 </span>
             </div>
@@ -2088,14 +2088,11 @@ function DetalleOrdenVenta() {
           <div className="text-right">
             <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
             {esUSD && tcOrden > 1 && (
-              <div className="mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold inline-block"
-                style={{ 
-                  background: 'rgba(59, 130, 246, 0.1)', 
-                  color: '#1e40af',
-                  border: '1px solid rgba(59, 130, 246, 0.3)'
-                }}>
-                <ArrowRightLeft size={9} className="inline mr-0.5" />
-                S/ {formatearNumero(subtotalCalc * tcOrden)}
+              <div className="pg-tags">
+                <span className="pg-tag is-info">
+                  <ArrowRightLeft size={9} />
+                  S/ {formatearNumero(subtotalCalc * tcOrden)}
+                </span>
               </div>
             )}
           </div>
@@ -2171,7 +2168,7 @@ function DetalleOrdenVenta() {
             {urls.map((url, i) => (
               <button
                 key={i}
-                className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                className="btn btn-xs btn-outline vt-px-15 flex items-center vt-gap-05"
                 onClick={() => abrirVisor(url, `${row.numero_pago} - Comprobante ${i + 1}`)}
                 title="Ver comprobante"
               >
@@ -2179,7 +2176,7 @@ function DetalleOrdenVenta() {
               </button>
             ))}
             <button
-              className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+              className="btn btn-xs btn-outline vt-px-15 flex items-center vt-gap-05"
               onClick={() => setModalComprobantePago({ open: true, pago: row, archivos: [] })}
               title="Adjuntar comprobante"
               disabled={orden.estado === 'Cancelada'}
@@ -2227,7 +2224,7 @@ function DetalleOrdenVenta() {
   });
 
   return (
-    <div className="p-6">
+    <div className="pg-page vt-page">
       <div className="ov-header">
         <div className="ov-header__identity">
           <button className="btn btn-outline btn-icon" onClick={() => navigate(-1)} title="Volver">
@@ -2331,7 +2328,7 @@ function DetalleOrdenVenta() {
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && orden.tipo_comprobante === 'Factura' && (
             (facturas.length > 0 && resumenFacturacion && resumenFacturacion.saldo_pendiente <= 1) ? (
               <button
-                className="btn btn-success cursor-default"
+                className="btn btn-success vt-cursor-default"
                 disabled
                 title="Orden totalmente facturada en SUNAT"
               >
@@ -2356,7 +2353,7 @@ function DetalleOrdenVenta() {
                 />
                 <label
                   htmlFor="facturaSunatInput"
-                  className="btn btn-outline border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 cursor-pointer inline-flex"
+                  className="btn btn-outline vt-btn-success"
                   title={facturas.length > 0 ? 'Vincular otra factura (facturación parcial)' : 'Vincular Factura SUNAT'}
                 >
                   <BadgeCheck size={20} className="mr-1"/> {facturas.length > 0 ? '+ Otra Factura' : 'Vincular SUNAT'}
@@ -2378,7 +2375,7 @@ function DetalleOrdenVenta() {
 
           {pendienteGuias > 0 && puedeDespachar() && esGREAplicable && (
              <button
-               className="btn btn-outline border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+               className="btn btn-outline vt-btn-success"
                onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
                disabled={procesando}
                title={guiaActiva ? 'Crear otra Guía de Remisión (entrega parcial)' : 'Crear Guía de Remisión (GRE) para esta orden'}
@@ -2389,7 +2386,7 @@ function DetalleOrdenVenta() {
 
           {guiaActiva && guiaActiva.estado === 'Emitida' && (
             <button
-              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              className="btn btn-outline vt-btn-info"
               onClick={() => { setFechaDespachoTransito(new Date().toISOString().split('T')[0]); setModalTransitoOpen(true); }}
               disabled={procesando}
               title="Poner la guía de remisión en tránsito"
@@ -2431,14 +2428,14 @@ function DetalleOrdenVenta() {
 
           {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
   <button 
-    className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
+    className="btn btn-outline vt-btn-info" 
     onClick={() => handleDescargarPDF('comprobante')} 
     disabled={procesando}
     title={`Descargar ${orden.tipo_comprobante}`}
   >
     <Download size={20} /> PDF {orden.tipo_comprobante}
   </button>
-)}
+          )}
           
           {puedeEditarOrden() && (
             <>
@@ -2468,68 +2465,39 @@ function DetalleOrdenVenta() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {verFinanzas && orden.moneda === 'USD' && parseFloat(orden.tipo_cambio) === 1 && (
-        <div className="alert alert-error mb-6 border-2 border-red-500 bg-red-50 animate-pulse shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="bg-red-500 text-white p-2 rounded-full shadow-md animate-bounce">
-              <AlertTriangle size={24} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-red-700 uppercase tracking-tight">¡Posible Error de Tipo de Cambio!</h3>
-              <p className="text-red-600 font-medium">
-                La orden está en <span className="font-bold underline">DÓLARES (USD)</span> pero se ha registrado con un 
-                Tipo de Cambio de <span className="bg-red-200 px-1 rounded font-bold">1.000</span>. 
-                Verifica si el monto total es correcto antes de proceder.
-              </p>
-            </div>
-            <button 
-              className="btn btn-sm btn-danger ml-auto shadow-sm"
-              onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
-            >
-              <Edit size={16} className="mr-1" /> Corregir TC
-            </button>
+        <div className="vt-note is-danger mb-6" role="alert">
+          <AlertTriangle size={20} />
+          <div>
+            <strong>¡Posible Error de Tipo de Cambio!</strong>
+            <p>
+              La orden está en <b>DÓLARES (USD)</b> pero se ha registrado con un
+              Tipo de Cambio de <b>1.000</b>.
+              Verifica si el monto total es correcto antes de proceder.
+            </p>
           </div>
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+          >
+            <Edit size={16} /> Corregir TC
+          </button>
         </div>
       )}
 
       {verFinanzas && esUSD && (
-        <div className="rounded-lg mb-4 p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
-          style={{ 
-            background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.08))' : 'var(--bg-tertiary, #f9fafb)',
-            border: tipoCambio ? '1px solid var(--accent-border, rgba(234,179,8,0.3))' : '1px solid #e2e8f0'
-          }}>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg" style={{ 
-              background: tipoCambio ? 'rgba(234,179,8,0.15)' : '#f3f4f6'
-            }}>
-              <DollarSign size={18} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-secondary)' }} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                Tipo de Cambio SUNAT — Conversión referencial
-              </p>
-              {tipoCambio ? (
-                <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-sm">
-                    Compra: <strong style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
-                  </span>
-                  <span className="text-sm">
-                    Venta: <strong style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <Calendar size={11} className="inline mr-1" />
-                    SUNAT: {formatearFecha(tipoCambio.fecha)}
-                    <span className="mx-1">·</span>
-                    <Clock size={11} className="inline mr-1" />
-                    {obtenerEdadTC()}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 mt-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  <AlertTriangle size={13} />
-                  <span>No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
-                </div>
-              )}
-            </div>
+        <div className={`pg-panel vt-tc-panel mb-4 ${tipoCambio ? 'is-on' : ''}`}>
+          <div className="vt-tc">
+            <span className="vt-tc-label"><DollarSign size={14} /> Tipo de Cambio SUNAT — Conversión referencial</span>
+            {tipoCambio ? (
+              <>
+                <span>Compra <b>S/ {tipoCambio.compra.toFixed(3)}</b></span>
+                <span>Venta <b className="is-accent">S/ {tipoCambio.venta.toFixed(3)}</b></span>
+                <span className="vt-tc-meta"><Calendar size={12} /> SUNAT: {formatearFecha(tipoCambio.fecha)}</span>
+                <span className="vt-tc-meta"><Clock size={12} /> {obtenerEdadTC()}</span>
+              </>
+            ) : (
+              <span className="vt-tc-meta"><AlertTriangle size={13} /> No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
+            )}
           </div>
           <button
             className="btn btn-sm btn-outline shrink-0"
@@ -2562,7 +2530,7 @@ function DetalleOrdenVenta() {
       )}
 
       {orden.estado_verificacion !== 'Aprobada' && (
-        <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-danger'}`}>
+        <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-error'}`}>
           <div className="flex items-start gap-3">
             <IconoVerificacion size={24} />
             <div className="flex-1">
@@ -2576,7 +2544,7 @@ function DetalleOrdenVenta() {
               {orden.estado_verificacion === 'Pendiente' && (
                 <div>
                   <p className="mb-2">Esta orden está en espera de verificación administrativa. No se pueden realizar las siguientes acciones hasta que sea aprobada:</p>
-                  <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                  <ul className="list-disc list-inside text-sm vt-sy-1 ml-4">
                     <li>Cambiar estado o prioridad</li>
                     <li>Reservar stock</li>
                     <li>Registrar despachos</li>
@@ -2591,7 +2559,7 @@ function DetalleOrdenVenta() {
                 <div>
                   <div className="mb-3">
                     <p className="font-semibold mb-1">Motivo del rechazo:</p>
-                    <p className="bg-white bg-opacity-50 p-3 rounded border border-red-300">
+                    <p className="bg-white p-3 rounded border border-red-300">
                       {orden.motivo_rechazo || 'No especificado'}
                     </p>
                   </div>
@@ -2599,7 +2567,7 @@ function DetalleOrdenVenta() {
                   {orden.observaciones_verificador && (
                     <div className="mb-3">
                       <p className="font-semibold mb-1">Observaciones del verificador:</p>
-                      <p className="bg-white bg-opacity-50 p-3 rounded border border-red-300 text-sm">
+                      <p className="bg-white p-3 rounded border border-red-300 text-sm">
                         {orden.observaciones_verificador}
                       </p>
                     </div>
@@ -2647,14 +2615,14 @@ function DetalleOrdenVenta() {
       )}
 
       {orden.estado_verificacion === 'Aprobada' && (
-        <div className="card mb-6 border-l-4 border-primary">
-          <div className="card-header">
-            <h2 className="card-title">
+        <div className="pg-panel mb-6 border-l-4 border-primary">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title">
               <TrendingUp size={20} />
               Estado de la Orden
             </h2>
           </div>
-          <div className="card-body">
+          <div className="pg-panel-body">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
                 <div className={`p-4 rounded-xl bg-gradient-to-br ${
@@ -2712,7 +2680,7 @@ function DetalleOrdenVenta() {
                     if (estado === 'En Proceso') {
                       colorClases = esActual ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
                     } else if (estado === 'Atendido por Producción') {
-                      colorClases = esActual ? 'bg-green-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
+                      colorClases = esActual ? 'bg-green-500 text-white vt-cursor-na opacity-70' : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
                     } else if (estado === 'Despacho Parcial') {
                       colorClases = esActual ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
                     } else if (estado === 'Despachada') {
@@ -2730,7 +2698,7 @@ function DetalleOrdenVenta() {
                         onClick={() => handleCambiarEstado(estado)}
                         disabled={esActual || procesando}
                       >
-                        <Icono size={16} className="mr-1.5" />
+                        <Icono size={16} className="vt-mr-15" />
                         {estado}
                       </button>
                     );
@@ -2742,13 +2710,13 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 vt-md-cols-3 gap-6 mb-6">
         
-        <div className="card h-full">
-            <div className="card-header">
-                <h2 className="card-title"><Building size={20} /> Cliente</h2>
+        <div className="pg-panel vt-h-full">
+            <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Building size={20} /> Cliente</h2>
             </div>
-            <div className="card-body space-y-2">
+            <div className="pg-panel-body vt-sy-2">
                 <div>
                     <label className="text-sm font-medium text-muted">Razón Social:</label>
                     <p className="font-bold">{orden.cliente}</p>
@@ -2780,11 +2748,11 @@ function DetalleOrdenVenta() {
         </div>
 
         {verFinanzas && (
-        <div className="card h-full">
-            <div className="card-header">
-                <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
+        <div className="pg-panel vt-h-full">
+            <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
             </div>
-            <div className="card-body space-y-2">
+            <div className="pg-panel-body vt-sy-2">
                 
                 {orden.id_cotizacion && (
                     <div className="pb-2 mb-2 border-b border-gray-100">
@@ -2815,11 +2783,11 @@ function DetalleOrdenVenta() {
                 )}
 
                 {orden.orden_compra_cliente && (
-                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded-lg space-y-2">
+                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded-lg vt-sy-2">
                         <div className="flex justify-between items-start">
                             <div>
                                 <label className="text-sm font-medium text-muted">O/C Cliente:</label>
-                                <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
+                                <p className="font-mono font-bold vt-text-warning">{orden.orden_compra_cliente}</p>
                             </div>
                             {orden.estado_verificacion_oc === 'Verificado' && (
                                 <span className="flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded-full">
@@ -2827,7 +2795,7 @@ function DetalleOrdenVenta() {
                                 </span>
                             )}
                             {orden.estado_verificacion_oc === 'Omitida' && (
-                                <span className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
+                                <span className="flex items-center gap-1 text-xs font-bold text-amber-700 vt-bg-warning border border-amber-200 px-2 py-1 rounded-full">
                                     <ShieldAlert size={12} /> Sin verificar
                                 </span>
                             )}
@@ -2838,7 +2806,7 @@ function DetalleOrdenVenta() {
                             )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="vt-sy-2">
                             {orden.orden_compra_url && (() => {
                                 let urls = [];
                                 try {
@@ -2856,7 +2824,7 @@ function DetalleOrdenVenta() {
                                     urls = [orden.orden_compra_url];
                                 }
                                 return (
-                                    <div className="space-y-3">
+                                    <div className="vt-sy-3">
                                         {urls.map((url, index) => {
                                             const titulo = urls.length > 1
                                                 ? `Orden de Compra Cliente ${index + 1}`
@@ -2865,59 +2833,28 @@ function DetalleOrdenVenta() {
                                             const esPdf = extension === 'pdf';
                                             const proxyUrl = archivosAPI.getProxyUrl(url);
                                             return (
-                                                <div key={index} className="space-y-1">
+                                                <div key={index} className="vt-sy-1">
                                                     {urls.length > 1 && (
                                                         <p className="text-xs font-semibold text-muted">Archivo {index + 1}</p>
                                                     )}
-                                                    <div
-                                                        style={{
-                                                            position: 'relative',
-                                                            width: '100%',
-                                                            height: 520,
-                                                            borderRadius: 6,
-                                                            overflow: 'hidden',
-                                                            border: '2px solid var(--border)',
-                                                            background: '#f3f4f6',
-                                                            boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
-                                                        }}
+                                                    <div className="vt-doc-frame"
                                                     >
                                                         {esPdf ? (
                                                             <iframe
                                                                 src={proxyUrl}
                                                                 title={titulo}
-                                                                style={{
-                                                                    width: '100%',
-                                                                    height: '100%',
-                                                                    border: 'none',
-                                                                }}
                                                             />
                                                         ) : (
                                                             <img
                                                                 src={proxyUrl}
                                                                 alt={titulo}
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
                                                             />
                                                         )}
                                                         <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-secondary vt-doc-zoom"
                                                             onClick={() => abrirVisor(url, titulo)}
                                                             title="Abrir en pantalla completa"
-                                                            style={{
-                                                                position: 'absolute',
-                                                                top: 8,
-                                                                right: 8,
-                                                                background: 'rgba(0,0,0,0.6)',
-                                                                color: '#fff',
-                                                                border: 'none',
-                                                                borderRadius: 4,
-                                                                padding: '4px 8px',
-                                                                fontSize: 11,
-                                                                fontWeight: 700,
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                zIndex: 10,
-                                                            }}
                                                         >
                                                             <Eye size={12} /> Ampliar
                                                         </button>
@@ -2932,7 +2869,7 @@ function DetalleOrdenVenta() {
                             {orden.orden_compra_url && orden.estado !== 'Cancelada' && (
                                 <div className="flex">
                                     <button
-                                        className="btn btn-xs bg-amber-500 hover:bg-amber-600 text-white border-amber-500 flex items-center gap-1"
+                                        className="btn btn-xs bg-amber-500 text-white border-amber-500 flex items-center gap-1"
                                         onClick={() => setModalVerificacionOCOpen(true)}
                                         disabled={guardandoVerifOC}
                                     >
@@ -2944,7 +2881,7 @@ function DetalleOrdenVenta() {
                         </div>
 
                         {orden.estado_verificacion_oc === 'Verificado' && orden.fecha_verificacion_oc && (
-                            <p className="text-[10px] text-green-600">
+                            <p className="vt-fs-10 text-green-600">
                                 Verificado el {new Date(orden.fecha_verificacion_oc).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </p>
                         )}
@@ -2997,7 +2934,7 @@ function DetalleOrdenVenta() {
     <label className="text-sm font-medium text-muted">N° Serie:</label>
     <p className="font-mono">{orden.numero_comprobante}</p>
   </div>
-)}
+          )}
                     </div>
                 </div>
                 )}
@@ -3053,9 +2990,9 @@ function DetalleOrdenVenta() {
                         <BadgeCheck size={14} /> Estado Facturación SUNAT
                     </p>
                     {facturas.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="vt-sy-3">
                             {resumenFacturacion && (
-                                <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-xs space-y-1">
+                                <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-xs vt-sy-1">
                                     <div className="flex justify-between">
                                         <span className="text-muted">Total orden:</span>
                                         <span className="font-semibold">{formatearMoneda(resumenFacturacion.total_orden)}</span>
@@ -3071,7 +3008,7 @@ function DetalleOrdenVenta() {
                                         </span>
                                     </div>
                                     {resumenFacturacion.saldo_pendiente > 1 && (
-                                        <div className="flex items-center gap-1 text-amber-600 pt-1 border-t border-emerald-200 mt-1">
+                                        <div className="flex items-center gap-1 text-amber-600 vt-pt-1 border-t border-emerald-200 mt-1">
                                             <AlertTriangle size={12} /> Facturación parcial
                                         </div>
                                     )}
@@ -3079,7 +3016,7 @@ function DetalleOrdenVenta() {
                             )}
 
                             {facturas.length > 1 && (
-                                <div className="flex flex-wrap gap-1.5 border-b pb-2.5 mb-1">
+                                <div className="flex flex-wrap vt-gap-15 border-b vt-pb-25 mb-1">
                                     {facturas.map((f, idx) => (
                                         <button
                                             key={f.id_factura}
@@ -3097,7 +3034,7 @@ function DetalleOrdenVenta() {
                             )}
 
                             {facturas[facturaTabActiva] && (
-                                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-2">
+                                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 vt-sy-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <BadgeCheck size={16} className="text-emerald-600" />
@@ -3106,7 +3043,7 @@ function DetalleOrdenVenta() {
                                         <div className="flex items-center gap-1">
                                             {facturas[facturaTabActiva].url_pdf && (
                                                 <button
-                                                    className="btn btn-xs btn-outline border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                                    className="btn btn-xs btn-outline text-emerald-700 "
                                                     onClick={() => abrirVisor(facturas[facturaTabActiva].url_pdf, `Factura ${facturas[facturaTabActiva].numero_factura}`)}
                                                     title="Ver PDF en pantalla completa"
                                                 >
@@ -3135,18 +3072,18 @@ function DetalleOrdenVenta() {
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                                    <div className="grid grid-cols-2 vt-gapx-2 vt-gapy-1 text-xs">
                                         <div><span className="text-muted">Fecha:</span> <span className="font-medium">{formatearFecha(facturas[facturaTabActiva].fecha_emision)}</span></div>
                                         <div><span className="text-muted">Total:</span> <span className="font-semibold">{formatearMoneda(facturas[facturaTabActiva].total)}</span></div>
                                         {facturas[facturaTabActiva].registrado_por && (
-                                            <div className="col-span-2"><span className="text-muted">Registró:</span> <span className="font-medium">{facturas[facturaTabActiva].registrado_por}</span></div>
+                                            <div className="vt-span-2"><span className="text-muted">Registró:</span> <span className="font-medium">{facturas[facturaTabActiva].registrado_por}</span></div>
                                         )}
                                     </div>
                                     {facturas[facturaTabActiva].url_pdf ? (
                                         <iframe
                                             src={archivosAPI.getProxyUrl(facturas[facturaTabActiva].url_pdf)}
                                             title={`PDF ${facturas[facturaTabActiva].numero_factura}`}
-                                            className="w-full h-72 border border-emerald-200 rounded bg-white"
+                                            className="w-full vt-h-72 border border-emerald-200 rounded bg-white"
                                         />
                                     ) : (
                                         <p className="text-xs text-muted italic">Esta factura no tiene PDF adjunto.</p>
@@ -3168,14 +3105,14 @@ function DetalleOrdenVenta() {
                             <p className="text-xs font-bold uppercase text-red-600 mb-2 flex items-center gap-1">
                                 <Trash2 size={14} /> Historial Facturas Anuladas
                             </p>
-                            <div className="space-y-2">
+                            <div className="vt-sy-2">
                                 {facturasAnuladas.map((factura) => (
                                     <div key={factura.id_anulacion} className="bg-red-50 border border-red-200 rounded p-2 text-sm">
                                         <div className="flex justify-between items-start mb-1">
-                                            <span className="font-bold font-mono text-red-700">{factura.numero_comprobante_sunat}</span>
+                                            <span className="font-bold font-mono vt-text-danger">{factura.numero_comprobante_sunat}</span>
                                             {factura.comprobante_sunat_url && (
                                                 <button
-                                                    className="text-red-600 hover:text-red-800 underline text-xs flex items-center gap-1"
+                                                    className="text-red-600 vt-underline text-xs flex items-center gap-1"
                                                     onClick={() => abrirVisor(factura.comprobante_sunat_url, `Factura Anulada: ${factura.numero_comprobante_sunat}`)}
                                                 >
                                                     <Eye size={12} /> Ver PDF
@@ -3183,7 +3120,7 @@ function DetalleOrdenVenta() {
                                             )}
                                         </div>
                                         <p className="text-red-800"><span className="font-semibold text-xs">Motivo:</span> {factura.motivo_anulacion}</p>
-                                        <div className="flex justify-between items-center mt-1 text-xs text-red-600/80">
+                                        <div className="flex justify-between items-center mt-1 text-xs vt-text-danger">
                                             <span>{formatearFechaHora(factura.fecha_anulacion)}</span>
                                             <span>Por: {factura.usuario_anulacion || 'Sistema'}</span>
                                         </div>
@@ -3208,7 +3145,7 @@ function DetalleOrdenVenta() {
                     <div key={g.id_guia}>
                         <PanelGuiaRemisionSee guia={g} onRefresh={cargarDatos} soloLectura={seeSoloLectura} />
                         <button
-                            className="btn btn-ghost btn-xs -mt-2 mb-4 hover:underline"
+                            className="btn btn-ghost btn-xs vt-see-link"
                             onClick={() => navigate(`/ventas/guias-remision/${g.id_guia}`)}
                         >
                             Ver guía completa (despacho / entrega) →
@@ -3217,17 +3154,19 @@ function DetalleOrdenVenta() {
                 ))}
                 {!seeSoloLectura && puedeDespachar() && (
                     pendienteGuias > 0 ? (
-                        <div className="card p-3 space-y-3 mb-4">
-                            <h3 className="flex items-center gap-2 font-semibold text-sm">
-                                <FileText size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
-                            </h3>
+                        <div className="pg-panel vt-see-panel vt-sy-3 mb-4">
+                            <div className="pg-panel-head">
+                                <h3 className="pg-panel-title">
+                                    <FileText size={16} /> Guía de Remisión Electrónica (SEE · GRE 09)
+                                </h3>
+                            </div>
                             <p className="text-xs text-muted">
                                 {guiasDetalleSee.length > 0
                                     ? `Quedan ${Number(pendienteGuias).toLocaleString('en-US', { maximumFractionDigits: 4 })} unidad(es) por despachar. Puedes crear otra guía (entrega parcial).`
                                     : 'Aún no se ha creado la guía de remisión de esta orden.'}
                             </p>
                             <button
-                                className="btn btn-sm btn-primary self-start"
+                                className="btn btn-sm btn-primary vt-self-start"
                                 onClick={() => navigate(`/ventas/guias-remision/nueva?orden=${id}`)}
                             >
                                 <FileText size={14} className="mr-1" /> {guiasDetalleSee.length > 0 ? 'Crear otra guía (parcial)' : 'Crear guía'}
@@ -3241,19 +3180,21 @@ function DetalleOrdenVenta() {
         )}
 
         {puedeVerSee && guiasHistorial.length > 0 && (
-          <div className="card p-3 space-y-2 mb-4 border-red-200">
-            <h3 className="flex items-center gap-2 font-semibold text-sm text-red-700">
-              <Ban size={16} /> Historial de Guías de Remisión
-            </h3>
+          <div className="pg-panel vt-see-panel vt-sy-2 mb-4">
+            <div className="pg-panel-head">
+              <h3 className="pg-panel-title vt-title-danger">
+                <Ban size={16} /> Historial de Guías de Remisión
+              </h3>
+            </div>
             {guiasHistorial.map((g) => {
               const numero = g.serie_sunat && g.numero_sunat
                 ? `${g.serie_sunat}-${g.numero_sunat}`
                 : g.numero_guia;
               const bajaConfirmada = Number(g.baja_sunat_confirmada) === 1;
               return (
-                <div key={g.id_guia} className="rounded border border-red-200 bg-red-50/50 p-2 text-sm">
+                <div key={g.id_guia} className="rounded border border-red-200 bg-red-50 p-2 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono font-bold text-red-700">{numero}</span>
+                    <span className="font-mono font-bold vt-text-danger">{numero}</span>
                     <span className="badge badge-secondary text-xs">{g.sunat_estado || g.estado}</span>
                     {bajaConfirmada && <span className="badge badge-success text-xs">Baja SOL confirmada</span>}
                     <div className="ml-auto flex flex-wrap gap-1">
@@ -3271,7 +3212,7 @@ function DetalleOrdenVenta() {
                     </div>
                   </div>
                   {g.motivo_anulacion && <p className="mt-1 text-xs text-red-800"><strong>Motivo:</strong> {g.motivo_anulacion}</p>}
-                  <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-red-700/80">
+                  <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs vt-text-danger">
                     <span>
                       {g.fecha_anulacion
                         ? `Baja SUNAT: ${formatearFechaHora(g.fecha_anulacion)}`
@@ -3280,21 +3221,21 @@ function DetalleOrdenVenta() {
                     <span>Por: {g.baja_confirmada_por || 'Sistema'}</span>
                   </div>
                   {g.baja_sunat_evidencia_url && (
-                    <a href={g.baja_sunat_evidencia_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs underline text-red-700">Ver evidencia de la baja ↗</a>
+                    <a href={g.baja_sunat_evidencia_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs vt-underline vt-text-danger">Ver evidencia de la baja ↗</a>
                   )}
                   {(emisionesHistorial[g.id_guia] || []).length > 0 && (
-                    <div className="mt-2 border-t border-red-200 pt-2 space-y-1.5">
-                      <div className="text-[10px] font-semibold uppercase text-red-700/70">Historial de emisiones SUNAT</div>
+                    <div className="mt-2 border-t border-red-200 pt-2 vt-sy-15">
+                      <div className="vt-fs-10 font-semibold uppercase vt-text-danger">Historial de emisiones SUNAT</div>
                       {emisionesHistorial[g.id_guia].map((em) => {
                         const rechazo = em.sunat_estado === 'RECHAZADO' || em.sunat_estado === 'ERROR';
                         const ok = em.sunat_estado === 'ACEPTADO';
                         const numEm = em.serie_sunat && em.numero_sunat ? `${em.serie_sunat}-${em.numero_sunat}` : '—';
                         return (
-                          <div key={em.id_emision} className={`rounded border p-1.5 text-xs ${rechazo ? 'border-red-200 bg-red-50' : ok ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
+                          <div key={em.id_emision} className={`rounded border vt-p-15 text-xs ${rechazo ? 'border-red-200 bg-red-50' : ok ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono font-bold">{numEm}</span>
                               <span className={`badge text-xs ${rechazo ? 'badge-danger' : ok ? 'badge-success' : 'badge-secondary'}`}>{em.sunat_estado}</span>
-                              {rechazo && <span className="text-red-700/80">Rechazada — sin validez</span>}
+                              {rechazo && <span className="vt-text-danger">Rechazada — sin validez</span>}
                               <div className="ml-auto flex flex-wrap gap-1">
                                 {em.tiene_snapshot && (
                                   <button className="btn btn-xs btn-outline" disabled={procesando} onClick={() => descargarPdfEmisionHistorial(g, em.id_emision)}>
@@ -3324,18 +3265,18 @@ function DetalleOrdenVenta() {
         )}
 
         {verFinanzas && (
-        <div className="card h-full">
-            <div className="card-header">
-                <h2 className="card-title"><FileText size={20} /> Documentos Adicionales</h2>
+        <div className="pg-panel vt-h-full">
+            <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><FileText size={20} /> Documentos Adicionales</h2>
             </div>
-            <div className="card-body space-y-3">
+            <div className="pg-panel-body vt-sy-3">
 
                 {!soloLectura && orden.estado !== 'Cancelada' && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 vt-sy-2">
                         <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Agregar documento</p>
                         <div className="flex gap-2 flex-wrap">
                             <select
-                                className="form-select text-sm flex-1 min-w-[160px]"
+                                className="form-select text-sm flex-1 vt-minw-160"
                                 value={formDocumento.tipo_documento}
                                 onChange={e => setFormDocumento(f => ({ ...f, tipo_documento: e.target.value }))}
                             >
@@ -3346,7 +3287,7 @@ function DetalleOrdenVenta() {
                             </select>
                             <input
                                 type="text"
-                                className="form-input text-sm flex-1 min-w-[140px]"
+                                className="form-input text-sm flex-1 vt-minw-140"
                                 placeholder="Correlativo / N° (opcional)"
                                 value={formDocumento.correlativo}
                                 onChange={e => setFormDocumento(f => ({ ...f, correlativo: e.target.value }))}
@@ -3354,7 +3295,7 @@ function DetalleOrdenVenta() {
                         </div>
                         <div className="flex items-center gap-2">
                             <label className={`flex-1 flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
-                                ${formDocumento.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+                                ${formDocumento.archivos.length > 0 ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
                                 <input
                                     type="file"
                                     multiple
@@ -3378,13 +3319,13 @@ function DetalleOrdenVenta() {
                         </div>
 
                         {formDocumento.archivos.length > 0 && (
-                            <div className="flex gap-1.5 flex-wrap pt-1">
+                            <div className="flex vt-gap-15 flex-wrap vt-pt-1">
                                 {formDocumento.archivos.map((file, i) => (
                                     <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
-                                        <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                                        <span className="text-gray-700 vt-maxw-130 truncate" title={file.name}>{file.name}</span>
                                         <button
                                             type="button"
-                                            className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                                            className="btn btn-xs btn-outline vt-px-15 flex items-center vt-gap-05"
                                             onClick={() => abrirVisor(file, file.name)}
                                             title="Vista previa"
                                         >
@@ -3392,7 +3333,7 @@ function DetalleOrdenVenta() {
                                         </button>
                                         <button
                                             type="button"
-                                            className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                            className="vt-p-05 text-gray-400 transition-colors"
                                             onClick={() => setFormDocumento(f => ({ ...f, archivos: f.archivos.filter((_, j) => j !== i) }))}
                                             title="Quitar archivo"
                                         >
@@ -3418,7 +3359,7 @@ function DetalleOrdenVenta() {
                             }
                         } catch { urls = []; }
                         return (
-                            <div className={`flex gap-1 mt-1.5 flex-wrap ${extraClass}`}>
+                            <div className={`flex gap-1 vt-mt-15 flex-wrap ${extraClass}`}>
                                 {urls.map((url, i) => (
                                     <button
                                         key={i}
@@ -3440,24 +3381,24 @@ function DetalleOrdenVenta() {
                             )}
 
                             {activos.length > 0 && (
-                                <div className="space-y-2">
+                                <div className="vt-sy-2">
                                     {activos.map(doc => (
                                         <div key={doc.id_documento} className="flex items-start justify-between gap-2 p-2 border border-gray-100 rounded-lg bg-white hover:bg-gray-50 transition-colors">
-                                            <div className="flex-1 min-w-0">
+                                            <div className="flex-1 vt-min0">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 vt-py-05 rounded-full">{doc.tipo_documento}</span>
                                                     {doc.correlativo && (
-                                                        <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{doc.correlativo}</span>
+                                                        <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 vt-py-05 rounded border border-gray-200">{doc.correlativo}</span>
                                                     )}
                                                 </div>
                                                 {renderUrls(doc)}
-                                                <p className="text-[10px] text-gray-400 mt-1">
+                                                <p className="vt-fs-10 text-gray-400 mt-1">
                                                     {doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </p>
                                             </div>
                                             {!soloLectura && orden.estado !== 'Cancelada' && (
                                                 <button
-                                                    className="btn btn-xs btn-outline border-red-200 text-red-500 hover:bg-red-50 shrink-0"
+                                                    className="btn btn-xs btn-outline border-red-200 vt-text-danger shrink-0"
                                                     onClick={() => handleEliminarDocumento(doc.id_documento)}
                                                     disabled={eliminandoDocumento === doc.id_documento}
                                                     title="Eliminar documento"
@@ -3478,21 +3419,21 @@ function DetalleOrdenVenta() {
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1 mb-2">
                                         <Trash2 size={12} /> Historial de documentos eliminados
                                     </p>
-                                    <div className="space-y-2">
+                                    <div className="vt-sy-2">
                                         {eliminados.map(doc => (
-                                            <div key={doc.id_documento} className="p-2 border border-red-100 rounded-lg bg-red-50/40 opacity-75">
+                                            <div key={doc.id_documento} className="p-2 border border-red-200 rounded-lg bg-red-50 opacity-70">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-xs font-bold text-gray-500 bg-gray-200 line-through px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                                    <span className="text-xs font-bold text-gray-500 bg-gray-200 vt-strike px-2 vt-py-05 rounded-full">{doc.tipo_documento}</span>
                                                     {doc.correlativo && (
-                                                        <span className="font-mono text-xs text-gray-400 line-through">{doc.correlativo}</span>
+                                                        <span className="font-mono text-xs text-gray-400 vt-strike">{doc.correlativo}</span>
                                                     )}
                                                 </div>
                                                 {renderUrls(doc)}
-                                                <div className="mt-1 space-y-0.5">
-                                                    <p className="text-[10px] text-gray-400">
+                                                <div className="mt-1 vt-sy-05">
+                                                    <p className="vt-fs-10 text-gray-400">
                                                         Agregado por {doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </p>
-                                                    <p className="text-[10px] text-red-500 font-medium">
+                                                    <p className="vt-fs-10 vt-text-danger font-medium">
                                                         Eliminado por {doc.eliminado_por || 'Sistema'} · {new Date(doc.deleted_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </p>
                                                 </div>
@@ -3508,9 +3449,9 @@ function DetalleOrdenVenta() {
         </div>
         )}
 
-        <div className="card h-full">
-            <div className="card-header flex justify-between items-center">
-                <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
+        <div className="pg-panel vt-h-full">
+            <div className="pg-panel-head flex justify-between items-center">
+                <h2 className="pg-panel-title"><MapPin size={20} /> Entrega y Logística</h2>
                 {!soloLectura && (
                   <button
                     className="btn btn-xs btn-outline"
@@ -3522,7 +3463,7 @@ function DetalleOrdenVenta() {
                   </button>
                 )}
             </div>
-            <div className="card-body space-y-2">
+            <div className="pg-panel-body vt-sy-2">
                 <div>
                     <label className="text-sm font-medium text-muted">Fecha Estimada:</label>
                     <p className="flex items-center gap-1">
@@ -3549,10 +3490,10 @@ function DetalleOrdenVenta() {
                         const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
                         return (
                             <div className="flex items-center gap-3 mt-1">
-                                <div className="flex-1 bg-gray-200 rounded-full h-4">
-                                    <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
+                                <div className="flex-1 bg-gray-200 rounded-full vt-h-4">
+                                    <div className="vt-bg-accent vt-h-4 rounded-full" style={{ width: `${pct}%` }}></div>
                                 </div>
-                                <span className="text-sm font-bold text-gray-700 min-w-[3rem] text-right">
+                                <span className="text-sm font-bold text-gray-700 vt-minw-3rem text-right">
                                     {pct.toFixed(0)}%
                                 </span>
                             </div>
@@ -3589,7 +3530,7 @@ function DetalleOrdenVenta() {
                       )}
                     </>
                   ) : orden.tipo_entrega === 'Transporte Privado' ? (
-                    <div className="text-sm space-y-1">
+                    <div className="text-sm vt-sy-1">
                       <p><span className="font-bold">Privado:</span> {orden.transporte_nombre || '-'}</p>
                       <p><span className="font-bold">Placa:</span> {orden.transporte_placa || '-'}</p>
                       <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor || '-'}</p>
@@ -3613,24 +3554,24 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      <div className="card mb-6">
-        <div className="card-header flex justify-between items-center">
-          <h2 className="card-title"><Package size={20} /> Detalle de Productos</h2>
-          <span className="badge badge-neutral">{orden.detalle.length} items</span>
+      <div className="pg-panel mb-6">
+        <div className="pg-panel-head flex justify-between items-center">
+          <h2 className="pg-panel-title"><Package size={20} /> Detalle de Productos</h2>
+          <span className="badge badge-secondary">{orden.detalle.length} items</span>
         </div>
-        <div className="card-body">
+        <div className="pg-panel-body">
           <Table columns={columnsDetalleVisibles} data={orden.detalle} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="card h-full">
-            <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
-            <div className="card-body">
+      <div className="grid grid-cols-1 vt-md-cols-2 gap-4 mb-6">
+        <div className="pg-panel vt-h-full">
+            <div className="pg-panel-head"><h3 className="pg-panel-title">Observaciones</h3></div>
+            <div className="pg-panel-body">
                 <p className="whitespace-pre-wrap mb-4">{orden.observaciones || 'Sin observaciones.'}</p>
 
                 {verFinanzas && orden.comprobante_url && (
-                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 space-y-2">
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200 vt-sy-2">
                         <div className="flex items-center gap-2 text-green-800">
                             <FileText size={20}/>
                             <span className="font-medium">Comprobante/Voucher Adjunto</span>
@@ -3652,7 +3593,7 @@ function DetalleOrdenVenta() {
                                 urls = [orden.comprobante_url];
                             }
                             return (
-                                <div className="space-y-3">
+                                <div className="vt-sy-3">
                                     {urls.map((url, index) => {
                                         const titulo = urls.length > 1
                                             ? `Comprobante de Pago ${index + 1}`
@@ -3661,59 +3602,28 @@ function DetalleOrdenVenta() {
                                         const esPdf = extension === 'pdf';
                                         const proxyUrl = archivosAPI.getProxyUrl(url);
                                         return (
-                                            <div key={index} className="space-y-1">
+                                            <div key={index} className="vt-sy-1">
                                                 {urls.length > 1 && (
                                                     <p className="text-xs font-semibold text-muted">Archivo {index + 1}</p>
                                                 )}
-                                                <div
-                                                    style={{
-                                                        position: 'relative',
-                                                        width: '100%',
-                                                        height: 520,
-                                                        borderRadius: 6,
-                                                        overflow: 'hidden',
-                                                        border: '2px solid var(--border)',
-                                                        background: '#f3f4f6',
-                                                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
-                                                    }}
+                                                <div className="vt-doc-frame"
                                                 >
                                                     {esPdf ? (
                                                         <iframe
                                                             src={proxyUrl}
                                                             title={titulo}
-                                                            style={{
-                                                                width: '100%',
-                                                                height: '100%',
-                                                                border: 'none',
-                                                            }}
                                                         />
                                                     ) : (
                                                         <img
                                                             src={proxyUrl}
                                                             alt={titulo}
-                                                            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
                                                         />
                                                     )}
                                                     <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-secondary vt-doc-zoom"
                                                         onClick={() => abrirVisor(url, titulo)}
                                                         title="Abrir en pantalla completa"
-                                                        style={{
-                                                            position: 'absolute',
-                                                            top: 8,
-                                                            right: 8,
-                                                            background: 'rgba(0,0,0,0.6)',
-                                                            color: '#fff',
-                                                            border: 'none',
-                                                            borderRadius: 4,
-                                                            padding: '4px 8px',
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            zIndex: 10,
-                                                        }}
                                                     >
                                                         <Eye size={12} /> Ampliar
                                                     </button>
@@ -3730,11 +3640,11 @@ function DetalleOrdenVenta() {
         </div>
 
         {verFinanzas && (
-        <div className={`card ml-auto w-full`}>
-          <div className="card-header">
-            <h3 className="card-title"><Calculator size={20} /> Totales</h3>
+        <div className={`pg-panel ml-auto w-full`}>
+          <div className="pg-panel-head">
+            <h3 className="pg-panel-title"><Calculator size={20} /> Totales</h3>
           </div>
-          <div className="card-body space-y-3">
+          <div className="pg-panel-body vt-sy-3">
             {pesoTotal > 0 && (
               <div className="flex justify-between py-2 border-b items-center">
                 <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
@@ -3772,11 +3682,11 @@ function DetalleOrdenVenta() {
                 border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
               }}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium flex items-center gap-1" style={{ color: 'var(--accent, #ca8a04)' }}>
+                  <span className="font-medium flex items-center gap-1" style={{ color: 'var(--accent)' }}>
                     <ArrowRightLeft size={14} />
                     Equivalente en Soles (TC SUNAT):
                   </span>
-                  <span className="font-bold text-lg" style={{ color: 'var(--accent, #ca8a04)' }}>
+                  <span className="font-bold text-lg" style={{ color: 'var(--accent)' }}>
                     S/ {formatearNumero(totalCorregido * tcVenta)}
                   </span>
                 </div>
@@ -3812,12 +3722,12 @@ function DetalleOrdenVenta() {
       </div>
 
       {salidas.length > 0 && (
-         <div className="card mb-6 border-l-4 border-info">
-             <div className="card-header flex items-center gap-2">
+         <div className="pg-panel mb-6 border-l-4 border-info">
+             <div className="pg-panel-head flex items-center gap-2">
                  <Truck size={20} className="text-info"/>
-                 <h2 className="card-title">Historial de Despachos (Guías de Salida)</h2>
+                 <h2 className="pg-panel-title">Historial de Despachos (Guías de Salida)</h2>
              </div>
-             <div className="card-body">
+             <div className="pg-panel-body">
                  <Table 
                      columns={[
                          { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
@@ -3871,7 +3781,7 @@ function DetalleOrdenVenta() {
                                      </button>
                                    )}
                                    <div
-                                     className={`text-[10px] leading-tight mt-0.5 px-1.5 py-0.5 rounded ${calza ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                                     className={`vt-fs-10 vt-leading-tight vt-mt-05 vt-px-15 vt-py-05 rounded ${calza ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
                                      title="Cruce: valor del despacho (según precios de la OV) vs total de la factura"
                                    >
                                      <div className="flex items-center gap-1 justify-center font-semibold">
@@ -3887,9 +3797,9 @@ function DetalleOrdenVenta() {
 
                              return puedeFacturar ? (
                                <div className="flex flex-col items-center gap-1">
-                                 <span className="text-[10px] text-gray-500">Valor: {formatearMoneda(valorDespacho)}</span>
+                                 <span className="vt-fs-10 text-gray-500">Valor: {formatearMoneda(valorDespacho)}</span>
                                  <button
-                                   className="btn btn-xs btn-outline border-teal-300 text-teal-700 hover:bg-teal-50"
+                                   className="btn btn-xs btn-outline vt-btn-success"
                                    onClick={() => handleSubirFacturaDespacho(row)}
                                    title="Vincular factura a este despacho"
                                  >
@@ -3917,12 +3827,12 @@ function DetalleOrdenVenta() {
                                    const urls = parseUrls(d);
                                    return (
                                      <div key={d.id_documento} className="flex items-center gap-1 flex-wrap">
-                                       <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{d.tipo_documento}</span>
-                                       {d.correlativo && <span className="font-mono text-[10px] text-gray-600">{d.correlativo}</span>}
+                                       <span className="vt-fs-10 font-bold text-primary bg-primary/10 vt-px-15 vt-py-05 rounded-full">{d.tipo_documento}</span>
+                                       {d.correlativo && <span className="font-mono vt-fs-10 text-gray-600">{d.correlativo}</span>}
                                        {urls.map((u, i) => (
                                          <button
                                            key={i}
-                                           className="btn btn-xs btn-outline py-0 px-1"
+                                           className="btn btn-xs btn-outline vt-px-1"
                                            onClick={() => abrirVisor(u, `${d.tipo_documento}${d.correlativo ? ' ' + d.correlativo : ''}`)}
                                            title="Ver documento"
                                          >
@@ -3934,7 +3844,7 @@ function DetalleOrdenVenta() {
                                  })}
                                  {!soloLectura && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                    <button
-                                     className="btn btn-xs btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                     className="btn btn-xs btn-outline vt-btn-info"
                                      onClick={() => handleAbrirDocDespacho(row.id_salida)}
                                      title="Adjuntar guía / documento a este despacho"
                                    >
@@ -3960,7 +3870,7 @@ function DetalleOrdenVenta() {
                                  title="Ver Constancia de Salida"
                                >
                                  {descargandoPDF === `ver-${val}` ? (
-                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                   <div className="animate-spin rounded-full vt-h-3 vt-w-3 border-2 vt-border-current"></div>
                                  ) : (
                                    <Eye size={14}/>
                                  )}
@@ -3972,7 +3882,7 @@ function DetalleOrdenVenta() {
                                  title="Descargar Constancia de Salida"
                                >
                                  {descargandoPDF === val ? (
-                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                   <div className="animate-spin rounded-full vt-h-3 vt-w-3 border-2 vt-border-current"></div>
                                  ) : (
                                    <Download size={14}/>
                                  )}
@@ -3988,7 +3898,7 @@ function DetalleOrdenVenta() {
                                      title="Ver Guía Interna generada"
                                    >
                                      {descargandoPDF === `ver-gi-${val}` ? (
-                                       <div className="animate-spin rounded-full h-3 w-3 border-2 border-white"></div>
+                                       <div className="animate-spin rounded-full vt-h-3 vt-w-3 border-2 "></div>
                                      ) : (
                                        <Eye size={14}/>
                                      )}
@@ -4000,7 +3910,7 @@ function DetalleOrdenVenta() {
                                      title="Descargar Guía Interna generada"
                                    >
                                      {descargandoPDF === `gi-${val}` ? (
-                                       <div className="animate-spin rounded-full h-3 w-3 border-2 border-white"></div>
+                                       <div className="animate-spin rounded-full vt-h-3 vt-w-3 border-2 "></div>
                                      ) : (
                                        extraerGuiaInterna(row.observaciones)
                                      )}
@@ -4008,7 +3918,7 @@ function DetalleOrdenVenta() {
                                    </>
                                  ) : (!soloLectura && (
                                    <button
-                                     className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                     className="btn btn-sm btn-outline vt-btn-info"
                                      onClick={() => {
                                        setSalidaSeleccionadaGI(val);
                                        setModalConfirmarGuiaInterna(true);
@@ -4043,22 +3953,22 @@ function DetalleOrdenVenta() {
       )}
 
       {verFinanzas && orden.estado_verificacion === 'Aprobada' && (
-        <div className="mt-8 border-t-2 border-gray-100 pt-6">
+        <div className="mt-8 border-t border-gray-100 vt-pt-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
               <CreditCard size={24} /> Gestión de Cobranzas
           </h2>
 
           {resumenPagos && (
-              <div className="card mb-4 border-l-4 border-success">
-              <div className="card-header flex justify-between items-center">
-                  <h2 className="card-title">Resumen de Pagos</h2>
+              <div className="pg-panel mb-4 border-l-4 border-success">
+              <div className="pg-panel-head flex justify-between items-center">
+                  <h2 className="pg-panel-title">Resumen de Pagos</h2>
                   {orden.estado_pago !== 'Pagado' && orden.estado !== 'Cancelada' && (
                   <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
                       <Plus size={16} /> Registrar Pago
                   </button>
                   )}
               </div>
-              <div className="card-body">
+              <div className="pg-panel-body">
                   <div className="grid grid-cols-4 gap-4">
                   <div>
                       <p className="text-sm text-muted">Total Orden</p>
@@ -4075,11 +3985,11 @@ function DetalleOrdenVenta() {
                   <div>
                       <p className="text-sm text-muted">Progreso Pago</p>
                       <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-3">
+                      <div className="flex-1 bg-gray-200 rounded-full vt-h-3">
                           <div 
-                          className={`h-3 rounded-full ${
+                          className={`vt-h-3 rounded-full ${
                               (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
-                              parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
+                              parseFloat(resumenPagos.monto_pagado) > 0 ? 'vt-bg-info' : 'bg-warning'
                           }`}
                           style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
                           ></div>
@@ -4093,14 +4003,14 @@ function DetalleOrdenVenta() {
           )}
 
           {pagos.length > 0 && (
-              <div className="card mb-4">
-              <div className="card-header">
-                  <h2 className="card-title">
+              <div className="pg-panel mb-4">
+              <div className="pg-panel-head">
+                  <h2 className="pg-panel-title">
                   <FileText size={20} /> Historial de Transacciones
                   <span className="badge badge-primary ml-2">{pagos.length}</span>
                   </h2>
               </div>
-              <div className="card-body">
+              <div className="pg-panel-body">
                   <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
               </div>
               </div>
@@ -4109,7 +4019,7 @@ function DetalleOrdenVenta() {
       )}
 
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
-        <div className="space-y-2">
+        <div className="vt-sy-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
             <button 
               key={prioridad} 
@@ -4126,7 +4036,7 @@ function DetalleOrdenVenta() {
 
       <Modal isOpen={modalPagoOpen} onClose={() => setModalPagoOpen(false)} title="Registrar Pago" size="md">
         <form onSubmit={handleRegistrarPago}>
-          <div className="space-y-4">
+          <div className="vt-sy-4">
             {resumenPagos && (
               <div className="alert alert-info">
                 <strong>Saldo Pendiente:</strong> {formatearMoneda(saldoCorregido)}
@@ -4237,7 +4147,7 @@ function DetalleOrdenVenta() {
             <div className="form-group">
               <label className="form-label">Comprobante de Pago</label>
               <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
-                ${pagoForm.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+                ${pagoForm.archivos.length > 0 ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
                 <input
                   type="file"
                   multiple
@@ -4251,13 +4161,13 @@ function DetalleOrdenVenta() {
                 }
               </label>
               {pagoForm.archivos.length > 0 && (
-                <div className="flex gap-1.5 flex-wrap pt-2">
+                <div className="flex vt-gap-15 flex-wrap pt-2">
                   {pagoForm.archivos.map((file, i) => (
                     <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
-                      <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                      <span className="text-gray-700 vt-maxw-130 truncate" title={file.name}>{file.name}</span>
                       <button
                         type="button"
-                        className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                        className="btn btn-xs btn-outline vt-px-15 flex items-center vt-gap-05"
                         onClick={() => abrirVisor(file, file.name)}
                         title="Vista previa"
                       >
@@ -4265,7 +4175,7 @@ function DetalleOrdenVenta() {
                       </button>
                       <button
                         type="button"
-                        className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                        className="vt-p-05 text-gray-400 transition-colors"
                         onClick={() => setPagoForm(f => ({ ...f, archivos: f.archivos.filter((_, j) => j !== i) }))}
                         title="Quitar archivo"
                       >
@@ -4295,9 +4205,9 @@ function DetalleOrdenVenta() {
         title={`Adjuntar Comprobante${modalComprobantePago.pago ? ` – ${modalComprobantePago.pago.numero_pago}` : ''}`}
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
-            ${modalComprobantePago.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+            ${modalComprobantePago.archivos.length > 0 ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
             <input
               type="file"
               multiple
@@ -4311,13 +4221,13 @@ function DetalleOrdenVenta() {
             }
           </label>
           {modalComprobantePago.archivos.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex vt-gap-15 flex-wrap">
               {modalComprobantePago.archivos.map((file, i) => (
                 <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
-                  <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                  <span className="text-gray-700 vt-maxw-130 truncate" title={file.name}>{file.name}</span>
                   <button
                     type="button"
-                    className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                    className="btn btn-xs btn-outline vt-px-15 flex items-center vt-gap-05"
                     onClick={() => abrirVisor(file, file.name)}
                     title="Vista previa"
                   >
@@ -4325,7 +4235,7 @@ function DetalleOrdenVenta() {
                   </button>
                   <button
                     type="button"
-                    className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                    className="vt-p-05 text-gray-400 transition-colors"
                     onClick={() => setModalComprobantePago(m => ({ ...m, archivos: m.archivos.filter((_, j) => j !== i) }))}
                     title="Quitar archivo"
                   >
@@ -4395,10 +4305,10 @@ function DetalleOrdenVenta() {
               setProcesando(false);
             }
           }}>
-            <div className="space-y-4">
+            <div className="vt-sy-4">
               <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
                 <div className="flex items-start gap-3">
-                  <Factory className="text-blue-500 shrink-0 mt-0.5" size={20} />
+                  <Factory className="vt-text-info shrink-0 vt-mt-05" size={20} />
                   <div className="text-sm text-blue-700">
                     <p className="font-semibold mb-1">Producto: {productoSeleccionado.producto}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -4474,7 +4384,7 @@ function DetalleOrdenVenta() {
         title="Poner Guía en Tránsito"
         size="sm"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <p className="text-sm text-gray-600">
             Se registrará el despacho de la guía <strong>{guiaActiva?.numero_guia}</strong> y su estado cambiará a <strong>En Tránsito</strong>.
           </p>
@@ -4507,15 +4417,15 @@ function DetalleOrdenVenta() {
         title="Registrar Despacho Parcial/Total"
         size="lg"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="bg-blue-50 p-3 rounded border border-blue-200">
             <p className="text-sm text-blue-700">
               Seleccione la cantidad a despachar para cada producto.
               Se generará una <strong>Salida de Inventario</strong> automáticamente.
             </p>
           </div>
-          <div className="table-container max-h-80 overflow-y-auto">
-            <table className="table table-sm">
+          <div className="table-container vt-maxh-80 overflow-y-auto">
+            <table className="table vt-table-sm">
               <thead>
                 <tr>
                   <th>Producto</th>
@@ -4583,7 +4493,7 @@ function DetalleOrdenVenta() {
 
           {despachoForm.detalles.some(it => (parseFloat(it.cantidad_a_despachar) || 0) > parseFloat(it.cantidad_pendiente)) && (
             <div className="bg-amber-50 border border-amber-200 rounded p-3 flex items-start gap-2">
-              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 vt-mt-05" />
               <p className="text-sm text-amber-700">
                 Estás despachando <strong>más de lo pedido</strong> en uno o más productos.
                 Verifica las cantidades antes de confirmar.
@@ -4608,13 +4518,13 @@ function DetalleOrdenVenta() {
         title="Anular Despacho"
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <p className="text-sm text-gray-600">
             Se revertirá el stock y las cantidades despachadas de esta salida.
           </p>
 
           {anularForm.esGuia && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 vt-sy-2">
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -4631,18 +4541,18 @@ function DetalleOrdenVenta() {
               </label>
 
               {anularForm.anularGuia && (
-                <div className="space-y-2">
+                <div className="vt-sy-2">
                   {anularForm.sunatAceptada && (
-                    <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-900 space-y-2">
+                    <div className="rounded border border-red-200 bg-red-50 p-2 text-xs vt-text-danger vt-sy-2">
                       <p><strong>Esta GRE está ACEPTADA.</strong> SPI no puede ejecutar su baja por el API REST. Complétala primero en SUNAT SOL.</p>
-                      <a href="https://www.sunat.gob.pe/sol.html" target="_blank" rel="noreferrer" className="underline font-semibold">Abrir SUNAT SOL ↗</a>
+                      <a href="https://www.sunat.gob.pe/sol.html" target="_blank" rel="noreferrer" className="vt-underline font-semibold">Abrir SUNAT SOL ↗</a>
                       <select className="form-select w-full text-xs" value={anularForm.causalBaja} onChange={(e) => setAnularForm({ ...anularForm, causalBaja: e.target.value })}>
                         <option value="TRASLADO_NO_INICIADO">El traslado todavía no se inició</option>
                         <option value="CAMBIO_DESTINATARIO">Cambio de destinatario antes de llegar</option>
                       </select>
                       <input type="date" className="form-input w-full text-xs" max={getFechaLocal()} value={anularForm.fechaBajaSunat} onChange={(e) => setAnularForm({ ...anularForm, fechaBajaSunat: e.target.value })} />
                       <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5" checked={anularForm.confirmacionSol} onChange={(e) => setAnularForm({ ...anularForm, confirmacionSol: e.target.checked })} />
+                        <input type="checkbox" className="vt-mt-05" checked={anularForm.confirmacionSol} onChange={(e) => setAnularForm({ ...anularForm, confirmacionSol: e.target.checked })} />
                         <span>Confirmo que ya realicé la baja oficial de la GRE en SUNAT SOL.</span>
                       </label>
                     </div>
@@ -4690,7 +4600,7 @@ function DetalleOrdenVenta() {
         title="Anular Orden de Venta"
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="alert alert-warning">
             <AlertTriangle size={20} />
             <div>
@@ -4748,10 +4658,10 @@ function DetalleOrdenVenta() {
         title="Asignar Tipo de Comprobante"
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded">
             <div className="flex gap-2 items-start">
-              <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+              <AlertTriangle className="text-amber-600 shrink-0 vt-mt-05" size={20} />
               <div className="text-sm text-amber-800">
                 <p className="font-bold mb-1">Asignación inicial de comprobante</p>
                 <p>Seleccione el tipo de documento que se emitirá para esta orden. Esta acción solo puede realizarse una vez.</p>
@@ -4759,13 +4669,13 @@ function DetalleOrdenVenta() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="vt-sy-3">
             <p className="text-sm font-medium text-muted">Seleccione el tipo de comprobante:</p>
             
             <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
-                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline hover:bg-green-50'}`}
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline'}`}
                 onClick={() => setNuevoTipoComprobante('Factura')}
               >
                 <div className="flex items-center gap-3">
@@ -4825,7 +4735,7 @@ function DetalleOrdenVenta() {
         title="Cambiar Tipo de Comprobante"
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="alert alert-warning">
             <AlertTriangle size={20} />
             <div>
@@ -4844,13 +4754,13 @@ function DetalleOrdenVenta() {
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="vt-sy-3">
             <p className="text-sm font-medium text-muted">Seleccione el nuevo tipo de comprobante:</p>
             
             <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
-                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline hover:bg-green-50'}`}
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline'}`}
                 onClick={() => setNuevoTipoComprobante('Factura')}
                 disabled={orden.tipo_comprobante === 'Factura'}
               >
@@ -4910,7 +4820,7 @@ function DetalleOrdenVenta() {
         size="md"
       >
         <form onSubmit={handleGuardarTransporte}>
-          <div className="space-y-4">
+          <div className="vt-sy-4">
             <div className="form-group">
               <label className="form-label">Tipo de Entrega</label>
               <select 
@@ -5246,7 +5156,7 @@ function DetalleOrdenVenta() {
                   </div>
                 )}
 
-                <div className="rounded-md border border-gray-200 p-2 space-y-1">
+                <div className="rounded-md border border-gray-200 p-2 vt-sy-1">
                   <p className="text-xs font-semibold text-gray-600">Indicadores (opcional)</p>
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -5272,7 +5182,7 @@ function DetalleOrdenVenta() {
                     />
                     Retorno de vehículo con envases o embalajes vacíos
                   </label>
-                  <p className="text-[11px] text-amber-700">Los 3 indicadores están pendientes de confirmar contra el Anexo SUNAT antes de usarse en producción.</p>
+                  <p className="vt-fs-11 text-amber-700">Los 3 indicadores están pendientes de confirmar contra el Anexo SUNAT antes de usarse en producción.</p>
                 </div>
               </>
             )}
@@ -5305,11 +5215,11 @@ function DetalleOrdenVenta() {
       >
         {productoRectificar && (
           <form onSubmit={handleRectificarCantidad}>
-            <div className="space-y-4">
+            <div className="vt-sy-4">
               <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
                 <div className="flex gap-2">
-                  <AlertTriangle className="text-orange-500 shrink-0" size={20} />
-                  <div className="text-sm text-orange-800">
+                  <AlertTriangle className="vt-text-warning shrink-0" size={20} />
+                  <div className="text-sm vt-text-warning">
                     <p className="font-bold">{productoRectificar.producto}</p>
                     <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
                     <p className="text-xs mt-1">
@@ -5374,7 +5284,7 @@ function DetalleOrdenVenta() {
         title="Reservar Stock Físico"
         size="lg"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
             <div className="flex gap-2">
               <Box className="text-yellow-600 shrink-0" size={20} />
@@ -5388,18 +5298,18 @@ function DetalleOrdenVenta() {
                     <span>Total Items: {infoReservaStock.resumen.total_items}</span>
                     <span className="text-green-700">Stock Completo: {infoReservaStock.resumen.con_stock_completo}</span>
                     <span className="text-orange-700">Stock Parcial: {infoReservaStock.resumen.con_stock_parcial}</span>
-                    <span className="text-red-700">Sin Stock: {infoReservaStock.resumen.sin_stock}</span>
+                    <span className="vt-text-danger">Sin Stock: {infoReservaStock.resumen.sin_stock}</span>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="table-container max-h-[60vh] overflow-y-auto border rounded-lg">
-            <table className="table table-sm w-full">
+          <div className="table-container vt-maxh-60vh overflow-y-auto border rounded-lg">
+            <table className="table vt-table-sm w-full">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="w-10 text-center">#</th>
+                  <th className="vt-w-10 text-center">#</th>
                   <th>Producto</th>
                   <th className="text-right">Requerido</th>
                   <th className="text-right">Disponible Total</th>
@@ -5416,7 +5326,7 @@ function DetalleOrdenVenta() {
                       <td className="text-center">
                         <input 
                           type="checkbox"
-                          className="checkbox checkbox-sm checkbox-primary"
+                          className="checkbox"
                           checked={item.seleccionado}
                           onChange={() => {
                              const nuevoVal = !item.seleccionado ? item.stock_maximo_disponible : 0;
@@ -5478,14 +5388,14 @@ function DetalleOrdenVenta() {
           {visorArchivo.tipo === 'pdf' ? (
             <iframe 
               src={visorArchivo.url} 
-              className="w-full h-[70vh] border-0 rounded"
+              className="w-full h-[70vh] vt-border-0 rounded"
               title="Visor de PDF"
             />
           ) : (
             <img 
               src={visorArchivo.url} 
               alt="Visualización de archivo" 
-              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
+              className="vt-maxw-full max-h-[70vh] vt-object-contain rounded shadow-lg"
             />
           )}
         </div>
@@ -5505,11 +5415,11 @@ function DetalleOrdenVenta() {
         title="Generar Correlativo de Guía Interna"
         size="sm"
       >
-        <div className="space-y-4">
-          <div className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded">
+        <div className="vt-sy-4">
+          <div className="bg-blue-50 border-l-4 border-info p-4 rounded">
             <div className="flex gap-3">
               <ClipboardList className="text-indigo-600 shrink-0" size={24} />
-              <div className="text-sm text-indigo-900">
+              <div className="text-sm ">
                 <p className="font-bold mb-1">¿Desea generar el correlativo para este despacho?</p>
                 <p>Se asignará el siguiente número de Guía Interna (GI) disponible de forma permanente a este despacho específico.</p>
               </div>
@@ -5552,8 +5462,8 @@ function DetalleOrdenVenta() {
         title="Anular Factura SUNAT"
         size="md"
       >
-        <div className="space-y-4">
-          <div className="alert alert-danger">
+        <div className="vt-sy-4">
+          <div className="alert alert-error">
             <AlertTriangle size={20} />
             <div>
               <strong>¡Atención!</strong> Se anulará la factura{' '}
@@ -5608,7 +5518,7 @@ function DetalleOrdenVenta() {
         title="Eliminar Factura (error de sistema)"
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="alert alert-warning">
             <AlertTriangle size={20} />
             <div>
@@ -5677,7 +5587,7 @@ function DetalleOrdenVenta() {
         title={`Adjuntar documento al despacho SAL-${String(salidaParaDoc || '').padStart(6, '0')}`}
         size="md"
       >
-        <div className="space-y-4">
+        <div className="vt-sy-4">
           <div className="form-group">
             <label className="form-label">Tipo de documento *</label>
             <select
@@ -5701,7 +5611,7 @@ function DetalleOrdenVenta() {
           </div>
           <div className="form-group">
             <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 cursor-pointer transition-colors text-sm
-              ${formDocDespacho.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+              ${formDocDespacho.archivos.length > 0 ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
               <input
                 type="file"
                 multiple

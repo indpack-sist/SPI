@@ -13,23 +13,22 @@ import {
   Calendar,
   CreditCard,
   FileText,
-  X,
   Eye,
-  ChevronRight,
-  Download,
+  ArrowLeft,
+  Flag,
   ShieldCheck,
   ShieldAlert,
   ShieldOff
 } from 'lucide-react';
-import Table from '../../components/UI/Table';
-import Pagination from '../../components/UI/Pagination';
+import PgPager from '../../components/UI/PgPager';
 import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, archivosAPI } from '../../config/api';
-import './VerificarOrdenes.css';
+import { BadgeEstadoOrden, BadgeEstadoPago } from './estadosVentas';
+import './Ventas.css';
 
 function VerificarOrdenes() {
   const navigate = useNavigate();
@@ -284,9 +283,9 @@ function VerificarOrdenes() {
   const getPrioridadConfig = (prioridad) => {
     const configs = {
       'Baja': { clase: 'badge-secondary', color: 'var(--text-secondary)' },
-      'Media': { clase: 'badge-info', color: '#3b82f6' },
-      'Alta': { clase: 'badge-warning', color: '#f59e0b' },
-      'Urgente': { clase: 'badge-danger', color: '#ef4444' }
+      'Media': { clase: 'badge-info', color: 'var(--info)' },
+      'Alta': { clase: 'badge-warning', color: 'var(--warning)' },
+      'Urgente': { clase: 'badge-danger', color: 'var(--danger)' }
     };
     return configs[prioridad] || configs['Media'];
   };
@@ -295,289 +294,245 @@ function VerificarOrdenes() {
   const { currentItems, setCurrentPage, ...paginacion } = usePagination(listaActiva);
   useEffect(() => { setCurrentPage(1); }, [activeTab]);
 
-  const columns = [
-    {
-      header: 'N° Orden',
-      accessor: 'numero_orden',
-      width: '140px',
-      render: (value, row) => (
-        <div>
-          <div className="font-mono font-bold text-primary">{value}</div>
-          {row.numero_comprobante && (
-            <div className="text-xs text-muted">
-              {row.tipo_comprobante}: {row.numero_comprobante}
-            </div>
+  const renderVistaDocumento = (url, titulo, key) => {
+    const esPdf = String(url).split('.').pop().toLowerCase() === 'pdf';
+    const proxyUrl = archivosAPI.getProxyUrl(url);
+    return (
+      <div key={key} className="vt-doc">
+        <span className="pg-field-label">{titulo}</span>
+        <div className="vt-doc-frame">
+          {esPdf ? (
+            <iframe src={proxyUrl} title={titulo} />
+          ) : (
+            <img src={proxyUrl} alt={titulo} />
           )}
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary vt-doc-zoom"
+            onClick={() => abrirVisor(url, titulo)}
+            title="Abrir en pantalla completa"
+          >
+            <Eye size={12} /> Ampliar
+          </button>
         </div>
-      )
-    },
-    {
-      header: 'Fecha',
-      accessor: 'fecha_emision',
-      width: '110px',
-      render: (value) => (
-        <div className="text-sm">{formatearFecha(value)}</div>
-      )
-    },
-    {
-      header: 'Cliente',
-      accessor: 'cliente',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted">RUC: {row.ruc_cliente}</div>
-        </div>
-      )
-    },
-    {
-      header: 'Comercial',
-      accessor: 'comercial',
-      width: '150px',
-      render: (value) => (
-        <div className="flex items-center gap-1 text-sm">
-          <User size={14} className="text-primary" />
-          {value || 'Sin asignar'}
-        </div>
-      )
-    },
-    {
-      header: 'Tipo Venta',
-      accessor: 'tipo_venta',
-      width: '120px',
-      align: 'center',
-      render: (value, row) => (
-        <div>
-          <span className={`badge ${value === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
-            {value || 'Contado'}
-          </span>
-          {value === 'Crédito' && row.dias_credito && (
-            <div className="text-xs text-muted mt-1">
-              {row.dias_credito} días
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Impuesto',
-      accessor: 'tipo_impuesto',
-      width: '120px',
-      align: 'center',
-      render: (value, row) => {
-        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(value || '').toUpperCase().trim());
-        return (
-          <div className="flex flex-col items-center">
-            <span className={`badge badge-sm ${
-              esSinImpuesto ? 'badge-info' : 'badge-primary'
-            }`}>
-              {value || 'IGV'}
-            </span>
-            <span className="text-[10px] text-muted">
-              ({esSinImpuesto ? 0 : (row.porcentaje_impuesto || 0)}%)
-            </span>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Total',
-      accessor: 'total',
-      width: '120px',
-      align: 'right',
-      render: (value, row) => {
-        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase().trim());
-        const totalAMostrar = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
-        const tc = parseFloat(row.tipo_cambio || 0);
-        const mostrarConversion = row.moneda === 'USD' && tc > 1;
+      </div>
+    );
+  };
 
-        return (
-          <div className="flex flex-col items-end">
-            <div className="font-bold text-primary">
-              {formatearMoneda(totalAMostrar, row.moneda)}
-            </div>
-            {mostrarConversion && (
-              <div className="text-[10px] text-success font-medium italic">
-                ≈ {formatearMoneda(totalAMostrar * tc, 'PEN')}
-              </div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Prioridad',
-      accessor: 'prioridad',
-      width: '100px',
-      align: 'center',
-      render: (value) => {
-        const config = getPrioridadConfig(value);
-        return (
-          <span className={`badge ${config.clase}`}>
-            {value}
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Items',
-      accessor: 'total_items',
-      width: '70px',
-      align: 'center',
-      render: (value) => (
-        <span className="badge badge-neutral">{value || 0}</span>
-      )
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_orden_venta',
-      width: '100px',
-      align: 'center',
-      render: (value, row) => (
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => abrirVerificacion(row)}
-          disabled={procesando}
-        >
-          <Eye size={14} />
-          Verificar
-        </button>
-      )
-    }
-  ];
+  const esPendientes = activeTab === 'pendientes';
 
   if (loading) return <Loading variant="table" />;
 
-  const montoTotalPendiente = ordenesPendientes.reduce(
-    (sum, orden) => sum + parseFloat(orden.total || 0),
-    0
-  );
+  const montoPendientePorMoneda = ordenesPendientes.reduce((acc, orden) => {
+    const moneda = orden.moneda === 'USD' ? 'USD' : 'PEN';
+    acc[moneda] += parseFloat(orden.total || 0);
+    return acc;
+  }, { PEN: 0, USD: 0 });
   const ordenesUrgentes = ordenesPendientes.filter(
     orden => orden.prioridad === 'Urgente'
   ).length;
 
   return (
-    <div className="p-6 verificar-ordenes-page">
-      <div className="flex justify-between items-center mb-6">
+    <div className="pg-page vt-page">
+      <header className="pg-header">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield size={32} className="text-primary" />
-            Verificación de Órdenes de Venta
-          </h1>
-          <p className="text-muted">Aprobar o rechazar órdenes pendientes de verificación</p>
+          <span className="pg-eyebrow"><Shield size={13} /> Ventas</span>
+          <h1 className="pg-title">Verificación de órdenes</h1>
+          <p className="pg-subtitle">Aprobar o rechazar órdenes pendientes de verificación</p>
         </div>
-        <button 
-          className="btn btn-outline"
-          onClick={() => navigate('/ventas/ordenes')}
-        >
-          Volver a Órdenes
-        </button>
+        <div className="pg-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => navigate('/ventas/ordenes')}
+          >
+            <ArrowLeft size={16} /> Volver a Órdenes
+          </button>
+        </div>
+      </header>
+
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+        <div className="pg-segmented vt-tabs" role="tablist" aria-label="Vista de verificación">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={esPendientes}
+            className={esPendientes ? 'active' : ''}
+            onClick={() => setActiveTab('pendientes')}
+          >
+            <Clock size={14} />
+            Pendientes ({ordenesPendientes.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!esPendientes}
+            className={!esPendientes ? 'active' : ''}
+            onClick={() => setActiveTab('historial')}
+          >
+            <Calendar size={14} />
+            Historial reciente ({historialReciente.length})
+          </button>
+        </div>
+
+        {esPendientes && (
+          <div className="pg-kpis" aria-label="Resumen de órdenes pendientes">
+            <div className="pg-kpi is-warning">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Pendientes</span>
+                <span className="pg-kpi-icon"><Clock size={16} /></span>
+              </div>
+              <span className="pg-kpi-value">{ordenesPendientes.length}</span>
+              <span className="pg-kpi-foot">Esperan verificación</span>
+            </div>
+            <div className="pg-kpi is-info">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Monto pendiente</span>
+                <span className="pg-kpi-icon"><DollarSign size={16} /></span>
+              </div>
+              <span className="pg-kpi-value">{formatearMoneda(montoPendientePorMoneda.PEN, 'PEN')}</span>
+              <span className="pg-kpi-foot">
+                {montoPendientePorMoneda.USD > 0
+                  ? <>Además <b>{formatearMoneda(montoPendientePorMoneda.USD, 'USD')}</b> en dólares</>
+                  : 'Órdenes en soles'}
+              </span>
+            </div>
+            <div className="pg-kpi is-danger">
+              <div className="pg-kpi-top">
+                <span className="pg-kpi-label">Urgentes</span>
+                <span className="pg-kpi-icon"><AlertTriangle size={16} /></span>
+              </div>
+              <span className="pg-kpi-value">{ordenesUrgentes}</span>
+              <span className="pg-kpi-foot">Prioridad urgente</span>
+            </div>
+          </div>
+        )}
+
+        {(esPendientes && ordenesPendientes.length === 0) ? (
+          <section className="pg-panel">
+            <div className="pg-empty">
+              <CheckCircle size={32} />
+              <strong>¡Excelente! No hay órdenes pendientes de verificación</strong>
+              <span>Todas las órdenes han sido revisadas y aprobadas</span>
+            </div>
+          </section>
+        ) : (
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title">
+                {esPendientes ? <><ShieldAlert size={16} /> Órdenes pendientes de verificación</> : <><Calendar size={16} /> Historial de verificaciones recientes</>}
+                <span className="pg-count">{listaActiva.length}</span>
+              </h2>
+            </div>
+
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>N° Orden</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Comercial</th>
+                    <th className="center">Tipo venta</th>
+                    <th className="center">Impuesto</th>
+                    {esPendientes ? (
+                      <>
+                        <th className="num">Total</th>
+                        <th className="center">Prioridad</th>
+                        <th className="center">Ítems</th>
+                        <th className="center">Acciones</th>
+                      </>
+                    ) : (
+                      <th className="center">Estado</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.length > 0 ? currentItems.map((row) => {
+                    const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase().trim());
+                    const totalAMostrar = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(row.total || 0);
+                    const tc = parseFloat(row.tipo_cambio || 0);
+                    const mostrarConversion = row.moneda === 'USD' && tc > 1;
+                    return (
+                      <tr key={row.id_orden_venta}>
+                        <td className="nowrap">
+                          <span className="pg-code">{row.numero_orden}</span>
+                          {row.numero_comprobante && (
+                            <span className="pg-cell-sub">{row.tipo_comprobante}: {row.numero_comprobante}</span>
+                          )}
+                        </td>
+                        <td className="nowrap">{formatearFecha(row.fecha_emision)}</td>
+                        <td>
+                          <span className="pg-cell-main pg-truncate" title={row.cliente}>{row.cliente}</span>
+                          <span className="pg-cell-sub">RUC {row.ruc_cliente}</span>
+                        </td>
+                        <td><span className="pg-cell-main"><User size={13} className="pg-muted" />{row.comercial || 'Sin asignar'}</span></td>
+                        <td className="center">
+                          <span className={`badge ${row.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
+                            {row.tipo_venta || 'Contado'}
+                          </span>
+                          {row.tipo_venta === 'Crédito' && row.dias_credito && (
+                            <span className="pg-cell-sub">{row.dias_credito} días</span>
+                          )}
+                        </td>
+                        <td className="center">
+                          <span className={`badge badge-sm ${esSinImpuesto ? 'badge-info' : 'badge-primary'}`}>
+                            {row.tipo_impuesto || 'IGV'}
+                          </span>
+                          <span className="pg-cell-sub">({esSinImpuesto ? 0 : (row.porcentaje_impuesto || 0)}%)</span>
+                        </td>
+                        {esPendientes ? (
+                          <>
+                            <td className="num">
+                              <span className="vt-amount">{formatearMoneda(totalAMostrar, row.moneda)}</span>
+                              {mostrarConversion && (
+                                <span className="pg-cell-sub">≈ {formatearMoneda(totalAMostrar * tc, 'PEN')}</span>
+                              )}
+                            </td>
+                            <td className="center">
+                              <span className={`badge ${getPrioridadConfig(row.prioridad).clase}`}><Flag size={11} />{row.prioridad}</span>
+                            </td>
+                            <td className="center"><span className="pg-count">{row.total_items || 0}</span></td>
+                            <td className="center">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => abrirVerificacion(row)}
+                                disabled={procesando}
+                              >
+                                <Eye size={14} />
+                                Verificar
+                              </button>
+                            </td>
+                          </>
+                        ) : (
+                          <td className="center"><BadgeEstadoOrden estado={row.estado} /></td>
+                        )}
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={esPendientes ? 10 : 7}>
+                        <div className="pg-empty">
+                          <Calendar size={28} />
+                          <strong>{esPendientes ? 'No hay órdenes pendientes' : 'No hay historial reciente'}</strong>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <PgPager {...paginacion} setCurrentPage={setCurrentPage} sustantivo="órdenes" />
+          </section>
+        )}
       </div>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
-
-      <div className="tabs-navigation mb-4">
-        <button
-          className={`tab-item ${activeTab === 'pendientes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pendientes')}
-        >
-          <Clock size={18} />
-          Pendientes ({ordenesPendientes.length})
-        </button>
-        <button
-          className={`tab-item ${activeTab === 'historial' ? 'active' : ''}`}
-          onClick={() => setActiveTab('historial')}
-        >
-          <Calendar size={18} />
-          Historial Reciente ({historialReciente.length})
-        </button>
-      </div>
-
-      {activeTab === 'pendientes' && (
-        <section className="verification-summary" aria-label="Resumen de órdenes pendientes">
-          <div className="verification-summary__item verification-summary__item--warning">
-            <Clock size={18} aria-hidden="true" />
-            <div className="verification-summary__content">
-              <span className="verification-summary__label">Pendientes</span>
-              <strong className="verification-summary__value">{ordenesPendientes.length}</strong>
-            </div>
-          </div>
-
-          <div className="verification-summary__item verification-summary__item--info">
-            <DollarSign size={18} aria-hidden="true" />
-            <div className="verification-summary__content">
-              <span className="verification-summary__label">Monto pendiente</span>
-              <strong className="verification-summary__value">
-                {formatearMoneda(montoTotalPendiente, 'PEN')}
-              </strong>
-            </div>
-          </div>
-
-          <div className="verification-summary__item verification-summary__item--danger">
-            <AlertTriangle size={18} aria-hidden="true" />
-            <div className="verification-summary__content">
-              <span className="verification-summary__label">Urgentes</span>
-              <strong className="verification-summary__value">{ordenesUrgentes}</strong>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {(activeTab === 'pendientes' && ordenesPendientes.length === 0) ? (
-        <div className="card">
-          <div className="card-body text-center py-12">
-            <CheckCircle size={64} className="text-success mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-700 mb-2">
-              ¡Excelente! No hay órdenes pendientes de verificación
-            </h3>
-            <p className="text-muted mb-4">
-              Todas las órdenes han sido revisadas y aprobadas
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="card list-panel">
-          <div className="card-header flex justify-between items-center">
-            <h2 className="card-title">
-              {activeTab === 'pendientes' ? 'Órdenes Pendientes de Verificación' : 'Historial de Verificaciones Recientes'}
-            </h2>
-          </div>
-          
-          <div className="card-body p-0">
-            <Table
-              columns={activeTab === 'pendientes' ? columns : [
-                ...columns.slice(0, 6),
-                {
-                  header: 'Estado',
-                  accessor: 'estado',
-                  width: '120px',
-                  align: 'center',
-                  render: (value) => (
-                    <span className={`badge ${
-                      ['Aprobada', 'Aprobado', 'En Proceso', 'Despachada', 'Entregada'].includes(value) ? 'badge-success' : 
-                      ['Rechazada', 'Cancelada'].includes(value) ? 'badge-danger' : 'badge-warning'
-                    }`}>
-                      {value}
-                    </span>
-                  )
-                },
-                {
-                  header: 'Fecha',
-                  accessor: 'fecha_emision',
-                  width: '110px',
-                  render: (value) => <div className="text-xs">{formatearFecha(value)}</div>
-                }
-              ]}
-              data={currentItems}
-              emptyMessage={activeTab === 'pendientes' ? "No hay órdenes pendientes" : "No hay historial reciente"}
-            />
-            <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
-          </div>
-        </div>
-      )}
-
-      <Modal 
-        isOpen={modalVerificar} 
+      <Modal
+        isOpen={modalVerificar}
         onClose={() => {
           setModalVerificar(false);
           setDatosVerificacion(null);
@@ -588,316 +543,218 @@ function VerificarOrdenes() {
         size="xl"
       >
         {datosVerificacion && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="card bg-blue-50 border border-blue-200">
-                <div className="card-header bg-blue-100 border-b border-blue-200">
-                  <h3 className="font-bold text-blue-900 flex items-center gap-2">
-                    <FileText size={18} />
-                    Datos de la Orden
-                  </h3>
+          <div className="pg-stack">
+            <div className="pg-grid pg-grid-even vt-align-start">
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h3 className="pg-panel-title"><FileText size={16} /> Datos de la orden</h3>
                 </div>
-                <div className="card-body space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Cliente:</span>
-                    <span className="font-semibold text-right">{datosVerificacion.orden.cliente}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">RUC:</span>
-                    <span className="font-mono">{datosVerificacion.orden.ruc_cliente}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Tipo Venta:</span>
-                    <span className={`badge ${datosVerificacion.orden.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
-                      {datosVerificacion.orden.tipo_venta || 'Contado'}
-                    </span>
-                  </div>
-                  {datosVerificacion.orden.dias_credito > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted">Plazo:</span>
-                      <span className="font-semibold">{datosVerificacion.orden.dias_credito} días</span>
+                <div className="pg-panel-body">
+                  <div className="pg-kv">
+                    <div className="wide"><span>Cliente</span><strong>{datosVerificacion.orden.cliente}</strong></div>
+                    <div><span>RUC</span><strong className="pg-code">{datosVerificacion.orden.ruc_cliente}</strong></div>
+                    <div>
+                      <span>Tipo venta</span>
+                      <strong>
+                        <span className={`badge ${datosVerificacion.orden.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
+                          {datosVerificacion.orden.tipo_venta || 'Contado'}
+                        </span>
+                      </strong>
                     </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-muted">Total Orden:</span>
-                    <span className="font-bold text-primary text-lg">
-                      {formatearMoneda(datosVerificacion.orden.total, datosVerificacion.orden.moneda)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Comercial:</span>
-                    <span className="font-semibold">{datosVerificacion.orden.comercial || 'Sin asignar'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Productos:</span>
-                    <span className="badge badge-neutral">{datosVerificacion.orden.detalle?.length || 0} items</span>
+                    {datosVerificacion.orden.dias_credito > 0 && (
+                      <div><span>Plazo</span><strong>{datosVerificacion.orden.dias_credito} días</strong></div>
+                    )}
+                    <div>
+                      <span>Total orden</span>
+                      <strong className="vt-amount">{formatearMoneda(datosVerificacion.orden.total, datosVerificacion.orden.moneda)}</strong>
+                    </div>
+                    <div><span>Comercial</span><strong>{datosVerificacion.orden.comercial || 'Sin asignar'}</strong></div>
+                    <div><span>Productos</span><strong>{datosVerificacion.orden.detalle?.length || 0} items</strong></div>
                   </div>
 
                   {(datosVerificacion.orden.orden_compra_url || datosVerificacion.orden.comprobante_url) && (
-                    <div className="pt-3 border-t border-blue-200 mt-2">
-                        <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
+                    <div className="vt-docs">
+                      <h4 className="pg-section-title"><FileText size={14} /> Documentos adjuntos</h4>
 
-                        {datosVerificacion.orden.orden_compra_url && (
-                          <div className="mb-2">
-                            {datosVerificacion.orden.estado_verificacion_oc === 'Verificado' ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
-                                <ShieldCheck size={11} /> OC Verificada
-                                {datosVerificacion.orden.fecha_verificacion_oc && (
-                                  <span className="font-normal text-green-600 ml-1">
-                                    · {new Date(datosVerificacion.orden.fecha_verificacion_oc).toLocaleDateString('es-PE')}
-                                  </span>
-                                )}
-                              </span>
-                            ) : datosVerificacion.orden.estado_verificacion_oc === 'Omitida' ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">
-                                <ShieldOff size={11} /> Verificación omitida
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
-                                <ShieldAlert size={11} /> Sin verificar
-                              </span>
-                            )}
-                          </div>
-                        )}
+                      {datosVerificacion.orden.orden_compra_url && (
+                        <div>
+                          {datosVerificacion.orden.estado_verificacion_oc === 'Verificado' ? (
+                            <span className="badge badge-success">
+                              <ShieldCheck size={11} /> OC Verificada
+                              {datosVerificacion.orden.fecha_verificacion_oc && (
+                                <> · {new Date(datosVerificacion.orden.fecha_verificacion_oc).toLocaleDateString('es-PE')}</>
+                              )}
+                            </span>
+                          ) : datosVerificacion.orden.estado_verificacion_oc === 'Omitida' ? (
+                            <span className="badge badge-secondary">
+                              <ShieldOff size={11} /> Verificación omitida
+                            </span>
+                          ) : (
+                            <span className="badge badge-warning">
+                              <ShieldAlert size={11} /> Sin verificar
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-                        {datosVerificacion.orden.orden_compra_url && (() => {
-                            let urls = [];
-                            try {
-                                if (Array.isArray(datosVerificacion.orden.orden_compra_url)) {
-                                    urls = datosVerificacion.orden.orden_compra_url;
-                                } else if (typeof datosVerificacion.orden.orden_compra_url === 'string') {
-                                    if (datosVerificacion.orden.orden_compra_url.startsWith('[')) {
-                                        urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
-                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
-                                    } else {
-                                        urls = [datosVerificacion.orden.orden_compra_url];
-                                    }
-                                }
-                            } catch {
-                                urls = [datosVerificacion.orden.orden_compra_url];
-                            }
-                            return (
-                                <div className="space-y-3 mb-3">
-                                    {urls.map((url, i) => {
-                                        const titulo = urls.length > 1 ? `Orden de Compra Cliente ${i + 1}` : 'Orden de Compra Cliente';
-                                        const esPdf = String(url).split('.').pop().toLowerCase() === 'pdf';
-                                        const proxyUrl = archivosAPI.getProxyUrl(url);
-                                        return (
-                                            <div key={`oc-${i}`} className="space-y-1">
-                                                <p className="text-xs font-semibold text-muted">{titulo}</p>
-                                                <div style={{ position: 'relative', width: '100%', height: 520, borderRadius: 6, overflow: 'hidden', border: '2px solid var(--border)', background: '#f3f4f6', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                                                    {esPdf ? (
-                                                        <iframe src={proxyUrl} title={titulo} style={{ width: '100%', height: '100%', border: 'none' }} />
-                                                    ) : (
-                                                        <img src={proxyUrl} alt={titulo} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }} />
-                                                    )}
-                                                    <button
-                                                        onClick={() => abrirVisor(url, titulo)}
-                                                        title="Abrir en pantalla completa"
-                                                        style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, zIndex: 10 }}
-                                                    >
-                                                        <Eye size={12} /> Ampliar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()}
+                      {datosVerificacion.orden.orden_compra_url && (() => {
+                          let urls = [];
+                          try {
+                              if (Array.isArray(datosVerificacion.orden.orden_compra_url)) {
+                                  urls = datosVerificacion.orden.orden_compra_url;
+                              } else if (typeof datosVerificacion.orden.orden_compra_url === 'string') {
+                                  if (datosVerificacion.orden.orden_compra_url.startsWith('[')) {
+                                      urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
+                                      if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
+                                  } else {
+                                      urls = [datosVerificacion.orden.orden_compra_url];
+                                  }
+                              }
+                          } catch {
+                              urls = [datosVerificacion.orden.orden_compra_url];
+                          }
+                          return (
+                              <div className="vt-docs-list">
+                                  {urls.map((url, i) => renderVistaDocumento(url, urls.length > 1 ? `Orden de Compra Cliente ${i + 1}` : 'Orden de Compra Cliente', `oc-${i}`))}
+                              </div>
+                          );
+                      })()}
 
-                        {datosVerificacion.orden.orden_compra_url && (
-                          <div className="flex mb-3">
-                            <button
-                              className="btn btn-xs btn-outline bg-amber-50 border-amber-400 text-amber-700 hover:bg-amber-100 flex items-center gap-1"
-                              onClick={() => setModalVerifOCOpen(true)}
-                            >
-                              <ShieldCheck size={12} />
-                              {datosVerificacion.orden.estado_verificacion_oc === 'Verificado'
-                                ? 'Ver/Re-verificar OC'
-                                : 'Verificar OC'}
-                            </button>
-                          </div>
-                        )}
+                      {datosVerificacion.orden.orden_compra_url && (
+                        <div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline btn-warning"
+                            onClick={() => setModalVerifOCOpen(true)}
+                          >
+                            <ShieldCheck size={13} />
+                            {datosVerificacion.orden.estado_verificacion_oc === 'Verificado'
+                              ? 'Ver/Re-verificar OC'
+                              : 'Verificar OC'}
+                          </button>
+                        </div>
+                      )}
 
-                        {datosVerificacion.orden.comprobante_url && (() => {
-                            let urls = [];
-                            try {
-                                if (Array.isArray(datosVerificacion.orden.comprobante_url)) {
-                                    urls = datosVerificacion.orden.comprobante_url;
-                                } else if (typeof datosVerificacion.orden.comprobante_url === 'string') {
-                                    if (datosVerificacion.orden.comprobante_url.startsWith('[')) {
-                                        urls = JSON.parse(datosVerificacion.orden.comprobante_url);
-                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
-                                    } else {
-                                        urls = [datosVerificacion.orden.comprobante_url];
-                                    }
-                                }
-                            } catch {
-                                urls = [datosVerificacion.orden.comprobante_url];
-                            }
-                            return (
-                                <div className="space-y-3">
-                                    {urls.map((url, i) => {
-                                        const titulo = urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago';
-                                        const esPdf = String(url).split('.').pop().toLowerCase() === 'pdf';
-                                        const proxyUrl = archivosAPI.getProxyUrl(url);
-                                        return (
-                                            <div key={`comp-${i}`} className="space-y-1">
-                                                <p className="text-xs font-semibold text-muted">{titulo}</p>
-                                                <div style={{ position: 'relative', width: '100%', height: 520, borderRadius: 6, overflow: 'hidden', border: '2px solid var(--border)', background: '#f3f4f6', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                                                    {esPdf ? (
-                                                        <iframe src={proxyUrl} title={titulo} style={{ width: '100%', height: '100%', border: 'none' }} />
-                                                    ) : (
-                                                        <img src={proxyUrl} alt={titulo} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }} />
-                                                    )}
-                                                    <button
-                                                        onClick={() => abrirVisor(url, titulo)}
-                                                        title="Abrir en pantalla completa"
-                                                        style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, zIndex: 10 }}
-                                                    >
-                                                        <Eye size={12} /> Ampliar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()}
+                      {datosVerificacion.orden.comprobante_url && (() => {
+                          let urls = [];
+                          try {
+                              if (Array.isArray(datosVerificacion.orden.comprobante_url)) {
+                                  urls = datosVerificacion.orden.comprobante_url;
+                              } else if (typeof datosVerificacion.orden.comprobante_url === 'string') {
+                                  if (datosVerificacion.orden.comprobante_url.startsWith('[')) {
+                                      urls = JSON.parse(datosVerificacion.orden.comprobante_url);
+                                      if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
+                                  } else {
+                                      urls = [datosVerificacion.orden.comprobante_url];
+                                  }
+                              }
+                          } catch {
+                              urls = [datosVerificacion.orden.comprobante_url];
+                          }
+                          return (
+                              <div className="vt-docs-list">
+                                  {urls.map((url, i) => renderVistaDocumento(url, urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago', `comp-${i}`))}
+                              </div>
+                          );
+                      })()}
                     </div>
                   )}
                 </div>
-              </div>
+              </section>
 
-              <div className="card bg-purple-50 border border-purple-200">
-                <div className="card-header bg-purple-100 border-b border-purple-200">
-                  <h3 className="font-bold text-purple-900 flex items-center gap-2">
-                    <Building size={18} />
-                    Información del Cliente
-                  </h3>
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h3 className="pg-panel-title"><Building size={16} /> Información del cliente</h3>
                 </div>
-                <div className="card-body space-y-2 text-sm">
-                  {datosVerificacion.orden.direccion_cliente && (
-                    <div>
-                      <span className="text-muted block mb-1">Dirección:</span>
-                      <span className="text-xs">{datosVerificacion.orden.direccion_cliente}</span>
-                    </div>
-                  )}
-                  {datosVerificacion.orden.telefono_cliente && (
-                    <div className="flex justify-between">
-                      <span className="text-muted">Teléfono:</span>
-                      <span className="font-semibold">{datosVerificacion.orden.telefono_cliente}</span>
-                    </div>
-                  )}
-                  {datosVerificacion.orden.email_cliente && (
-                    <div>
-                      <span className="text-muted block mb-1">Email:</span>
-                      <span className="text-xs">{datosVerificacion.orden.email_cliente}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-purple-200">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-muted">Total Órdenes (6m):</span>
-                      <span className="font-bold">{datosVerificacion.estadisticas_pago.total_ordenes || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">Órdenes Pagadas:</span>
-                      <span className="font-bold text-success">{datosVerificacion.estadisticas_pago.ordenes_pagadas || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">Pendientes Pago:</span>
-                      <span className="font-bold text-warning">{datosVerificacion.estadisticas_pago.ordenes_pendientes || 0}</span>
-                    </div>
+                <div className="pg-panel-body">
+                  <div className="pg-kv">
+                    {datosVerificacion.orden.direccion_cliente && (
+                      <div className="wide"><span>Dirección</span><strong>{datosVerificacion.orden.direccion_cliente}</strong></div>
+                    )}
+                    {datosVerificacion.orden.telefono_cliente && (
+                      <div><span>Teléfono</span><strong>{datosVerificacion.orden.telefono_cliente}</strong></div>
+                    )}
+                    {datosVerificacion.orden.email_cliente && (
+                      <div className="wide"><span>Email</span><strong>{datosVerificacion.orden.email_cliente}</strong></div>
+                    )}
+                  </div>
+                  <div className="vt-figures vt-figures-block">
+                    <div className="vt-figure"><span>Total órdenes (6m)</span><b>{datosVerificacion.estadisticas_pago.total_ordenes || 0}</b></div>
+                    <div className="vt-figure"><span>Órdenes pagadas</span><b className="is-success">{datosVerificacion.estadisticas_pago.ordenes_pagadas || 0}</b></div>
+                    <div className="vt-figure"><span>Pendientes pago</span><b className="is-warning">{datosVerificacion.estadisticas_pago.ordenes_pendientes || 0}</b></div>
                   </div>
                 </div>
-              </div>
+              </section>
             </div>
 
             {datosVerificacion.analisis_credito && (
-              <div className={`card border-2 ${datosVerificacion.alertas.excede_limite_credito ? 'border-red-400 bg-red-50' : 'border-green-400 bg-green-50'}`}>
-                <div className={`card-header ${datosVerificacion.alertas.excede_limite_credito ? 'bg-red-100 border-b border-red-200' : 'bg-green-100 border-b border-green-200'}`}>
-                  <h3 className={`font-bold flex items-center gap-2 ${datosVerificacion.alertas.excede_limite_credito ? 'text-red-900' : 'text-green-900'}`}>
-                    <CreditCard size={18} />
-                    Análisis de Crédito
+              <section className={`pg-panel vt-credito-panel ${datosVerificacion.alertas.excede_limite_credito ? 'is-danger' : ''}`}>
+                <div className="pg-panel-head">
+                  <h3 className="pg-panel-title">
+                    <CreditCard size={16} />
+                    Análisis de crédito
                     {datosVerificacion.alertas.excede_limite_credito && (
-                      <span className="badge badge-danger ml-2">¡EXCEDE LÍMITE!</span>
+                      <span className="badge badge-danger"><AlertTriangle size={11} />¡EXCEDE LÍMITE!</span>
                     )}
                   </h3>
                 </div>
-                <div className="card-body">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted text-xs mb-1">Límite Asignado</p>
-                      <p className="font-bold text-lg">{formatearMoneda(datosVerificacion.analisis_credito.limite_asignado, datosVerificacion.orden.moneda)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted text-xs mb-1">Deuda Actual</p>
-                      <p className="font-bold text-lg text-warning">{formatearMoneda(datosVerificacion.analisis_credito.deuda_actual, datosVerificacion.orden.moneda)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted text-xs mb-1">Disponible ANTES</p>
-                      <p className="font-bold text-lg text-info">{formatearMoneda(datosVerificacion.analisis_credito.disponible, datosVerificacion.orden.moneda)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted text-xs mb-1">Disponible DESPUÉS</p>
-                      <p className={`font-bold text-lg ${datosVerificacion.analisis_credito.disponible_despues_orden < 0 ? 'text-danger' : 'text-success'}`}>
+                <div className="pg-panel-body">
+                  <div className="vt-figures">
+                    <div className="vt-figure"><span>Límite asignado</span><b>{formatearMoneda(datosVerificacion.analisis_credito.limite_asignado, datosVerificacion.orden.moneda)}</b></div>
+                    <div className="vt-figure"><span>Deuda actual</span><b className="is-warning">{formatearMoneda(datosVerificacion.analisis_credito.deuda_actual, datosVerificacion.orden.moneda)}</b></div>
+                    <div className="vt-figure"><span>Disponible antes</span><b>{formatearMoneda(datosVerificacion.analisis_credito.disponible, datosVerificacion.orden.moneda)}</b></div>
+                    <div className="vt-figure">
+                      <span>Disponible después</span>
+                      <b className={datosVerificacion.analisis_credito.disponible_despues_orden < 0 ? 'is-danger' : 'is-success'}>
                         {formatearMoneda(datosVerificacion.analisis_credito.disponible_despues_orden, datosVerificacion.orden.moneda)}
-                      </p>
+                      </b>
                     </div>
                   </div>
-                  
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted">Uso Actual</span>
-                        <span className="font-bold">{datosVerificacion.analisis_credito.porcentaje_uso_actual}%</span>
+
+                  <div className="pg-measures vt-mt">
+                    <div className="pg-measure">
+                      <div className="pg-measure-top">
+                        <span>Uso actual</span>
+                        <b>{datosVerificacion.analisis_credito.porcentaje_uso_actual}%</b>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div 
-                          className={`h-3 rounded-full ${parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_actual) > 90 ? 'bg-danger' : parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_actual) > 70 ? 'bg-warning' : 'bg-success'}`}
-                          style={{ width: `${Math.min(100, datosVerificacion.analisis_credito.porcentaje_uso_actual)}%` }}
-                        ></div>
+                      <div className="pg-meter" style={{ '--meter-c': parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_actual) > 90 ? 'var(--danger)' : parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_actual) > 70 ? 'var(--warning)' : 'var(--success)' }}>
+                        <span style={{ width: `${Math.min(100, datosVerificacion.analisis_credito.porcentaje_uso_actual)}%` }} />
                       </div>
                     </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted">Uso Después de Aprobar</span>
-                        <span className="font-bold">{datosVerificacion.analisis_credito.porcentaje_uso_despues}%</span>
+                    <div className="pg-measure">
+                      <div className="pg-measure-top">
+                        <span>Uso después de aprobar</span>
+                        <b>{datosVerificacion.analisis_credito.porcentaje_uso_despues}%</b>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div 
-                          className={`h-3 rounded-full ${parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_despues) > 100 ? 'bg-danger' : parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_despues) > 90 ? 'bg-warning' : 'bg-success'}`}
-                          style={{ width: `${Math.min(100, datosVerificacion.analisis_credito.porcentaje_uso_despues)}%` }}
-                        ></div>
+                      <div className="pg-meter" style={{ '--meter-c': parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_despues) > 100 ? 'var(--danger)' : parseFloat(datosVerificacion.analisis_credito.porcentaje_uso_despues) > 90 ? 'var(--warning)' : 'var(--success)' }}>
+                        <span style={{ width: `${Math.min(100, datosVerificacion.analisis_credito.porcentaje_uso_despues)}%` }} />
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
 
             {datosVerificacion.alertas && (
-              <div className="space-y-2">
+              <div className="vt-alertas">
                 {datosVerificacion.alertas.excede_limite_credito && (
-                  <div className="alert alert-danger">
-                    <AlertTriangle size={20} />
+                  <div className="vt-note is-danger">
+                    <AlertTriangle size={18} />
                     <div>
-                      <strong>¡ALERTA CRÍTICA!</strong> Esta orden excede el límite de crédito disponible del cliente.
-                      <br />
-                      <small>
+                      <strong>¡ALERTA CRÍTICA! Esta orden excede el límite de crédito disponible del cliente.</strong>
+                      <p>
                         Déficit: {formatearMoneda(
                           Math.abs(datosVerificacion.analisis_credito.disponible_despues_orden),
                           datosVerificacion.orden.moneda
                         )}
-                      </small>
+                      </p>
                     </div>
                   </div>
                 )}
 
                 {datosVerificacion.alertas.tiene_ordenes_vencidas && (
-                  <div className="alert alert-warning">
-                    <Clock size={20} />
+                  <div className="vt-note is-warning">
+                    <Clock size={18} />
                     <div>
                       <strong>Atención:</strong> El cliente tiene {datosVerificacion.ordenes_vencidas.length} orden(es) vencida(s) sin pagar.
                     </div>
@@ -905,8 +762,8 @@ function VerificarOrdenes() {
                 )}
 
                 {datosVerificacion.alertas.promedio_retraso_alto && (
-                  <div className="alert alert-warning">
-                    <TrendingUp size={20} />
+                  <div className="vt-note is-warning">
+                    <TrendingUp size={18} />
                     <div>
                       <strong>Historial de Retrasos:</strong> El cliente tiene un promedio de {Math.round(datosVerificacion.estadisticas_pago.promedio_dias_retraso || 0)} días de retraso en sus pagos.
                     </div>
@@ -914,11 +771,11 @@ function VerificarOrdenes() {
                 )}
 
                 {datosVerificacion.alertas.tasa_pago_baja && (
-                  <div className="alert alert-info">
-                    <AlertTriangle size={20} />
+                  <div className="vt-note is-info">
+                    <AlertTriangle size={18} />
                     <div>
                       <strong>Tasa de Cumplimiento:</strong> El cliente ha pagado {datosVerificacion.estadisticas_pago.ordenes_pagadas} de {datosVerificacion.estadisticas_pago.total_ordenes} órdenes (
-                      {datosVerificacion.estadisticas_pago.total_ordenes > 0 
+                      {datosVerificacion.estadisticas_pago.total_ordenes > 0
                         ? ((datosVerificacion.estadisticas_pago.ordenes_pagadas / datosVerificacion.estadisticas_pago.total_ordenes) * 100).toFixed(0)
                         : 0}%).
                     </div>
@@ -926,243 +783,197 @@ function VerificarOrdenes() {
                 )}
               </div>
             )}
+
             {datosVerificacion.ordenes_vencidas && datosVerificacion.ordenes_vencidas.length > 0 && (
-              <div className="card border-l-4 border-danger">
-                <div className="card-header bg-red-50">
-                  <h3 className="font-bold text-danger flex items-center gap-2">
-                    <XCircle size={18} />
-                    Órdenes Vencidas ({datosVerificacion.ordenes_vencidas.length})
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h3 className="pg-panel-title vt-title-danger">
+                    <XCircle size={16} />
+                    Órdenes vencidas <span className="pg-count">{datosVerificacion.ordenes_vencidas.length}</span>
                   </h3>
                 </div>
-                <div className="card-body">
-                  <div className="space-y-2">
+                <div className="pg-panel-body">
+                  <ul className="pg-list">
                     {datosVerificacion.ordenes_vencidas.map((vencida, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-3 bg-red-50 rounded border border-red-200">
+                      <li key={idx}>
                         <div>
-                          <div className="font-mono font-semibold text-sm">{vencida.numero_orden}</div>
-                          <div className="text-xs text-muted">
-                            Vencida: {formatearFecha(vencida.fecha_vencimiento)} 
-                            <span className="text-danger font-bold ml-2">
-                              ({vencida.dias_vencido} días)
-                            </span>
-                          </div>
+                          <span className="pg-code">{vencida.numero_orden}</span>
+                          <span className="pg-cell-sub">
+                            Vencida: {formatearFecha(vencida.fecha_vencimiento)} · <b className="vt-text-danger">{vencida.dias_vencido} días</b>
+                          </span>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold text-danger">
-                            {formatearMoneda(vencida.saldo_pendiente, vencida.moneda)}
-                          </div>
-                          <div className="text-xs text-muted">Saldo pendiente</div>
-                        </div>
-                      </div>
+                        <span className="pg-list-push">
+                          <span className="pg-money is-danger"><b>{formatearMoneda(vencida.saldo_pendiente, vencida.moneda)}</b></span>
+                          <span className="pg-cell-sub">Saldo pendiente</span>
+                        </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
-              </div>
+              </section>
             )}
 
             {datosVerificacion.historial_cliente && datosVerificacion.historial_cliente.length > 0 && (
-              <div className="card border-l-4 border-info">
-                <div className="card-header bg-blue-50">
-                  <h3 className="font-bold text-info flex items-center gap-2">
-                    <Calendar size={18} />
-                    Historial de Órdenes (Últimas 10)
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h3 className="pg-panel-title">
+                    <Calendar size={16} />
+                    Historial de órdenes (últimas 10)
                   </h3>
                 </div>
-                <div className="card-body">
-                  <div className="overflow-x-auto">
-                    <table className="table table-sm w-full">
-                      <thead>
-                        <tr>
-                          <th>N° Orden</th>
-                          <th>Fecha</th>
-                          <th className="text-right">Total</th>
-                          <th className="text-right">Pagado</th>
-                          <th className="text-center">Estado Pago</th>
-                          <th className="text-center">Estado</th>
-                          <th className="text-center">Retraso</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {datosVerificacion.historial_cliente.map((hist, idx) => {
-                          const diasRetraso = hist.dias_retraso || 0;
-                          const tieneRetraso = diasRetraso > 0 && hist.estado_pago !== 'Pagado';
-                          
-                          return (
-                            <tr key={idx} className={tieneRetraso ? 'bg-red-50' : ''}>
-                              <td className="font-mono text-xs">{hist.numero_orden}</td>
-                              <td className="text-xs">{formatearFecha(hist.fecha_emision)}</td>
-                              <td className="text-right font-semibold text-xs">
-                                {formatearMoneda(hist.total, hist.moneda)}
-                              </td>
-                              <td className="text-right text-xs">
-                                {formatearMoneda(hist.monto_pagado, hist.moneda)}
-                              </td>
-                              <td className="text-center">
-                                <span className={`badge badge-xs ${
-                                  hist.estado_pago === 'Pagado' ? 'badge-success' : 
-                                  hist.estado_pago === 'Parcial' ? 'badge-info' : 'badge-warning'
-                                }`}>
-                                  {hist.estado_pago}
-                                </span>
-                              </td>
-                              <td className="text-center">
-                                <span className={`badge badge-xs ${
-                                  hist.estado === 'Entregada' ? 'badge-success' : 
-                                  hist.estado === 'Cancelada' ? 'badge-danger' : 'badge-info'
-                                }`}>
-                                  {hist.estado}
-                                </span>
-                              </td>
-                              <td className="text-center">
-                                {tieneRetraso ? (
-                                  <span className="text-danger font-bold text-xs">
-                                    {diasRetraso} días
-                                  </span>
-                                ) : hist.estado_pago === 'Pagado' ? (
-                                  <span className="text-success text-xs">
-                                    <CheckCircle size={14} className="inline" />
-                                  </span>
-                                ) : (
-                                  <span className="text-muted text-xs">-</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="card border-l-4 border-gray-300">
-              <div className="card-header bg-gray-50">
-                <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                  <FileText size={18} />
-                  Detalle de Productos ({datosVerificacion.orden.detalle?.length || 0} items)
-                </h3>
-              </div>
-              <div className="card-body">
-                <div className="overflow-x-auto">
-                  <table className="table table-sm w-full">
+                <div className="pg-table-wrap">
+                  <table className="pg-table">
                     <thead>
                       <tr>
-                        <th>Código</th>
-                        <th>Producto</th>
-                        <th className="text-right">Cantidad</th>
-                        <th className="text-right">Precio Unit.</th>
-                        <th className="text-right">Subtotal</th>
+                        <th>N° Orden</th>
+                        <th>Fecha</th>
+                        <th className="num">Total</th>
+                        <th className="num">Pagado</th>
+                        <th className="center">Estado pago</th>
+                        <th className="center">Estado</th>
+                        <th className="center">Retraso</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {datosVerificacion.orden.detalle?.map((item, idx) => {
-                        const subtotalCalculado = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+                      {datosVerificacion.historial_cliente.map((hist, idx) => {
+                        const diasRetraso = hist.dias_retraso || 0;
+                        const tieneRetraso = diasRetraso > 0 && hist.estado_pago !== 'Pagado';
+
                         return (
-                          <tr key={idx}>
-                            <td className="font-mono text-xs">{item.codigo_producto}</td>
-                            <td>
-                              <div className="font-medium text-sm">{item.producto}</div>
-                              <div className="text-xs text-muted">{item.unidad_medida}</div>
-                            </td>
-                            <td className="text-right font-semibold">{formatearNumero(item.cantidad)}</td>
-                            <td className="text-right">{formatearMoneda(item.precio_unitario, datosVerificacion.orden.moneda)}</td>
-                            <td className="text-right font-bold text-primary">
-                              {formatearMoneda(subtotalCalculado, datosVerificacion.orden.moneda)}
+                          <tr key={idx} className={tieneRetraso ? 'vt-row-danger' : ''}>
+                            <td className="nowrap"><span className="pg-code">{hist.numero_orden}</span></td>
+                            <td className="nowrap">{formatearFecha(hist.fecha_emision)}</td>
+                            <td className="num"><b>{formatearMoneda(hist.total, hist.moneda)}</b></td>
+                            <td className="num">{formatearMoneda(hist.monto_pagado, hist.moneda)}</td>
+                            <td className="center"><BadgeEstadoPago estado={hist.estado_pago} /></td>
+                            <td className="center"><BadgeEstadoOrden estado={hist.estado} /></td>
+                            <td className="center">
+                              {tieneRetraso ? (
+                                <b className="vt-text-danger">{diasRetraso} días</b>
+                              ) : hist.estado_pago === 'Pagado' ? (
+                                <CheckCircle size={14} className="vt-ok-icon" aria-label="Pagado a tiempo" />
+                              ) : (
+                                <span className="pg-muted">-</span>
+                              )}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot>
-                      {(() => {
-                        const subtotalReal = datosVerificacion.orden.detalle?.reduce((acc, item) => {
-                          const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-                          return acc + (isNaN(val) ? 0 : val);
-                        }, 0) || 0;
-                        
-                        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(datosVerificacion.orden.tipo_impuesto || '').toUpperCase().trim());
-                        const pctImpuesto = parseFloat(datosVerificacion.orden.porcentaje_impuesto || 0);
-                        const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (pctImpuesto / 100);
-                        const totalReal = subtotalReal + impuestoReal;
-                        
-                        const tc = parseFloat(datosVerificacion.orden.tipo_cambio || 1);
-                        const mostrarConversion = datosVerificacion.orden.moneda === 'USD' && tc > 1;
-
-                        return (
-                          <>
-                            <tr className="border-t-2">
-                              <td colSpan="4" className="text-right font-medium text-muted">Subtotal:</td>
-                              <td className="text-right">
-                                <div className="font-medium">
-                                  {formatearMoneda(subtotalReal, datosVerificacion.orden.moneda)}
-                                </div>
-                                {mostrarConversion && (
-                                  <div className="text-[10px] text-success italic">
-                                    ≈ {formatearMoneda(subtotalReal * tc, 'PEN')}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td colSpan="4" className="text-right font-medium text-muted">
-                                {esSinImpuesto 
-                                  ? `${datosVerificacion.orden.tipo_impuesto || 'Inafecto/Exonerado'}:` 
-                                  : `IGV (${pctImpuesto}%):`}
-                              </td>
-                              <td className="text-right">
-                                <div className="font-medium">
-                                  {formatearMoneda(impuestoReal, datosVerificacion.orden.moneda)}
-                                </div>
-                                {mostrarConversion && (
-                                  <div className="text-[10px] text-success italic">
-                                    ≈ {formatearMoneda(impuestoReal * tc, 'PEN')}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                            <tr className="bg-gray-50">
-                              <td colSpan="4" className="text-right font-bold text-lg">TOTAL:</td>
-                              <td className="text-right">
-                                <div className="font-bold text-xl text-primary">
-                                  {formatearMoneda(totalReal, datosVerificacion.orden.moneda)}
-                                </div>
-                                {mostrarConversion && (
-                                  <div className="text-[11px] text-success font-bold italic">
-                                    ≈ {formatearMoneda(totalReal * tc, 'PEN')}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          </>
-                        );
-                      })()}
-                    </tfoot>
                   </table>
                 </div>
+              </section>
+            )}
+
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h3 className="pg-panel-title">
+                  <FileText size={16} />
+                  Detalle de productos <span className="pg-count">{datosVerificacion.orden.detalle?.length || 0}</span>
+                </h3>
               </div>
+              <div className="pg-table-wrap">
+                <table className="pg-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Producto</th>
+                      <th className="num">Cantidad</th>
+                      <th className="num">Precio unit.</th>
+                      <th className="num">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datosVerificacion.orden.detalle?.map((item, idx) => {
+                      const subtotalCalculado = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+                      return (
+                        <tr key={idx}>
+                          <td className="nowrap"><span className="pg-code">{item.codigo_producto}</span></td>
+                          <td>
+                            <span className="pg-cell-main">{item.producto}</span>
+                            <span className="pg-cell-sub">{item.unidad_medida}</span>
+                          </td>
+                          <td className="num"><b>{formatearNumero(item.cantidad)}</b></td>
+                          <td className="num">{formatearMoneda(item.precio_unitario, datosVerificacion.orden.moneda)}</td>
+                          <td className="num"><span className="vt-lp-price">{formatearMoneda(subtotalCalculado, datosVerificacion.orden.moneda)}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="vt-tfoot">
+                    {(() => {
+                      const subtotalReal = datosVerificacion.orden.detalle?.reduce((acc, item) => {
+                        const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+                        return acc + (isNaN(val) ? 0 : val);
+                      }, 0) || 0;
+
+                      const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(datosVerificacion.orden.tipo_impuesto || '').toUpperCase().trim());
+                      const pctImpuesto = parseFloat(datosVerificacion.orden.porcentaje_impuesto || 0);
+                      const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (pctImpuesto / 100);
+                      const totalReal = subtotalReal + impuestoReal;
+
+                      const tc = parseFloat(datosVerificacion.orden.tipo_cambio || 1);
+                      const mostrarConversion = datosVerificacion.orden.moneda === 'USD' && tc > 1;
+
+                      return (
+                        <>
+                          <tr>
+                            <td colSpan="4" className="num pg-muted" data-label="Subtotal">Subtotal:</td>
+                            <td className="num">
+                              <b>{formatearMoneda(subtotalReal, datosVerificacion.orden.moneda)}</b>
+                              {mostrarConversion && (
+                                <span className="pg-cell-sub">≈ {formatearMoneda(subtotalReal * tc, 'PEN')}</span>
+                              )}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan="4" className="num pg-muted" data-label="Impuesto">
+                              {esSinImpuesto
+                                ? `${datosVerificacion.orden.tipo_impuesto || 'Inafecto/Exonerado'}:`
+                                : `IGV (${pctImpuesto}%):`}
+                            </td>
+                            <td className="num">
+                              <b>{formatearMoneda(impuestoReal, datosVerificacion.orden.moneda)}</b>
+                              {mostrarConversion && (
+                                <span className="pg-cell-sub">≈ {formatearMoneda(impuestoReal * tc, 'PEN')}</span>
+                              )}
+                            </td>
+                          </tr>
+                          <tr className="vt-tfoot-total">
+                            <td colSpan="4" className="num" data-label="Total">TOTAL:</td>
+                            <td className="num">
+                              <span className="vt-amount">{formatearMoneda(totalReal, datosVerificacion.orden.moneda)}</span>
+                              {mostrarConversion && (
+                                <span className="pg-cell-sub">≈ {formatearMoneda(totalReal * tc, 'PEN')}</span>
+                              )}
+                            </td>
+                          </tr>
+                        </>
+                      );
+                    })()}
+                  </tfoot>
+                </table>
+              </div>
+            </section>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="vt-verif-obs">Observaciones del verificador (opcional)</label>
+              <textarea
+                id="vt-verif-obs"
+                className="form-textarea"
+                rows={3}
+                placeholder="Agregue observaciones o comentarios sobre esta verificación (opcional)..."
+                value={observacionesAprobacion}
+                onChange={(e) => setObservacionesAprobacion(e.target.value)}
+              ></textarea>
+              <small className="pg-hint">
+                Estas observaciones quedarán registradas en el historial de la orden.
+              </small>
             </div>
 
-            <div className="card bg-gray-50 border border-gray-200">
-              <div className="card-header bg-gray-100 border-b border-gray-200">
-                <h3 className="font-bold text-gray-700">Observaciones del Verificador (Opcional)</h3>
-              </div>
-              <div className="card-body">
-                <textarea
-                  className="form-textarea w-full"
-                  rows={3}
-                  placeholder="Agregue observaciones o comentarios sobre esta verificación (opcional)..."
-                  value={observacionesAprobacion}
-                  onChange={(e) => setObservacionesAprobacion(e.target.value)}
-                ></textarea>
-                <small className="text-muted">
-                  Estas observaciones quedarán registradas en el historial de la orden.
-                </small>
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-4 border-t">
+            <div className="vt-lp-modal-foot">
               <button
+                type="button"
                 className="btn btn-outline"
                 onClick={() => {
                   setModalVerificar(false);
@@ -1174,24 +985,26 @@ function VerificarOrdenes() {
               >
                 Cancelar
               </button>
-              
+
               <button
+                type="button"
                 className="btn btn-danger"
                 onClick={() => {
                   setModalRechazar(true);
                 }}
                 disabled={procesando}
               >
-                <XCircle size={18} />
+                <XCircle size={16} />
                 Rechazar Orden
               </button>
 
               <button
+                type="button"
                 className="btn btn-success"
                 onClick={handleAprobar}
                 disabled={procesando}
               >
-                <CheckCircle size={18} />
+                <CheckCircle size={16} />
                 {procesando ? 'Aprobando...' : 'Aprobar Orden'}
               </button>
             </div>
@@ -1209,76 +1022,75 @@ function VerificarOrdenes() {
         size="md"
       >
         <form onSubmit={handleRechazar}>
-          <div className="space-y-4">
-            <div className="alert alert-warning">
-              <AlertTriangle size={20} />
-              <div>
-                <strong>¡Atención!</strong> Esta acción rechazará la orden y notificará al comercial.
-                <br />
-                <small>El comercial podrá corregir la orden y reenviarla para una nueva verificación.</small>
-              </div>
+          <div className="vt-note is-warning">
+            <AlertTriangle size={18} />
+            <div>
+              <strong>¡Atención! Esta acción rechazará la orden y notificará al comercial.</strong>
+              <p>El comercial podrá corregir la orden y reenviarla para una nueva verificación.</p>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                Motivo del Rechazo *
-              </label>
-              <select
-                className="form-select"
-                value={formRechazo.motivo_rechazo}
-                onChange={(e) => setFormRechazo({ ...formRechazo, motivo_rechazo: e.target.value })}
-                required
-              >
-                <option value="">Seleccione un motivo...</option>
-                <option value="Cliente excede límite de crédito">Cliente excede límite de crédito</option>
-                <option value="Cliente tiene órdenes vencidas sin pagar">Cliente tiene órdenes vencidas sin pagar</option>
-                <option value="Historial de pagos deficiente">Historial de pagos deficiente</option>
-                <option value="Información incompleta del cliente">Información incompleta del cliente</option>
-                <option value="Productos o cantidades incorrectas">Productos o cantidades incorrectas</option>
-                <option value="Precios no autorizados">Precios no autorizados</option>
-                <option value="Condiciones de pago no aprobadas">Condiciones de pago no aprobadas</option>
-                <option value="Requiere autorización de gerencia">Requiere autorización de gerencia</option>
-                <option value="Otro motivo">Otro motivo</option>
-              </select>
-            </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="vt-rech-motivo">
+              Motivo del Rechazo *
+            </label>
+            <select
+              id="vt-rech-motivo"
+              className="form-select"
+              value={formRechazo.motivo_rechazo}
+              onChange={(e) => setFormRechazo({ ...formRechazo, motivo_rechazo: e.target.value })}
+              required
+            >
+              <option value="">Seleccione un motivo...</option>
+              <option value="Cliente excede límite de crédito">Cliente excede límite de crédito</option>
+              <option value="Cliente tiene órdenes vencidas sin pagar">Cliente tiene órdenes vencidas sin pagar</option>
+              <option value="Historial de pagos deficiente">Historial de pagos deficiente</option>
+              <option value="Información incompleta del cliente">Información incompleta del cliente</option>
+              <option value="Productos o cantidades incorrectas">Productos o cantidades incorrectas</option>
+              <option value="Precios no autorizados">Precios no autorizados</option>
+              <option value="Condiciones de pago no aprobadas">Condiciones de pago no aprobadas</option>
+              <option value="Requiere autorización de gerencia">Requiere autorización de gerencia</option>
+              <option value="Otro motivo">Otro motivo</option>
+            </select>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                Observaciones Adicionales
-              </label>
-              <textarea
-                className="form-textarea"
-                rows={4}
-                placeholder="Agregue detalles específicos sobre el rechazo, instrucciones para corrección, o cualquier información adicional..."
-                value={formRechazo.observaciones_verificador}
-                onChange={(e) => setFormRechazo({ ...formRechazo, observaciones_verificador: e.target.value })}
-              ></textarea>
-              <small className="text-muted">
-                Ejemplo: "Solicitar pago adelantado del 50% antes de procesar", "Actualizar precio según lista vigente", etc.
-              </small>
-            </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="vt-rech-obs">
+              Observaciones Adicionales
+            </label>
+            <textarea
+              id="vt-rech-obs"
+              className="form-textarea"
+              rows={4}
+              placeholder="Agregue detalles específicos sobre el rechazo, instrucciones para corrección, o cualquier información adicional..."
+              value={formRechazo.observaciones_verificador}
+              onChange={(e) => setFormRechazo({ ...formRechazo, observaciones_verificador: e.target.value })}
+            ></textarea>
+            <small className="pg-hint">
+              Ejemplo: "Solicitar pago adelantado del 50% antes de procesar", "Actualizar precio según lista vigente", etc.
+            </small>
+          </div>
 
-            <div className="flex gap-2 justify-end pt-2 border-t">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => {
-                  setModalRechazar(false);
-                  setFormRechazo({ motivo_rechazo: '', observaciones_verificador: '' });
-                }}
-                disabled={procesando}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="btn btn-danger"
-                disabled={procesando || !formRechazo.motivo_rechazo.trim()}
-              >
-                <XCircle size={18} />
-                {procesando ? 'Rechazando...' : 'Confirmar Rechazo'}
-              </button>
-            </div>
+          <div className="vt-lp-modal-foot">
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setModalRechazar(false);
+                setFormRechazo({ motivo_rechazo: '', observaciones_verificador: '' });
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-danger"
+              disabled={procesando || !formRechazo.motivo_rechazo.trim()}
+            >
+              <XCircle size={16} />
+              {procesando ? 'Rechazando...' : 'Confirmar Rechazo'}
+            </button>
           </div>
         </form>
       </Modal>
@@ -1289,23 +1101,21 @@ function VerificarOrdenes() {
         title={visorArchivo.titulo}
         size="2xl"
       >
-        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
+        <div className="vt-visor-full">
           {visorArchivo.tipo === 'pdf' ? (
             <iframe
               src={visorArchivo.url}
-              className="w-full h-[70vh] border-0 rounded"
               title="Visor de PDF"
             />
           ) : (
             <img
               src={visorArchivo.url}
               alt="Visualización de archivo"
-              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
             />
           )}
         </div>
-        <div className="flex justify-end mt-4">
-          <button className="btn btn-primary" onClick={cerrarVisor}>
+        <div className="vt-lp-modal-foot vt-mt-lg">
+          <button type="button" className="btn btn-primary" onClick={cerrarVisor}>
             Cerrar Visor
           </button>
         </div>

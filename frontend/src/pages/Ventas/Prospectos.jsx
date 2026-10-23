@@ -670,7 +670,7 @@ export default function Prospectos() {
         <div>
           <span className="pg-eyebrow">
             <Radar size={13} /> Ventas
-            <span className={`pros-live ${enVivo ? 'on' : 'off'}`} title={enVivo ? 'Actualización en vivo activa: verás los cambios de otros usuarios sin recargar' : 'Sin conexión en vivo (se reintenta automáticamente)'}>
+            <span className={`pros-live ${enVivo ? 'on' : ''}`} title={enVivo ? 'Actualización en vivo activa: verás los cambios de otros usuarios sin recargar' : 'Sin conexión en vivo (se reintenta automáticamente)'}>
               <span className="pros-live-dot" /> {enVivo ? 'En vivo' : 'Sin conexión'}
             </span>
           </span>

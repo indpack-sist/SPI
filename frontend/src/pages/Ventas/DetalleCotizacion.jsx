@@ -970,11 +970,11 @@ function DetalleCotizacion() {
               {estadoCredito && estadoCredito.usar_limite_credito && !esMuestra && (
                 <div className="vt-credito">
                   <h4 className="pg-section-title"><CreditCard size={14} /> Saldo de credito del cliente</h4>
-                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'is-danger' : 'is-ok'}`}>
+                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'is-danger' : ''}`}>
                     <span>PEN disponible</span>
                     <b>S/ {formatearNumero(parseFloat(estadoCredito.credito_pen.disponible))}</b>
                   </div>
-                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_usd.disponible) < totalReal && cotizacion.moneda === 'USD' ? 'is-danger' : 'is-ok'}`}>
+                  <div className={`vt-credito-row ${parseFloat(estadoCredito.credito_usd.disponible) < totalReal && cotizacion.moneda === 'USD' ? 'is-danger' : ''}`}>
                     <span>USD disponible</span>
                     <b>$ {formatearNumero(parseFloat(estadoCredito.credito_usd.disponible))}</b>
                   </div>

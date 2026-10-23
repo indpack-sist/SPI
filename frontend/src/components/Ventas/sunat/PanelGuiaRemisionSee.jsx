@@ -6,6 +6,7 @@ import BadgeEstadoSunat from './BadgeEstadoSunat';
 import UbigeoSelector from '../../common/UbigeoSelector';
 import { resolverUbigeoDesdeDireccion } from '../../../utils/ubigeo';
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../../config/api';
+import '../../../pages/Ventas/Ventas.css';
 
 const normPlaca = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const placaOk = (p) => /^[A-Z0-9]{6,8}$/.test(normPlaca(p));
@@ -400,12 +401,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   if (soloLectura && !(tieneComprobante && cerradaOk)) return null;
 
   return (
-    <div className="card p-3 space-y-3 mb-4">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-semibold text-sm">
-          <Zap size={16} className="text-amber-500" /> Guía de Remisión Electrónica (SEE · GRE 09)
+    <div className="pg-panel vt-see-panel vt-sy-3 mb-4">
+      <div className="pg-panel-head">
+        <h3 className="pg-panel-title">
+          <Zap size={16} /> Guía de Remisión Electrónica (SEE · GRE 09)
         </h3>
-        <div className="flex items-center gap-2">
+        <div className="pg-rowactions">
           {!soloLectura && puedeEmitir && (
             <button className="btn btn-sm btn-primary" onClick={abrirEmitir} disabled={procesando || faltantes.length > 0}>
               <Zap size={14} className="mr-1" /> Emitir GRE
@@ -424,7 +425,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       <div className="border border-gray-200 rounded p-2 flex flex-wrap items-center gap-2">
         <span className="font-mono font-bold text-sm">{comprobante || 'Sin serie SUNAT'}</span>
         <BadgeEstadoSunat estado={estado} />
-        {guia?.sunat_ticket && <span className="text-[11px] text-muted">ticket {guia.sunat_ticket}</span>}
+        {guia?.sunat_ticket && <span className="vt-fs-11 text-muted">ticket {guia.sunat_ticket}</span>}
         <div className="flex flex-wrap items-center gap-1 ml-auto">
           {tieneComprobante && cerradaOk && (
             <button className="btn btn-xs btn-outline" onClick={handlePdf} disabled={procesando} title="Ver PDF SEE (con QR)">
@@ -474,18 +475,18 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       )}
 
       {(guia?.emisiones || []).length > 0 && (
-        <div className="border border-gray-200 rounded p-2 space-y-2">
-          <div className="text-[10px] text-muted uppercase">Historial de emisiones SUNAT</div>
+        <div className="border border-gray-200 rounded p-2 vt-sy-2">
+          <div className="vt-fs-10 text-muted uppercase">Historial de emisiones SUNAT</div>
           {guia.emisiones.map((em) => {
             const rechazo = em.sunat_estado === 'RECHAZADO' || em.sunat_estado === 'ERROR';
             const ok = em.sunat_estado === 'ACEPTADO';
             return (
-              <div key={em.id_emision} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${rechazo ? 'border-red-200 bg-red-50/40' : ok ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+              <div key={em.id_emision} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${rechazo ? 'border-red-200 bg-red-50' : ok ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
                 <span className="font-mono font-bold text-xs">{em.serie_sunat && em.numero_sunat ? `${em.serie_sunat}-${em.numero_sunat}` : '—'}</span>
                 <BadgeEstadoSunat estado={em.sunat_estado} />
                 {rechazo && <span className="badge badge-danger text-xs">Rechazada — sin validez</span>}
                 {ok && <span className="badge badge-success text-xs">Aceptada</span>}
-                {em.created_ms && <span className="text-[11px] text-muted">{fmtFechaLima(em.created_ms)}</span>}
+                {em.created_ms && <span className="vt-fs-11 text-muted">{fmtFechaLima(em.created_ms)}</span>}
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
                   {em.tiene_snapshot ? (
                     <button className="btn btn-xs btn-outline" onClick={() => handlePdfEmision(em.id_emision)} disabled={procesando}
@@ -493,7 +494,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       <FileText size={13} className="mr-1" /> PDF
                     </button>
                   ) : (
-                    <span className="text-[10px] text-muted italic">Registro histórico (sin PDF)</span>
+                    <span className="vt-fs-10 text-muted italic">Registro histórico (sin PDF)</span>
                   )}
                   {em.xml_url && (
                     <button className="btn btn-xs btn-outline" onClick={() => handleDescargarUrl(em.xml_url)} disabled={procesando} title="Descargar XML firmado">
@@ -520,22 +521,22 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
       <Modal isOpen={modalEmitir} onClose={() => !procesando && setModalEmitir(false)} title="Emitir Guía de Remisión Electrónica (GRE 09)" size="xl">
         {f && (
-        <div className="space-y-3 text-sm">
+        <div className="vt-sy-3 text-sm">
           <div className="flex items-center gap-1 text-xs">
             {PASOS.map((p, i) => (
               <div key={p} className="flex items-center gap-1">
-                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${i === wizStep ? 'bg-primary text-on-accent' : i < wizStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <span className={`inline-flex items-center justify-center vt-w-5 vt-h-5 rounded-full vt-fs-11 font-bold ${i === wizStep ? 'vt-bg-accent text-on-accent' : i < wizStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {i < wizStep ? <Check size={12} /> : i + 1}
                 </span>
                 <span className={i === wizStep ? 'font-semibold' : 'text-muted'}>{p}</span>
-                {i < PASOS.length - 1 && <ChevronRight size={13} className="text-gray-300 mx-1" />}
+                {i < PASOS.length - 1 && <ChevronRight size={13} className="text-gray-300 vt-mx-1" />}
               </div>
             ))}
           </div>
 
           {wizStep === 0 && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="vt-sy-3">
+              <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">¿Es una operación de comercio exterior?</label>
                   <div className="flex gap-2">
@@ -552,15 +553,15 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               </div>
 
               <div className="border border-gray-200 rounded p-3">
-                <div className="text-[10px] text-muted uppercase mb-1">{esCompra ? 'Proveedor' : 'Destinatario (de la orden)'}</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                <div className="vt-fs-10 text-muted uppercase mb-1">{esCompra ? 'Proveedor' : 'Destinatario (de la orden)'}</div>
+                <div className="grid grid-cols-1 vt-md-cols-2 vt-gapx-4 vt-gapy-1">
                   <div className="flex justify-between gap-2"><span className="text-muted">Razón social:</span><span className="font-medium text-right">{(esCompra ? guia?.proveedor : guia?.cliente) || '-'}</span></div>
                   <div className="flex justify-between gap-2"><span className="text-muted">RUC:</span><span className="font-mono">{(esCompra ? guia?.ruc_proveedor : guia?.ruc_cliente) || '-'}</span></div>
                 </div>
               </div>
 
               <div className="border border-gray-200 rounded overflow-x-auto">
-                <div className="text-[10px] text-muted uppercase px-2 pt-2 flex items-center gap-1"><Package size={12} /> Bienes por transportar (de la orden)</div>
+                <div className="vt-fs-10 text-muted uppercase px-2 pt-2 flex items-center gap-1"><Package size={12} /> Bienes por transportar (de la orden)</div>
                 <table className="w-full text-xs">
                   <thead className="bg-gray-100 text-muted">
                     <tr>
@@ -594,7 +595,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                               placeholder="13 dígitos (código de bien del cliente)"
                               maxLength={13}
                             />
-                            {valor && !ok && <p className="text-[10px] text-danger mt-0.5">Debe tener 13 dígitos.</p>}
+                            {valor && !ok && <p className="vt-fs-10 text-danger vt-mt-05">Debe tener 13 dígitos.</p>}
                           </td>
                         </tr>
                       );
@@ -611,17 +612,17 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Peso bruto total *</label>
                   <input type="number" step="0.01" min="0" className={`form-input w-full text-sm ${Number(f.peso_bruto_kg) > 0 ? '' : 'border-danger'}`} value={f.peso_bruto_kg} onChange={(e) => setF('peso_bruto_kg', e.target.value)} />
-                  {!(Number(f.peso_bruto_kg) > 0) && <p className="text-[11px] text-danger mt-1">El peso debe ser mayor a 0.</p>}
+                  {!(Number(f.peso_bruto_kg) > 0) && <p className="vt-fs-11 text-danger mt-1">El peso debe ser mayor a 0.</p>}
                 </div>
               </div>
             </div>
           )}
 
           {wizStep === 1 && (
-            <div className="space-y-3">
+            <div className="vt-sy-3">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1 flex items-center gap-1"><Truck size={13} /> Modalidad de transporte</label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
                   {[
                     { k: 'flota', t: 'Vehículo propio', d: 'Camioneta/carro de la empresa (flota)' },
                     { k: 'particular', t: 'Carro particular del cliente', d: 'Carro común, no es empresa de transporte' },
@@ -630,15 +631,15 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     <button key={o.k} type="button" onClick={() => setF('transporteModo', o.k)}
                       className={`text-left border rounded p-2 ${f.transporteModo === o.k ? 'border-primary bg-blue-50' : 'border-gray-200'}`}>
                       <div className="font-semibold text-xs">{o.t}</div>
-                      <div className="text-[11px] text-muted">{o.d}</div>
+                      <div className="vt-fs-11 text-muted">{o.d}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               {f.transporteModo === 'flota' && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="vt-sy-2">
+                  <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted mb-1">Conductor (flota) *</label>
                       <select className="form-input w-full text-sm" value={f.id_conductor} onChange={(e) => setF('id_conductor', e.target.value)}>
@@ -655,17 +656,17 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     </div>
                   </div>
                   {(condFlota || vehFlota) && (
-                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 vt-md-cols-3 vt-gapx-4 vt-gapy-1">
                       <div>DNI: <span className="font-mono font-semibold">{condFlota?.dni || '—'}</span></div>
                       <div>Licencia: <span className="font-mono font-semibold">{condFlota?.licencia_conducir || '—'}</span></div>
                       <div>Placa: <span className="font-mono font-semibold">{vehFlota?.placa ? normPlaca(vehFlota.placa) : '—'}</span></div>
                       {condFlota && !condFlota.licencia_conducir && (
-                        <div className="md:col-span-3 text-warning">Este conductor no tiene licencia registrada en su ficha de empleado. Complétala antes de emitir.</div>
+                        <div className="vt-md-span-3 text-warning">Este conductor no tiene licencia registrada en su ficha de empleado. Complétala antes de emitir.</div>
                       )}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted mb-1">Conductor secundario (opcional)</label>
                       <select className="form-input w-full text-sm" value={f.id_conductor2} onChange={(e) => setF('id_conductor2', e.target.value)}>
@@ -682,12 +683,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     </div>
                   </div>
                   {(condFlota2 || vehFlota2) && (
-                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs grid grid-cols-1 vt-md-cols-3 vt-gapx-4 vt-gapy-1">
                       <div>DNI 2: <span className="font-mono font-semibold">{condFlota2?.dni || '—'}</span></div>
                       <div>Licencia 2: <span className="font-mono font-semibold">{condFlota2?.licencia_conducir || '—'}</span></div>
                       <div>Placa 2: <span className="font-mono font-semibold">{vehFlota2?.placa ? normPlaca(vehFlota2.placa) : '—'}</span></div>
                       {condFlota2 && !condFlota2.licencia_conducir && (
-                        <div className="md:col-span-3 text-warning">El conductor secundario no tiene licencia registrada en su ficha. Complétala o quítalo.</div>
+                        <div className="vt-md-span-3 text-warning">El conductor secundario no tiene licencia registrada en su ficha. Complétala o quítalo.</div>
                       )}
                     </div>
                   )}
@@ -695,7 +696,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               )}
 
               {f.transporteModo === 'particular' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">Nombre del conductor *</label>
                     <input className="form-input w-full text-sm" value={f.conductor} onChange={(e) => setF('conductor', e.target.value)} placeholder="Ej. CHAVEZ GUERRA CHARLES JORGE" />
@@ -703,7 +704,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">DNI del conductor *</label>
                     <input className={`form-input w-full text-sm ${f.dni && !dniOk(f.dni) ? 'border-danger' : ''}`} value={f.dni} onChange={(e) => setF('dni', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 dígitos" />
-                    {f.dni && !dniOk(f.dni) && <p className="text-[11px] text-danger mt-1">El DNI debe tener 8 dígitos.</p>}
+                    {f.dni && !dniOk(f.dni) && <p className="vt-fs-11 text-danger mt-1">El DNI debe tener 8 dígitos.</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">Licencia de conducir *</label>
@@ -714,17 +715,17 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     <input className={`form-input w-full text-sm ${f.placa && !placaOk(f.placa) ? 'border-danger' : ''}`} value={f.placa} onChange={(e) => setF('placa', e.target.value.toUpperCase())} placeholder="Ej. B2Q-671 o B2Q671" />
                     {f.placa
                       ? (placaOk(f.placa)
-                          ? <p className="text-[11px] text-success mt-1">Se enviará como: <span className="font-mono font-bold">{normPlaca(f.placa)}</span></p>
-                          : <p className="text-[11px] text-danger mt-1">Placa inválida (6 a 8 caracteres alfanuméricos; el guion/espacio se ignora).</p>)
-                      : <p className="text-[11px] text-muted mt-1">Acepta con o sin guion; se normaliza para SUNAT.</p>}
+                          ? <p className="vt-fs-11 text-success mt-1">Se enviará como: <span className="font-mono font-bold">{normPlaca(f.placa)}</span></p>
+                          : <p className="vt-fs-11 text-danger mt-1">Placa inválida (6 a 8 caracteres alfanuméricos; el guion/espacio se ignora).</p>)
+                      : <p className="vt-fs-11 text-muted mt-1">Acepta con o sin guion; se normaliza para SUNAT.</p>}
                   </div>
                 </div>
               )}
 
               {f.transporteModo === 'tercero' && (
-                <div className="space-y-2">
-                  <div className="border border-gray-200 rounded p-2 space-y-2">
-                    <div className="text-[10px] text-muted uppercase">Transportista (editable)</div>
+                <div className="vt-sy-2">
+                  <div className="border border-gray-200 rounded p-2 vt-sy-2">
+                    <div className="vt-fs-10 text-muted uppercase">Transportista (editable)</div>
                     {!f.nuevoTransportista ? (
                       <>
                         <select className="form-input w-full text-sm" value={f.id_transportista} onChange={(e) => setF('id_transportista', e.target.value)}>
@@ -734,11 +735,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                         <button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', true)}>Corregir / registrar transportista por RUC</button>
                       </>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div><label className="block text-[11px] text-muted mb-1">RUC *</label><input className="form-input w-full text-sm" maxLength={11} value={f.transportistaRuc} onChange={(e) => setF('transportistaRuc', e.target.value.replace(/\D/g, '').slice(0, 11))} /></div>
-                        <div><label className="block text-[11px] text-muted mb-1">Razón social *</label><input className="form-input w-full text-sm" value={f.transportistaRazon} onChange={(e) => setF('transportistaRazon', e.target.value)} /></div>
-                        <div><label className="block text-[11px] text-muted mb-1">MTC (opcional)</label><input className="form-input w-full text-sm" value={f.transportistaMtc} onChange={(e) => setF('transportistaMtc', e.target.value)} /></div>
-                        <div className="md:col-span-3"><button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', false)}>Elegir uno existente</button></div>
+                      <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
+                        <div><label className="block vt-fs-11 text-muted mb-1">RUC *</label><input className="form-input w-full text-sm" maxLength={11} value={f.transportistaRuc} onChange={(e) => setF('transportistaRuc', e.target.value.replace(/\D/g, '').slice(0, 11))} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">Razón social *</label><input className="form-input w-full text-sm" value={f.transportistaRazon} onChange={(e) => setF('transportistaRazon', e.target.value)} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">MTC (opcional)</label><input className="form-input w-full text-sm" value={f.transportistaMtc} onChange={(e) => setF('transportistaMtc', e.target.value)} /></div>
+                        <div className="vt-md-span-3"><button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', false)}>Elegir uno existente</button></div>
                       </div>
                     )}
                   </div>
@@ -752,41 +753,41 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   </label>
 
                   {f.registrar && (
-                    <div className="border border-gray-200 rounded p-2 space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="border border-gray-200 rounded p-2 vt-sy-2">
+                      <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
                         <div>
-                          <label className="block text-[11px] text-muted mb-1">Placa *</label>
+                          <label className="block vt-fs-11 text-muted mb-1">Placa *</label>
                           <input className={`form-input w-full text-sm ${f.tPlaca && !placaOk(f.tPlaca) ? 'border-danger' : ''}`} value={f.tPlaca} onChange={(e) => setF('tPlaca', e.target.value.toUpperCase())} />
                         </div>
-                        <div><label className="block text-[11px] text-muted mb-1">TUCE / Habilitación</label><input className="form-input w-full text-sm" value={f.tTuc} onChange={(e) => setF('tTuc', e.target.value)} /></div>
-                        <div><label className="block text-[11px] text-muted mb-1">Autorización</label><input className="form-input w-full text-sm" value={f.tAut} onChange={(e) => setF('tAut', e.target.value)} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">TUCE / Habilitación</label><input className="form-input w-full text-sm" value={f.tTuc} onChange={(e) => setF('tTuc', e.target.value)} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">Autorización</label><input className="form-input w-full text-sm" value={f.tAut} onChange={(e) => setF('tAut', e.target.value)} /></div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div><label className="block text-[11px] text-muted mb-1">Conductor *</label><input className="form-input w-full text-sm" value={f.tConductor} onChange={(e) => setF('tConductor', e.target.value)} /></div>
+                      <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
+                        <div><label className="block vt-fs-11 text-muted mb-1">Conductor *</label><input className="form-input w-full text-sm" value={f.tConductor} onChange={(e) => setF('tConductor', e.target.value)} /></div>
                         <div>
-                          <label className="block text-[11px] text-muted mb-1">DNI *</label>
+                          <label className="block vt-fs-11 text-muted mb-1">DNI *</label>
                           <input className={`form-input w-full text-sm ${f.tDni && !dniOk(f.tDni) ? 'border-danger' : ''}`} maxLength={8} value={f.tDni} onChange={(e) => setF('tDni', e.target.value.replace(/\D/g, '').slice(0, 8))} />
                         </div>
-                        <div><label className="block text-[11px] text-muted mb-1">Licencia *</label><input className="form-input w-full text-sm" value={f.tLicencia} onChange={(e) => setF('tLicencia', e.target.value)} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">Licencia *</label><input className="form-input w-full text-sm" value={f.tLicencia} onChange={(e) => setF('tLicencia', e.target.value)} /></div>
                       </div>
                       <details>
-                        <summary className="text-[11px] text-muted cursor-pointer">2.º vehículo / conductor (opcional)</summary>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                          <div><label className="block text-[11px] text-muted mb-1">Placa 2</label><input className="form-input w-full text-sm" value={f.tPlaca2} onChange={(e) => setF('tPlaca2', e.target.value.toUpperCase())} /></div>
-                          <div><label className="block text-[11px] text-muted mb-1">TUCE 2</label><input className="form-input w-full text-sm" value={f.tTuc2} onChange={(e) => setF('tTuc2', e.target.value)} /></div>
-                          <div><label className="block text-[11px] text-muted mb-1">Autorización 2</label><input className="form-input w-full text-sm" value={f.tAut2} onChange={(e) => setF('tAut2', e.target.value)} /></div>
-                          <div><label className="block text-[11px] text-muted mb-1">Conductor 2</label><input className="form-input w-full text-sm" value={f.tConductor2} onChange={(e) => setF('tConductor2', e.target.value)} /></div>
-                          <div><label className="block text-[11px] text-muted mb-1">DNI 2</label><input className="form-input w-full text-sm" maxLength={8} value={f.tDni2} onChange={(e) => setF('tDni2', e.target.value.replace(/\D/g, '').slice(0, 8))} /></div>
-                          <div><label className="block text-[11px] text-muted mb-1">Licencia 2</label><input className="form-input w-full text-sm" value={f.tLicencia2} onChange={(e) => setF('tLicencia2', e.target.value)} /></div>
+                        <summary className="vt-fs-11 text-muted cursor-pointer">2.º vehículo / conductor (opcional)</summary>
+                        <div className="grid grid-cols-1 vt-md-cols-3 gap-2 mt-2">
+                          <div><label className="block vt-fs-11 text-muted mb-1">Placa 2</label><input className="form-input w-full text-sm" value={f.tPlaca2} onChange={(e) => setF('tPlaca2', e.target.value.toUpperCase())} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">TUCE 2</label><input className="form-input w-full text-sm" value={f.tTuc2} onChange={(e) => setF('tTuc2', e.target.value)} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">Autorización 2</label><input className="form-input w-full text-sm" value={f.tAut2} onChange={(e) => setF('tAut2', e.target.value)} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">Conductor 2</label><input className="form-input w-full text-sm" value={f.tConductor2} onChange={(e) => setF('tConductor2', e.target.value)} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">DNI 2</label><input className="form-input w-full text-sm" maxLength={8} value={f.tDni2} onChange={(e) => setF('tDni2', e.target.value.replace(/\D/g, '').slice(0, 8))} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">Licencia 2</label><input className="form-input w-full text-sm" value={f.tLicencia2} onChange={(e) => setF('tLicencia2', e.target.value)} /></div>
                         </div>
                       </details>
-                      <div><label className="block text-[11px] text-muted mb-1">Fecha de entrega al transportista (opcional)</label><input type="date" className="form-input w-full text-sm" value={f.tFechaEntrega} onChange={(e) => setF('tFechaEntrega', e.target.value)} /></div>
-                      <p className="text-[11px] text-muted">Precargado con lo registrado en la guía. Si no cambias nada, se emite tal cual.</p>
+                      <div><label className="block vt-fs-11 text-muted mb-1">Fecha de entrega al transportista (opcional)</label><input type="date" className="form-input w-full text-sm" value={f.tFechaEntrega} onChange={(e) => setF('tFechaEntrega', e.target.value)} /></div>
+                      <p className="vt-fs-11 text-muted">Precargado con lo registrado en la guía. Si no cambias nada, se emite tal cual.</p>
                     </div>
                   )}
 
-                  <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
-                    <div className="text-[10px] text-muted uppercase">Indicadores (opcional)</div>
+                  <div className="border border-gray-200 rounded p-2 text-xs vt-sy-1">
+                    <div className="vt-fs-10 text-muted uppercase">Indicadores (opcional)</div>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={f.indTransbordo} onChange={(e) => setF('indTransbordo', e.target.checked)} /> Transbordo programado</label>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={f.indM1l} onChange={(e) => setF('indM1l', e.target.checked)} /> Traslado en vehículo M1/L</label>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={f.indRetornoVacio} onChange={(e) => setF('indRetornoVacio', e.target.checked)} /> Retorno con envases/embalajes vacíos</label>
@@ -794,16 +795,16 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><MapPin size={12} /> Punto de partida (fijo)</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1 flex items-center gap-1"><MapPin size={12} /> Punto de partida (fijo)</div>
                   <div className="text-xs">{partidaDireccion || '-'}</div>
                   <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{partidaUbigeo || '—'}</span></div>
                 </div>
-                <div className="border border-gray-200 rounded p-3 space-y-2">
-                  <div className="text-[10px] text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada {esCompra ? '(empresa_config)' : '(editable)'}</div>
+                <div className="border border-gray-200 rounded p-3 vt-sy-2">
+                  <div className="vt-fs-10 text-muted uppercase flex items-center gap-1"><MapPin size={12} /> Punto de llegada {esCompra ? '(empresa_config)' : '(editable)'}</div>
                   <div>
-                    <label className="block text-[11px] text-muted mb-1">Dirección *</label>
+                    <label className="block vt-fs-11 text-muted mb-1">Dirección *</label>
                     <input
                       className="form-input w-full text-sm"
                       value={f.direccion_llegada}
@@ -812,13 +813,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       placeholder="Dirección detallada, distrito, provincia, departamento"
                     />
                     {ubigeoDetectado && (
-                      <p className="text-[11px] text-success mt-1">
+                      <p className="vt-fs-11 text-success mt-1">
                         Detectado: {ubigeoDetectado.departamento} / {ubigeoDetectado.provincia} / {ubigeoDetectado.distrito} ({ubigeoDetectado.codigo})
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-[11px] text-muted mb-1">Ubigeo * (Departamento / Provincia / Distrito)</label>
+                    <label className="block vt-fs-11 text-muted mb-1">Ubigeo * (Departamento / Provincia / Distrito)</label>
                     {esCompra ? (
                       <input className="form-input w-full text-sm font-mono bg-gray-50" value={f.ubigeo_llegada} readOnly />
                     ) : (
@@ -835,41 +836,41 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                         }}
                       />
                     )}
-                    {esCompra && <p className="text-[11px] text-muted mt-1">Se usa la dirección fiscal configurada para la empresa.</p>}
+                    {esCompra && <p className="vt-fs-11 text-muted mt-1">Se usa la dirección fiscal configurada para la empresa.</p>}
                   </div>
                   {!ubigeoDetectado && f.direccion_llegada && !f.ubigeo_llegada && (
-                    <p className="text-[11px] text-warning">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
+                    <p className="vt-fs-11 text-warning">Incluye distrito, provincia y departamento en la dirección o selecciónalos manualmente.</p>
                   )}
-                  {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="text-[11px] text-danger">El ubigeo debe tener 6 dígitos.</p>}
+                  {f.ubigeo_llegada && !ubigeoOk(f.ubigeo_llegada) && <p className="vt-fs-11 text-danger">El ubigeo debe tener 6 dígitos.</p>}
                 </div>
               </div>
             </div>
           )}
 
           {wizStep === 2 && (
-            <div className="space-y-3">
+            <div className="vt-sy-3">
               <p className="text-muted text-xs">Esto es lo que se declarará a SUNAT (DespatchAdvice UBL 2.1). Revísalo antes de emitir.</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Documento</div><div className="font-semibold">GRE Remitente (09)</div><div className="font-mono text-xs">Serie TE01</div></div>
-                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Fecha emisión</div><div className="font-semibold">{hoy}</div></div>
-                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Fecha traslado</div><div className="font-semibold">{guia?.fecha_traslado ? new Date(guia.fecha_traslado).toLocaleDateString('es-PE') : '-'}</div></div>
-                <div className="bg-gray-50 rounded p-2"><div className="text-[10px] text-muted uppercase">Guía interna</div><div className="font-mono text-xs">{guia?.numero_guia}</div></div>
+              <div className="grid grid-cols-2 vt-md-cols-4 gap-2">
+                <div className="bg-gray-50 rounded p-2"><div className="vt-fs-10 text-muted uppercase">Documento</div><div className="font-semibold">GRE Remitente (09)</div><div className="font-mono text-xs">Serie TE01</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="vt-fs-10 text-muted uppercase">Fecha emisión</div><div className="font-semibold">{hoy}</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="vt-fs-10 text-muted uppercase">Fecha traslado</div><div className="font-semibold">{guia?.fecha_traslado ? new Date(guia.fecha_traslado).toLocaleDateString('es-PE') : '-'}</div></div>
+                <div className="bg-gray-50 rounded p-2"><div className="vt-fs-10 text-muted uppercase">Guía interna</div><div className="font-mono text-xs">{guia?.numero_guia}</div></div>
               </div>
 
-              <div className={`grid grid-cols-1 ${esCompra ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-2`}>
+              <div className={`grid grid-cols-1 ${esCompra ? 'vt-md-cols-3' : 'vt-md-cols-2'} gap-2`}>
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Remitente</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Remitente</div>
                   <div className="font-medium">{empresaRemitente?.razon_social || '-'}</div>
                   <div className="font-mono text-xs">RUC {empresaRemitente?.ruc || '-'}</div>
                 </div>
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Destinatario</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Destinatario</div>
                   <div className="font-medium">{(esCompra ? empresaRemitente?.razon_social : guia?.cliente) || '-'}</div>
                   <div className="font-mono text-xs">RUC {(esCompra ? empresaRemitente?.ruc : guia?.ruc_cliente) || '-'}</div>
                 </div>
                 {esCompra && (
                   <div className="border border-gray-200 rounded p-3">
-                    <div className="text-[10px] text-muted uppercase mb-1">Proveedor (vendedor)</div>
+                    <div className="vt-fs-10 text-muted uppercase mb-1">Proveedor (vendedor)</div>
                     <div className="font-medium">{guia?.proveedor || '-'}</div>
                     <div className="font-mono text-xs">RUC {guia?.ruc_proveedor || '-'}</div>
                   </div>
@@ -878,7 +879,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               {esCompra && (
                 <div className="border border-gray-200 rounded p-3 text-xs">
-                  <div className="text-[10px] text-muted uppercase mb-1">Validación de identidad documental</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Validación de identidad documental</div>
                   <div>Remitente y destinatario: <span className="font-semibold">{empresaRemitente?.razon_social || '—'}</span></div>
                   <div>Vendedor e issuer de la factura: <span className="font-semibold">{guia?.proveedor || '—'}</span> · RUC <span className="font-mono">{guia?.ruc_proveedor || '—'}</span></div>
                   <div>N.º de bultos: <span className="font-semibold">{guia?.numero_bultos ?? 0}</span></div>
@@ -887,7 +888,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               {esCompra && guia?.oc_serie_documento && guia?.oc_numero_documento && (
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Factura asociada</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Factura asociada</div>
                   <div className="font-mono font-semibold">{guia.oc_serie_documento}-{guia.oc_numero_documento}</div>
                   <div className="text-xs text-muted mt-1">Se declarará como documento relacionado, con el RUC del proveedor emisor.</div>
                 </div>
@@ -895,8 +896,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
 
               {!esCompra && !f.es_comercio_exterior && (
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Documentos relacionados (Facturas)</div>
-                  <p className="text-[11px] text-muted mb-2">Si la venta ya se facturó, la factura se declara en la guía como documento relacionado. Se auto-cargan las facturas aceptadas de la orden; puedes quitarlas o agregar otra.</p>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Documentos relacionados (Facturas)</div>
+                  <p className="vt-fs-11 text-muted mb-2">Si la venta ya se facturó, la factura se declara en la guía como documento relacionado. Se auto-cargan las facturas aceptadas de la orden; puedes quitarlas o agregar otra.</p>
                   {(f.facturasRel || []).length === 0 && <div className="text-xs text-muted">Sin facturas. Agrega una si corresponde.</div>}
                   {(f.facturasRel || []).map((x, i) => (
                     <div key={`${x.serie}-${x.numero}-${i}`} className="flex items-center justify-between gap-2 py-1">
@@ -909,11 +910,11 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   ))}
                   <div className="flex items-end gap-2 mt-2">
                     <div>
-                      <label className="block text-[10px] text-muted uppercase">Serie</label>
+                      <label className="block vt-fs-10 text-muted uppercase">Serie</label>
                       <input className="form-input text-sm w-24" value={facturaManual.serie} onChange={(e) => setFacturaManual((m) => ({ ...m, serie: e.target.value }))} placeholder="FE01" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-muted uppercase">Número</label>
+                      <label className="block vt-fs-10 text-muted uppercase">Número</label>
                       <input className="form-input text-sm w-28" value={facturaManual.numero} onChange={(e) => setFacturaManual((m) => ({ ...m, numero: e.target.value.replace(/\D/g, '') }))} placeholder="44" />
                     </div>
                     <button type="button" className="btn btn-sm btn-outline" onClick={agregarFacturaRel}>Agregar factura</button>
@@ -922,8 +923,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               )}
 
               <div className="border border-gray-200 rounded p-3">
-                <div className="text-[10px] text-muted uppercase mb-1">Traslado</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                <div className="vt-fs-10 text-muted uppercase mb-1">Traslado</div>
+                <div className="grid grid-cols-1 vt-md-cols-2 vt-gapx-4 vt-gapy-1">
                   <div className="flex justify-between gap-2"><span className="text-muted">Comercio exterior:</span><span>{f.es_comercio_exterior ? 'Sí' : 'No'}</span></div>
                   <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{labelMotivo(f.motivo_traslado_cod)} ({f.motivo_traslado_cod})</span></div>
                   <div className="flex justify-between gap-2"><span className="text-muted">Modalidad:</span><span className="text-right">{resTransporte?.modalidad}</span></div>
@@ -932,7 +933,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               </div>
 
               <div className="border border-gray-200 rounded p-3">
-                <div className="text-[10px] text-muted uppercase mb-1 flex items-center gap-1"><Truck size={12} /> Transporte</div>
+                <div className="vt-fs-10 text-muted uppercase mb-1 flex items-center gap-1"><Truck size={12} /> Transporte</div>
                 {resTransporte?.empresa && <div className="flex justify-between gap-2"><span className="text-muted">Empresa:</span><span className="text-right">{resTransporte.empresa} (RUC {resTransporte.ruc}{resTransporte.mtc ? ` · MTC ${resTransporte.mtc}` : ''})</span></div>}
                 {f.transporteModo === 'tercero' ? (
                   <>
@@ -954,7 +955,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                     )}
                   </>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="grid grid-cols-1 vt-md-cols-2 vt-gapx-4 vt-gapy-1">
                     <div className="flex justify-between gap-2"><span className="text-muted">Conductor:</span><span className="text-right">{resTransporte?.conductor || '—'}</span></div>
                     <div className="flex justify-between gap-2"><span className="text-muted">DNI:</span><span className="font-mono">{resTransporte?.dni || '—'}</span></div>
                     <div className="flex justify-between gap-2"><span className="text-muted">Licencia:</span><span className="font-mono">{resTransporte?.licencia || '—'}</span></div>
@@ -973,14 +974,14 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 vt-md-cols-2 gap-2">
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Punto de partida</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Punto de partida</div>
                   <div className="text-xs">{partidaDireccion || '-'}</div>
                   <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{partidaUbigeo || '—'}</span></div>
                 </div>
                 <div className="border border-gray-200 rounded p-3">
-                  <div className="text-[10px] text-muted uppercase mb-1">Punto de llegada</div>
+                  <div className="vt-fs-10 text-muted uppercase mb-1">Punto de llegada</div>
                   <div className="text-xs">{f.direccion_llegada || '-'}</div>
                   <div className="text-xs text-muted mt-1">Ubigeo: <span className="font-mono">{f.ubigeo_llegada || '—'}</span></div>
                 </div>
@@ -1009,7 +1010,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Observaciones (viajan a SUNAT como observación de la GRE)</label>
                 <textarea className="form-input w-full text-sm" rows={2} maxLength={250} value={f.observaciones} onChange={(e) => setF('observaciones', e.target.value)} placeholder="Ej. OC: 260810058" />
-                <p className="text-[11px] text-muted mt-1">Lo que escribas aquí es exactamente lo que se envía a SUNAT y se muestra en el PDF. (máx. 250)</p>
+                <p className="vt-fs-11 text-muted mt-1">Lo que escribas aquí es exactamente lo que se envía a SUNAT y se muestra en el PDF. (máx. 250)</p>
               </div>
 
               {f.es_comercio_exterior && (
@@ -1042,13 +1043,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       </Modal>
 
       <Modal isOpen={modalDespachar} onClose={() => !procesando && setModalDespachar(false)} title="Despachar Guía de Remisión" size="md">
-        <div className="space-y-4 text-sm">
+        <div className="vt-sy-4 text-sm">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <Truck size={24} className="text-info flex-shrink-0 mt-1" />
               <div>
                 <p className="font-medium">¿Qué sucederá al despachar?</p>
-                <ul className="text-sm text-muted mt-2 space-y-1">
+                <ul className="text-sm text-muted mt-2 vt-sy-1">
                   <li>✓ Se generará salida de inventario automática</li>
                   <li>✓ Se descontará el stock de cada producto</li>
                   <li>✓ La guía cambiará a estado "En Tránsito"</li>
@@ -1068,12 +1069,12 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
               onChange={(e) => setFechaDespacho(e.target.value)}
               required
             />
-            <p className="text-[11px] text-muted mt-1">Puede ser anterior o posterior a hoy (según la fecha real del traslado).</p>
+            <p className="vt-fs-11 text-muted mt-1">Puede ser anterior o posterior a hoy (según la fecha real del traslado).</p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
             <h4 className="font-medium mb-3">Resumen del Despacho:</h4>
-            <div className="space-y-2 text-sm">
+            <div className="vt-sy-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted">Guía:</span>
                 <span className="font-mono font-bold">{guia?.numero_guia}</span>
@@ -1106,7 +1107,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       </Modal>
 
       <Modal isOpen={modalSinEfecto} onClose={() => !procesando && setModalSinEfecto(false)} title="Dar de baja la GRE en SUNAT" size="md">
-        <div className="space-y-3 text-sm">
+        <div className="vt-sy-3 text-sm">
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <p className="font-semibold">La baja oficial se completa en SUNAT SOL.</p>
             <p className="text-xs mt-1">El API REST de emisión GRE no ofrece una operación de baja. SPI solo registrará la baja después de tu confirmación y conservará la guía en el historial de la OV.</p>

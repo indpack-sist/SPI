@@ -1,7 +1,7 @@
 import {
   Clock, PlayCircle, Factory, Truck, PackageCheck, CheckCircle, XCircle, AlertTriangle,
   Receipt, Ban, FileText, CreditCard, Hourglass, ShieldCheck, ShieldX, Route, Car, Store,
-  FileEdit, Send, ArrowRightCircle, CalendarX
+  FileEdit, Send, ArrowRightCircle, CalendarX, RefreshCw
 } from 'lucide-react';
 
 export const ESTADOS_ORDEN = {
@@ -66,7 +66,8 @@ export const ESTADOS_SEE = {
   SIN_EMITIR: { label: 'Sin emitir',  badge: 'badge-secondary', icon: Receipt,       color: 'var(--steel-light)' },
   ANULADA:    { label: 'Anulada',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
   BAJA:       { label: 'De baja',     badge: 'badge-secondary', icon: Ban,           color: 'var(--steel-light)' },
-  NO_APLICA:  { label: 'No aplica',   badge: 'badge-secondary', icon: FileText,      color: 'var(--steel-light)' }
+  NO_APLICA:  { label: 'No aplica',   badge: 'badge-secondary', icon: FileText,      color: 'var(--steel-light)' },
+  REEMPLAZADA:{ label: 'Reemplazada', badge: 'badge-info',      icon: RefreshCw,     color: 'var(--info)' }
 };
 
 export function BadgeSee({ estado }) {

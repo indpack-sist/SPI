@@ -4,6 +4,7 @@ import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
 import { sunatAPI } from '../../../config/api';
+import '../../../pages/Ventas/Ventas.css';
 
 const MOTIVOS = {
   '07': [
@@ -147,10 +148,10 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     <>
       {errores.length > 0 && (
         <div className="rounded border border-red-300 bg-red-50 p-2 text-xs">
-          <div className="font-semibold text-red-700 mb-1">
+          <div className="font-semibold vt-text-danger mb-1">
             {errores.length} error(es) impiden emitir — corríjalos (NO se pierde correlativo):
           </div>
-          <ul className="list-disc pl-4 space-y-0.5 text-red-700">
+          <ul className="list-disc vt-pl-4 vt-sy-05 vt-text-danger">
             {errores.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
           </ul>
         </div>
@@ -160,7 +161,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
           <div className="font-semibold text-amber-700 mb-1">
             {observaciones.length} observación(es) — SUNAT podría aceptar con reparos (no bloquean):
           </div>
-          <ul className="list-disc pl-4 space-y-0.5 text-amber-700">
+          <ul className="list-disc vt-pl-4 vt-sy-05 text-amber-700">
             {observaciones.map((x, i) => <li key={`${x.codigo}-${i}`}>{x.mensaje}</li>)}
           </ul>
         </div>
@@ -322,10 +323,10 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
   if (soloLectura && comprobantes.length === 0) return null;
 
   return (
-    <div className="card p-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-semibold text-sm">
-          <Zap size={16} className="text-amber-500" /> Facturación Electrónica (SEE)
+    <div className="pg-panel vt-see-panel vt-sy-3">
+      <div className="pg-panel-head">
+        <h3 className="pg-panel-title">
+          <Zap size={16} /> Facturación Electrónica (SEE)
         </h3>
         {!soloLectura && puedeEmitir && (
           <button className="btn btn-sm btn-primary" onClick={() => { setFechaEmision(hoyISO); setEmitStep(1); setModalEmitir(true); }} disabled={procesando}>
@@ -342,7 +343,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             : 'La orden debe estar Aprobada y sin facturar para emitir el comprobante electrónico.'}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="vt-sy-2">
           {comprobantes.map((f) => {
             const esFactura = f.codigo_tipo_sunat === '01';
             const esNC = f.codigo_tipo_sunat === '07';
@@ -357,8 +358,8 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             else if (esFactura && aceptado) rol = { clase: 'badge-success', txt: 'Factura vigente' };
             else if (esRechazo) rol = { clase: 'badge-danger', txt: 'Rechazada — sin validez' };
             return (
-              <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50/40' : (esNC || esND ? 'border-sky-200 bg-sky-50/40' : 'border-gray-200')}`}>
-                <span className={`font-mono font-bold text-sm ${anulada ? 'line-through text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
+              <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50' : (esNC || esND ? 'border-blue-200 bg-blue-50' : 'border-gray-200')}`}>
+                <span className={`font-mono font-bold text-sm ${anulada ? 'vt-strike text-muted' : ''}`}>{f.numero_factura || `${f.serie}-${f.numero}`}</span>
                 <BadgeEstadoSunat estado={f.sunat_estado} />
                 {rol && anulada && <span className="text-xs text-muted" aria-hidden="true">→</span>}
                 {rol && <span className={`badge ${rol.clase} text-xs`}>{rol.txt}</span>}
@@ -402,7 +403,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   )}
                 </div>
                 {esRechazo && (f.sunat_response_desc || f.sunat_response_code) && (
-                  <div className="w-full text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1">
+                  <div className="w-full text-xs bg-red-50 border border-red-200 vt-text-danger rounded px-2 py-1">
                     <span className="font-semibold">
                       Motivo del rechazo{f.sunat_response_code ? ` (${f.sunat_response_code})` : ''}:
                     </span>{' '}
@@ -429,20 +430,20 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         size="xl"
       >
         {emitStep === 1 && (
-        <div className="space-y-3 text-sm">
+        <div className="vt-sy-3 text-sm">
           <p className="text-muted text-xs">Completa los datos del comprobante. En el siguiente paso verás el preliminar exacto que se declarará a SUNAT.</p>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 vt-md-cols-4 gap-2">
             <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Comprobante</div>
+              <div className="vt-fs-10 text-muted uppercase">Comprobante</div>
               <div className="font-semibold">Factura electrónica (01)</div>
               <div className="font-mono text-xs">Serie FE01</div>
             </div>
             <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Fecha de emisión</div>
+              <div className="vt-fs-10 text-muted uppercase">Fecha de emisión</div>
               <input
                 type="date"
-                className="form-input w-full text-sm font-semibold py-0.5 px-1 bg-white"
+                className="form-input w-full text-sm font-semibold vt-py-05 vt-px-1 bg-white"
                 value={fechaEmision}
                 min={minISO}
                 max={hoyISO}
@@ -450,46 +451,46 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 disabled={procesando}
               />
               {fechaEmision !== hoyISO && (
-                <div className="text-[10px] text-amber-600 mt-0.5">Retro-fechada al {fechaFmt(fechaEmision)} (dentro del plazo).</div>
+                <div className="vt-fs-10 text-amber-600 vt-mt-05">Retro-fechada al {fechaFmt(fechaEmision)} (dentro del plazo).</div>
               )}
               {ultimaFechaEmitida && ultimaFechaEmitida >= hoyISO && (
-                <div className="text-[10px] text-muted mt-0.5">Ya existe una factura con fecha {fechaFmt(ultimaFechaEmitida)}: no se puede retro-fechar.</div>
+                <div className="vt-fs-10 text-muted vt-mt-05">Ya existe una factura con fecha {fechaFmt(ultimaFechaEmitida)}: no se puede retro-fechar.</div>
               )}
             </div>
             <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Moneda</div>
+              <div className="vt-fs-10 text-muted uppercase">Moneda</div>
               <div className="font-semibold">{orden?.moneda === 'USD' ? 'Dólares (USD)' : 'Soles (PEN)'}</div>
             </div>
             <div className="bg-gray-50 rounded p-2">
-              <div className="text-[10px] text-muted uppercase">Tipo de operación</div>
+              <div className="vt-fs-10 text-muted uppercase">Tipo de operación</div>
               <div className="font-semibold">{esExportacion ? 'Exportación (0200)' : 'Venta interna (0101)'}</div>
             </div>
           </div>
 
           {esExportacion && ubicacionExport && (
-            <div className="border border-blue-200 bg-blue-50/50 rounded p-3 text-xs space-y-2">
+            <div className="border border-blue-200 bg-blue-50 rounded p-3 text-xs vt-sy-2">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-[10px] text-blue-700 uppercase font-semibold">Dirección donde se entrega el bien</div>
+                  <div className="vt-fs-10 text-blue-700 uppercase font-semibold">Dirección donde se entrega el bien</div>
                   <div className="font-semibold">Selección SUNAT: {ubicacionExport.seleccion}</div>
                 </div>
                 <span className="badge badge-info">Precargado</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 vt-md-cols-4 gap-2">
                 <div><span className="text-muted">Departamento</span><div className="font-semibold">{ubicacionExport.departamento || '—'}</div></div>
                 <div><span className="text-muted">Provincia</span><div className="font-semibold">{ubicacionExport.provincia || '—'}</div></div>
                 <div><span className="text-muted">Distrito</span><div className="font-semibold">{ubicacionExport.distrito || '—'}</div></div>
                 <div><span className="text-muted">Ubigeo</span><div className="font-mono font-semibold">{ubicacionExport.ubigeo || '—'}</div></div>
               </div>
               <div><span className="text-muted">Dirección: </span><strong>{ubicacionExport.direccion || '—'}</strong></div>
-              <div className="text-[10px] text-blue-700">Estos datos provienen de la configuración de la empresa y se enviarán en el XML; no requieren ingreso manual.</div>
+              <div className="vt-fs-10 text-blue-700">Estos datos provienen de la configuración de la empresa y se enviarán en el XML; no requieren ingreso manual.</div>
             </div>
           )}
 
           {lineasFactura.length > 0 && (
-            <div className="border border-gray-200 rounded p-3 space-y-2">
-              <label className="text-[10px] text-muted uppercase">Cantidades a facturar</label>
-              <div className="text-[10px] text-muted -mt-1">
+            <div className="border border-gray-200 rounded p-3 vt-sy-2">
+              <label className="vt-fs-10 text-muted uppercase">Cantidades a facturar</label>
+              <div className="vt-fs-10 text-muted -mt-1">
                 Edita la cantidad por línea para facturar parcialmente. Viene precargado con lo pendiente (pedido − ya facturado) y no puede superarlo. Deja 0 para no incluir una línea.
               </div>
               <div className="overflow-x-auto">
@@ -517,7 +518,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                           <td className="p-2 text-right">
                             <input
                               type="number" min="0" max={l.pendiente} step="any"
-                              className={`form-input w-24 text-right text-xs py-0.5 ${excede ? 'border-red-400' : ''}`}
+                              className={`form-input w-24 text-right text-xs vt-py-05 ${excede ? 'border-danger' : ''}`}
                               value={cantidades[l.id_detalle] ?? ''}
                               onChange={(e) => setCantidades((prev) => ({ ...prev, [l.id_detalle]: e.target.value }))}
                               disabled={procesando || previewLoading}
@@ -530,22 +531,22 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </table>
               </div>
               {cantidadesExceden && (
-                <div className="text-[11px] text-red-600">Alguna cantidad supera lo pendiente. Corrígela antes de continuar.</div>
+                <div className="vt-fs-11 text-red-600">Alguna cantidad supera lo pendiente. Corrígela antes de continuar.</div>
               )}
               {!lineasPayload.length && (
-                <div className="text-[11px] text-red-600">Indica al menos una cantidad mayor a 0 para emitir.</div>
+                <div className="vt-fs-11 text-red-600">Indica al menos una cantidad mayor a 0 para emitir.</div>
               )}
               {esParcial && !cantidadesExceden && lineasPayload.length > 0 && (
-                <div className="text-[11px] text-amber-600">Factura parcial: quedará saldo pendiente en la OV para facturar después.</div>
+                <div className="vt-fs-11 text-amber-600">Factura parcial: quedará saldo pendiente en la OV para facturar después.</div>
               )}
             </div>
           )}
 
-          <div className="border border-gray-200 rounded p-3 space-y-3">
+          <div className="border border-gray-200 rounded p-3 vt-sy-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] text-muted uppercase">Orden de compra</label>
-                <span className="text-[10px] text-muted">{ordenCompra.length}/{OC_MAX}</span>
+                <label className="vt-fs-10 text-muted uppercase">Orden de compra</label>
+                <span className="vt-fs-10 text-muted">{ordenCompra.length}/{OC_MAX}</span>
               </div>
               <input
                 type="text"
@@ -556,14 +557,14 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 placeholder="Ej: 15152 (solo el número, sin OC ni espacios)"
                 disabled={procesando || previewLoading}
               />
-              <div className="text-[10px] text-muted mt-0.5">
-                Coloque solo el número, sin "OC" adelante y sin espacios. Ejemplo correcto: <strong>15152</strong>. Ejemplos incorrectos: <span className="line-through">OC 15152</span>, <span className="line-through">O/C-15152</span>, <span className="line-through">151 52</span>. Viaja como campo propio del comprobante (cac:OrderReference) y se rotula aparte en el PDF, igual que en SUNAT. Si atiende dos órdenes, coloque ambas directamente en Observaciones.
+              <div className="vt-fs-10 text-muted vt-mt-05">
+                Coloque solo el número, sin "OC" adelante y sin espacios. Ejemplo correcto: <strong>15152</strong>. Ejemplos incorrectos: <span className="vt-strike">OC 15152</span>, <span className="vt-strike">O/C-15152</span>, <span className="vt-strike">151 52</span>. Viaja como campo propio del comprobante (cac:OrderReference) y se rotula aparte en el PDF, igual que en SUNAT. Si atiende dos órdenes, coloque ambas directamente en Observaciones.
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] text-muted uppercase">Observaciones (aparecen en SUNAT)</label>
-                <span className="text-[10px] text-muted">{observaciones.length}/{OBS_MAX}</span>
+                <label className="vt-fs-10 text-muted uppercase">Observaciones (aparecen en SUNAT)</label>
+                <span className="vt-fs-10 text-muted">{observaciones.length}/{OBS_MAX}</span>
               </div>
               <textarea
                 className="form-input w-full text-sm"
@@ -574,24 +575,24 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 placeholder={"Notas libres del comprobante.\nUsa Enter para separar por líneas (p. ej. ACOMPAÑANTES).\nSi atiendes dos órdenes de compra, colócalas aquí directamente."}
                 disabled={procesando || previewLoading}
               />
-              <div className="text-[10px] text-muted mt-0.5">
+              <div className="vt-fs-10 text-muted vt-mt-05">
                 Texto libre que viaja en el comprobante (cbc:Note) y verás en SUNAT. No repitas aquí una única orden de compra (ya viaja como campo propio); pero si atiendes dos órdenes, colócalas ambas aquí. Ejemplo: <strong>OC: 15152 y 15153</strong>.
               </div>
             </div>
           </div>
 
-          <div className="border border-gray-200 rounded p-3 space-y-2">
-            <label className="text-[10px] text-muted uppercase">Guías de remisión relacionadas</label>
-            <div className="text-[10px] text-muted -mt-1">
+          <div className="border border-gray-200 rounded p-3 vt-sy-2">
+            <label className="vt-fs-10 text-muted uppercase">Guías de remisión relacionadas</label>
+            <div className="vt-fs-10 text-muted -mt-1">
               Agrega las guías que amparan el traslado (se declaran en la factura). Como las emites directo en SUNAT, ingrésalas a mano.
             </div>
             {guiasSistema.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1">
-                <div className="text-[11px] text-blue-700 font-semibold">Guías emitidas desde el sistema (marca las que amparan esta factura):</div>
+              <div className="bg-blue-50 border border-blue-200 rounded p-2 vt-sy-1">
+                <div className="vt-fs-11 text-blue-700 font-semibold">Guías emitidas desde el sistema (marca las que amparan esta factura):</div>
                 {guiasSistema.map((g) => {
                   const k = claveGuia(g);
                   return (
-                    <label key={k} className="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <label key={k} className="flex items-center gap-2 vt-fs-11 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={!!guiasSistemaSel[k]}
@@ -605,14 +606,14 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     </label>
                   );
                 })}
-                <div className="text-[10px] text-blue-700/80">
+                <div className="vt-fs-10 vt-text-info">
                   Por defecto se marcan solo las guías que aún no están en otra factura (útil para entregas parciales).
                 </div>
               </div>
             )}
             <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[180px]">
-                <label className="block text-[10px] text-muted mb-0.5">Tipo de documento</label>
+              <div className="flex-1 vt-minw-180">
+                <label className="block vt-fs-10 text-muted vt-mb-05">Tipo de documento</label>
                 <select
                   className="form-select w-full text-sm"
                   value={nuevaGuia.tipo_documento}
@@ -623,7 +624,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </select>
               </div>
               <div className="w-24">
-                <label className="block text-[10px] text-muted mb-0.5">Serie</label>
+                <label className="block vt-fs-10 text-muted vt-mb-05">Serie</label>
                 <input
                   type="text" className="form-input w-full text-sm font-mono" maxLength={4}
                   value={nuevaGuia.serie}
@@ -632,7 +633,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 />
               </div>
               <div className="w-32">
-                <label className="block text-[10px] text-muted mb-0.5">Número</label>
+                <label className="block vt-fs-10 text-muted vt-mb-05">Número</label>
                 <input
                   type="text" className="form-input w-full text-sm font-mono" maxLength={8}
                   value={nuevaGuia.numero}
@@ -645,21 +646,21 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 Agregar
               </button>
             </div>
-            {guiaError && <div className="text-[11px] text-red-600">{guiaError}</div>}
+            {guiaError && <div className="vt-fs-11 text-red-600">{guiaError}</div>}
             {guiasRef.length > 0 ? (
-              <ul className="space-y-1">
+              <ul className="vt-sy-1">
                 {guiasRef.map((g, i) => (
                   <li key={`${g.tipo_documento}-${g.serie}-${g.numero}`} className="flex items-center gap-2 text-xs bg-gray-50 rounded px-2 py-1">
                     <span className="text-muted">{g.tipo_documento === '31' ? 'Transportista' : 'Remitente'}</span>
                     <span className="font-mono font-semibold">{g.serie}-{g.numero}</span>
-                    <button type="button" className="ml-auto text-red-600 hover:underline" onClick={() => quitarGuia(i)} disabled={procesando}>
+                    <button type="button" className="ml-auto text-red-600" onClick={() => quitarGuia(i)} disabled={procesando}>
                       Eliminar
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className="text-[11px] text-muted italic">Sin guías relacionadas.</div>
+              <div className="vt-fs-11 text-muted italic">Sin guías relacionadas.</div>
             )}
           </div>
 
@@ -679,20 +680,20 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         )}
 
         {emitStep === 2 && (
-        <div className="space-y-3 text-sm">
+        <div className="vt-sy-3 text-sm">
           {previewLoading && <p className="text-muted text-xs">Calculando preliminar…</p>}
           {previewError && <Alert type="error" message={previewError} />}
           {preview && (
             <>
               <div className="text-center border-b border-gray-200 pb-2">
                 <div className="font-bold uppercase">{preview.empresa?.razon_social}</div>
-                <div className="text-[10px] text-muted">{preview.empresa?.direccion}</div>
+                <div className="vt-fs-10 text-muted">{preview.empresa?.direccion}</div>
                 <div className="mt-1 font-semibold">FACTURA ELECTRÓNICA</div>
                 <div className="font-mono text-xs">RUC: {preview.empresa?.ruc}</div>
-                <div className="font-mono text-[11px] text-muted">Serie FE01 · el número se asigna al emitir</div>
+                <div className="font-mono vt-fs-11 text-muted">Serie FE01 · el número se asigna al emitir</div>
               </div>
 
-              <div className="text-xs space-y-0.5">
+              <div className="text-xs vt-sy-05">
                 <div><span className="text-muted">Fecha de Emisión: </span><strong>{fechaFmt(fechaEmision)}</strong></div>
                 <div><span className="text-muted">Señor(es): </span><strong>{preview.cliente?.razon_social || orden?.cliente || '-'}</strong></div>
                 <div><span className="text-muted">{esExportacion ? 'Tipo de documento' : (String(preview.cliente?.tipo_documento || 'RUC').toUpperCase() === 'RUC' ? 'RUC' : 'Documento')}: </span>
@@ -710,23 +711,23 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <div><span className="text-muted">Orden de Compra: </span><strong>{ordenCompra.trim()}</strong></div>
                 )}
                 {obsPreliminar && (
-                  <div className="whitespace-pre-line"><span className="text-muted">Observación: </span>{obsPreliminar}</div>
+                  <div className="vt-pre-line"><span className="text-muted">Observación: </span>{obsPreliminar}</div>
                 )}
                 <div><span className="text-muted">Tipo de operación: </span>
                   <strong>{esExportacion ? 'EXPORTACIÓN' : (preview.igv === 0 ? 'OP. NO GRAVADA' : 'OP. GRAVADA')}</strong></div>
               </div>
 
               {esExportacion && ubicacionExport && (
-                <div className="border border-blue-200 bg-blue-50/40 rounded p-3 text-xs space-y-1">
+                <div className="border border-blue-200 bg-blue-50 rounded p-3 text-xs vt-sy-1">
                   <div className="font-semibold text-blue-700">Ubicación declarada a SUNAT — {ubicacionExport.seleccion}</div>
                   <div><span className="text-muted">Dirección: </span><strong>{ubicacionExport.direccion || '—'}</strong></div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+                  <div className="grid grid-cols-2 vt-md-cols-4 gap-2 vt-pt-1">
                     <div><span className="text-muted">Departamento</span><div>{ubicacionExport.departamento || '—'}</div></div>
                     <div><span className="text-muted">Provincia</span><div>{ubicacionExport.provincia || '—'}</div></div>
                     <div><span className="text-muted">Distrito</span><div>{ubicacionExport.distrito || '—'}</div></div>
                     <div><span className="text-muted">Ubigeo / País</span><div className="font-mono">{ubicacionExport.ubigeo || '—'} / {ubicacionExport.pais || 'PE'}</div></div>
                   </div>
-                  <div className="text-[10px] text-blue-700 pt-1">Esto se enviará como la dirección del establecimiento del emisor (SellerSupplierParty) en el XML. El cliente receptor figurará sin dirección según norma SUNAT.</div>
+                  <div className="vt-fs-10 text-blue-700 vt-pt-1">Esto se enviará como la dirección del establecimiento del emisor (SellerSupplierParty) en el XML. El cliente receptor figurará sin dirección según norma SUNAT.</div>
                 </div>
               )}
 
@@ -768,7 +769,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 </table>
               </div>
 
-              <div className="border border-gray-200 rounded divide-y divide-gray-100 text-xs">
+              <div className="border border-gray-200 rounded vt-divide-y text-xs">
                 {[
                   ['Sub Total Ventas', preview.subtotal],
                   ['Anticipos', 0],
@@ -785,38 +786,38 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     <span className="font-mono">{fmt(val)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between px-3 py-1.5 bg-gray-50 font-semibold">
+                <div className="flex justify-between px-3 vt-py-15 bg-gray-50 font-semibold">
                   <span>Importe Total</span>
                   <span className="font-mono">{fmt(preview.total)}</span>
                 </div>
               </div>
 
               {preview.montoEnLetras && (
-                <p className="text-[11px] text-muted"><span className="uppercase font-semibold">Son:</span> {preview.montoEnLetras}</p>
+                <p className="vt-fs-11 text-muted"><span className="uppercase font-semibold">Son:</span> {preview.montoEnLetras}</p>
               )}
 
               {esCredito && vencimientoISO && (
-                <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
+                <div className="border border-gray-200 rounded p-2 text-xs vt-sy-1">
                   <div className="font-semibold">Información del crédito</div>
                   <div className="flex justify-between"><span className="text-muted">Monto neto pendiente de pago</span>
                     <span className="font-mono">{fmt(preview.total)}</span></div>
                   <div className="flex justify-between"><span className="text-muted">Total de Cuotas</span><span>1</span></div>
-                  <div className="grid grid-cols-3 gap-1 text-[11px] font-semibold text-muted border-t border-gray-100 pt-1 mt-1">
+                  <div className="grid grid-cols-3 gap-1 vt-fs-11 font-semibold text-muted border-t border-gray-100 vt-pt-1 mt-1">
                     <span>Nº Cuota</span><span>Fec. Venc.</span><span className="text-right">Monto</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 text-[11px]">
+                  <div className="grid grid-cols-3 gap-1 vt-fs-11">
                     <span>1</span><span>{fechaFmt(vencimientoISO)}</span><span className="text-right font-mono">{fmt(preview.total)}</span>
                   </div>
                 </div>
               )}
 
               {preview?.avisos?.length > 0 && (
-                <div className="text-[11px] bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
+                <div className="vt-fs-11 bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
                   {preview.avisos.map((a, i) => <div key={i}>• {a}</div>)}
                 </div>
               )}
 
-              <p className="text-[11px] text-muted italic">Los importes los calcula el servidor con la MISMA lógica (afectación por línea, redondeo half-up) que se usa al firmar el UBL, así que coinciden con lo que se declara. SUNAT aún podría observar por reglas de formato.</p>
+              <p className="vt-fs-11 text-muted italic">Los importes los calcula el servidor con la MISMA lógica (afectación por línea, redondeo half-up) que se usa al firmar el UBL, así que coinciden con lo que se declara. SUNAT aún podría observar por reglas de formato.</p>
             </>
           )}
 
@@ -843,12 +844,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         size={esDisminucion ? 'xl' : 'lg'}
       >
         {notaStep === 1 && (
-          <div className="space-y-3 text-sm">
+          <div className="vt-sy-3 text-sm">
             <p className="text-muted text-xs">
               Sobre la factura vigente <strong className="font-mono">{modalNota?.factura?.numero_factura}</strong>. El documento quedará vinculado a ella en el historial.
             </p>
             {notaPreviewError && <Alert type="error" message={notaPreviewError} />}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 vt-md-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-muted mb-1">Fecha de emisión</label>
                 <input
@@ -861,7 +862,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   disabled={procesando}
                 />
                 {notaFecha !== hoyISO && (
-                  <div className="text-[10px] text-amber-600 mt-0.5">Retro-fechada al {fechaFmt(notaFecha)} (dentro del plazo).</div>
+                  <div className="vt-fs-10 text-amber-600 vt-mt-05">Retro-fechada al {fechaFmt(notaFecha)} (dentro del plazo).</div>
                 )}
               </div>
               <div>
@@ -875,7 +876,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
               <div>
                 <label className="block text-xs text-muted mb-1">Documento que modifica</label>
                 <input type="text" className="form-input w-full bg-gray-50 font-mono" value={modalNota?.factura?.numero_factura || ''} readOnly disabled />
-                <div className="text-[10px] text-muted mt-0.5">Seleccionado automáticamente (factura afectada).</div>
+                <div className="vt-fs-10 text-muted vt-mt-05">Seleccionado automáticamente (factura afectada).</div>
               </div>
               <div>
                 <label className="block text-xs text-muted mb-1">Motivo</label>
@@ -887,7 +888,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-muted">Motivo o Sustento</label>
-                <span className="text-[10px] text-muted">{notaSustento.length}/{SUSTENTO_MAX}</span>
+                <span className="vt-fs-10 text-muted">{notaSustento.length}/{SUSTENTO_MAX}</span>
               </div>
               <textarea
                 className="form-input w-full"
@@ -898,16 +899,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 placeholder="Ej: Anulación por acuerdo con el cliente…"
                 disabled={procesando}
               />
-              <div className="text-[10px] text-muted mt-0.5">Texto libre que viaja a SUNAT (cbc:Description) y aparece en el comprobante.</div>
+              <div className="vt-fs-10 text-muted vt-mt-05">Texto libre que viaja a SUNAT (cbc:Description) y aparece en el comprobante.</div>
             </div>
 
             {esDisminucion && (
-              <div className="space-y-3 border-t border-gray-200 pt-3">
+              <div className="vt-sy-3 border-t border-gray-200 pt-3">
                 <div>
                   <div className="text-xs font-semibold">Alcance de la disminución</div>
                   <div className="flex gap-4 mt-1">
                     {[['item', 'Por ítem'], ['global', 'Global']].map(([value, label]) => (
-                      <label key={value} className="flex items-center gap-1.5 cursor-pointer">
+                      <label key={value} className="flex items-center vt-gap-15 cursor-pointer">
                         <input type="radio" name="nota-modo" value={value} checked={notaModo === value}
                           onChange={() => { setNotaModo(value); setNotaEditando(null); }} disabled={procesando} />
                         <span>{label}</span>
@@ -915,7 +916,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     ))}
                   </div>
                   {notaCatalogo?.saldoDisponible != null && (
-                    <div className="text-[10px] text-muted mt-1">
+                    <div className="vt-fs-10 text-muted mt-1">
                       Saldo máximo disponible para disminuir: <strong>{notaFmt(notaCatalogo.saldoDisponible)}</strong> (valor de venta sin IGV).
                     </div>
                   )}
@@ -927,7 +928,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <div className="border border-gray-200 rounded overflow-x-auto">
                     <div className="px-3 py-2 text-xs font-semibold bg-gray-50">Seleccione el ítem de la Factura Electrónica</div>
                     <table className="w-full text-xs">
-                      <thead className="bg-gray-50 border-y border-gray-200">
+                      <thead className="bg-gray-50 vt-border-y border-gray-200">
                         <tr>
                           <th className="p-2 text-center">Selección de ítems</th>
                           <th className="p-2 text-left">Unidad de medida</th>
@@ -975,29 +976,29 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                     ...prev, [notaEditando]: { ...prev[notaEditando], [field]: value }
                   }));
                   return (
-                    <div className="border border-sky-200 bg-sky-50/40 rounded p-3 space-y-3">
+                    <div className="border border-blue-200 bg-blue-50 rounded p-3 vt-sy-3">
                       <div className="flex items-center justify-between">
                         <strong className="text-xs">Captura NC - Disminución en el valor por ítem</strong>
                         <button type="button" className="btn btn-xs btn-outline" onClick={() => setNotaEditando(null)}><X size={12} /></button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div><label className="block text-[10px] text-muted mb-1">Cantidad afectada</label>
+                      <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
+                        <div><label className="block vt-fs-10 text-muted mb-1">Cantidad afectada</label>
                           <input type="number" min="0.000001" max={it.cantidad_original} step="0.000001" className="form-input w-full"
                             value={it.cantidad} onChange={(e) => update('cantidad', e.target.value)} /></div>
-                        <div><label className="block text-[10px] text-muted mb-1">Unidad de medida</label>
+                        <div><label className="block vt-fs-10 text-muted mb-1">Unidad de medida</label>
                           <input className="form-input w-full bg-gray-50" value={it.codigo_unidad_sunat || ''} readOnly /></div>
-                        <div><label className="block text-[10px] text-muted mb-1">Descripción</label>
+                        <div><label className="block vt-fs-10 text-muted mb-1">Descripción</label>
                           <input className="form-input w-full bg-gray-50" value={it.descripcion || ''} readOnly /></div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-                        <div><label className="block text-[10px] text-muted mb-1">Disminución en el valor (unitaria, sin IGV)</label>
+                      <div className="grid grid-cols-1 vt-md-cols-4 gap-2 items-end">
+                        <div><label className="block vt-fs-10 text-muted mb-1">Disminución en el valor (unitaria, sin IGV)</label>
                           <input type="number" min="0.01" max={it.valor_unitario_original} step="0.01" className="form-input w-full"
                             value={it.disminucion_valor} onChange={(e) => update('disminucion_valor', e.target.value)} placeholder="0.00" /></div>
-                        <div><div className="text-[10px] text-muted">ISC</div><strong>{notaFmt(0)}</strong></div>
-                        <div><div className="text-[10px] text-muted">IGV ({tasa * 100}%)</div><strong>{notaFmtCaptura(igv)}</strong></div>
-                        <div><div className="text-[10px] text-muted">Importe de venta</div><strong>{notaFmtCaptura(base + igv)}</strong></div>
+                        <div><div className="vt-fs-10 text-muted">ISC</div><strong>{notaFmt(0)}</strong></div>
+                        <div><div className="vt-fs-10 text-muted">IGV ({tasa * 100}%)</div><strong>{notaFmtCaptura(igv)}</strong></div>
+                        <div><div className="vt-fs-10 text-muted">Importe de venta</div><strong>{notaFmtCaptura(base + igv)}</strong></div>
                       </div>
-                      {!valido && it.disminucion_valor !== '' && <div className="text-[10px] text-red-600">Verifique cantidad e importe: la base no puede superar {notaFmt(it.valor_disponible)}.</div>}
+                      {!valido && it.disminucion_valor !== '' && <div className="vt-fs-10 text-red-600">Verifique cantidad e importe: la base no puede superar {notaFmt(it.valor_disponible)}.</div>}
                       <div className="flex justify-end gap-2">
                         {it.seleccionado && <button type="button" className="btn btn-xs btn-outline" onClick={() => {
                           update('seleccionado', false); setNotaEditando(null);
@@ -1011,12 +1012,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 })()}
 
                 {notaModo === 'global' && (
-                  <div className="border border-gray-200 rounded p-3 max-w-md">
+                  <div className="border border-gray-200 rounded p-3 vt-maxw-md">
                     <label className="block text-xs text-muted mb-1">Disminución global (valor de venta sin IGV)</label>
                     <input type="number" min="0.01" max={notaCatalogo?.saldoDisponible || undefined} step="0.01"
                       className="form-input w-full" value={notaMontoGlobal}
                       onChange={(e) => setNotaMontoGlobal(e.target.value)} placeholder="0.00" />
-                    <div className="text-[10px] text-muted mt-1">El servidor distribuye el monto por afectación tributaria y calcula el IGV correspondiente.</div>
+                    <div className="vt-fs-10 text-muted mt-1">El servidor distribuye el monto por afectación tributaria y calcula el IGV correspondiente.</div>
                   </div>
                 )}
               </div>
@@ -1030,19 +1031,19 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
         )}
 
         {notaStep === 2 && (
-          <div className="space-y-3 text-sm">
+          <div className="vt-sy-3 text-sm">
             {notaPreviewLoading && <p className="text-muted text-xs">Calculando preliminar…</p>}
             {notaPreviewError && <Alert type="error" message={notaPreviewError} />}
             {notaPreview && (
               <>
                 <div className="text-center border-b border-gray-200 pb-2">
                   <div className="font-bold uppercase">{notaPreview.empresa?.razon_social}</div>
-                  <div className="text-[10px] text-muted">{notaPreview.empresa?.direccion}</div>
+                  <div className="vt-fs-10 text-muted">{notaPreview.empresa?.direccion}</div>
                   <div className="mt-1 font-semibold">{notaPreview.tipoLabel}</div>
                   <div className="font-mono text-xs">RUC: {notaPreview.empresa?.ruc}</div>
                 </div>
 
-                <div className="text-xs space-y-0.5">
+                <div className="text-xs vt-sy-05">
                   <div><span className="text-muted">Fecha de Emisión: </span><strong>{fechaFmt(notaFecha)}</strong></div>
                   <div><span className="text-muted">Documento que modifica — {notaPreview.docAfectado?.tipoLabel}: </span>
                     <strong className="font-mono">{notaPreview.docAfectado?.numero}</strong></div>
@@ -1055,7 +1056,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   <div><span className="text-muted">Tipo de Moneda: </span><strong>{notaPreview.monedaLabel}</strong></div>
                   <div><span className="text-muted">Motivo o Sustento: </span><strong>{notaSustento}</strong></div>
                   {notaPreview.motivo?.label && (
-                    <div className="uppercase font-semibold text-[11px]">{notaPreview.motivo.label}</div>
+                    <div className="uppercase font-semibold vt-fs-11">{notaPreview.motivo.label}</div>
                   )}
                 </div>
 
@@ -1084,7 +1085,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                   </table>
                 </div>
 
-                <div className="border border-gray-200 rounded divide-y divide-gray-100 text-xs">
+                <div className="border border-gray-200 rounded vt-divide-y text-xs">
                   {[
                     ['Sub Total Ventas', notaPreview.totales?.subtotal],
                     ['Anticipos', notaPreview.totales?.anticipos],
@@ -1101,28 +1102,28 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                       <span className="font-mono">{notaFmt(val)}</span>
                     </div>
                   ))}
-                  <div className="flex justify-between px-3 py-1.5 bg-gray-50 font-semibold">
+                  <div className="flex justify-between px-3 vt-py-15 bg-gray-50 font-semibold">
                     <span>Importe Total</span>
                     <span className="font-mono">{notaFmt(notaPreview.totales?.total)}</span>
                   </div>
                 </div>
 
                 {notaPreview.montoEnLetras && (
-                  <p className="text-[11px] text-muted"><span className="uppercase font-semibold">Son:</span> {notaPreview.montoEnLetras}</p>
+                  <p className="vt-fs-11 text-muted"><span className="uppercase font-semibold">Son:</span> {notaPreview.montoEnLetras}</p>
                 )}
 
                 {notaPreview.credito?.esCredito && (
-                  <div className="border border-gray-200 rounded p-2 text-xs space-y-1">
+                  <div className="border border-gray-200 rounded p-2 text-xs vt-sy-1">
                     <div className="font-semibold">Información del crédito</div>
                     <div className="flex justify-between"><span className="text-muted">Monto neto pendiente de pago</span>
                       <span className="font-mono">{notaFmt(notaPreview.credito.montoPendiente)}</span></div>
                     <div className="flex justify-between"><span className="text-muted">Total de Cuotas</span>
                       <span>{notaPreview.credito.totalCuotas}</span></div>
-                    <div className="grid grid-cols-3 gap-1 text-[11px] font-semibold text-muted border-t border-gray-100 pt-1 mt-1">
+                    <div className="grid grid-cols-3 gap-1 vt-fs-11 font-semibold text-muted border-t border-gray-100 vt-pt-1 mt-1">
                       <span>Nº Cuota</span><span>Fec. Venc.</span><span className="text-right">Monto</span>
                     </div>
                     {(notaPreview.credito.cuotas || []).map((q) => (
-                      <div key={q.n} className="grid grid-cols-3 gap-1 text-[11px]">
+                      <div key={q.n} className="grid grid-cols-3 gap-1 vt-fs-11">
                         <span>{q.n}</span><span>{fechaFmt(q.venc)}</span>
                         <span className="text-right font-mono">{notaFmt(q.monto)}</span>
                       </div>
@@ -1131,12 +1132,12 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 )}
 
                 {Array.isArray(notaPreview.avisos) && notaPreview.avisos.length > 0 && (
-                  <div className="text-[11px] bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
+                  <div className="vt-fs-11 bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
                     {notaPreview.avisos.map((a, i) => <div key={i}>• {a}</div>)}
                   </div>
                 )}
 
-                <p className="text-[11px] text-muted italic">Los importes los calcula el servidor con la MISMA lógica del UBL que se firma. SUNAT aún podría observar por reglas de formato.</p>
+                <p className="vt-fs-11 text-muted italic">Los importes los calcula el servidor con la MISMA lógica del UBL que se firma. SUNAT aún podría observar por reglas de formato.</p>
               </>
             )}
 
@@ -1157,7 +1158,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
       </Modal>
 
       <Modal isOpen={!!modalBaja} onClose={() => !procesando && setModalBaja(null)} title="Comunicación de baja (RA)" size="sm">
-        <div className="space-y-3 text-sm">
+        <div className="vt-sy-3 text-sm">
           <p className="text-muted">Se dará de baja la factura <strong className="font-mono">{modalBaja?.factura?.numero_factura}</strong> ante SUNAT (solo dentro de los 7 días de emitida).</p>
           <div>
             <label className="block text-xs text-muted mb-1">Motivo de la baja</label>

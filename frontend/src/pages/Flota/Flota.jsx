@@ -186,8 +186,8 @@ function Flota() {
         <section>
           <h3 className="pg-section-title"><FileCheck size={14} /> Guías de remisión</h3>
           {guias > 0 ? (
-            <div className="ms-measure">
-              <div className="ms-measure-top">
+            <div className="pg-measure">
+              <div className="pg-measure-top">
                 <span>Aceptadas por SUNAT</span>
                 <b>{aceptadas} <small>/ {guias} guías</small></b>
               </div>
@@ -195,11 +195,11 @@ function Flota() {
                 <span style={{ width: `${pctAceptadas}%` }} />
               </div>
               {guias - aceptadas > 0 && (
-                <span className="ms-measure-note">{guias - aceptadas} sin aceptar (pendientes, rechazadas o manuales)</span>
+                <span className="pg-measure-note">{guias - aceptadas} sin aceptar (pendientes, rechazadas o manuales)</span>
               )}
             </div>
           ) : (
-            <p className="ms-empty-line">Este vehículo aún no figura en ninguna guía de remisión.</p>
+            <p className="pg-empty-line">Este vehículo aún no figura en ninguna guía de remisión.</p>
           )}
         </section>
       </PgDrawer>
@@ -378,7 +378,7 @@ function Flota() {
             <input id="ms-flota-placa" type="text" className="form-input" value={formData.placa}
               onChange={(e) => setFormData({ ...formData, placa: e.target.value.toUpperCase() })}
               required placeholder="Ej: ABC-123" maxLength={10} />
-            <small className="ms-hint">Formato: ABC-123 o ABC-1234</small>
+            <small className="pg-hint">Formato: ABC-123 o ABC-1234</small>
           </div>
 
           <div className="form-group">
@@ -387,7 +387,7 @@ function Flota() {
               onChange={(e) => setFormData({ ...formData, marca_modelo: e.target.value })} placeholder="Ej: Toyota Hilux 2020" />
           </div>
 
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ms-flota-kg">Capacidad (kg)</label>
               <input id="ms-flota-kg" type="number" step="0.01" className="form-input" value={formData.capacidad_kg}

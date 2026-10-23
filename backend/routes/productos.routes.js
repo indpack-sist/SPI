@@ -24,7 +24,8 @@ import {
   calcularEvolucionCUP,
   getHistorialComprasProducto,
   generarReporteProductoPDF,
-  generarReporteProductoXLSX
+  generarReporteProductoXLSX,
+  getCompromisosProducto
 } from '../controllers/productos.controller.js';
 
 import {
@@ -62,6 +63,7 @@ router.get('/', getAllProductos);
 router.post('/', createProducto);
 router.get('/:id/historial-compras', getHistorialComprasProducto);
 router.get('/:id/historial-movimientos', getHistorialMovimientos);
+router.get('/:id/compromisos', getCompromisosProducto);
 router.get('/:id/reporte-pdf', generarReporteProductoPDF);
 router.get('/:id/reporte-xlsx', generarReporteProductoXLSX);
 router.get('/:id/recetas', getRecetasByProducto);

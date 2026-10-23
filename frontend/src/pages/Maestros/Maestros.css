@@ -22,31 +22,9 @@
 .ms-lines span > svg { flex-shrink: 0; }
 .ms-lines b { color: var(--text-primary); font-weight: 600; }
 
-.ms-measure { display: flex; flex-direction: column; gap: 0.2rem; min-width: 170px; }
-.ms-measure-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; font-size: 0.74rem; }
-.ms-measure-top span {
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-.ms-measure-top b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary); }
-.ms-measure-top b small { font-weight: 400; color: var(--text-secondary); }
-.ms-measure .pg-meter { margin-top: 0; }
-.ms-measure-note { font-size: 0.72rem; color: var(--text-secondary); }
-.ms-measure-note.is-danger { color: var(--danger); }
-.pg-kv + .ms-measures { margin-top: 0.9rem; }
-.pg-kv + .pg-tags { margin-top: 0.6rem; }
-.ms-measures { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-
-.ms-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
-.ms-form-grid > .is-full { grid-column: 1 / -1; }
 .ms-inline { display: flex; gap: 0.5rem; }
 .ms-inline > .form-input, .ms-inline > .ms-field-icon { flex: 1; min-width: 0; }
 .ms-inline > .btn { flex-shrink: 0; min-width: 132px; }
-.ms-hint > svg { margin-right: 0.3rem; vertical-align: -1px; }
-.ms-hint { display: block; margin-top: 0.3rem; font-size: 0.74rem; color: var(--text-secondary); }
 .ms-status { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; font-size: 0.8rem; }
 .ms-status.is-ok { color: var(--success); }
 .ms-box-sep > .ms-status:first-child { margin-top: 0; margin-bottom: 0.5rem; }
@@ -107,13 +85,6 @@
 .ms-note.is-info > svg { color: var(--info); }
 .ms-note.is-warning { border-color: rgba(243, 156, 18, 0.35); }
 .ms-note.is-warning > svg { color: var(--warning); }
-
-.ms-check { display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer; font-size: 0.85rem; color: var(--text-primary); }
-.ms-check input { width: 16px; height: 16px; margin-top: 0.15rem; flex-shrink: 0; accent-color: var(--accent); }
-.ms-check input:disabled + * { opacity: 0.6; }
-.ms-check > div > span { display: block; font-weight: 600; }
-.ms-check > div > span > svg { margin-right: 0.4rem; vertical-align: -2px; }
-.ms-check > div > small { display: block; margin-top: 0.15rem; font-size: 0.75rem; color: var(--text-secondary); }
 
 .ms-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
 .ms-days { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
@@ -182,12 +153,6 @@
 .ms-cartera-count { margin: 0 0 0.5rem; font-size: 0.76rem; color: var(--text-secondary); }
 .ms-cartera-count b { color: var(--text-primary); }
 
-.ms-empty-line { margin: 0; font-size: 0.82rem; color: var(--text-secondary); }
-
-.ms-loading { display: grid; place-items: center; padding: 2.5rem; color: var(--text-secondary); }
-
-.pg-list li > span > svg { margin-right: 0.3rem; vertical-align: -1px; }
-
 .ms-link {
   display: inline-flex;
   align-items: center;
@@ -213,7 +178,7 @@
 }
 
 @media (max-width: 640px) {
-  .ms-form-grid, .ms-choice { grid-template-columns: minmax(0, 1fr); }
+  .ms-choice { grid-template-columns: minmax(0, 1fr); }
   .ms-inline { flex-wrap: wrap; }
   .ms-inline > .btn { flex: 1 1 100%; }
 }

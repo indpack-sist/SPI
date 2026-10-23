@@ -525,7 +525,7 @@ function Empleados() {
               </div>
             </div>
             {sinLicencia(emp) && (
-              <p className="ms-hint">La emisión de GRE exige licencia con formato letra + 8 dígitos (Ej: Q12345678).</p>
+              <p className="pg-hint">La emisión de GRE exige licencia con formato letra + 8 dígitos (Ej: Q12345678).</p>
             )}
           </section>
         )}
@@ -724,7 +724,7 @@ function Empleados() {
 
       <Modal isOpen={modalOpen} onClose={cerrarModal} title={editando ? 'Editar empleado' : 'Nuevo empleado'} size="lg">
         <form onSubmit={handleSubmit}>
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ms-emp-dni">DNI</label>
@@ -749,7 +749,7 @@ function Empleados() {
                   <>
                     <div className="ms-status is-error"><AlertCircle size={16} /> No se pudo validar el DNI con RENIEC (sin resultados)</div>
                     <div className="ms-box is-tight">
-                      <label className="ms-check">
+                      <label className="pg-check">
                         <input type="checkbox" checked={!formData.validar_dni}
                           onChange={(e) => setFormData({ ...formData, validar_dni: !e.target.checked })} />
                         <div><span>Registrar de todas formas</span><small>El empleado se guardará sin validar el DNI.</small></div>
@@ -758,21 +758,21 @@ function Empleados() {
                   </>
                 )}
 
-                <small className="ms-hint">Opcional. Si ingresa un DNI, puede validarlo con RENIEC.</small>
+                <small className="pg-hint">Opcional. Si ingresa un DNI, puede validarlo con RENIEC.</small>
               </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="ms-emp-nombre">Nombre completo *</label>
                 <input id="ms-emp-nombre" type="text" className="form-input" value={formData.nombre_completo}
                   onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })} required placeholder="Ej: Juan Pérez García" />
-                {datosRENIEC && <small className="ms-hint">Autocompletado desde RENIEC</small>}
+                {datosRENIEC && <small className="pg-hint">Autocompletado desde RENIEC</small>}
               </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="ms-emp-cargo">Cargo</label>
                 <input id="ms-emp-cargo" type="text" className="form-input" value={formData.cargo}
                   onChange={(e) => setFormData({ ...formData, cargo: e.target.value })} placeholder="Ej: Jefe de Producción" />
-                <small className="ms-hint">Opcional. Si no se especifica, se usa el rol como cargo.</small>
+                <small className="pg-hint">Opcional. Si no se especifica, se usa el rol como cargo.</small>
               </div>
 
               <div className="form-group">
@@ -781,7 +781,7 @@ function Empleados() {
                   onChange={(e) => setFormData({ ...formData, rol: e.target.value })} required>
                   <OpcionesRol />
                 </select>
-                <small className="ms-hint">El rol determina los permisos y accesos en el sistema.</small>
+                <small className="pg-hint">El rol determina los permisos y accesos en el sistema.</small>
               </div>
 
               {formData.rol === 'Conductor' && (
@@ -796,7 +796,7 @@ function Empleados() {
                   {formData.licencia_conducir && LICENCIA_REGEX.test(formData.licencia_conducir) && (
                     <div className="ms-status is-ok"><CheckCircle size={16} /> Formato válido</div>
                   )}
-                  <small className="ms-hint">Una letra seguida de los 8 dígitos del DNI. Usado en las guías de remisión.</small>
+                  <small className="pg-hint">Una letra seguida de los 8 dígitos del DNI. Usado en las guías de remisión.</small>
                 </div>
               )}
             </div>
@@ -827,7 +827,7 @@ function Empleados() {
                 </div>
                 {emailValidado === true && <div className="ms-status is-ok"><CheckCircle size={16} /> Email disponible</div>}
                 {emailValidado === false && <div className="ms-status is-error"><AlertCircle size={16} /> Email ya registrado</div>}
-                <small className="ms-hint">Este correo se usará para iniciar sesión en el sistema.</small>
+                <small className="pg-hint">Este correo se usará para iniciar sesión en el sistema.</small>
               </div>
 
               <div className="form-group">
@@ -841,7 +841,7 @@ function Empleados() {
                     {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
-                <small className="ms-hint">
+                <small className="pg-hint">
                   {editando
                     ? 'Dejar vacío si no desea cambiar la contraseña.'
                     : 'Mínimo 6 caracteres. El empleado usará esta contraseña para iniciar sesión.'}
@@ -884,11 +884,11 @@ function Empleados() {
         size="lg"
       >
         {carteraLoading ? (
-          <div className="ms-loading"><Loader size={28} className="animate-spin" /></div>
+          <div className="pg-loading"><Loader size={28} className="animate-spin" /></div>
         ) : (
           <div>
             <div className="ms-box">
-              <label className="ms-check">
+              <label className="pg-check">
                 <input type="checkbox" checked={carteraRestringir} onChange={(e) => setCarteraRestringir(e.target.checked)} />
                 <div>
                   <span>
@@ -986,13 +986,13 @@ function Empleados() {
             </div>
           </div>
 
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ms-rem-dni">DNI</label>
                 <input id="ms-rem-dni" type="text" className="form-input" value={reemplazoData.dni}
                   onChange={(e) => setReemplazoData({ ...reemplazoData, dni: e.target.value })} placeholder="12345678" maxLength={8} />
-                <small className="ms-hint">Opcional. DNI de la persona que ingresa.</small>
+                <small className="pg-hint">Opcional. DNI de la persona que ingresa.</small>
               </div>
 
               <div className="form-group">
@@ -1005,7 +1005,7 @@ function Empleados() {
                 <label className="form-label" htmlFor="ms-rem-cargo">Cargo</label>
                 <input id="ms-rem-cargo" type="text" className="form-input" value={reemplazoData.cargo}
                   onChange={(e) => setReemplazoData({ ...reemplazoData, cargo: e.target.value })} placeholder="Ej: Ejecutivo Comercial" />
-                <small className="ms-hint">Opcional. Si se deja vacío se usa el rol.</small>
+                <small className="pg-hint">Opcional. Si se deja vacío se usa el rol.</small>
               </div>
 
               <div className="form-group">
@@ -1030,7 +1030,7 @@ function Empleados() {
                   <input id="ms-rem-email" type="email" className="form-input" value={reemplazoData.email}
                     onChange={(e) => setReemplazoData({ ...reemplazoData, email: e.target.value })} required placeholder="correo@empresa.com" />
                 </div>
-                <small className="ms-hint">Con este correo iniciará sesión la persona nueva.</small>
+                <small className="pg-hint">Con este correo iniciará sesión la persona nueva.</small>
               </div>
 
               <div className="form-group">
@@ -1048,7 +1048,7 @@ function Empleados() {
 
               {ROLES_CARTERA.includes(saliente?.rol) && (
                 <div className="form-group">
-                  <label className="ms-check">
+                  <label className="pg-check">
                     <input type="checkbox" checked={reemplazoData.transferir_cartera}
                       onChange={(e) => setReemplazoData({ ...reemplazoData, transferir_cartera: e.target.checked })} />
                     <div>

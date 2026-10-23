@@ -81,15 +81,15 @@ function MedidorCredito({ titulo, linea, moneda }) {
   const usado = parseFloat(linea?.utilizado || 0);
   const pct = limite > 0 ? (usado / limite) * 100 : 0;
   return (
-    <div className="ms-measure">
-      <div className="ms-measure-top">
+    <div className="pg-measure">
+      <div className="pg-measure-top">
         <span>{titulo}</span>
         <b>{fmtMonto(usado, moneda)} <small>/ {fmtMonto(limite, moneda)}</small></b>
       </div>
       <div className="pg-meter" title={`${pct.toFixed(1)}% utilizado`} style={{ '--meter-c': colorUso(pct) }}>
         <span style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className={`ms-measure-note ${pct > 100 ? 'is-danger' : ''}`}>
+      <span className={`pg-measure-note ${pct > 100 ? 'is-danger' : ''}`}>
         {pct.toFixed(0)}% utilizado · disponible {fmtMonto(parseFloat(linea?.disponible || 0), moneda)}
       </span>
     </div>
@@ -523,9 +523,9 @@ function Clientes() {
           </div>
           {linea && (
             credito.loading ? (
-              <div className="ms-loading"><Loader size={20} className="animate-spin" /></div>
+              <div className="pg-loading"><Loader size={20} className="animate-spin" /></div>
             ) : credito.data ? (
-              <div className="ms-measures">
+              <div className="pg-measures">
                 <MedidorCredito titulo="Soles" linea={credito.data.credito_pen} moneda="PEN" />
                 <MedidorCredito titulo="Dólares" linea={credito.data.credito_usd} moneda="USD" />
               </div>
@@ -848,7 +848,7 @@ function Clientes() {
               onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })} required />
           </div>
 
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ms-cli-contacto">Contacto</label>
               <input id="ms-cli-contacto" type="text" className="form-input" value={formData.contacto}
@@ -872,14 +872,14 @@ function Clientes() {
             <textarea id="ms-cli-direccion" className="form-textarea" value={formData.direccion_despacho}
               onChange={(e) => setFormData({ ...formData, direccion_despacho: e.target.value })}
               rows={3} placeholder="Dirección principal de entrega" />
-            <small className="ms-hint"><MapPin size={11} />Las direcciones adicionales se gestionan desde la ficha del cliente.</small>
+            <small className="pg-hint"><MapPin size={11} />Las direcciones adicionales se gestionan desde la ficha del cliente.</small>
           </div>
 
           {formData.direccion_despacho && (
             <div className="form-group">
               <span className="form-label">Ubigeo de la dirección principal *</span>
               <UbigeoSelector value={formData.ubigeo} onChange={(codigo) => setFormData({ ...formData, ubigeo: codigo })} required />
-              <small className="ms-hint">Este código se reutilizará como ubigeo de llegada al emitir la guía.</small>
+              <small className="pg-hint">Este código se reutilizará como ubigeo de llegada al emitir la guía.</small>
             </div>
           )}
 
@@ -901,7 +901,7 @@ function Clientes() {
             </div>
 
             {!formData.usar_limite_credito && (
-              <small className="ms-hint">La opción Crédito solo está disponible para clientes con límite de crédito habilitado.</small>
+              <small className="pg-hint">La opción Crédito solo está disponible para clientes con límite de crédito habilitado.</small>
             )}
 
             {formData.condicion_pago === 'Credito' && (
@@ -939,7 +939,7 @@ function Clientes() {
           </div>
 
           <div className="ms-box">
-            <label className="ms-check">
+            <label className="pg-check">
               <input type="checkbox" checked={formData.usar_limite_credito} disabled={!!editando}
                 onChange={(e) => {
                   const nuevoValor = e.target.checked;
@@ -985,7 +985,7 @@ function Clientes() {
                     <Info size={16} />
                     <p>Estos límites se enviarán como una solicitud de crédito automática para aprobación.</p>
                   </div>
-                  <div className="ms-form-grid">
+                  <div className="pg-form-grid">
                     <div className="form-group">
                       <label className="form-label" htmlFor="ms-cli-lim-pen">Límite en soles (S/)</label>
                       <input id="ms-cli-lim-pen" type="number" className="form-input" value={formData.limite_credito_pen}
@@ -1039,7 +1039,7 @@ function Clientes() {
             </div>
 
             <h3 className="pg-section-title">Nuevos límites solicitados</h3>
-            <div className="ms-form-grid">
+            <div className="pg-form-grid">
               <div className="form-group">
                 <label className="form-label" htmlFor="ms-sol-pen">Límite en soles (S/) *</label>
                 <input id="ms-sol-pen" type="number" className="form-input" value={solicitudData.limite_credito_pen_solicitado}

@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
-import { X, AlertTriangle, CheckCircle, Package, TrendingUp, TrendingDown } from 'lucide-react';
+import { AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Loader, ClipboardCheck } from 'lucide-react';
 import Modal from '../UI/Modal';
 import { api } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
+import { fmtCantidad, fmtCosto } from '../../pages/Productos/estadosProductos';
+import '../../pages/Productos/Productos.css';
+
 function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
+  const { tienePermiso } = usePermisos();
+  const verPrecios = tienePermiso('verPrecios');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [motivos, setMotivos] = useState([]);
@@ -44,8 +50,7 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
       if (response.data.success) {
         setMotivos(response.data.data);
       }
-    } catch (err) {
-      console.error('Error al cargar motivos:', err);
+    } catch {
       setError('Error al cargar los motivos de ajuste');
     }
   };
@@ -79,8 +84,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
 
     try {
       const token = localStorage.getItem('token');
-      console.log('Token presente:', !!token);
-      
       if (!token) {
         throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
       }
@@ -91,8 +94,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
         motivo: formData.motivo,
         observaciones: formData.observaciones || null
       });
-
-      console.log('Respuesta del servidor:', response.data);
 
       if (response.data.success) {
         if (onSuccess) {
@@ -105,9 +106,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
       }
 
     } catch (err) {
-      console.error('Error completo:', err);
-      console.error('Error response:', err.response?.data);
-      
       let mensajeError = 'Error al realizar el conteo físico';
       
       if (err.response?.data?.error) {
@@ -138,219 +136,122 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
     ? Math.abs(diferencia) * parseFloat(producto.costo_unitario_promedio)
     : 0;
 
+  const unidad = producto.unidad_medida;
+  const hayDiferencia = diferencia !== null && diferencia !== 0;
+  const esSobrante = tipoAjuste === 'Positivo';
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      title="Conteo Físico de Inventario"
-      size="lg"
-    >
+    <Modal isOpen={isOpen} onClose={handleClose} title="Conteo físico de inventario" size="lg">
       <form onSubmit={handleSubmit}>
-        <div className="bg-gray-50 rounded-lg p-4 mb-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <Package size={24} className="text-indigo-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900">{producto.nombre}</h3>
-              <p className="text-sm text-gray-600">Código: {producto.codigo}</p>
-              <div className="flex items-center gap-4 mt-2">
-                <div className="text-sm">
-                  <span className="text-gray-500">Stock Sistema:</span>
-                  <span className="ml-2 font-semibold text-gray-900">
-                    {stockSistema.toFixed(2)} {producto.unidad_medida}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-500">CUP:</span>
-                  <span className="ml-2 font-semibold text-gray-900">
-                    S/ {parseFloat(producto.costo_unitario_promedio || 0).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div className="pr-stock-box pr-conteo-head">
+          <div>
+            <strong className="pr-conteo-name">{producto.nombre}</strong>
+            <span className="pg-code">{producto.codigo}</span>
+          </div>
+          <div className="pg-kv pr-kv-flat">
+            <div><span>Stock en sistema</span><strong>{fmtCantidad(stockSistema)} {unidad}</strong></div>
+            {verPrecios && <div><span>CUP</span><strong>{fmtCosto(producto.costo_unitario_promedio)}</strong></div>}
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-            <AlertTriangle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-            <span className="text-sm text-red-800">{error}</span>
+          <div className="pr-note is-danger" role="alert">
+            <AlertTriangle size={16} />
+            <p>{error}</p>
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="form-group">
-            <label className="form-label">
-              Stock Físico Contado *
-              <span className="text-xs text-gray-500 ml-2">
-                ({producto.unidad_medida})
-              </span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              className="form-input"
-              value={formData.stock_fisico}
-              onChange={(e) => setFormData({ ...formData, stock_fisico: e.target.value })}
-              placeholder={`Ej: ${stockSistema.toFixed(2)}`}
-              required
-              autoFocus
-            />
-            <small className="text-muted">
-              Ingresa la cantidad exacta que encontraste en el inventario físico
-            </small>
-          </div>
-
-          {diferencia !== null && diferencia !== 0 && (
-            <div className={`p-4 rounded-lg border-2 ${
-              tipoAjuste === 'Positivo' 
-                ? 'bg-green-50 border-green-200' 
-                : 'bg-red-50 border-red-200'
-            }`}>
-              <div className="flex items-center gap-2 mb-2">
-                {tipoAjuste === 'Positivo' ? (
-                  <TrendingUp size={20} className="text-green-600" />
-                ) : (
-                  <TrendingDown size={20} className="text-red-600" />
-                )}
-                <span className={`font-semibold ${
-                  tipoAjuste === 'Positivo' ? 'text-green-900' : 'text-red-900'
-                }`}>
-                  Ajuste {tipoAjuste}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-600">Diferencia</p>
-                  <p className={`font-bold ${
-                    tipoAjuste === 'Positivo' ? 'text-green-700' : 'text-red-700'
-                  }`}>
-                    {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)} {producto.unidad_medida}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Valor del Ajuste</p>
-                  <p className="font-bold text-gray-900">
-                    S/ {valorAjuste.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Stock Nuevo</p>
-                  <p className="font-bold text-gray-900">
-                    {parseFloat(formData.stock_fisico).toFixed(2)} {producto.unidad_medida}
-                  </p>
-                </div>
-              </div>
-
-              {tipoAjuste === 'Positivo' && (
-                <p className="text-xs text-green-700 mt-2">
-                  ✓ Se encontró más stock del registrado en el sistema
-                </p>
-              )}
-              {tipoAjuste === 'Negativo' && (
-                <p className="text-xs text-red-700 mt-2">
-                  ⚠ Falta stock registrado en el sistema
-                </p>
-              )}
-            </div>
-          )}
-
-          {diferencia === 0 && formData.stock_fisico !== '' && (
-            <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={20} className="text-blue-600" />
-                <span className="text-sm font-semibold text-blue-900">
-                  Stock correcto - No hay diferencia
-                </span>
-              </div>
-              <p className="text-xs text-blue-700 mt-1">
-                El stock físico coincide con el stock del sistema
-              </p>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label className="form-label">Motivo del Ajuste *</label>
-            <select
-              className="form-select"
-              value={formData.motivo}
-              onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
-              required
-              disabled={diferencia === 0 || diferencia === null}
-            >
-              <option value="">Seleccione un motivo...</option>
-              {motivos.map((motivo) => (
-                <option key={motivo.value} value={motivo.value}>
-                  {motivo.label}
-                </option>
-              ))}
-            </select>
-            {motivos.length === 0 && (
-              <small className="text-red-500">Cargando motivos...</small>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Observaciones</label>
-            <textarea
-              className="form-textarea"
-              value={formData.observaciones}
-              onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-              placeholder="Detalles adicionales sobre el conteo físico (opcional)"
-              rows={3}
-            />
-            <small className="text-muted">
-              Especifica detalles como ubicación, condición del producto, etc.
-            </small>
-          </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="pr-conteo-fisico">Stock físico contado * <span className="pg-muted">({unidad})</span></label>
+          <input
+            id="pr-conteo-fisico"
+            type="number"
+            step="0.01"
+            className="form-input"
+            value={formData.stock_fisico}
+            onChange={(e) => setFormData({ ...formData, stock_fisico: e.target.value })}
+            placeholder={`Ej: ${stockSistema.toFixed(2)}`}
+            required
+          />
+          <small className="pg-hint">Ingresa la cantidad exacta encontrada en el inventario físico.</small>
         </div>
 
-        {diferencia !== null && diferencia !== 0 && (
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={18} className="text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-yellow-800">
-                <p className="font-semibold">Confirma antes de continuar:</p>
-                <ul className="mt-1 ml-4 list-disc space-y-1">
-                  <li>El stock del sistema se actualizará a <strong>{formData.stock_fisico} {producto.unidad_medida}</strong></li>
-                  <li>Este ajuste quedará registrado en el historial</li>
-                  <li>La acción no se puede deshacer</li>
-                </ul>
-              </div>
+        {hayDiferencia && (
+          <div className={`pr-delta ${esSobrante ? 'is-in' : 'is-out'}`}>
+            <div className="pr-delta-head">
+              {esSobrante ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              <strong>Ajuste {tipoAjuste.toLowerCase()} · {esSobrante ? 'sobrante: hay más stock del registrado' : 'faltante: hay menos stock del registrado'}</strong>
+            </div>
+            <div className="pg-kv pr-kv-flat">
+              <div><span>Diferencia</span><strong className={`pr-qty ${esSobrante ? 'is-in' : 'is-out'}`}>{diferencia > 0 ? '+' : '−'}{fmtCantidad(Math.abs(diferencia), 2)} {unidad}</strong></div>
+              {verPrecios && <div><span>Valor del ajuste</span><strong>{fmtCosto(valorAjuste)}</strong></div>}
+              <div><span>Stock nuevo</span><strong>{fmtCantidad(formData.stock_fisico, 2)} {unidad}</strong></div>
             </div>
           </div>
         )}
 
-        <div className="flex gap-3 justify-end mt-6">
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={handleClose}
-            disabled={loading}
+        {diferencia === 0 && formData.stock_fisico !== '' && (
+          <div className="pr-note is-success">
+            <CheckCircle size={16} />
+            <p><strong>Stock correcto</strong>El stock físico coincide con el del sistema; no hay nada que ajustar.</p>
+          </div>
+        )}
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="pr-conteo-motivo">Motivo del ajuste *</label>
+          <select
+            id="pr-conteo-motivo"
+            className="form-select"
+            value={formData.motivo}
+            onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+            required
+            disabled={!hayDiferencia}
           >
-            Cancelar
-          </button>
+            <option value="">Seleccione un motivo...</option>
+            {motivos.map((motivo) => (
+              <option key={motivo.value} value={motivo.value}>{motivo.label}</option>
+            ))}
+          </select>
+          {motivos.length === 0 && <small className="pg-hint">Cargando motivos...</small>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="pr-conteo-obs">Observaciones</label>
+          <textarea
+            id="pr-conteo-obs"
+            className="form-textarea"
+            value={formData.observaciones}
+            onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
+            placeholder="Ubicación, condición del producto u otros detalles (opcional)"
+            rows={3}
+          />
+        </div>
+
+        {hayDiferencia && (
+          <div className="pr-note is-warning">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>Confirma antes de continuar</strong>
+              <ul>
+                <li>El stock del sistema pasará a <b>{fmtCantidad(formData.stock_fisico, 2)} {unidad}</b>.</li>
+                <li>El ajuste quedará registrado en el historial del producto.</li>
+                <li>La acción no se puede deshacer.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        <div className="pr-form-actions">
+          <button type="button" className="btn btn-outline" onClick={handleClose} disabled={loading}>Cancelar</button>
           <button
             type="submit"
-            className={`btn ${
-              tipoAjuste === 'Positivo' ? 'btn-success' : 
-              tipoAjuste === 'Negativo' ? 'btn-danger' : 
-              'btn-primary'
-            }`}
-            disabled={loading || diferencia === 0 || diferencia === null}
+            className={`btn ${tipoAjuste === 'Positivo' ? 'btn-success' : tipoAjuste === 'Negativo' ? 'btn-danger' : 'btn-primary'}`}
+            disabled={loading || !hayDiferencia}
           >
-            {loading ? (
+            {loading ? <><Loader size={16} className="animate-spin" /> Procesando...</> : (
               <>
-                <span className="animate-spin mr-2"></span>
-                Procesando...
-              </>
-            ) : (
-              <>
-                {tipoAjuste === 'Positivo' && '✓ Registrar Sobrante'}
-                {tipoAjuste === 'Negativo' && '⚠ Registrar Faltante'}
-                {(!tipoAjuste || diferencia === 0) && 'Realizar Ajuste'}
+                <ClipboardCheck size={16} />
+                {tipoAjuste === 'Positivo' ? 'Registrar sobrante' : tipoAjuste === 'Negativo' ? 'Registrar faltante' : 'Realizar ajuste'}
               </>
             )}
           </button>

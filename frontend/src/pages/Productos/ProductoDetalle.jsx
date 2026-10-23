@@ -1,29 +1,83 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit, Trash2, Package, Copy, Star, Clock, CheckCircle, XCircle, History, TrendingUp, TrendingDown, ArrowRightLeft, Factory, AlertTriangle, Info, DollarSign } from 'lucide-react';
-import { productosAPI } from '../../config/api';
+import {
+  ArrowLeft, Plus, Pencil, Trash2, Package, Copy, Star, Clock, CheckCircle, XCircle, History, Factory,
+  AlertTriangle, Info, Coins, Boxes, ShoppingCart, ShieldAlert, FileText, FileSpreadsheet, BookOpen,
+  ChevronRight, CalendarDays, PackageCheck, TrendingUp, TrendingDown, Loader, Layers
+} from 'lucide-react';
+import { productosAPI, inventarioAPI, incidenciasAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
-import Table from '../../components/UI/Table';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
-import './ProductoDetalle.css';
+import PgPager from '../../components/UI/PgPager';
+import { BadgeEstadoRegistro } from '../Maestros/estadosMaestros';
+import { fmtFecha, fmtMonto, haceTexto } from '../Maestros/formatoMaestros';
+import { useResetPagina } from '../Maestros/useResetPagina';
+import { BadgeEstadoProduccion } from '../Produccion/estadosProduccion';
+import { getEstadoBadge } from '../Calidad/Incidencias';
+import {
+  BadgeEstadoStock, MedidorStock, TagMovimiento, configMovimiento, FILTROS_MOVIMIENTO,
+  fmtCantidad, fmtCosto, fmtPeso, esTipoVendible
+} from './estadosProductos';
+import './Productos.css';
+
+const FORM_RECETA_VACIO = {
+  nombre_receta: '',
+  descripcion: '',
+  version: '',
+  es_principal: false,
+  es_activa: true,
+  rendimiento_unidades: '1',
+  tiempo_produccion_minutos: '0',
+  notas: ''
+};
+
+const GRUPOS_MOVIMIENTO = {
+  entrada: ['entrada'],
+  salida: ['salida', 'devolucion_anulacion'],
+  transferencia: ['transferencia_entrada', 'transferencia_salida'],
+  produccion: ['produccion_consumo'],
+  ajuste: ['ajuste']
+};
+
+const num = (v) => parseFloat(v || 0) || 0;
+
+const ajusteComoMovimiento = (a) => ({
+  tipo_movimiento: 'ajuste',
+  id_movimiento: `aj-${a.id_ajuste}`,
+  fecha_movimiento: a.fecha_ajuste,
+  inventario: a.tipo_inventario || 'Conteo físico',
+  destino: a.motivo || 'Conteo físico',
+  documento_soporte: null,
+  detalle_ajuste: `Sistema ${fmtCantidad(a.stock_sistema)} → físico ${fmtCantidad(a.stock_fisico)}`,
+  cantidad: a.diferencia,
+  registrado_por: a.usuario_ajuste,
+  observaciones: a.observaciones,
+  estado: 'Activo'
+});
 
 function ProductoDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  
+  const verPrecios = tienePermiso('verPrecios');
+  const verIncidencias = tienePermiso('incidencias');
+  const verOrdenesProduccion = tienePermiso('ordenesProduccion');
+  const verOrdenesVenta = tienePermiso('ordenesVenta');
+
   const [producto, setProducto] = useState(null);
   const [recetas, setRecetas] = useState([]);
   const [recetaSeleccionada, setRecetaSeleccionada] = useState(null);
   const [detalleReceta, setDetalleReceta] = useState([]);
   const [insumosDisponibles, setInsumosDisponibles] = useState([]);
-  const [historialMovimientos, setHistorialMovimientos] = useState([]);
-  const [filtroTipoMovimiento, setFiltroTipoMovimiento] = useState('');
-  const [tabActiva, setTabActiva] = useState('recetas');
+  const [movimientos, setMovimientos] = useState({ loading: true, data: [] });
+  const [compromisos, setCompromisos] = useState({ loading: true, data: null, resumen: null });
+  const [incidencias, setIncidencias] = useState({ loading: true, data: [] });
+  const [filtroMovimiento, setFiltroMovimiento] = useState('');
+  const [tabActiva, setTabActiva] = useState('movimientos');
   const [loading, setLoading] = useState(true);
-  const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [modalRecetaOpen, setModalRecetaOpen] = useState(false);
@@ -32,19 +86,11 @@ function ProductoDetalle() {
   const [editandoInsumo, setEditandoInsumo] = useState(null);
   const [cupCalculado, setCupCalculado] = useState(null);
   const [evolucionCUP, setEvolucionCUP] = useState(null);
+  const [repDesde, setRepDesde] = useState('');
+  const [repHasta, setRepHasta] = useState('');
+  const [generando, setGenerando] = useState('');
 
-  const canSeePrices = tienePermiso('verPrecios');
-  
-  const [formReceta, setFormReceta] = useState({
-    id_producto_terminado: id,
-    nombre_receta: '',
-    descripcion: '',
-    version: '',
-    es_principal: false,
-    rendimiento_unidades: '1',
-    tiempo_produccion_minutos: '0',
-    notas: ''
-  });
+  const [formReceta, setFormReceta] = useState({ ...FORM_RECETA_VACIO, id_producto_terminado: id });
 
   const [formInsumo, setFormInsumo] = useState({
     id_receta_producto: '',
@@ -58,6 +104,9 @@ function ProductoDetalle() {
 
   useEffect(() => {
     cargarDatos();
+    cargarMovimientos();
+    cargarCompromisos();
+    cargarIncidencias();
   }, [id]);
 
   useEffect(() => {
@@ -66,45 +115,42 @@ function ProductoDetalle() {
     }
   }, [recetaSeleccionada]);
 
-  useEffect(() => {
-    if (tabActiva === 'historial' && historialMovimientos.length === 0) {
-      cargarHistorialMovimientos();
-    }
-  }, [tabActiva]);
-
-  const cargarDatos = async () => {
+  const cargarDatos = async ({ silencioso = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
       setError(null);
-      
+
       const [prodRes, recetasRes, insumosRes] = await Promise.all([
         productosAPI.getById(id),
         productosAPI.getRecetasByProducto(id),
         productosAPI.getAll({ estado: 'Activo' })
       ]);
-      
-      setProducto(prodRes.data.data);
-      
+
+      const prod = prodRes.data.data;
+      setProducto(prod);
+      if (!silencioso) setTabActiva(prod?.requiere_receta ? 'recetas' : 'movimientos');
+
       const recetasData = recetasRes.data.data || [];
       setRecetas(recetasData);
-      
-      const insumosFiltrados = (insumosRes.data.data || []).filter(p => 
+
+      setInsumosDisponibles((insumosRes.data.data || []).filter(p =>
         p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
-      );
-      setInsumosDisponibles(insumosFiltrados);
+      ));
 
       if (recetasData.length > 0) {
-        const principal = recetasData.find(r => r.es_principal);
-        setRecetaSeleccionada(principal || recetasData[0]);
+        setRecetaSeleccionada(prev => {
+          const vigente = prev && recetasData.find(r => r.id_receta_producto === prev.id_receta_producto);
+          return vigente || recetasData.find(r => r.es_principal) || recetasData[0];
+        });
       } else {
         setRecetaSeleccionada(null);
         setDetalleReceta([]);
       }
 
-      await calcularCUPDesdeReceta();
-      await cargarEvolucionCUP();
+      if (verPrecios) {
+        await Promise.all([calcularCUPDesdeReceta(), cargarEvolucionCUP()]);
+      }
     } catch (err) {
-      console.error('Error cargando datos:', err);
       setError(err.error || 'Error al cargar datos del producto');
     } finally {
       setLoading(false);
@@ -114,45 +160,59 @@ function ProductoDetalle() {
   const cargarEvolucionCUP = async () => {
     try {
       const response = await productosAPI.getEvolucionCUP(id);
-      if (response.data.success) {
-        setEvolucionCUP(response.data);
-      }
-    } catch (err) {
-      console.error('Error al cargar evolución CUP:', err);
+      if (response.data.success) setEvolucionCUP(response.data);
+    } catch {
+      setEvolucionCUP(null);
     }
-  };
-
-  const getTendenciaIcono = (tendencia) => {
-    if (tendencia === 'sube') return <TrendingUp size={14} className="text-danger" />;
-    if (tendencia === 'baja') return <TrendingDown size={14} className="text-success" />;
-    return null;
   };
 
   const calcularCUPDesdeReceta = async () => {
     try {
       const response = await productosAPI.calcularCUPDesdeReceta(id);
-      if (response.data.success) {
-        setCupCalculado(response.data);
-      }
-    } catch (err) {
-      console.error('Error al calcular CUP:', err);
+      if (response.data.success) setCupCalculado(response.data);
+    } catch {
+      setCupCalculado(null);
     }
   };
 
-  const cargarHistorialMovimientos = async (tipoFiltro = '') => {
+  const cargarMovimientos = async () => {
+    setMovimientos(prev => ({ ...prev, loading: true }));
     try {
-      setLoadingHistorial(true);
-      setError(null);
-      
-      const params = tipoFiltro ? { tipo_movimiento: tipoFiltro } : {};
-      const response = await productosAPI.getHistorialMovimientos(id, params);
-      
-      setHistorialMovimientos(response.data.data || []);
+      const [movRes, ajRes] = await Promise.all([
+        productosAPI.getHistorialMovimientos(id),
+        productosAPI.ajustes.getPorProducto(id, { limit: 200 }).catch(() => ({ data: { data: [] } }))
+      ]);
+      const ajustes = (ajRes.data.data || []).map(ajusteComoMovimiento);
+      const lista = [...(movRes.data.data || []), ...ajustes]
+        .sort((a, b) => new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento));
+      setMovimientos({ loading: false, data: lista });
     } catch (err) {
-      console.error('Error cargando historial:', err);
-      setError(err.error || 'Error al cargar historial de movimientos');
-    } finally {
-      setLoadingHistorial(false);
+      setMovimientos({ loading: false, data: [] });
+      setError(err.error || 'Error al cargar el historial de movimientos');
+    }
+  };
+
+  const cargarCompromisos = async () => {
+    setCompromisos(prev => ({ ...prev, loading: true }));
+    try {
+      const res = await productosAPI.getCompromisos(id);
+      setCompromisos({ loading: false, data: res.data.data, resumen: res.data.resumen });
+    } catch {
+      setCompromisos({ loading: false, data: null, resumen: null });
+    }
+  };
+
+  const cargarIncidencias = async () => {
+    if (!verIncidencias) {
+      setIncidencias({ loading: false, data: [] });
+      return;
+    }
+    setIncidencias(prev => ({ ...prev, loading: true }));
+    try {
+      const res = await incidenciasAPI.getPorProducto(id);
+      setIncidencias({ loading: false, data: res.data.data || [] });
+    } catch {
+      setIncidencias({ loading: false, data: [] });
     }
   };
 
@@ -161,7 +221,6 @@ function ProductoDetalle() {
       const response = await productosAPI.getDetalleReceta(idReceta);
       setDetalleReceta(response.data.data || []);
     } catch (err) {
-      console.error('Error cargando detalle:', err);
       setError(err.error || 'Error al cargar detalle de receta');
       setDetalleReceta([]);
     }
@@ -175,25 +234,15 @@ function ProductoDetalle() {
         nombre_receta: receta.nombre_receta,
         descripcion: receta.descripcion || '',
         version: receta.version || '',
-        es_principal: receta.es_principal,
-        es_activa: receta.es_activa !== undefined ? receta.es_activa : true,
+        es_principal: !!receta.es_principal,
+        es_activa: receta.es_activa !== undefined ? !!receta.es_activa : true,
         rendimiento_unidades: receta.rendimiento_unidades,
         tiempo_produccion_minutos: receta.tiempo_produccion_minutos || 0,
         notas: receta.notas || ''
       });
     } else {
       setEditandoReceta(null);
-      setFormReceta({
-        id_producto_terminado: id,
-        nombre_receta: '',
-        descripcion: '',
-        version: '',
-        es_principal: recetas.length === 0,
-        es_activa: true,
-        rendimiento_unidades: '1',
-        tiempo_produccion_minutos: '0',
-        notas: ''
-      });
+      setFormReceta({ ...FORM_RECETA_VACIO, id_producto_terminado: id, es_principal: recetas.length === 0 });
     }
     setModalRecetaOpen(true);
   };
@@ -217,7 +266,7 @@ function ProductoDetalle() {
         setSuccess('Receta creada exitosamente');
       }
       cerrarModalReceta();
-      cargarDatos();
+      cargarDatos({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al guardar receta');
     }
@@ -232,7 +281,7 @@ function ProductoDetalle() {
       setSuccess('Receta eliminada exitosamente');
       setRecetaSeleccionada(null);
       setDetalleReceta([]);
-      cargarDatos();
+      cargarDatos({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al eliminar receta');
     }
@@ -246,7 +295,7 @@ function ProductoDetalle() {
       setError(null);
       await productosAPI.duplicarReceta(idReceta, { nuevo_nombre: nuevoNombre });
       setSuccess('Receta duplicada exitosamente');
-      cargarDatos();
+      cargarDatos({ silencioso: true });
     } catch (err) {
       setError(err.error || 'Error al duplicar receta');
     }
@@ -266,7 +315,7 @@ function ProductoDetalle() {
         cantidad_requerida: item.cantidad_requerida,
         unidad_medida: item.unidad_medida,
         orden_agregado: item.orden_agregado || 0,
-        es_critico: item.es_critico,
+        es_critico: !!item.es_critico,
         notas: item.notas || ''
       });
     } else {
@@ -292,7 +341,6 @@ function ProductoDetalle() {
   const handleInsumoChange = (e) => {
     const insumoId = e.target.value;
     const insumo = insumosDisponibles.find(i => i.id_producto == insumoId);
-    
     setFormInsumo({
       ...formInsumo,
       id_insumo: insumoId,
@@ -333,1029 +381,799 @@ function ProductoDetalle() {
     }
   };
 
-  const handleFiltroMovimiento = (tipo) => {
-    setFiltroTipoMovimiento(tipo);
-    cargarHistorialMovimientos(tipo);
-  };
-
-  const formatearMoneda = (valor, moneda = 'PEN') => {
-    const simbolos = { 'PEN': 'S/', 'USD': '$', 'EUR': '€' };
-    return `${simbolos[moneda] || 'S/'} ${parseFloat(valor || 0).toFixed(2)}`;
-  };
-
-  const formatearFecha = (fecha) => {
-    if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
-  const calcularCostoTotal = () => {
-    return detalleReceta.reduce((sum, item) => sum + parseFloat(item.costo_total_insumo || 0), 0);
-  };
-
-  const getTipoMovimientoConfig = (tipo) => {
-    const configs = {
-      'entrada': { icono: TrendingUp, color: 'text-success', bg: 'bg-success', texto: 'Entrada' },
-      'salida': { icono: TrendingDown, color: 'text-danger', bg: 'bg-danger', texto: 'Salida' },
-      'transferencia_entrada': { icono: ArrowRightLeft, color: 'text-primary', bg: 'bg-primary', texto: 'Transfer. Entrada' },
-      'transferencia_salida': { icono: ArrowRightLeft, color: 'text-warning', bg: 'bg-warning', texto: 'Transfer. Salida' },
-      'produccion_consumo': { icono: Factory, color: 'text-purple', bg: 'bg-purple', texto: 'Consumo Prod.' },
-      'devolucion_anulacion': { icono: TrendingUp, color: 'text-success', bg: 'bg-success', texto: 'Entrada (Reverso)' }
-    };
-    return configs[tipo] || configs['entrada'];
-  };
-
-  const columnsInsumos = [
-    { 
-      header: '#', 
-      accessor: 'orden_agregado',
-      width: '70px',
-      align: 'center',
-      render: (value) => {
-        const orden = parseInt(value || 0);
-        return orden > 0 ? (
-          <span className="orden-badge">{orden}</span>
-        ) : (
-          <span className="orden-vacio">-</span>
-        );
-      }
-    },
-    { 
-      header: 'Código', 
-      accessor: 'codigo_insumo', 
-      width: '120px',
-      render: (value) => <span className="codigo-text">{value}</span>
-    },
-    { 
-      header: 'Insumo / Material', 
-      accessor: 'insumo',
-      render: (value, row) => (
-        <div className="insumo-cell">
-          <div className="insumo-nombre">{value}</div>
-          {row.es_critico === 1 && (
-            <span className="badge badge-warning badge-critico">
-              <AlertTriangle size={12} />
-              Crítico
-            </span>
-          )}
-          {row.notas && (
-            <div className="insumo-notas">{row.notas}</div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Cantidad Requerida',
-      accessor: 'cantidad_requerida',
-      align: 'right',
-      width: '160px',
-      render: (value, row) => (
-        <div className="cantidad-cell">
-          <div className="cantidad-valor">{parseFloat(value).toFixed(4)}</div>
-          <div className="cantidad-unidad">{row.unidad_medida}</div>
-        </div>
-      )
-    },
-    ...(canSeePrices ? [
-      {
-        header: 'CUP',
-        accessor: 'costo_unitario_promedio',
-        align: 'right',
-        width: '110px',
-        render: (value) => {
-          const cup = parseFloat(value || 0);
-          return (
-            <div className="cup-cell">
-              {cup > 0 ? (
-                formatearMoneda(value)
-              ) : (
-                <span className="cup-sin-valor">Sin CUP</span>
-              )}
-            </div>
-          );
-        }
-      },
-      {
-        header: 'Costo Total',
-        accessor: 'costo_total_insumo',
-        align: 'right',
-        width: '120px',
-        render: (value) => (
-          <div className="costo-total-cell">
-            {formatearMoneda(value)}
-          </div>
-        )
-      }
-    ] : []),
-    {
-      header: 'Stock Disponible',
-      accessor: 'stock_actual',
-      align: 'right',
-      width: '140px',
-      render: (value, row) => {
-        const stock = parseFloat(value);
-        const requerido = parseFloat(row.cantidad_requerida);
-        const suficiente = stock >= requerido;
-        
-        return (
-          <div className="stock-cell">
-            <div className={`stock-valor ${suficiente ? 'stock-suficiente' : 'stock-insuficiente'}`}>
-              {parseFloat(stock.toFixed(4))} {row.unidad_medida}
-            </div>
-            {!suficiente && (
-              <div className="stock-alerta">
-                <AlertTriangle size={12} />
-                Insuficiente
-              </div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Acciones',
-      accessor: 'id_detalle',
-      width: '120px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="acciones-cell">
-          <button
-            className="btn btn-sm btn-outline"
-            onClick={() => abrirModalInsumo(row)}
-            title="Editar insumo"
-          >
-            <Edit size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-danger"
-            onClick={() => handleDeleteInsumo(value)}
-            title="Eliminar insumo"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )
+  const descargar = async (clave) => {
+    if (repDesde && repHasta && repDesde > repHasta) {
+      setError('La fecha "Desde" no puede ser mayor que la fecha "Hasta".');
+      return;
     }
-  ];
-
-  const columnsHistorial = [
-    {
-      header: 'Fecha',
-      accessor: 'fecha_movimiento',
-      width: '150px',
-      render: (value) => (
-        <span className="fecha-text">{formatearFecha(value)}</span>
-      )
-    },
-    {
-      header: 'Tipo',
-      accessor: 'tipo_movimiento',
-      width: '180px',
-      render: (value, row) => {
-        const config = getTipoMovimientoConfig(value);
-        const Icono = config.icono;
-        const anulado = row.estado === 'Anulado';
-        return (
-          <div className="tipo-movimiento-cell">
-            <Icono size={16} className={config.color} />
-            <span className={anulado ? 'texto-anulado' : ''}>{config.texto}</span>
-            {anulado && <span className="badge-anulado">Anulado</span>}
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Inventario/Origen',
-      accessor: 'inventario',
-      width: '160px',
-      render: (value) => <span className="inventario-text">{value}</span>
-    },
-    {
-      header: 'Destino/Detalle',
-      accessor: 'destino',
-      render: (value, row) => (
-        <div className="destino-cell">
-          <div className="destino-principal">{value || row.proveedor || '-'}</div>
-          {row.documento_soporte && (
-            <div className="destino-documento">Doc: {row.documento_soporte}</div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Cantidad',
-      accessor: 'cantidad',
-      align: 'right',
-      width: '110px',
-      render: (value, row) => (
-        <div className={`cantidad-historial ${row.estado === 'Anulado' ? 'texto-anulado' : ''}`}>
-          {parseFloat(parseFloat(value).toFixed(4))}
-        </div>
-      )
-    },
-    ...(canSeePrices ? [
-      {
-        header: 'Moneda',
-        accessor: 'moneda',
-        align: 'center',
-        width: '90px',
-        render: (value) => {
-          const colores = {
-            'PEN': 'badge-primary',
-            'USD': 'badge-success',
-            'EUR': 'badge-warning'
-          };
-          return <span className={`badge ${colores[value] || 'badge-secondary'}`}>{value}</span>;
-        }
-      },
-      {
-        header: 'Costo Unit.',
-        accessor: 'costo_unitario',
-        align: 'right',
-        width: '110px',
-        render: (value, row) => (
-          <div className="costo-unitario-text">{formatearMoneda(value, row.moneda)}</div>
-        )
-      },
-      {
-        header: 'Costo Total',
-        accessor: 'costo_total',
-        align: 'right',
-        width: '120px',
-        render: (value, row) => (
-          <div className="costo-total-historial">{formatearMoneda(value, row.moneda)}</div>
-        )
-      }
-    ] : []),
-    {
-      header: 'Registrado Por',
-      accessor: 'registrado_por',
-      width: '140px',
-      render: (value) => <span className="registrado-text">{value || '-'}</span>
+    const params = { fecha_inicio: repDesde || undefined, fecha_fin: repHasta || undefined };
+    try {
+      setGenerando(clave);
+      setError(null);
+      if (clave === 'prod-pdf') await productosAPI.descargarReportePDF(id, params);
+      if (clave === 'prod-xlsx') await productosAPI.descargarReporteXLSX(id, params);
+      if (clave === 'kardex-pdf') await inventarioAPI.descargarKardexPDF({ ...params, id_tipo_inventario: producto.id_tipo_inventario });
+      if (clave === 'kardex-xlsx') await inventarioAPI.descargarKardexXLSX({ ...params, id_tipo_inventario: producto.id_tipo_inventario });
+    } catch (err) {
+      setError(err.message || 'Error al generar el reporte');
+    } finally {
+      setGenerando('');
     }
-  ];
+  };
 
-  if (loading) {
-    return <Loading variant="detail" />;
-  }
+  const movimientosFiltrados = filtroMovimiento
+    ? movimientos.data.filter(m => GRUPOS_MOVIMIENTO[filtroMovimiento]?.includes(m.tipo_movimiento))
+    : movimientos.data;
+  const { currentItems: movimientosPagina, setCurrentPage: setPaginaMov, ...paginacionMov } =
+    usePagination(movimientosFiltrados, { itemsPerPage: 15 });
+  useResetPagina(setPaginaMov, [filtroMovimiento, id]);
+
+  if (loading) return <Loading variant="detail" />;
 
   if (!producto) {
     return (
-      <div>
-        <Alert type="error" message="Producto no encontrado" />
-        <button className="btn btn-outline mt-3" onClick={() => navigate('/productos')}>
-          Volver a Productos
-        </button>
+      <div className="pg-page">
+        <div className="pg-panel">
+          <div className="pg-empty">
+            <Package size={34} />
+            <strong>Producto no encontrado</strong>
+            <span>Puede que el enlace sea antiguo o que el producto haya sido eliminado.</span>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => navigate('/productos')}>
+              <ArrowLeft size={14} /> Volver al catálogo
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
+  const unidad = producto.unidad_medida;
+  const resumen = compromisos.resumen;
+  const pendienteOV = num(resumen?.pendiente_ov);
+  const disponible = num(producto.stock_actual) - pendienteOV;
+  const cupVigente = cupCalculado?.cup_calculado || num(producto.costo_unitario_promedio);
+  const precioVenta = num(producto.precio_venta);
+  const vendible = esTipoVendible(producto.tipo_inventario);
+  const opsActivas = compromisos.data?.produccion || [];
+  const opsConsumo = compromisos.data?.consumo || [];
+  const ovsPendientes = compromisos.data?.ventas || [];
+  const incidenciasAbiertas = incidencias.data.filter(i => !['Cerrada', 'Anulada'].includes(i.estado));
+  const costoTotalReceta = detalleReceta.reduce((sum, item) => sum + num(item.costo_total_insumo), 0);
+  const columnasMov = 6 + (verPrecios ? 2 : 0);
+  const columnasInsumos = 5 + (verPrecios ? 2 : 0);
+
+  const enlace = (tienePermisoRuta, ruta, etiqueta) => (tienePermisoRuta ? (
+    <button type="button" className="pg-iconbtn" title={`Abrir ${etiqueta}`} aria-label={`Abrir ${etiqueta}`} onClick={() => navigate(ruta)}>
+      <ChevronRight size={15} />
+    </button>
+  ) : null);
+
   return (
-    <div className="producto-detalle-container">
-      <button className="btn btn-outline mb-4" onClick={() => navigate('/productos')}>
-        <ArrowLeft size={20} />
-        Volver a Productos
-      </button>
-
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
-
-      <div className="seccion-info-producto">
-        <div className="seccion-header">
-          <Package size={24} />
-          <h2>Información del Producto</h2>
-        </div>
-
-        <div className="info-producto-grid">
-          <div className="info-card">
-            <div className="info-card-header">
-              <h3>Datos Básicos</h3>
-            </div>
-            <div className="info-card-body">
-              <div className="info-row">
-                <span className="info-label">Código:</span>
-                <span className="info-value codigo-badge">{producto.codigo}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Nombre:</span>
-                <span className="info-value">{producto.nombre}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Tipo de Inventario:</span>
-                <span className="info-value badge badge-primary">{producto.tipo_inventario}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Categoría:</span>
-                <span className="info-value">{producto.categoria || '-'}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Unidad de Medida:</span>
-                <span className="info-value">{producto.unidad_medida}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Estado:</span>
-                <span className={`badge ${producto.estado === 'Activo' ? 'badge-success' : 'badge-secondary'}`}>
-                  {producto.estado}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="info-card">
-            <div className="info-card-header">
-              <h3>Stock</h3>
-            </div>
-            <div className="info-card-body">
-              <div className="stock-principal">
-                <span className="stock-label">Stock Actual</span>
-                <div className="stock-valor-grande">
-                  {parseFloat(parseFloat(producto.stock_actual).toFixed(4))}
-                  <span className="stock-unidad">{producto.unidad_medida}</span>
-                </div>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Stock Mínimo:</span>
-                <span className="info-value">{parseFloat(parseFloat(producto.stock_minimo).toFixed(4))}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Stock Máximo:</span>
-                <span className="info-value">{parseFloat(parseFloat(producto.stock_maximo).toFixed(4))}</span>
-              </div>
-              {canSeePrices && (
-                <div className="info-row">
-                  <span className="info-label">Valor en Stock:</span>
-                  <span className="info-value valor-destacado">
-                    {formatearMoneda(
-                      parseFloat(producto.stock_actual) * (cupCalculado?.cup_calculado || parseFloat(producto.costo_unitario_promedio || 0))
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {canSeePrices && (
-            <div className="info-card">
-              <div className="info-card-header">
-                <h3>Costos y Precios</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="grid grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded border border-gray-100">
-                  <div>
-                    <span className="text-xs text-muted block mb-1">CUP Inventario (Soles)</span>
-                    <div className="font-bold text-lg text-primary">
-                      {formatearMoneda(producto.costo_unitario_promedio, 'PEN')}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted block mb-1">CUP Inventario (Dólares)</span>
-                    <div className="font-bold text-lg text-success flex items-center gap-1">
-                      <DollarSign size={16} />
-                      {parseFloat(producto.costo_unitario_promedio_usd || 0).toFixed(4)}
-                    </div>
-                  </div>
-                </div>
-
-                {cupCalculado?.cup_calculado > 0 ? (
-                  <div className="cup-principal">
-                    <span className="cup-label">
-                      {cupCalculado?.origen === 'promedio_ponderado' && 'CUP Teórico (Promedio Ponderado)'}
-                      {cupCalculado?.origen === 'receta_teorica' && 'CUP Teórico (Receta)'}
-                      {!cupCalculado?.origen && 'Costo Teórico'}
-                    </span>
-                    <div className="cup-valor-grande text-sm text-gray-500">
-                      {formatearMoneda(cupCalculado.cup_calculado)}
-                    </div>
-                    
-                    {cupCalculado?.origen === 'promedio_ponderado' && (
-                      <>
-                        <div className="cup-info success">
-                          <CheckCircle size={14} />
-                          <span>
-                            Calculado de {cupCalculado.detalle?.total_producciones} producciones
-                          </span>
-                        </div>
-
-                        {evolucionCUP?.evolucion?.length > 0 && (
-                          <details className="cup-desglose" open>
-                            <summary>Histórico de Costos</summary>
-                            <div className="cup-evolucion-tabla">
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>Fecha</th>
-                                    <th>Cant.</th>
-                                    <th>CUP</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {evolucionCUP.evolucion.slice(0, 5).map((item, idx) => (
-                                    <tr key={idx}>
-                                      <td>{new Date(item.fecha).toLocaleDateString('es-PE')}</td>
-                                      <td className="text-right">{item.cantidad}</td>
-                                      <td className="text-right">{formatearMoneda(item.cup_produccion)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </details>
-                        )}
-                      </>
-                    )}
-                    
-                    {cupCalculado?.origen === 'receta_teorica' && (
-                      <div className="cup-info warning">
-                        <Info size={14} />
-                        <span>Basado en receta "{cupCalculado.receta_usada}"</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted text-center py-2">
-                    Sin cálculo teórico disponible
-                  </div>
-                )}
-
-                <div className="info-row mt-3 border-t pt-2">
-                  <span className="info-label">Precio Venta:</span>
-                  <span className="info-value text-lg font-bold">{formatearMoneda(producto.precio_venta)}</span>
-                </div>
-
-                {cupCalculado?.cup_calculado > 0 && producto.precio_venta > 0 && (
-                  <div className="info-row">
-                    <span className="info-label">Margen Bruto:</span>
-                    <span className="info-value valor-destacado">
-                      {(((parseFloat(producto.precio_venta) - cupCalculado.cup_calculado) / parseFloat(producto.precio_venta)) * 100).toFixed(2)}%
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {producto.descripcion && (
-          <div className="descripcion-producto">
-            <h4>Descripción</h4>
-            <p>{producto.descripcion}</p>
-          </div>
-        )}
+    <div className="pg-page">
+      <div className="pr-topbar">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/productos')}>
+          <ArrowLeft size={16} /> Catálogo
+        </button>
       </div>
 
-      <div className="seccion-tabs">
-        <div className="tabs-header">
-          <button
-            className={`tab-button ${tabActiva === 'recetas' ? 'active' : ''}`}
-            onClick={() => setTabActiva('recetas')}
-          >
-            <Package size={20} />
-            <span>Recetas (BOM)</span>
-          </button>
-          <button
-            className={`tab-button ${tabActiva === 'historial' ? 'active' : ''}`}
-            onClick={() => setTabActiva('historial')}
-          >
-            <History size={20} />
-            <span>Historial de Movimientos</span>
-          </button>
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Package size={13} /> {producto.tipo_inventario}</span>
+          <h1 className="pg-title">{producto.nombre}</h1>
+          <p className="pg-subtitle">
+            <span className="pg-code">{producto.codigo}</span>
+            {producto.categoria ? <> · {producto.categoria}</> : null} · {unidad} · SUNAT <b>{producto.codigo_unidad_sunat || '—'}</b>
+          </p>
+          <div className="pg-drawer-badges">
+            <BadgeEstadoRegistro estado={producto.estado} />
+            <BadgeEstadoStock producto={producto} />
+            {producto.requiere_receta ? (
+              <span className="badge badge-secondary"><BookOpen size={11} />{Number(producto.total_recetas) || 0} receta(s) activa(s)</span>
+            ) : null}
+          </div>
+        </div>
+      </header>
+
+      <div className="pg-stack">
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+        <div className="pg-kpis">
+          <div className="pg-kpi is-accent">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Stock actual</span>
+              <span className="pg-kpi-icon"><Boxes size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{fmtCantidad(producto.stock_actual)} <small>{unidad}</small></span>
+            <MedidorStock producto={producto} />
+            <span className="pg-kpi-foot">
+              mín <b>{fmtCantidad(producto.stock_minimo)}</b> · máx <b>{num(producto.stock_maximo) > 0 ? fmtCantidad(producto.stock_maximo) : '—'}</b>
+            </span>
+          </div>
+          <div className="pg-kpi is-warning">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Pendiente de despacho</span>
+              <span className="pg-kpi-icon"><ShoppingCart size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{compromisos.loading ? '…' : fmtCantidad(pendienteOV)} <small>{unidad}</small></span>
+            <span className="pg-kpi-foot">
+              {ovsPendientes.length} OV · reservado <b>{fmtCantidad(resumen?.reservado_ov)}</b>
+            </span>
+          </div>
+          <div className={`pg-kpi ${disponible < 0 ? 'is-danger' : 'is-success'}`}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Disponible</span>
+              <span className="pg-kpi-icon"><PackageCheck size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{compromisos.loading ? '…' : fmtCantidad(disponible)} <small>{unidad}</small></span>
+            <span className="pg-kpi-foot">{disponible < 0 ? 'Faltante frente a lo pendiente en OV' : 'Stock menos lo pendiente en OV'}</span>
+          </div>
+          <div className="pg-kpi is-info">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">{opsConsumo.length > 0 && opsActivas.length === 0 ? 'Comprometido en producción' : 'En producción'}</span>
+              <span className="pg-kpi-icon"><Factory size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">
+              {compromisos.loading ? '…' : fmtCantidad(opsConsumo.length > 0 && opsActivas.length === 0 ? resumen?.consumo_op : resumen?.en_produccion)} <small>{unidad}</small>
+            </span>
+            <span className="pg-kpi-foot">
+              <b>{opsActivas.length}</b> OP por producir · <b>{opsConsumo.length}</b> OP lo consumen
+            </span>
+          </div>
         </div>
 
-        <div className="tabs-content">
-          {tabActiva === 'recetas' && producto.requiere_receta && (
-            <div className="tab-recetas-content">
-              <div className="seccion-header">
-                <div>
-                  <h2>Gestión de Recetas</h2>
-                  {recetas.length > 0 && (
-                    <p className="seccion-subtitulo">
-                      Total: {recetas.length} receta(s) configurada(s)
-                    </p>
+        <div className="pg-grid pg-grid-2">
+          <div className="pg-stack">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Info size={16} /> Datos del producto</h2>
+              </div>
+              <div className="pg-panel-body">
+                <div className="pg-kv">
+                  <div><span>Código</span><strong className="pg-code">{producto.codigo}</strong></div>
+                  <div><span>Tipo de inventario</span><strong>{producto.tipo_inventario}</strong></div>
+                  <div><span>Categoría</span><strong>{producto.categoria || '—'}</strong></div>
+                  <div><span>Unidad de medida</span><strong>{unidad}</strong></div>
+                  <div><span>Unidad SUNAT</span><strong>{producto.codigo_unidad_sunat || 'Sin código'}</strong></div>
+                  <div><span>Peso unitario</span><strong>{fmtPeso(producto.peso_unitario)}</strong></div>
+                  <div><span>Receta principal</span><strong>{producto.receta_principal || (producto.requiere_receta ? 'Sin definir' : 'No requiere')}</strong></div>
+                  <div><span>Estado</span><strong>{producto.estado}</strong></div>
+                  {producto.descripcion && <div className="wide"><span>Descripción</span><strong>{producto.descripcion}</strong></div>}
+                </div>
+              </div>
+            </section>
+
+            {verPrecios && (
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h2 className="pg-panel-title"><Coins size={16} /> Costos y precio</h2>
+                  {cupCalculado?.origen && (
+                    <span className="pg-panel-meta">
+                      {cupCalculado.origen === 'promedio_ponderado'
+                        ? `CUP teórico de ${cupCalculado.detalle?.total_producciones || 0} producciones`
+                        : `CUP teórico de la receta "${cupCalculado.receta_usada}"`}
+                    </span>
                   )}
                 </div>
-                <button className="btn btn-primary" onClick={() => abrirModalReceta()}>
-                  <Plus size={20} />
-                  Nueva Receta
-                </button>
-              </div>
+                <div className="pg-panel-body pg-stack">
+                  <div className="pg-kv">
+                    <div><span>CUP inventario · soles</span><strong>{fmtCosto(producto.costo_unitario_promedio)}</strong></div>
+                    <div><span>CUP inventario · dólares</span><strong>{fmtCosto(producto.costo_unitario_promedio_usd, 'USD')}</strong></div>
+                    <div><span>CUP teórico</span><strong>{cupCalculado?.cup_calculado > 0 ? fmtCosto(cupCalculado.cup_calculado) : 'Sin cálculo disponible'}</strong></div>
+                    <div><span>Valor en stock</span><strong>{fmtMonto(Math.max(num(producto.stock_actual), 0) * cupVigente)}</strong></div>
+                    {vendible && <div><span>Precio de venta</span><strong>{fmtMonto(precioVenta)}</strong></div>}
+                    {vendible && (
+                      <div>
+                        <span>Margen bruto</span>
+                        <strong>{cupCalculado?.cup_calculado > 0 && precioVenta > 0
+                          ? `${(((precioVenta - cupCalculado.cup_calculado) / precioVenta) * 100).toFixed(2)} %`
+                          : '—'}</strong>
+                      </div>
+                    )}
+                  </div>
+                  {cupCalculado?.origen === 'promedio_ponderado' && evolucionCUP?.evolucion?.length > 0 && (
+                    <div>
+                      <h3 className="pg-section-title"><History size={14} /> Histórico de costos</h3>
+                      <div className="pg-table-wrap">
+                        <table className="pg-table" data-mobile-table="scroll">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th>
+                              <th className="num">Cantidad</th>
+                              <th className="num">CUP</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {evolucionCUP.evolucion.slice(0, 5).map((item, idx) => (
+                              <tr key={idx}>
+                                <td>{fmtFecha(item.fecha)}</td>
+                                <td className="num">{fmtCantidad(item.cantidad)}</td>
+                                <td className="num">{fmtCosto(item.cup_produccion)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
-              {recetas.length > 0 ? (
-                <div className="recetas-container">
-                  <div className="recetas-tabs-container">
-                    <div className="recetas-tabs">
-                      {recetas.map(receta => {
-                        const esSeleccionada = recetaSeleccionada?.id_receta_producto === receta.id_receta_producto;
-                        
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Layers size={16} /> Compromisos</h2>
+                <span className="pg-panel-meta">Órdenes de producción y de venta abiertas</span>
+              </div>
+              <div className="pg-panel-body pg-stack">
+                {compromisos.loading ? (
+                  <div className="pg-loading"><Loader size={20} className="animate-spin" /></div>
+                ) : !compromisos.data ? (
+                  <p className="pg-empty-line">No se pudieron cargar los compromisos de este producto.</p>
+                ) : (
+                  <>
+                    <div>
+                      <h3 className="pg-section-title"><Factory size={14} /> Órdenes de producción en curso</h3>
+                      {opsActivas.length === 0 && opsConsumo.length === 0 ? (
+                        <p className="pg-empty-line">No hay órdenes de producción abiertas para este producto.</p>
+                      ) : (
+                        <ul className="pg-list">
+                          {opsActivas.map(op => (
+                            <li key={`p-${op.id_orden}`}>
+                              <span className="pg-code">{op.numero_orden}</span>
+                              <BadgeEstadoProduccion estado={op.estado} />
+                              <span className="pg-muted">
+                                {fmtCantidad(op.cantidad_producida)} / {fmtCantidad(op.cantidad_planificada)} {unidad}
+                              </span>
+                              <span className="pg-list-push">
+                                {op.supervisor && <span className="pg-muted">{op.supervisor}</span>}
+                                {enlace(verOrdenesProduccion, `/produccion/ordenes/${op.id_orden}`, op.numero_orden)}
+                              </span>
+                            </li>
+                          ))}
+                          {opsConsumo.map(op => (
+                            <li key={`c-${op.id_orden}`}>
+                              <span className="pg-code">{op.numero_orden}</span>
+                              <BadgeEstadoProduccion estado={op.estado} />
+                              <span className="pg-tag is-accent"><TrendingDown size={11} />Consume {fmtCantidad(op.cantidad_requerida)} {unidad}</span>
+                              <span className="pg-list-push">
+                                <span className="pg-muted">{op.producto_terminado}</span>
+                                {enlace(verOrdenesProduccion, `/produccion/ordenes/${op.id_orden}`, op.numero_orden)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="pg-section-title"><ShoppingCart size={14} /> Pendiente de despacho en órdenes de venta</h3>
+                      {ovsPendientes.length === 0 ? (
+                        <p className="pg-empty-line">No hay órdenes de venta con saldo pendiente de este producto.</p>
+                      ) : (
+                        <ul className="pg-list">
+                          {ovsPendientes.map(ov => (
+                            <li key={ov.id_orden_venta}>
+                              <span className="pg-code">{ov.numero_orden}</span>
+                              <span className="pg-tag">{ov.estado}</span>
+                              <span><b>{fmtCantidad(ov.pendiente)}</b> <span className="pg-muted">de {fmtCantidad(ov.cantidad)} {unidad}</span></span>
+                              {num(ov.reservada) > 0 && <span className="pg-tag is-info"><PackageCheck size={11} />Reservado {fmtCantidad(ov.reservada)}</span>}
+                              <span className="pg-list-push">
+                                <span className="pg-muted pr-ellipsis">{ov.cliente || '—'}</span>
+                                {ov.fecha_entrega_estimada && <span className="pg-muted"><CalendarDays size={12} />{fmtFecha(ov.fecha_entrega_estimada)}</span>}
+                                {enlace(verOrdenesVenta, `/ventas/ordenes/${ov.id_orden_venta}`, ov.numero_orden)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="pg-stack">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><FileText size={16} /> Reportes</h2>
+              </div>
+              <div className="pg-panel-body pg-stack">
+                <div className="pr-dates">
+                  <div className="pg-field">
+                    <label className="pg-field-label" htmlFor="pr-rep-desde">Desde</label>
+                    <input id="pr-rep-desde" type="date" className="form-input" value={repDesde} onChange={(e) => setRepDesde(e.target.value)} />
+                  </div>
+                  <div className="pg-field">
+                    <label className="pg-field-label" htmlFor="pr-rep-hasta">Hasta</label>
+                    <input id="pr-rep-hasta" type="date" className="form-input" value={repHasta} onChange={(e) => setRepHasta(e.target.value)} />
+                  </div>
+                </div>
+                <div className="pr-report">
+                  <div>
+                    <strong>Producción vs despacho</strong>
+                    <span>Reporte de este producto en el rango elegido.</span>
+                  </div>
+                  <div className="pr-report-actions">
+                    <button type="button" className="btn btn-outline btn-sm" disabled={!!generando} onClick={() => descargar('prod-pdf')}>
+                      {generando === 'prod-pdf' ? <Loader size={14} className="animate-spin" /> : <FileText size={14} />} PDF
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" disabled={!!generando} onClick={() => descargar('prod-xlsx')}>
+                      {generando === 'prod-xlsx' ? <Loader size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />} Excel
+                    </button>
+                  </div>
+                </div>
+                <div className="pr-report">
+                  <div>
+                    <strong>Kardex · {producto.tipo_inventario}</strong>
+                    <span>Kardex del tipo de inventario de este producto.</span>
+                  </div>
+                  <div className="pr-report-actions">
+                    <button type="button" className="btn btn-outline btn-sm" disabled={!!generando} onClick={() => descargar('kardex-pdf')}>
+                      {generando === 'kardex-pdf' ? <Loader size={14} className="animate-spin" /> : <FileText size={14} />} PDF
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" disabled={!!generando} onClick={() => descargar('kardex-xlsx')}>
+                      {generando === 'kardex-xlsx' ? <Loader size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />} Excel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {verIncidencias && (
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h2 className="pg-panel-title">
+                    <ShieldAlert size={16} /> Incidencias de calidad <span className="pg-count">{incidencias.data.length}</span>
+                  </h2>
+                  {incidenciasAbiertas.length > 0 && <span className="pg-panel-meta">{incidenciasAbiertas.length} abiertas</span>}
+                </div>
+                <div className="pg-panel-body">
+                  {incidencias.loading ? (
+                    <div className="pg-loading"><Loader size={20} className="animate-spin" /></div>
+                  ) : incidencias.data.length === 0 ? (
+                    <p className="pg-empty-line">Este producto no tiene incidencias de calidad registradas.</p>
+                  ) : (
+                    <ul className="pg-list">
+                      {incidencias.data.slice(0, 6).map(inc => {
+                        const cfg = getEstadoBadge(inc.estado);
+                        const Icono = cfg.icono;
                         return (
-                          <button
-                            key={receta.id_receta_producto}
-                            className={`receta-tab ${esSeleccionada ? 'active' : ''}`}
-                            onClick={() => setRecetaSeleccionada(receta)}
-                          >
-                            <div className="receta-tab-header">
-                              {receta.es_principal === 1 && (
-                                <Star size={14} fill="currentColor" className="receta-star" />
-                              )}
-                              <span className="receta-tab-nombre">{receta.nombre_receta}</span>
-                              {receta.es_activa ? (
-                                <CheckCircle size={14} className="receta-icono-activo" />
-                              ) : (
-                                <XCircle size={14} className="receta-icono-inactivo" />
-                              )}
-                            </div>
-                            <div className="receta-tab-info">
-                              {receta.total_insumos || 0} insumo(s)
-                            </div>
-                            <div className="receta-tab-costo">
-                              {formatearMoneda(receta.costo_total_materiales || 0)}
-                            </div>
-                            {receta.version && (
-                              <div className="receta-tab-version">v{receta.version}</div>
+                          <li key={inc.id_incidencia} className={inc.estado === 'Anulada' ? 'is-void' : ''}>
+                            <span className="pg-code">{inc.codigo}</span>
+                            <span className={`badge ${cfg.bg}`}><Icono size={11} />{inc.estado}</span>
+                            {inc.severidad && (
+                              <span className={`pg-tag ${inc.severidad === 'Crítica' ? 'is-danger' : inc.severidad === 'Mayor' ? 'is-warning' : ''}`}>
+                                <AlertTriangle size={11} />{inc.severidad}
+                              </span>
                             )}
-                          </button>
+                            <span className="pg-list-push">
+                              <span className="pg-muted">{inc.tipo_nombre || inc.origen_deteccion}</span>
+                              <span className="pg-muted">{haceTexto(inc.fecha_deteccion)}</span>
+                              {enlace(true, `/calidad/incidencias/${inc.id_incidencia}`, inc.codigo)}
+                            </span>
+                          </li>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {recetaSeleccionada && (
-                    <div className="receta-detalle-container">
-                      <div className="receta-detalle-header">
-                        <div className="receta-detalle-info">
-                          <div className="receta-titulo-badges">
-                            <h3>{recetaSeleccionada.nombre_receta}</h3>
-                            <div className="receta-badges">
-                              {recetaSeleccionada.es_principal === 1 && (
-                                <span className="badge badge-warning">
-                                  <Star size={12} fill="currentColor" />
-                                  Principal
-                                </span>
-                              )}
-                              {recetaSeleccionada.es_activa ? (
-                                <span className="badge badge-success">
-                                  <CheckCircle size={12} />
-                                  Activa
-                                </span>
-                              ) : (
-                                <span className="badge badge-danger">
-                                  <XCircle size={12} />
-                                  Inactiva
-                                </span>
-                              )}
-                              {recetaSeleccionada.version && (
-                                <span className="badge badge-info">
-                                  v{recetaSeleccionada.version}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {recetaSeleccionada.descripcion && (
-                            <p className="receta-descripcion">{recetaSeleccionada.descripcion}</p>
-                          )}
-
-                          <div className="receta-metricas">
-                            <div className="metrica-card">
-                              <div className="metrica-label">Rendimiento</div>
-                              <div className="metrica-valor">
-                                {recetaSeleccionada.rendimiento_unidades}
-                                <span className="metrica-unidad">{producto.unidad_medida}</span>
-                              </div>
-                            </div>
-                            
-                            <div className="metrica-card">
-                              <div className="metrica-label">Tiempo</div>
-                              <div className="metrica-valor">
-                                <Clock size={16} />
-                                {recetaSeleccionada.tiempo_produccion_minutos}
-                                <span className="metrica-unidad">min</span>
-                              </div>
-                            </div>
-                            
-                            <div className="metrica-card">
-                              <div className="metrica-label">Insumos</div>
-                              <div className="metrica-valor">
-                                <Package size={16} />
-                                {recetaSeleccionada.total_insumos || 0}
-                              </div>
-                            </div>
-                            
-                            <div className="metrica-card destacado">
-                              <div className="metrica-label">Costo Materiales</div>
-                              <div className="metrica-valor">
-                                {formatearMoneda(recetaSeleccionada.costo_total_materiales || 0)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="receta-detalle-acciones">
-                          <button
-                            className="btn btn-sm btn-outline"
-                            onClick={() => abrirModalReceta(recetaSeleccionada)}
-                            title="Editar receta"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline"
-                            onClick={() => handleDuplicarReceta(recetaSeleccionada.id_receta_producto)}
-                            title="Duplicar receta"
-                          >
-                            <Copy size={16} />
-                          </button>
-                          <button
-                            className="btn btn-sm btn-danger"
-                            onClick={() => handleDeleteReceta(recetaSeleccionada.id_receta_producto)}
-                            title="Eliminar receta"
-                            disabled={recetas.length === 1 && recetaSeleccionada.es_principal}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="insumos-section">
-                        <div className="insumos-header">
-                          <div>
-                            <h4>Insumos y Materiales</h4>
-                            <p>Componentes necesarios para producir este producto</p>
-                          </div>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => abrirModalInsumo()}
-                          >
-                            <Plus size={18} />
-                            Agregar Insumo
-                          </button>
-                        </div>
-
-                        {detalleReceta.length > 0 ? (
-                          <>
-                            <div className="insumos-tabla-container">
-                              <Table
-                                columns={columnsInsumos}
-                                data={detalleReceta}
-                                emptyMessage="No hay insumos en esta receta"
-                              />
-                            </div>
-                            
-                            <div className="costos-resumen">
-                              <div className="costo-card">
-                                <div className="costo-icono">
-                                  <Package size={24} />
-                                </div>
-                                <div className="costo-info">
-                                  <div className="costo-label">Total de Insumos</div>
-                                  <div className="costo-valor">{detalleReceta.length}</div>
-                                  <div className="costo-descripcion">componente(s)</div>
-                                </div>
-                              </div>
-                              
-                              <div className="costo-card destacado">
-                                <div className="costo-icono">
-                                  <TrendingUp size={24} />
-                                </div>
-                                <div className="costo-info">
-                                  <div className="costo-label">Costo Total Materiales</div>
-                                  <div className="costo-valor">{formatearMoneda(calcularCostoTotal())}</div>
-                                  <div className="costo-descripcion">
-                                    para {recetaSeleccionada.rendimiento_unidades} {producto.unidad_medida}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="costo-card">
-                                <div className="costo-icono">
-                                  <Info size={24} />
-                                </div>
-                                <div className="costo-info">
-                                  <div className="costo-label">Costo por Unidad</div>
-                                  <div className="costo-valor">
-                                    {formatearMoneda(calcularCostoTotal() / (recetaSeleccionada.rendimiento_unidades || 1))}
-                                  </div>
-                                  <div className="costo-descripcion">por 1 {producto.unidad_medida}</div>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="empty-state">
-                            <Package size={64} className="empty-icon" />
-                            <h3>No hay insumos configurados</h3>
-                            <p>Esta receta aún no tiene materiales. Agregue los insumos necesarios para la producción.</p>
-                            <button className="btn btn-primary" onClick={() => abrirModalInsumo()}>
-                              <Plus size={20} />
-                              Agregar Primer Insumo
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    </ul>
+                  )}
+                  {incidencias.data.length > 6 && (
+                    <button type="button" className="btn btn-ghost btn-sm pr-more" onClick={() => navigate('/calidad/incidencias-por-producto')}>
+                      Ver las {incidencias.data.length} incidencias <ChevronRight size={14} />
+                    </button>
                   )}
                 </div>
-              ) : (
-                <div className="empty-state">
-                  <Package size={64} className="empty-icon" />
-                  <h3>No hay recetas configuradas</h3>
-                  <p>Este producto requiere receta. Cree la primera receta con sus materiales e insumos.</p>
-                  <button className="btn btn-primary" onClick={() => abrirModalReceta()}>
-                    <Plus size={20} />
-                    Crear Primera Receta
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+              </section>
+            )}
+          </div>
+        </div>
 
-          {tabActiva === 'historial' && (
-            <div className="tab-historial-content">
-              <div className="historial-header">
-                <div>
-                  <h2>Historial de Movimientos</h2>
-                  <p>Trazabilidad completa del producto con distinción por moneda</p>
-                </div>
-                
-                <div className="historial-filtros">
-                  <button
-                    className={`btn btn-sm ${!filtroTipoMovimiento ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => handleFiltroMovimiento('')}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    className={`btn btn-sm ${filtroTipoMovimiento === 'entrada' ? 'btn-success' : 'btn-outline'}`}
-                    onClick={() => handleFiltroMovimiento('entrada')}
-                  >
-                    Entradas
-                  </button>
-                  <button
-                    className={`btn btn-sm ${filtroTipoMovimiento === 'salida' ? 'btn-danger' : 'btn-outline'}`}
-                    onClick={() => handleFiltroMovimiento('salida')}
-                  >
-                    Salidas
-                  </button>
-                  <button
-                    className={`btn btn-sm ${filtroTipoMovimiento === 'transferencia' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => handleFiltroMovimiento('transferencia')}
-                  >
-                    Transferencias
-                  </button>
-                  <button
-                    className={`btn btn-sm ${filtroTipoMovimiento === 'produccion' ? 'btn-warning' : 'btn-outline'}`}
-                    onClick={() => handleFiltroMovimiento('produccion')}
-                  >
-                    Producción
-                  </button>
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <div className="pg-segmented" role="tablist" aria-label="Secciones del producto">
+              <button type="button" role="tab" aria-selected={tabActiva === 'movimientos'} className={tabActiva === 'movimientos' ? 'active' : ''}
+                onClick={() => setTabActiva('movimientos')}>
+                <History size={14} /> Movimientos
+              </button>
+              <button type="button" role="tab" aria-selected={tabActiva === 'recetas'} className={tabActiva === 'recetas' ? 'active' : ''}
+                onClick={() => setTabActiva('recetas')}>
+                <BookOpen size={14} /> Recetas (BOM)
+              </button>
+            </div>
+            {tabActiva === 'movimientos' && (
+              <span className="pg-panel-meta">Entradas, salidas, transferencias, consumo en producción y ajustes por conteo físico</span>
+            )}
+            {tabActiva === 'recetas' && producto.requiere_receta && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => abrirModalReceta()}>
+                <Plus size={14} /> Nueva receta
+              </button>
+            )}
+          </div>
+
+          {tabActiva === 'movimientos' && (
+            <>
+              <div className="pr-tabbar">
+                <div className="pg-chips" role="group" aria-label="Tipo de movimiento">
+                  {FILTROS_MOVIMIENTO.map(f => {
+                    const total = f.id ? movimientos.data.filter(m => GRUPOS_MOVIMIENTO[f.id].includes(m.tipo_movimiento)).length : movimientos.data.length;
+                    return (
+                      <button key={f.id || 'todos'} type="button" className={`pg-chip ${filtroMovimiento === f.id ? 'on' : ''}`}
+                        aria-pressed={filtroMovimiento === f.id} onClick={() => setFiltroMovimiento(f.id)}>
+                        {f.label} <b>{total}</b>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {loadingHistorial ? (
-                <Loading message="Cargando historial..." />
-              ) : historialMovimientos.length > 0 ? (
-                <div className="historial-tabla-container">
-                  <Table
-                    columns={columnsHistorial}
-                    data={historialMovimientos}
-                    emptyMessage="No hay movimientos registrados"
-                  />
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <History size={64} className="empty-icon" />
-                  <h3>No hay movimientos registrados</h3>
-                  <p>Este producto aún no tiene movimientos en el historial.</p>
-                </div>
-              )}
-            </div>
+              <div className="pg-table-wrap">
+                <table className="pg-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Inventario / origen</th>
+                      <th>Destino / detalle</th>
+                      <th className="num">Cantidad</th>
+                      {verPrecios && <th className="num">Costo unit.</th>}
+                      {verPrecios && <th className="num">Costo total</th>}
+                      <th>Registrado por</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movimientos.loading ? (
+                      <tr><td colSpan={columnasMov}><div className="pg-loading"><Loader size={20} className="animate-spin" /></div></td></tr>
+                    ) : movimientosPagina.length === 0 ? (
+                      <tr>
+                        <td colSpan={columnasMov}>
+                          <div className="pg-empty">
+                            <History size={34} />
+                            <strong>{movimientos.data.length === 0 ? 'Sin movimientos registrados' : 'No hay movimientos de este tipo'}</strong>
+                            <span>
+                              {movimientos.data.length === 0
+                                ? 'Las entradas, salidas, transferencias y ajustes de este producto aparecerán aquí.'
+                                : 'Elige otro tipo de movimiento para ver el historial.'}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : movimientosPagina.map((m, idx) => {
+                      const anulado = m.estado === 'Anulado';
+                      const signo = m.tipo_movimiento === 'ajuste' ? Math.sign(num(m.cantidad)) : configMovimiento(m.tipo_movimiento).signo;
+                      const cantidad = Math.abs(num(m.cantidad));
+                      return (
+                        <tr key={`${m.tipo_movimiento}-${m.id_movimiento}-${idx}`} className={anulado ? 'pr-row-off' : ''}>
+                          <td className="nowrap">{fmtFecha(m.fecha_movimiento)}</td>
+                          <td>
+                            <TagMovimiento tipo={m.tipo_movimiento} />
+                            {anulado && <span className="pg-tags"><span className="pg-tag is-danger"><XCircle size={11} />Anulado</span></span>}
+                          </td>
+                          <td>{m.inventario || '—'}</td>
+                          <td>
+                            <span className="pg-cell-main pr-ellipsis">{m.destino || m.proveedor || '—'}</span>
+                            {m.documento_soporte && <span className="pg-cell-sub">Doc: {m.documento_soporte}</span>}
+                            {m.detalle_ajuste && <span className="pg-cell-sub">{m.detalle_ajuste}</span>}
+                          </td>
+                          <td className={`num pr-qty ${signo > 0 ? 'is-in' : signo < 0 ? 'is-out' : ''}`}>
+                            {signo > 0 ? <TrendingUp size={12} /> : signo < 0 ? <TrendingDown size={12} /> : null}
+                            {signo > 0 ? '+' : signo < 0 ? '−' : ''}{fmtCantidad(cantidad)}
+                          </td>
+                          {verPrecios && <td className="num">{m.costo_unitario != null ? fmtCosto(m.costo_unitario, m.moneda) : '—'}</td>}
+                          {verPrecios && <td className="num">{m.costo_total != null ? fmtMonto(m.costo_total, m.moneda) : '—'}</td>}
+                          <td>{m.registrado_por || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <PgPager {...paginacionMov} setCurrentPage={setPaginaMov} sustantivo="movimientos" />
+            </>
           )}
 
           {tabActiva === 'recetas' && !producto.requiere_receta && (
-            <div className="empty-state">
-              <Package size={64} className="empty-icon" />
-              <h3>Este producto no requiere recetas</h3>
-              <p>Los productos de reventa y materia prima no utilizan recetas de producción.</p>
+            <div className="pg-empty">
+              <BookOpen size={34} />
+              <strong>Este producto no requiere recetas</strong>
+              <span>Los productos de reventa, materias primas e insumos no usan recetas de producción. Puedes activarlo editando el producto en el catálogo.</span>
             </div>
           )}
-        </div>
+
+          {tabActiva === 'recetas' && producto.requiere_receta && recetas.length === 0 && (
+            <div className="pg-empty">
+              <BookOpen size={34} />
+              <strong>No hay recetas configuradas</strong>
+              <span>Este producto requiere receta. Crea la primera con sus materiales e insumos.</span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => abrirModalReceta()}>
+                <Plus size={14} /> Crear primera receta
+              </button>
+            </div>
+          )}
+
+          {tabActiva === 'recetas' && producto.requiere_receta && recetas.length > 0 && (
+            <div className="pr-recetas">
+              <div className="pr-receta-list" role="listbox" aria-label="Recetas">
+                {recetas.map(receta => {
+                  const activa = recetaSeleccionada?.id_receta_producto === receta.id_receta_producto;
+                  return (
+                    <button key={receta.id_receta_producto} type="button" role="option" aria-selected={activa}
+                      className={`pr-receta ${activa ? 'on' : ''}`} onClick={() => setRecetaSeleccionada(receta)}>
+                      <span className="pr-receta-name">
+                        {!!receta.es_principal && <Star size={13} className="pr-star" />}
+                        {receta.nombre_receta}
+                      </span>
+                      <span className="pr-receta-meta">
+                        {receta.es_activa
+                          ? <span className="pr-ok"><CheckCircle size={12} />Activa</span>
+                          : <span className="pr-off"><XCircle size={12} />Inactiva</span>}
+                        <span>{receta.total_insumos || 0} insumo(s)</span>
+                        {receta.version && <span>v{receta.version}</span>}
+                      </span>
+                      {verPrecios && <span className="pr-receta-cost">{fmtMonto(receta.costo_total_materiales)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {recetaSeleccionada && (
+                <div className="pr-receta-detalle">
+                  <div className="pr-receta-head">
+                    <div>
+                      <h3 className="pr-receta-title">{recetaSeleccionada.nombre_receta}</h3>
+                      <div className="pg-drawer-badges">
+                        {!!recetaSeleccionada.es_principal && <span className="badge badge-warning"><Star size={11} />Principal</span>}
+                        {recetaSeleccionada.es_activa
+                          ? <span className="badge badge-success"><CheckCircle size={11} />Activa</span>
+                          : <span className="badge badge-danger"><XCircle size={11} />Inactiva</span>}
+                        {recetaSeleccionada.version && <span className="badge badge-info">v{recetaSeleccionada.version}</span>}
+                      </div>
+                      {recetaSeleccionada.descripcion && <p className="pr-receta-desc">{recetaSeleccionada.descripcion}</p>}
+                    </div>
+                    <div className="pg-rowactions">
+                      <button type="button" className="pg-iconbtn" title="Editar receta" aria-label="Editar receta" onClick={() => abrirModalReceta(recetaSeleccionada)}>
+                        <Pencil size={15} />
+                      </button>
+                      <button type="button" className="pg-iconbtn" title="Duplicar receta" aria-label="Duplicar receta"
+                        onClick={() => handleDuplicarReceta(recetaSeleccionada.id_receta_producto)}>
+                        <Copy size={15} />
+                      </button>
+                      <button type="button" className="pg-iconbtn is-danger" title="Eliminar receta" aria-label="Eliminar receta"
+                        disabled={recetas.length === 1 && !!recetaSeleccionada.es_principal}
+                        onClick={() => handleDeleteReceta(recetaSeleccionada.id_receta_producto)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pg-kv">
+                    <div><span>Rendimiento</span><strong>{fmtCantidad(recetaSeleccionada.rendimiento_unidades)} {unidad}</strong></div>
+                    <div><span>Tiempo de producción</span><strong><Clock size={12} className="pr-inline-icon" />{recetaSeleccionada.tiempo_produccion_minutos || 0} min</strong></div>
+                    <div><span>Insumos</span><strong>{detalleReceta.length}</strong></div>
+                    {verPrecios && <div><span>Costo materiales</span><strong>{fmtMonto(costoTotalReceta)}</strong></div>}
+                    {verPrecios && (
+                      <div>
+                        <span>Costo por {unidad}</span>
+                        <strong>{fmtCosto(costoTotalReceta / (num(recetaSeleccionada.rendimiento_unidades) || 1))}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pr-subhead">
+                    <h3 className="pg-section-title"><Package size={14} /> Insumos y materiales</h3>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => abrirModalInsumo()}>
+                      <Plus size={14} /> Agregar insumo
+                    </button>
+                  </div>
+
+                  <div className="pg-table-wrap pr-bordered">
+                    <table className="pg-table">
+                      <thead>
+                        <tr>
+                          <th className="center">#</th>
+                          <th>Insumo / material</th>
+                          <th className="num">Cantidad</th>
+                          {verPrecios && <th className="num">CUP</th>}
+                          {verPrecios && <th className="num">Costo total</th>}
+                          <th className="num">Stock disponible</th>
+                          <th className="center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalleReceta.length === 0 ? (
+                          <tr>
+                            <td colSpan={columnasInsumos}>
+                              <div className="pg-empty">
+                                <Package size={34} />
+                                <strong>Esta receta aún no tiene insumos</strong>
+                                <span>Agrega los materiales necesarios para producir el producto.</span>
+                                <button type="button" className="btn btn-primary btn-sm" onClick={() => abrirModalInsumo()}>
+                                  <Plus size={14} /> Agregar primer insumo
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : detalleReceta.map(item => {
+                          const stock = num(item.stock_actual);
+                          const suficiente = stock >= num(item.cantidad_requerida);
+                          const orden = parseInt(item.orden_agregado || 0, 10);
+                          return (
+                            <tr key={item.id_detalle}>
+                              <td className="center">{orden > 0 ? <span className="pg-count">{orden}</span> : <span className="pg-muted">—</span>}</td>
+                              <td>
+                                <span className="pg-cell-main">{item.insumo}</span>
+                                <span className="pg-cell-sub"><span className="pg-code">{item.codigo_insumo}</span></span>
+                                {(!!item.es_critico || item.notas) && (
+                                  <span className="pg-tags">
+                                    {!!item.es_critico && <span className="pg-tag is-warning"><AlertTriangle size={11} />Crítico</span>}
+                                    {item.notas && <span className="pg-tag">{item.notas}</span>}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="num">{fmtCantidad(item.cantidad_requerida)} <span className="pg-muted">{item.unidad_medida}</span></td>
+                              {verPrecios && (
+                                <td className="num">{num(item.costo_unitario_promedio) > 0 ? fmtCosto(item.costo_unitario_promedio) : <span className="pg-muted">Sin CUP</span>}</td>
+                              )}
+                              {verPrecios && <td className="num">{fmtMonto(item.costo_total_insumo)}</td>}
+                              <td className="num">
+                                <span className={`pr-qty ${suficiente ? 'is-in' : 'is-out'}`}>{fmtCantidad(stock)} {item.unidad_medida}</span>
+                                {!suficiente && <span className="pg-tags"><span className="pg-tag is-danger"><AlertTriangle size={11} />Insuficiente</span></span>}
+                              </td>
+                              <td className="center">
+                                <div className="pg-rowactions">
+                                  <button type="button" className="pg-iconbtn" title="Editar insumo" aria-label={`Editar ${item.insumo}`} onClick={() => abrirModalInsumo(item)}>
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button type="button" className="pg-iconbtn is-danger" title="Eliminar insumo" aria-label={`Eliminar ${item.insumo}`}
+                                    onClick={() => handleDeleteInsumo(item.id_detalle)}>
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {recetaSeleccionada.notas && (
+                    <p className="pg-hint"><Info size={12} />Notas: {recetaSeleccionada.notas}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
 
-      <Modal
-        isOpen={modalRecetaOpen}
-        onClose={cerrarModalReceta}
-        title={editandoReceta ? 'Editar Receta' : 'Nueva Receta'}
-        size="md"
-      >
+      <Modal isOpen={modalRecetaOpen} onClose={cerrarModalReceta} title={editandoReceta ? 'Editar receta' : 'Nueva receta'} size="md">
         <form onSubmit={handleSubmitReceta}>
-          <div className="form-group">
-            <label className="form-label">Nombre de la Receta *</label>
-            <input
-              type="text"
-              className="form-input"
-              value={formReceta.nombre_receta}
-              onChange={(e) => setFormReceta({ ...formReceta, nombre_receta: e.target.value })}
-              required
-              placeholder="Ej: Receta Estándar, Receta Premium, Receta Económica"
-            />
-          </div>
+          <div className="pg-form-grid">
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-r-nombre">Nombre de la receta *</label>
+              <input id="pr-r-nombre" type="text" className="form-input" value={formReceta.nombre_receta} required
+                placeholder="Ej: Receta estándar, Receta premium"
+                onChange={(e) => setFormReceta({ ...formReceta, nombre_receta: e.target.value })} />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Descripción</label>
-            <textarea
-              className="form-textarea"
-              value={formReceta.descripcion}
-              onChange={(e) => setFormReceta({ ...formReceta, descripcion: e.target.value })}
-              placeholder="Descripción de la receta (opcional)"
-              rows={2}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Versión</label>
-              <input
-                type="text"
-                className="form-input"
-                value={formReceta.version}
-                onChange={(e) => setFormReceta({ ...formReceta, version: e.target.value })}
-                placeholder="v1.0"
-              />
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-r-desc">Descripción</label>
+              <textarea id="pr-r-desc" className="form-textarea" rows={2} value={formReceta.descripcion}
+                placeholder="Descripción de la receta (opcional)"
+                onChange={(e) => setFormReceta({ ...formReceta, descripcion: e.target.value })} />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Rendimiento (unidades) *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                className="form-input"
-                value={formReceta.rendimiento_unidades}
-                onChange={(e) => setFormReceta({ ...formReceta, rendimiento_unidades: e.target.value })}
-                placeholder="1.00"
-                required
-              />
+              <label className="form-label" htmlFor="pr-r-version">Versión</label>
+              <input id="pr-r-version" type="text" className="form-input" value={formReceta.version} placeholder="v1.0"
+                onChange={(e) => setFormReceta({ ...formReceta, version: e.target.value })} />
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Tiempo de Producción (minutos)</label>
-            <input
-              type="number"
-              min="0"
-              className="form-input"
-              value={formReceta.tiempo_produccion_minutos}
-              onChange={(e) => setFormReceta({ ...formReceta, tiempo_produccion_minutos: e.target.value })}
-              placeholder="0"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-checkbox-label">
-              <input
-                type="checkbox"
-                checked={formReceta.es_principal}
-                onChange={(e) => setFormReceta({ ...formReceta, es_principal: e.target.checked })}
-              />
-              <span>Marcar como Receta Principal</span>
-            </label>
-            <small className="text-muted">La receta principal se usará por defecto en producción</small>
-          </div>
-
-          {editandoReceta && (
             <div className="form-group">
-              <label className="form-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={formReceta.es_activa}
-                  onChange={(e) => setFormReceta({ ...formReceta, es_activa: e.target.checked })}
-                />
-                <span>Receta Activa</span>
+              <label className="form-label" htmlFor="pr-r-rend">Rendimiento (unidades) *</label>
+              <input id="pr-r-rend" type="number" step="0.01" min="0.01" className="form-input" value={formReceta.rendimiento_unidades}
+                placeholder="1.00" required
+                onChange={(e) => setFormReceta({ ...formReceta, rendimiento_unidades: e.target.value })} />
+            </div>
+
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-r-tiempo">Tiempo de producción (minutos)</label>
+              <input id="pr-r-tiempo" type="number" min="0" className="form-input" value={formReceta.tiempo_produccion_minutos} placeholder="0"
+                onChange={(e) => setFormReceta({ ...formReceta, tiempo_produccion_minutos: e.target.value })} />
+            </div>
+
+            <div className="form-group">
+              <label className="pg-check">
+                <input type="checkbox" checked={formReceta.es_principal}
+                  onChange={(e) => setFormReceta({ ...formReceta, es_principal: e.target.checked })} />
+                <div>
+                  <span>Receta principal</span>
+                  <small>Se usa por defecto en producción.</small>
+                </div>
               </label>
-              <small className="text-muted">Solo las recetas activas se pueden usar en producción</small>
             </div>
-          )}
 
-          <div className="form-group">
-            <label className="form-label">Notas</label>
-            <textarea
-              className="form-textarea"
-              value={formReceta.notas}
-              onChange={(e) => setFormReceta({ ...formReceta, notas: e.target.value })}
-              placeholder="Notas adicionales (opcional)"
-              rows={3}
-            />
+            {editandoReceta && (
+              <div className="form-group">
+                <label className="pg-check">
+                  <input type="checkbox" checked={formReceta.es_activa}
+                    onChange={(e) => setFormReceta({ ...formReceta, es_activa: e.target.checked })} />
+                  <div>
+                    <span>Receta activa</span>
+                    <small>Solo las activas se pueden usar en producción.</small>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-r-notas">Notas</label>
+              <textarea id="pr-r-notas" className="form-textarea" rows={3} value={formReceta.notas} placeholder="Notas adicionales (opcional)"
+                onChange={(e) => setFormReceta({ ...formReceta, notas: e.target.value })} />
+            </div>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" className="btn btn-outline" onClick={cerrarModalReceta}>
-              Cancelar
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {editandoReceta ? 'Actualizar' : 'Crear'} Receta
-            </button>
+          <div className="pr-form-actions">
+            <button type="button" className="btn btn-outline" onClick={cerrarModalReceta}>Cancelar</button>
+            <button type="submit" className="btn btn-primary">{editandoReceta ? 'Actualizar' : 'Crear'} receta</button>
           </div>
         </form>
       </Modal>
 
-      <Modal
-        isOpen={modalInsumoOpen}
-        onClose={cerrarModalInsumo}
-        title={editandoInsumo ? 'Editar Insumo' : 'Agregar Insumo a Receta'}
-        size="md"
-      >
+      <Modal isOpen={modalInsumoOpen} onClose={cerrarModalInsumo} title={editandoInsumo ? 'Editar insumo' : 'Agregar insumo a la receta'} size="md">
         <form onSubmit={handleSubmitInsumo}>
-          <div className="form-group">
-            <label className="form-label">Insumo / Material *</label>
-            <select
-              className="form-select"
-              value={formInsumo.id_insumo}
-              onChange={handleInsumoChange}
-              required
-              disabled={editandoInsumo}
-            >
-              <option value="">Seleccione un insumo...</option>
-              {insumosDisponibles.map(insumo => (
-                <option key={insumo.id_producto} value={insumo.id_producto}>
-                  {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(parseFloat(insumo.stock_actual).toFixed(4))} {insumo.unidad_medida})
-                </option>
-              ))}
-            </select>
-            <small className="text-muted">Solo se muestran productos de Materia Prima e Insumos</small>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Cantidad Requerida *</label>
-              <input
-                type="number"
-                step="0.0001"
-                min="0.0001"
-                className="form-input"
-                value={formInsumo.cantidad_requerida}
-                onChange={(e) => setFormInsumo({ ...formInsumo, cantidad_requerida: e.target.value })}
-                required
-                placeholder="0.0000"
-              />
+          <div className="pg-form-grid">
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-i-insumo">Insumo / material *</label>
+              <select id="pr-i-insumo" className="form-select" value={formInsumo.id_insumo} onChange={handleInsumoChange} required disabled={!!editandoInsumo}>
+                <option value="">Seleccione un insumo...</option>
+                {insumosDisponibles.map(insumo => (
+                  <option key={insumo.id_producto} value={insumo.id_producto}>
+                    {insumo.codigo} - {insumo.nombre} (Stock: {fmtCantidad(insumo.stock_actual)} {insumo.unidad_medida})
+                  </option>
+                ))}
+              </select>
+              <small className="pg-hint">Solo se muestran productos de materia prima e insumos.</small>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Unidad de Medida *</label>
-              <input
-                type="text"
-                className="form-input"
-                value={formInsumo.unidad_medida}
-                readOnly
-                style={{ backgroundColor: 'var(--bg-secondary)' }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Orden de Agregado</label>
-              <input
-                type="number"
-                min="0"
-                className="form-input"
-                value={formInsumo.orden_agregado}
-                onChange={(e) => setFormInsumo({ ...formInsumo, orden_agregado: e.target.value })}
-                placeholder="0"
-              />
+              <label className="form-label" htmlFor="pr-i-cant">Cantidad requerida *</label>
+              <input id="pr-i-cant" type="number" step="0.0001" min="0.0001" className="form-input" value={formInsumo.cantidad_requerida}
+                required placeholder="0.0000"
+                onChange={(e) => setFormInsumo({ ...formInsumo, cantidad_requerida: e.target.value })} />
             </div>
 
             <div className="form-group">
-              <label className="form-checkbox-label" style={{ marginTop: '1.5rem' }}>
-                <input
-                  type="checkbox"
-                  checked={formInsumo.es_critico}
-                  onChange={(e) => setFormInsumo({ ...formInsumo, es_critico: e.target.checked })}
-                />
-                <span>Insumo Crítico</span>
+              <label className="form-label" htmlFor="pr-i-unidad">Unidad de medida</label>
+              <input id="pr-i-unidad" type="text" className="form-input pr-readonly" value={formInsumo.unidad_medida} readOnly />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="pr-i-orden">Orden de agregado</label>
+              <input id="pr-i-orden" type="number" min="0" className="form-input" value={formInsumo.orden_agregado} placeholder="0"
+                onChange={(e) => setFormInsumo({ ...formInsumo, orden_agregado: e.target.value })} />
+            </div>
+
+            <div className="form-group pr-check-cell">
+              <label className="pg-check">
+                <input type="checkbox" checked={formInsumo.es_critico}
+                  onChange={(e) => setFormInsumo({ ...formInsumo, es_critico: e.target.checked })} />
+                <div>
+                  <span>Insumo crítico</span>
+                  <small>Se resalta en la receta y en producción.</small>
+                </div>
               </label>
             </div>
+
+            <div className="form-group is-full">
+              <label className="form-label" htmlFor="pr-i-notas">Notas</label>
+              <textarea id="pr-i-notas" className="form-textarea" rows={3} value={formInsumo.notas}
+                placeholder="Notas adicionales sobre este insumo (opcional)"
+                onChange={(e) => setFormInsumo({ ...formInsumo, notas: e.target.value })} />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Notas</label>
-            <textarea
-              className="form-textarea"
-              value={formInsumo.notas}
-              onChange={(e) => setFormInsumo({ ...formInsumo, notas: e.target.value })}
-              placeholder="Notas adicionales sobre este insumo (opcional)"
-              rows={3}
-            />
-          </div>
-
-          <div className="modal-actions">
-            <button type="button" className="btn btn-outline" onClick={cerrarModalInsumo}>
-              Cancelar
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {editandoInsumo ? 'Actualizar' : 'Agregar'} Insumo
-            </button>
+          <div className="pr-form-actions">
+            <button type="button" className="btn btn-outline" onClick={cerrarModalInsumo}>Cancelar</button>
+            <button type="submit" className="btn btn-primary">{editandoInsumo ? 'Actualizar' : 'Agregar'} insumo</button>
           </div>
         </form>
       </Modal>

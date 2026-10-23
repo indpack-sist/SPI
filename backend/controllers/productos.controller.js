@@ -2,6 +2,18 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import pool from '../config/database.js';
 import { generarPDFReporteProducto } from '../utils/pdf-generator.js';
 import { generarReporteProductoXLSX as generarReporteProductoXLSX_ } from '../utils/excelGenerators/reporteProductoXLSX.js';
+import { PERMISOS_POR_ROL } from '../middleware/auth.js';
+
+const puedeVerCostos = (req) => !!PERMISOS_POR_ROL[req.user?.rol]?.ui?.verPrecios;
+
+const CAMPOS_COSTO_PRODUCTO = ['costo_unitario_promedio', 'costo_unitario_promedio_usd', 'costo_produccion_calculado', 'valor_inventario', 'precio_venta'];
+const CAMPOS_COSTO_MOVIMIENTO = ['costo_unitario', 'costo_total', 'moneda'];
+
+const sinCampos = (fila, campos) => {
+  const copia = { ...fila };
+  campos.forEach((c) => { delete copia[c]; });
+  return copia;
+};
 
 export async function getAllProductos(req, res) {
   try {
@@ -154,14 +166,16 @@ export async function getAllProductosConCosto(req, res) {
        return res.json({ success: true, data: [], total: 0 });
     }
 
+    const verCostos = puedeVerCostos(req);
     const dataFinal = result.data.map(prod => {
       const costo = parseFloat(prod.costo_produccion_calculado || 0);
       const stock = parseFloat(prod.stock_actual || 0);
-      return {
+      const fila = {
         ...prod,
         costo_unitario_promedio: costo, 
         valor_inventario: stock * costo
       };
+      return verCostos ? fila : sinCampos(fila, CAMPOS_COSTO_PRODUCTO);
     });
 
     res.json({
@@ -304,7 +318,7 @@ export async function updateProducto(req, res) {
         id_categoria,
         id_tipo_inventario,
         unidad_medida,
-        precio_venta || 0,
+        puedeVerCostos(req) && precio_venta !== undefined ? (precio_venta || 0) : checkResult.data[0].precio_venta,
         peso_unitario || null,
         stock_minimo,
         stock_maximo,
@@ -546,15 +560,85 @@ export async function getHistorialMovimientos(req, res) {
       return diff !== 0 ? diff : a.__orden - b.__orden;
     });
     movimientos.forEach((m) => { delete m.__orden; });
+    const verCostos = puedeVerCostos(req);
     
     res.json({
       success: true,
-      data: movimientos,
+      data: verCostos ? movimientos : movimientos.map((m) => sinCampos(m, CAMPOS_COSTO_MOVIMIENTO)),
       total: movimientos.length,
       producto: checkProducto.data[0]
     });
   } catch (error) {
     console.error('Error en getHistorialMovimientos:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function getCompromisosProducto(req, res) {
+  try {
+    const { id } = req.params;
+
+    const [produccion, consumo, ventas] = await Promise.all([
+      executeQuery(
+        `SELECT op.id_orden, op.numero_orden, op.estado, op.cantidad_planificada, op.cantidad_producida,
+                op.fecha_creacion, e.nombre_completo AS supervisor
+         FROM ordenes_produccion op
+         LEFT JOIN empleados e ON e.id_empleado = op.id_supervisor
+         WHERE op.id_producto_terminado = ?
+           AND op.estado IN ('Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa')
+         ORDER BY op.fecha_creacion DESC`,
+        [id]
+      ),
+      executeQuery(
+        `SELECT op.id_orden, op.numero_orden, op.estado, pt.nombre AS producto_terminado, cm.cantidad_requerida
+         FROM op_consumo_materiales cm
+         INNER JOIN ordenes_produccion op ON op.id_orden = cm.id_orden
+         INNER JOIN productos pt ON pt.id_producto = op.id_producto_terminado
+         WHERE cm.id_insumo = ? AND op.estado IN ('En Curso', 'En Pausa')
+         ORDER BY op.fecha_creacion DESC`,
+        [id]
+      ),
+      executeQuery(
+        `SELECT ov.id_orden_venta, ov.numero_orden, ov.estado, ov.fecha_entrega_estimada, c.razon_social AS cliente,
+                dov.cantidad, dov.cantidad_despachada, (dov.cantidad - dov.cantidad_despachada) AS pendiente,
+                COALESCE(dov.cantidad_reservada, 0) AS reservada
+         FROM detalle_orden_venta dov
+         INNER JOIN ordenes_venta ov ON ov.id_orden_venta = dov.id_orden_venta
+         LEFT JOIN clientes c ON c.id_cliente = ov.id_cliente
+         WHERE dov.id_producto = ?
+           AND ov.estado NOT IN ('Cancelada', 'Despachada', 'Entregada')
+           AND dov.cantidad > dov.cantidad_despachada
+         ORDER BY ov.fecha_entrega_estimada IS NULL, ov.fecha_entrega_estimada`,
+        [id]
+      )
+    ]);
+
+    if (!produccion.success || !consumo.success || !ventas.success) {
+      return res.status(500).json({ error: 'No se pudieron obtener los compromisos del producto.' });
+    }
+
+    const suma = (filas, campo) => filas.reduce((acc, f) => acc + parseFloat(f[campo] || 0), 0);
+    const enProduccion = produccion.data.reduce(
+      (acc, op) => acc + Math.max(parseFloat(op.cantidad_planificada || 0) - parseFloat(op.cantidad_producida || 0), 0),
+      0
+    );
+
+    res.json({
+      success: true,
+      data: {
+        produccion: produccion.data,
+        consumo: consumo.data,
+        ventas: ventas.data
+      },
+      resumen: {
+        pendiente_ov: suma(ventas.data, 'pendiente'),
+        reservado_ov: suma(ventas.data, 'reservada'),
+        en_produccion: enProduccion,
+        consumo_op: suma(consumo.data, 'cantidad_requerida')
+      }
+    });
+  } catch (error) {
+    console.error('Error en getCompromisosProducto:', error);
     res.status(500).json({ error: error.message });
   }
 }
@@ -1356,6 +1440,9 @@ export async function verCUPPorRecetas(req, res) {
 
 export async function calcularCUPDesdeReceta(req, res) {
   try {
+    if (!puedeVerCostos(req)) {
+      return res.status(403).json({ success: false, error: 'No tiene permiso para ver costos' });
+    }
     const { id } = req.params;
 
     const productoResult = await executeQuery(
@@ -1507,6 +1594,9 @@ export async function calcularCUPDesdeReceta(req, res) {
 
 export async function calcularEvolucionCUP(req, res) {
   try {
+    if (!puedeVerCostos(req)) {
+      return res.status(403).json({ success: false, error: 'No tiene permiso para ver costos' });
+    }
     const { id } = req.params;
 
     const productoResult = await executeQuery(

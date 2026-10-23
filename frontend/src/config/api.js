@@ -248,6 +248,7 @@ export const productosAPI = {
   
   getHistorialMovimientos: (id, params) => api.get(`/productos/${id}/historial-movimientos`, { params }),
   getHistorialCompras: (id, params) => api.get(`/productos/${id}/historial-compras`, { params }),
+  getCompromisos: (id) => api.get(`/productos/${id}/compromisos`),
 
   getRecetasByProducto: (id) => api.get(`/productos/${id}/recetas`),
   getDetalleReceta: (idReceta) => api.get(`/productos/recetas/${idReceta}/detalle`),

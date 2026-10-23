@@ -289,7 +289,7 @@ function Proveedores() {
           <section>
             <h3 className="pg-section-title"><Receipt size={14} /> Compras recientes</h3>
             {comprasRecientes.loading ? (
-              <div className="ms-loading"><Loader size={20} className="animate-spin" /></div>
+              <div className="pg-loading"><Loader size={20} className="animate-spin" /></div>
             ) : comprasRecientes.data.length > 0 ? (
               <ul className="pg-list">
                 {comprasRecientes.data.map(c => (
@@ -308,7 +308,7 @@ function Proveedores() {
                 ))}
               </ul>
             ) : (
-              <p className="ms-empty-line">No hay compras registradas con este proveedor.</p>
+              <p className="pg-empty-line">No hay compras registradas con este proveedor.</p>
             )}
           </section>
         )}
@@ -530,10 +530,10 @@ function Proveedores() {
             <label className="form-label" htmlFor="ms-prov-razon">Razón social *</label>
             <input id="ms-prov-razon" type="text" className="form-input" value={formData.razon_social}
               onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })} required placeholder="Empresa S.A.C." />
-            {datosSUNAT && <small className="ms-hint">Autocompletado desde SUNAT. Puede modificarlo si es necesario.</small>}
+            {datosSUNAT && <small className="pg-hint">Autocompletado desde SUNAT. Puede modificarlo si es necesario.</small>}
           </div>
 
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ms-prov-contacto">Contacto</label>
               <input id="ms-prov-contacto" type="text" className="form-input" value={formData.contacto}
@@ -552,7 +552,7 @@ function Proveedores() {
               onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="contacto@empresa.com" />
           </div>
 
-          <div className="ms-form-grid">
+          <div className="pg-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ms-prov-terminos">Términos de pago</label>
               <input id="ms-prov-terminos" type="text" className="form-input" value={formData.terminos_pago}

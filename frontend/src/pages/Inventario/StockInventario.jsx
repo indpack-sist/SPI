@@ -197,27 +197,12 @@ function StockInventario() {
 
   const getConfigTipo = (nombreTipo) => {
     const colores = {
-      'Materia Prima': { 
-        bg: '#dbeafe', color: '#2563eb', icon: Factory,
-        gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
-      },
-      'Insumos': { 
-        bg: '#d1fae5', color: '#10b981', icon: Box,
-        gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-      },
-      'Productos Terminados': { 
-        bg: '#fef3c7', color: '#f59e0b', icon: CheckCircle,
-        gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-      },
-      'Productos de Reventa': { 
-        bg: '#e0e7ff', color: '#6366f1', icon: ShoppingCart,
-        gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-      }
+      'Materia Prima': { color: 'var(--info)', icon: Factory },
+      'Insumos': { color: 'var(--success)', icon: Box },
+      'Productos Terminados': { color: 'var(--accent)', icon: CheckCircle },
+      'Productos de Reventa': { color: 'var(--warning)', icon: ShoppingCart }
     };
-    return colores[nombreTipo] || { 
-      bg: '#f3f4f6', color: 'var(--text-secondary)', icon: Layers,
-      gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
-    };
+    return colores[nombreTipo] || { color: 'var(--steel-light)', icon: Layers };
   };
 
   const columns = [
@@ -544,8 +529,8 @@ function StockInventario() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm"
-                        style={{ background: config.gradient }}
+                        className="w-10 h-10 rounded-full flex items-center justify-center"
+                        style={{ width: 40, height: 40, flexShrink: 0, color: config.color, backgroundColor: 'var(--bg-tertiary)', border: `1px solid ${config.color}` }}
                       >
                         <Icon size={20} />
                       </div>

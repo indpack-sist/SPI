@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info, Hash, Ruler, Scale 
+import {
+  ArrowLeft, AlertCircle, Plus, Trash2, Star, CheckCircle, AlertTriangle, Factory, Layers, BarChart,
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Sun, Moon, Users, Info, Hash, Ruler, Scale
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import './Produccion.css';
 
 const extraerMedidas = (nombre) => {
   if (!nombre) return [];
@@ -390,513 +391,487 @@ function CrearOrden() {
 
   const porcentajeActualTotal = listaInsumos.reduce((sum, item) => sum + item.porcentaje, 0);
 
-  return (
-    <div>
-      <button className="btn btn-outline mb-4" onClick={() => navigate('/produccion/ordenes')}>
-        <ArrowLeft size={20} />
-        Volver a Órdenes
-      </button>
+  const porcentajeCompleto = Math.abs(porcentajeActualTotal - 100) < 0.01;
+  const kilosMezcla = listaInsumos.reduce((sum, item) => sum + calcularCantidadInsumo(item.porcentaje), 0);
+  const insumosSinStock = listaInsumos.filter(item => item.stock_actual < calcularCantidadInsumo(item.porcentaje)).length;
+  const usaMezcla = modoReceta === 'porcentaje' && !esProductoLamina;
 
-      <div className="mb-4">
-        <h1 className="card-title">Nueva Orden de Producción</h1>
-        <p className="text-muted">Configure los insumos por porcentaje según la cantidad a producir</p>
+  const pendientes = [
+    !formData.id_producto_terminado && 'Elegir el producto terminado',
+    !esProductoLamina && !formData.cantidad_planificada && 'Indicar los kilos estimados',
+    esProductoLamina && !formData.cantidad_unidades && 'Indicar la meta en unidades',
+    !formData.id_supervisor && 'Asignar un supervisor',
+    usaMezcla && listaInsumos.length === 0 && 'Agregar insumos a la mezcla',
+    usaMezcla && listaInsumos.length > 0 && !porcentajeCompleto && 'Completar la mezcla al 100%'
+  ].filter(Boolean);
+
+  return (
+    <div className="pg-page">
+      <div className="pd-topbar">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/produccion/ordenes')}>
+          <ArrowLeft size={16} /> Órdenes de producción
+        </button>
       </div>
+
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Factory size={13} /> Producción</span>
+          <h1 className="pg-title">Nueva orden de producción</h1>
+          <p className="pg-subtitle">Define el producto, la meta y la mezcla de insumos por porcentaje.</p>
+        </div>
+        <div className="pg-actions">
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')} disabled={guardando}>
+            Cancelar
+          </button>
+          <button type="submit" form="form-crear-op" className="btn btn-primary" disabled={guardando || !formData.id_producto_terminado}>
+            <CheckCircle size={16} /> {guardando ? 'Creando…' : 'Crear orden'}
+          </button>
+        </div>
+      </header>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} />}
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          
-          <div className="card lg:col-span-2">
-            <div className="card-header">
-              <h2 className="card-title">Información de Producción</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group">
-                    <label className="form-label">Número de Orden</label>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            className="form-input bg-gray-100 font-mono font-bold"
-                            value={formData.numero_orden}
-                            readOnly 
-                        />
-                        <button 
-                            type="button" 
-                            className="btn btn-outline p-2" 
-                            onClick={generarSiguienteCorrelativo}
-                            disabled={generandoCorrelativo}
-                        >
-                            <RefreshCw size={18} className={generandoCorrelativo ? 'animate-spin' : ''} />
-                        </button>
+      <form id="form-crear-op" onSubmit={handleSubmit}>
+        <div className="pd-create">
+          <div className="pg-stack">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Package size={16} /> Producto y cantidades</h2>
+              </div>
+              <div className="pg-panel-body">
+                <div className="pd-form-grid pd-cols-2">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-numero">Número de orden</label>
+                    <div className="pd-input-row">
+                      <input id="co-numero" type="text" className="form-input pd-readonly-code" value={formData.numero_orden} readOnly />
+                      <button type="button" className="pg-iconbtn pd-iconbtn-lg" onClick={generarSiguienteCorrelativo}
+                        disabled={generandoCorrelativo} title="Generar siguiente correlativo" aria-label="Generar siguiente correlativo">
+                        <RefreshCw size={16} className={generandoCorrelativo ? 'animate-spin' : ''} />
+                      </button>
                     </div>
-                </div>
+                  </div>
 
-                <div className="form-group relative" ref={dropdownRef}>
-                    <label className="form-label">Producto Terminado *</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            className="form-input pl-9 pr-8"
-                            placeholder="Buscar producto por código o nombre..."
-                            value={busquedaProducto}
-                            onChange={(e) => {
-                                setBusquedaProducto(e.target.value);
-                                setMostrarDropdown(true); 
-                                if (e.target.value === '') {
-                                    setFormData({ ...formData, id_producto_terminado: '' });
-                                }
-                            }}
-                            onFocus={() => setMostrarDropdown(true)} 
-                            required={!formData.id_producto_terminado} 
-                        />
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                        {formData.id_producto_terminado ? (
-                            <button
-                                type="button"
-                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                                onClick={handleLimpiarProducto}
-                            >
-                                <X size={18} />
-                            </button>
-                        ) : (
-                            <ChevronDown className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" size={18} />
-                        )}
+                  <div className="form-group pd-combo" ref={dropdownRef}>
+                    <label className="form-label" htmlFor="co-producto">Producto terminado *</label>
+                    <div className="pd-combo-field">
+                      <Search size={16} className="pd-combo-icon" />
+                      <input
+                        id="co-producto"
+                        type="text"
+                        className="form-input"
+                        autoComplete="off"
+                        placeholder="Buscar por código o nombre"
+                        value={busquedaProducto}
+                        onChange={(e) => {
+                          setBusquedaProducto(e.target.value);
+                          setMostrarDropdown(true);
+                          if (e.target.value === '') {
+                            setFormData({ ...formData, id_producto_terminado: '' });
+                          }
+                        }}
+                        onFocus={() => setMostrarDropdown(true)}
+                        required={!formData.id_producto_terminado}
+                        aria-expanded={mostrarDropdown}
+                      />
+                      {formData.id_producto_terminado ? (
+                        <button type="button" className="pd-combo-clear" onClick={handleLimpiarProducto} aria-label="Quitar producto">
+                          <X size={16} />
+                        </button>
+                      ) : (
+                        <ChevronDown size={16} className="pd-combo-chevron" />
+                      )}
                     </div>
 
                     {mostrarDropdown && (
-                        <div 
-                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-96 overflow-y-auto overscroll-contain"
-                          style={{ zIndex: 9999, backgroundColor: '#ffffff' }}
-                        >
-                            {productosFiltrados.length > 0 ? (
-                                productosFiltrados.map((prod) => {
-                                    const stock = parseFloat(prod.stock_actual || 0);
-                                    return (
-                                        <div
-                                            key={prod.id_producto}
-                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-50 last:border-0"
-                                            onClick={() => handleSeleccionarProducto(prod)}
-                                        >
-                                            <div className="font-bold text-gray-800">{prod.codigo}</div>
-                                            <div className="text-gray-600">{prod.nombre}</div>
-                                            <div className={`text-xs mt-1 font-medium ${stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                Stock: {stock.toFixed(2)}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="px-4 py-3 text-sm text-gray-500 text-center">No se encontraron productos</div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <div className="form-group">
-                    <label className="form-label">
-                        {esProductoLamina ? 'Cantidad Unidades (Meta) *' : 'Cantidad Unidades (Meta)'}
-                        {unidadMedidaSeleccionada && (
-                            <span className="text-blue-600 ml-2 text-xs font-bold">
-                                ({unidadMedidaSeleccionada})
-                            </span>
+                      <ul className="pd-combo-menu" role="listbox">
+                        {productosFiltrados.length > 0 ? (
+                          productosFiltrados.map((prod) => {
+                            const stock = parseFloat(prod.stock_actual || 0);
+                            return (
+                              <li key={prod.id_producto}>
+                                <button type="button" role="option" aria-selected={formData.id_producto_terminado == prod.id_producto}
+                                  onClick={() => handleSeleccionarProducto(prod)}>
+                                  <span>
+                                    <b>{prod.codigo}</b>
+                                    <small>{prod.nombre}</small>
+                                  </span>
+                                  <span className={`pd-tag ${stock > 0 ? 'is-success' : 'is-danger'}`}>Stock {stock.toFixed(2)}</span>
+                                </button>
+                              </li>
+                            );
+                          })
+                        ) : (
+                          <li className="pd-combo-empty">No se encontraron productos</li>
                         )}
-                    </label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="form-input pl-9"
-                            value={formData.cantidad_unidades}
-                            onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}
-                            required={esProductoLamina}
-                            placeholder={unidadMedidaSeleccionada ? `Ej: 100 ${unidadMedidaSeleccionada}` : "0"}
-                        />
-                        <Hash className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    </div>
-                </div>
-
-                {!esProductoLamina && (
-                    <div className="form-group">
-                        <label className="form-label">Total Kilos Estimados (Insumos) *</label>
-                        <div className="relative">
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                className="form-input pl-9"
-                                value={formData.cantidad_planificada}
-                                onChange={(e) => setFormData({ ...formData, cantidad_planificada: e.target.value })}
-                                required
-                                placeholder="0.00"
-                            />
-                            <Package className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                        </div>
-                    </div>
-                )}
-
-                <div className="form-group">
-                    <label className="form-label">Turno *</label>
-                    <div className="relative">
-                        <select
-                            className="form-select pl-9"
-                            value={formData.turno}
-                            onChange={(e) => setFormData({ ...formData, turno: e.target.value })}
-                            required
-                        >
-                            <option value="Día">Día</option>
-                            <option value="Noche">Noche</option>
-                        </select>
-                        <Clock className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 bg-gray-50 p-3 rounded border border-gray-100">
-                <div className="form-group">
-                    <label className="form-label text-xs">Medida (Opcional)</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            className="form-input text-sm pl-8"
-                            value={formData.medida}
-                            onChange={(e) => setFormData({ ...formData, medida: e.target.value })}
-                            placeholder="Ej: 50x70 cm"
-                        />
-                        <Ruler className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
-                    </div>
-                </div>
-                <div className="form-group">
-                    <label className="form-label text-xs">Peso Unitario (Opcional)</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            className="form-input text-sm pl-8"
-                            value={formData.peso_producto}
-                            onChange={(e) => setFormData({ ...formData, peso_producto: e.target.value })}
-                            placeholder="Ej: 200g"
-                        />
-                        <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
-                    </div>
-                </div>
-                <div className="form-group">
-                    <label className="form-label text-xs">Gramaje (Opcional)</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            className="form-input text-sm pl-8"
-                            value={formData.gramaje}
-                            onChange={(e) => setFormData({ ...formData, gramaje: e.target.value })}
-                            placeholder="Ej: 150 micras"
-                        />
-                        <Info className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
-                    </div>
-                </div>
-            </div>
-            
-            <div className="border-t border-gray-100 my-4 pt-4">
-                <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
-                    <Users size={16} /> Personal Asignado
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="form-group">
-                        <label className="form-label text-xs">Supervisor *</label>
-                        <select
-                            className="form-select text-sm"
-                            value={formData.id_supervisor}
-                            onChange={(e) => setFormData({ ...formData, id_supervisor: e.target.value })}
-                            required
-                        >
-                            <option value="">Seleccionar...</option>
-                            {supervisores.map(sup => (
-                                <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {esProductoLamina ? (
-                        <>
-                            <div className="form-group">
-                                <label className="form-label text-xs">Operario de Corte</label>
-                                <input
-                                    type="text"
-                                    className="form-input text-sm"
-                                    value={formData.operario_corte}
-                                    onChange={(e) => setFormData({ ...formData, operario_corte: e.target.value })}
-                                    placeholder="Encargado del corte"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label text-xs">Operario de Embalaje</label>
-                                <input
-                                    type="text"
-                                    className="form-input text-sm"
-                                    value={formData.operario_embalaje}
-                                    onChange={(e) => setFormData({ ...formData, operario_embalaje: e.target.value })}
-                                    placeholder="Encargado de embalaje"
-                                />
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="form-group">
-                                <label className="form-label text-xs">Maquinista</label>
-                                <input
-                                    type="text"
-                                    className="form-input text-sm"
-                                    value={formData.maquinista}
-                                    onChange={(e) => setFormData({ ...formData, maquinista: e.target.value })}
-                                    placeholder="Nombre del maquinista"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label text-xs">Ayudante</label>
-                                <input
-                                    type="text"
-                                    className="form-input text-sm"
-                                    value={formData.ayudante}
-                                    onChange={(e) => setFormData({ ...formData, ayudante: e.target.value })}
-                                    placeholder="Nombre del ayudante"
-                                />
-                            </div>
-                        </>
+                      </ul>
                     )}
-                </div>
-            </div>
+                  </div>
 
-            <div className="form-group">
-              <label className="form-label">Observaciones</label>
-              <textarea
-                className="form-textarea"
-                value={formData.observaciones}
-                onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                rows={2}
-                placeholder="Notas adicionales..."
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="card">
-                <div className="card-header">
-                    <h2 className="card-title">Configuración</h2>
-                </div>
-                <div className="flex flex-col gap-2">
-                    <button
-                        type="button"
-                        className={`btn text-left ${modoReceta === 'porcentaje' && !esProductoLamina ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => {
-                            if (!esProductoLamina) setModoReceta('porcentaje');
-                        }}
-                        disabled={esProductoLamina}
-                    >
-                        <Star size={18} className="mr-2" />
-                        <div>
-                            <div className="font-bold">Por Porcentajes</div>
-                            <div className="text-xs opacity-80">Calcula kilos autom.</div>
-                        </div>
-                    </button>
-                    <button
-                        type="button"
-                        className={`btn text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
-                        onClick={() => setModoReceta('manual')}
-                        disabled={esProductoLamina}
-                    >
-                        <Zap size={18} className="mr-2" />
-                        <div>
-                            <div className="font-bold">{esProductoLamina ? 'Orden de Conversión' : 'Orden Manual'}</div>
-                            <div className="text-xs opacity-80">{esProductoLamina ? 'Selección de rollos posterior' : 'Sin insumos iniciales'}</div>
-                        </div>
-                    </button>
-                </div>
-            </div>
-
-            {modoReceta === 'porcentaje' && !esProductoLamina && (
-                <div className="card bg-gray-50">
-                    <div className="p-3">
-                        <div className="flex justify-between items-end mb-2">
-                            <div>
-                                <p className="text-xs text-muted">Costo Estimado</p>
-                                <p className="text-xl font-bold text-success">{formatearMoneda(costoTotalEstimado)}</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-xs text-muted">Total Insumos</p>
-                                <p className="text-lg font-bold">{listaInsumos.length}</p>
-                            </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                            <span className="text-xs font-medium">Suma Porcentajes:</span>
-                            <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
-                                {porcentajeActualTotal.toFixed(2)}%
-                            </span>
-                        </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-unidades">
+                      Meta en unidades{esProductoLamina ? ' *' : ''}
+                      {unidadMedidaSeleccionada && <span className="pg-muted"> · {unidadMedidaSeleccionada}</span>}
+                    </label>
+                    <div className="input-with-icon">
+                      <Hash size={16} className="icon" />
+                      <input
+                        id="co-unidades"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="form-input"
+                        value={formData.cantidad_unidades}
+                        onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}
+                        required={esProductoLamina}
+                        placeholder={unidadMedidaSeleccionada ? `Ej: 100 ${unidadMedidaSeleccionada}` : '0'}
+                      />
                     </div>
-                </div>
-            )}
-          </div>
-        </div>
+                  </div>
 
-        {modoReceta === 'porcentaje' && !esProductoLamina && (
-            <div className="card">
-                <div className="card-header flex justify-between items-center">
-                    <h2 className="card-title">Composición de la Mezcla</h2>
-                    <button
-                        type="button"
-                        className="btn btn-sm btn-primary"
-                        onClick={abrirModalInsumo}
-                        disabled={!formData.cantidad_planificada}
-                    >
-                        <Plus size={16} /> Agregar Insumo
-                    </button>
+                  {!esProductoLamina && (
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="co-kilos">Kilos estimados de insumos *</label>
+                      <div className="input-with-icon">
+                        <Scale size={16} className="icon" />
+                        <input
+                          id="co-kilos"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="form-input"
+                          value={formData.cantidad_planificada}
+                          onChange={(e) => setFormData({ ...formData, cantidad_planificada: e.target.value })}
+                          required
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <span className="form-label">Turno *</span>
+                    <div className="pg-segmented" role="radiogroup" aria-label="Turno">
+                      {[{ id: 'Día', icon: Sun }, { id: 'Noche', icon: Moon }].map(t => {
+                        const Icono = t.icon;
+                        return (
+                          <button key={t.id} type="button" role="radio" aria-checked={formData.turno === t.id}
+                            className={formData.turno === t.id ? 'active' : ''} onClick={() => setFormData({ ...formData, turno: t.id })}>
+                            <Icono size={13} /> {t.id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Ruler size={16} /> Especificaciones</h2>
+                <span className="pg-panel-meta">Opcional</span>
+              </div>
+              <div className="pg-panel-body">
+                <div className="pd-form-grid pd-cols-3">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-medida">Medida</label>
+                    <div className="input-with-icon">
+                      <Ruler size={14} className="icon" />
+                      <input id="co-medida" type="text" className="form-input" value={formData.medida}
+                        onChange={(e) => setFormData({ ...formData, medida: e.target.value })} placeholder="Ej: 50x70 cm" />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-peso">Peso unitario</label>
+                    <div className="input-with-icon">
+                      <Scale size={14} className="icon" />
+                      <input id="co-peso" type="text" className="form-input" value={formData.peso_producto}
+                        onChange={(e) => setFormData({ ...formData, peso_producto: e.target.value })} placeholder="Ej: 200 g" />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-gramaje">Gramaje</label>
+                    <div className="input-with-icon">
+                      <Info size={14} className="icon" />
+                      <input id="co-gramaje" type="text" className="form-input" value={formData.gramaje}
+                        onChange={(e) => setFormData({ ...formData, gramaje: e.target.value })} placeholder="Ej: 150 micras" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Users size={16} /> Personal asignado</h2>
+              </div>
+              <div className="pg-panel-body">
+                <div className="pd-form-grid pd-cols-3">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="co-supervisor">Supervisor *</label>
+                    <select id="co-supervisor" className="form-select" value={formData.id_supervisor}
+                      onChange={(e) => setFormData({ ...formData, id_supervisor: e.target.value })} required>
+                      <option value="">Seleccionar…</option>
+                      {supervisores.map(sup => (
+                        <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {esProductoLamina ? (
+                    <>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="co-corte">Operario de corte</label>
+                        <input id="co-corte" type="text" className="form-input" value={formData.operario_corte}
+                          onChange={(e) => setFormData({ ...formData, operario_corte: e.target.value })} placeholder="Encargado del corte" />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="co-embalaje">Operario de embalaje</label>
+                        <input id="co-embalaje" type="text" className="form-input" value={formData.operario_embalaje}
+                          onChange={(e) => setFormData({ ...formData, operario_embalaje: e.target.value })} placeholder="Encargado de embalaje" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="co-maquinista">Maquinista</label>
+                        <input id="co-maquinista" type="text" className="form-input" value={formData.maquinista}
+                          onChange={(e) => setFormData({ ...formData, maquinista: e.target.value })} placeholder="Nombre del maquinista" />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="co-ayudante">Ayudante</label>
+                        <input id="co-ayudante" type="text" className="form-input" value={formData.ayudante}
+                          onChange={(e) => setFormData({ ...formData, ayudante: e.target.value })} placeholder="Nombre del ayudante" />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="form-group m-0">
+                  <label className="form-label" htmlFor="co-observaciones">Observaciones</label>
+                  <textarea id="co-observaciones" className="form-textarea" value={formData.observaciones}
+                    onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })} rows={2} placeholder="Notas adicionales…" />
+                </div>
+              </div>
+            </section>
+
+            {usaMezcla && (
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h2 className="pg-panel-title"><Layers size={16} /> Composición de la mezcla <span className="pg-count">{listaInsumos.length}</span></h2>
+                  <button type="button" className="btn btn-sm btn-primary" onClick={abrirModalInsumo} disabled={!formData.cantidad_planificada}>
+                    <Plus size={15} /> Agregar insumo
+                  </button>
                 </div>
 
                 {!formData.cantidad_planificada ? (
-                    <div className="p-8 text-center text-muted">
-                        <AlertCircle size={40} className="mx-auto mb-2 opacity-20" />
-                        <p>Ingrese la cantidad total en kilos para habilitar la calculadora de insumos</p>
-                    </div>
+                  <div className="pg-empty">
+                    <AlertCircle size={28} />
+                    <strong>Primero indica los kilos estimados</strong>
+                    <span>Con ese total se calculan los kilos de cada insumo según su porcentaje.</span>
+                  </div>
                 ) : (
-                    <div className="table-container">
-                        <table className="table table-mobile">
-                            <thead>
-                                <tr>
-                                    <th>Insumo</th>
-                                    <th className="text-center">Porcentaje (%)</th>
-                                    <th className="text-right">Calculado (Kg)</th>
-                                    <th className="text-right">Stock</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {listaInsumos.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="text-center py-4 text-muted">No hay insumos agregados</td>
-                                    </tr>
-                                ) : (
-                                    listaInsumos.map(item => {
-                                        const calculado = calcularCantidadInsumo(item.porcentaje);
-                                        const tieneStock = item.stock_actual >= calculado;
-                                        return (
-                                            <tr key={item.id_insumo}>
-                                                <td data-label="Insumo">
-                                                    <div className="font-medium">{item.codigo_insumo}</div>
-                                                    <div className="text-xs text-muted">{item.insumo}</div>
-                                                </td>
-                                                <td data-label="Porcentaje (%)" className="text-center font-bold text-blue-600">
-                                                    {`${item.porcentaje}%`}
-                                                </td>
-                                                <td data-label="Calculado (Kg)" className="text-right font-mono font-bold">
-                                                    {`${calculado.toFixed(2)} Kg`}
-                                                </td>
-                                                <td data-label="Stock" className="text-right">
-                                                    <span className={tieneStock ? 'text-success' : 'text-danger'}>
-                                                        {item.stock_actual.toFixed(2)}
-                                                    </span>
-                                                </td>
-                                                <td data-label="">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-danger p-1"
-                                                        onClick={() => eliminarInsumoLista(item.id_insumo)}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-        )}
-
-        {esProductoLamina && formData.id_producto_terminado && (
-            <div className="card">
-                <div className="card-header flex justify-between items-center">
-                    <div>
-                        <h2 className="card-title">Rollos a Consumir</h2>
-                        <p className="text-xs text-muted mt-1">
-                            Solo se muestran los rollos cuyo ancho coincide con las medidas de la lámina.
-                            La cantidad consumida se registra durante la producción.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        className="btn btn-sm btn-primary"
-                        onClick={() => { setRolloSeleccionado(''); setModalAgregarRollo(true); }}
-                    >
-                        <Plus size={16} /> Agregar Rollo
-                    </button>
-                </div>
-
-                <div className="table-container">
-                    <table className="table table-mobile">
-                        <thead>
-                            <tr>
-                                <th>Rollo</th>
-                                <th className="text-right">Stock</th>
-                                <th></th>
+                  <div className="pg-table-wrap">
+                    <table className="pg-table">
+                      <thead>
+                        <tr>
+                          <th>Insumo</th>
+                          <th className="num">Porcentaje</th>
+                          <th className="num">Calculado</th>
+                          <th className="num">Stock</th>
+                          <th className="center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listaInsumos.length === 0 ? (
+                          <tr>
+                            <td colSpan={5}>
+                              <div className="pg-empty">
+                                <Layers size={24} />
+                                <strong>Sin insumos</strong>
+                                <span>Agrega los insumos hasta sumar 100%.</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : listaInsumos.map(item => {
+                          const calculado = calcularCantidadInsumo(item.porcentaje);
+                          const tieneStock = item.stock_actual >= calculado;
+                          return (
+                            <tr key={item.id_insumo}>
+                              <td>
+                                <span className="pg-cell-main">{item.insumo}</span>
+                                <span className="pg-cell-sub">{item.codigo_insumo}</span>
+                              </td>
+                              <td className="num"><b className="text-primary">{item.porcentaje}%</b></td>
+                              <td className="num"><b>{calculado.toFixed(2)}</b> kg</td>
+                              <td className="num">
+                                <span className={`pd-tag ${tieneStock ? 'is-success' : 'is-danger'}`}>
+                                  {tieneStock ? <CheckCircle size={11} /> : <AlertTriangle size={11} />}
+                                  {item.stock_actual.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="center">
+                                <button type="button" className="pg-iconbtn" onClick={() => eliminarInsumoLista(item.id_insumo)}
+                                  title="Quitar insumo" aria-label={`Quitar ${item.insumo}`}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {listaRollos.length === 0 ? (
-                                <tr>
-                                    <td colSpan="3" className="text-center py-4 text-muted">
-                                        No hay rollos seleccionados. Puede agregarlos aquí o durante la producción.
-                                    </td>
-                                </tr>
-                            ) : (
-                                listaRollos.map(item => (
-                                    <tr key={item.id_insumo}>
-                                        <td data-label="Rollo">
-                                            <div className="font-medium">{item.codigo}</div>
-                                            <div className="text-xs text-muted">{item.nombre}</div>
-                                        </td>
-                                        <td data-label="Stock" className="text-right">
-                                            <span className={item.stock_actual > 0 ? 'text-success' : 'text-danger'}>
-                                                {item.stock_actual.toFixed(2)} {item.unidad_medida}
-                                            </span>
-                                        </td>
-                                        <td data-label="">
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm btn-danger p-1"
-                                                onClick={() => eliminarRollo(item.id_insumo)}
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
+                          );
+                        })}
+                      </tbody>
+                      {listaInsumos.length > 0 && (
+                        <tfoot>
+                          <tr className="pd-total-row">
+                            <td>Total</td>
+                            <td className={`num ${porcentajeCompleto ? 'text-success' : 'text-danger'}`}>{porcentajeActualTotal.toFixed(2)}%</td>
+                            <td className="num">{kilosMezcla.toFixed(2)} kg</td>
+                            <td colSpan={2} className="num">{formatearMoneda(costoTotalEstimado)}</td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
-                </div>
-            </div>
-        )}
+                  </div>
+                )}
+              </section>
+            )}
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end mt-4">
-          <button
-            type="button"
-            className="btn btn-outline w-full sm:w-auto"
-            onClick={() => navigate('/produccion/ordenes')}
-            disabled={guardando}
-          >
+            {esProductoLamina && formData.id_producto_terminado && (
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <div>
+                    <h2 className="pg-panel-title"><Layers size={16} /> Rollos a consumir <span className="pg-count">{listaRollos.length}</span></h2>
+                    <span className="pg-panel-meta">Solo rollos cuyo ancho coincide con la lámina. La cantidad se registra en producción.</span>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-primary" onClick={() => { setRolloSeleccionado(''); setModalAgregarRollo(true); }}>
+                    <Plus size={15} /> Agregar rollo
+                  </button>
+                </div>
+                <div className="pg-table-wrap">
+                  <table className="pg-table">
+                    <thead>
+                      <tr>
+                        <th>Rollo</th>
+                        <th className="num">Stock</th>
+                        <th className="center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listaRollos.length === 0 ? (
+                        <tr>
+                          <td colSpan={3}>
+                            <div className="pg-empty">
+                              <Layers size={24} />
+                              <strong>Sin rollos seleccionados</strong>
+                              <span>Puedes agregarlos ahora o durante la producción.</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : listaRollos.map(item => (
+                        <tr key={item.id_insumo}>
+                          <td>
+                            <span className="pg-cell-main">{item.nombre}</span>
+                            <span className="pg-cell-sub">{item.codigo}</span>
+                          </td>
+                          <td className="num">
+                            <span className={`pd-tag ${item.stock_actual > 0 ? 'is-success' : 'is-danger'}`}>
+                              {item.stock_actual.toFixed(2)} {item.unidad_medida}
+                            </span>
+                          </td>
+                          <td className="center">
+                            <button type="button" className="pg-iconbtn" onClick={() => eliminarRollo(item.id_insumo)}
+                              title="Quitar rollo" aria-label={`Quitar ${item.nombre}`}>
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </div>
+
+          <aside className="pd-create-aside">
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><Star size={16} /> Tipo de orden</h2>
+              </div>
+              <div className="pg-panel-body pd-vstack" role="radiogroup" aria-label="Tipo de orden">
+                <button type="button" role="radio" aria-checked={usaMezcla}
+                  className={`pd-option is-accent ${usaMezcla ? 'on' : ''}`}
+                  onClick={() => { if (!esProductoLamina) setModoReceta('porcentaje'); }}
+                  disabled={esProductoLamina}>
+                  <Star size={18} />
+                  <span>
+                    <strong>Por porcentajes</strong>
+                    <small>Calcula los kilos de cada insumo automáticamente.</small>
+                  </span>
+                </button>
+                <button type="button" role="radio" aria-checked={modoReceta === 'manual'}
+                  className={`pd-option is-warning ${modoReceta === 'manual' ? 'on' : ''}`}
+                  onClick={() => setModoReceta('manual')}
+                  disabled={esProductoLamina}>
+                  <Zap size={18} />
+                  <span>
+                    <strong>{esProductoLamina ? 'Orden de conversión' : 'Orden manual'}</strong>
+                    <small>{esProductoLamina ? 'Los rollos se eligen arriba o durante la producción.' : 'Sin insumos iniciales.'}</small>
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            {usaMezcla && (
+              <section className="pg-panel">
+                <div className="pg-panel-head">
+                  <h2 className="pg-panel-title"><BarChart size={16} /> Resumen de la mezcla</h2>
+                </div>
+                <div className="pg-panel-body pd-vstack">
+                  <div>
+                    <span className="pg-field-label">Costo estimado</span>
+                    <div className="pd-summary-value">{formatearMoneda(costoTotalEstimado)}</div>
+                  </div>
+                  <div>
+                    <div className="pd-progress-top">
+                      <span>Suma de porcentajes</span>
+                      <b className={porcentajeCompleto ? 'text-success' : 'text-danger'}>{porcentajeActualTotal.toFixed(2)}%</b>
+                    </div>
+                    <div className="pg-meter" style={{ '--meter-c': porcentajeCompleto ? 'var(--success)' : porcentajeActualTotal > 100 ? 'var(--danger)' : 'var(--warning)' }}>
+                      <span style={{ width: `${Math.min(porcentajeActualTotal, 100)}%` }} />
+                    </div>
+                  </div>
+                  <div className="pg-kv">
+                    <div><span>Insumos</span><strong>{listaInsumos.length}</strong></div>
+                    <div><span>Kilos</span><strong>{kilosMezcla.toFixed(2)} kg</strong></div>
+                    {insumosSinStock > 0 && <div className="wide"><span>Atención</span><strong className="text-danger">{insumosSinStock} sin stock suficiente</strong></div>}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section className="pg-panel">
+              <div className="pg-panel-head">
+                <h2 className="pg-panel-title"><CheckCircle size={16} /> Antes de crear</h2>
+              </div>
+              <div className="pg-panel-body">
+                {pendientes.length === 0 ? (
+                  <p className="pd-ready"><CheckCircle size={15} /> Todo listo para crear la orden.</p>
+                ) : (
+                  <ul className="pd-checklist">
+                    {pendientes.map(p => <li key={p}><AlertCircle size={13} /> {p}</li>)}
+                  </ul>
+                )}
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <div className="pd-form-footer">
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')} disabled={guardando}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            className="btn btn-primary w-full sm:w-auto"
-            disabled={guardando || !formData.id_producto_terminado}
-          >
-            {guardando ? 'Creando...' : 'Crear Orden'}
+          <button type="submit" className="btn btn-primary" disabled={guardando || !formData.id_producto_terminado}>
+            <CheckCircle size={16} /> {guardando ? 'Creando…' : 'Crear orden'}
           </button>
         </div>
       </form>

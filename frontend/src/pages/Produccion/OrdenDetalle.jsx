@@ -7,7 +7,7 @@ import {
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon,
   Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History, ShieldCheck,
-  Paperclip, Image, Download, Eye, X
+  Paperclip, Image, Download, Eye, X, Factory
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
@@ -15,6 +15,8 @@ import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalNuevaIncidencia from '../Calidad/ModalNuevaIncidencia';
+import { BadgeEstadoProduccion, BadgePrioridad } from './estadosProduccion';
+import './Produccion.css';
 
 const extraerMedidas = (nombre) => {
   if (!nombre) return [];
@@ -1079,19 +1081,6 @@ function OrdenDetalle() {
     return `${horas}h ${mins}m`;
   };
 
-  const getBadgeEstado = (estado) => {
-    const badges = {
-      'Pendiente Asignación': 'badge-warning',
-      'Pendiente': 'badge-secondary',
-      'En Curso': 'badge-primary',
-      'En Pausa': 'badge-warning',
-      'Finalizada': 'badge-success',
-      'Cancelada': 'badge-danger',
-      'Anulada': 'badge-danger'
-    };
-    return badges[estado] || 'badge-secondary';
-  };
-
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0) + (parseFloat(item.cantidad_ya_consumida) || 0), 0);
   const sumaRequeridaFinal = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad_requerida) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
@@ -1102,6 +1091,13 @@ function OrdenDetalle() {
 
   const porcentajeActualTotal = listaInsumos.reduce((sum, item) => sum + item.porcentaje, 0);
   const porcentajeEdicionTotal = insumosEdicion.reduce((sum, item) => sum + item.porcentaje, 0);
+
+  useEffect(() => {
+    if (!adjuntoVisor) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setAdjuntoVisor(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [adjuntoVisor]);
 
   if (loading) {
     return <Loading variant="detail" />;
@@ -1140,19 +1136,150 @@ function OrdenDetalle() {
   const tieneRegistrosParciales = registrosParciales && registrosParciales.length > 0;
   const tieneConsumoMateriales = consumoMateriales && consumoMateriales.length > 0;
 
+  const metaUnd = parseFloat(orden.cantidad_unidades || 0);
+  const realUnd = parseFloat(orden.cantidad_unidades_producida || 0);
+  const metaKg = parseFloat(orden.cantidad_planificada || 0);
+  const realKg = parseFloat(orden.cantidad_producida || 0);
+  const avanceUnd = metaUnd > 0 ? (realUnd / metaUnd) * 100 : 0;
+  const avanceKg = metaKg > 0 ? (realKg / metaKg) * 100 : 0;
+
+  const diasParaEntrega = (() => {
+    if (!orden.fecha_estimada_venta) return null;
+    const base = String(orden.fecha_estimada_venta).split('T')[0];
+    const objetivo = new Date(`${base}T00:00:00`);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Math.round((objetivo - hoy) / 86400000);
+  })();
+
+  const textoDiasEntrega = diasParaEntrega === null
+    ? ''
+    : diasParaEntrega > 1 ? `Faltan ${diasParaEntrega} días`
+      : diasParaEntrega === 1 ? 'Mañana'
+        : diasParaEntrega === 0 ? 'Hoy'
+          : `Vencida hace ${Math.abs(diasParaEntrega)} día${Math.abs(diasParaEntrega) === 1 ? '' : 's'}`;
+
+  const ordenTerminada = ['Finalizada', 'Cancelada', 'Anulada'].includes(orden.estado);
+  const diferenciaCosto = analisisConsumo?.resumen?.diferencia || 0;
+  const costoMostrado = analisisConsumo ? analisisConsumo.resumen.costo_real : orden.costo_materiales;
+
+  const abrirParcial = () => {
+    setCantidadUnidadesParcial('');
+    setObservacionesParcial('');
+    setMermas([]);
+    setMostrarMermas(false);
+    inicializarInsumosParaParcial();
+    cargarProductosMerma();
+    setModalParcial(true);
+  };
+
+  const abrirFinalizar = () => {
+    setCantidadUnidadesFinal('');
+    setObservacionesFinal('');
+    setMermas([]);
+    setMostrarMermas(false);
+    setFinalizarVieneDeParcial(false);
+    inicializarInsumosParaFinal();
+    cargarProductosMerma();
+    setModalFinalizar(true);
+  };
+
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <button className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')}>
-          <ArrowLeft size={20} className="mr-2" />
-          Volver a Órdenes
+    <div className="pg-page">
+      <div className="pd-topbar">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/produccion/ordenes')}>
+          <ArrowLeft size={16} /> Órdenes de producción
         </button>
         {puedeRegistrarIncidencia && (
-          <button className="btn btn-danger flex items-center gap-2" onClick={() => setModalIncidencia(true)}>
-            <AlertTriangle size={18} /> Registrar Incidencia
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setModalIncidencia(true)}>
+            <AlertTriangle size={15} className="text-danger" /> Registrar incidencia
           </button>
         )}
       </div>
+
+      <header className="pg-header">
+        <div>
+          <span className="pg-eyebrow"><Factory size={13} /> Orden de producción</span>
+          <h1 className="pg-title">{orden.numero_orden}</h1>
+          <p className="pg-subtitle"><b>{orden.producto}</b> · {orden.codigo_producto}</p>
+          <div className="pg-drawer-badges">
+            <BadgeEstadoProduccion estado={orden.estado} />
+            {desdeOrdenVenta ? (
+              <span className="badge badge-info"><ShoppingCart size={11} /> Desde O.V.</span>
+            ) : (
+              <span className="badge badge-secondary"><UserCog size={11} /> Interna</span>
+            )}
+            {orden.es_manual === 1 && <span className="badge badge-warning"><Zap size={11} /> Manual</span>}
+            {orden.resultado_calidad && (
+              <span className={`badge ${orden.resultado_calidad === 'Aprobado' ? 'badge-success' : orden.resultado_calidad === 'Observado' ? 'badge-warning' : 'badge-danger'}`}>
+                <ShieldCheck size={11} /> Calidad: {orden.resultado_calidad}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="pd-header-actions">
+          <div className="pg-actions">
+            <button type="button" className="btn btn-outline btn-sm" onClick={handleDescargarPDF} disabled={procesando} title="Descargar la orden en PDF">
+              <FileText size={15} /> Orden PDF
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={handleDescargarHojaRuta} disabled={procesando} title="Hoja de ruta para el operario">
+              <Clipboard size={15} /> Hoja de ruta
+            </button>
+            {puedeEditar && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={inicializarEdicion} disabled={procesando}>
+                <Edit size={15} /> Editar
+              </button>
+            )}
+            {!['Cancelada', 'Anulada'].includes(orden.estado) && !esComercial && (
+              <button type="button" className="btn btn-ghost btn-sm text-danger" onClick={() => setModalAnular(true)} disabled={procesando} title="Revertir toda la producción e inventario">
+                <Trash2 size={15} /> Anular
+              </button>
+            )}
+          </div>
+
+          {(puedeAsignar || puedeIniciar || puedePausar || puedeReanudar || puedeRegistrarParcial || puedeFinalizar ||
+            (orden.estado === 'Finalizada' && (user?.rol === 'Calidad' || user?.rol === 'Administrador') && !orden.resultado_calidad)) && (
+            <div className="pg-actions">
+              {puedeAsignar && (
+                <button type="button" className="btn btn-primary" onClick={() => { cargarSupervisores(); setModalAsignar(true); }} disabled={procesando}>
+                  <Users size={16} /> {esPendienteAsignacionDesdeVenta ? 'Configurar orden' : 'Asignar personal'}
+                </button>
+              )}
+              {puedeIniciar && (
+                <button type="button" className="btn btn-primary" onClick={handleIniciar} disabled={procesando}>
+                  <Play size={16} /> Iniciar producción
+                </button>
+              )}
+              {puedePausar && (
+                <button type="button" className="btn btn-outline" onClick={handlePausar} disabled={procesando}>
+                  <Pause size={16} /> Pausar
+                </button>
+              )}
+              {puedeReanudar && (
+                <button type="button" className="btn btn-primary" onClick={handleReanudar} disabled={procesando}>
+                  <Play size={16} /> Reanudar
+                </button>
+              )}
+              {puedeRegistrarParcial && (
+                <button type="button" className="btn btn-outline" onClick={abrirParcial} disabled={procesando}>
+                  <Layers size={16} /> Registro parcial
+                </button>
+              )}
+              {puedeFinalizar && (
+                <button type="button" className="btn btn-success" onClick={abrirFinalizar} disabled={procesando}>
+                  <CheckCircle size={16} /> Finalizar
+                </button>
+              )}
+              {orden.estado === 'Finalizada' && (user?.rol === 'Calidad' || user?.rol === 'Administrador') && !orden.resultado_calidad && (
+                <button type="button" className="btn btn-primary" onClick={() => { setResultadoCalidad(''); setObservacionCalidad(''); setModalCalidad(true); }} disabled={procesando}>
+                  <ShieldCheck size={16} /> Verificar calidad
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </header>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
@@ -1178,671 +1305,373 @@ function OrdenDetalle() {
         onClose={() => setModalCalidad(false)}
         title={<span className="flex items-center gap-2"><ShieldCheck className="text-primary" /> Verificación de Calidad</span>}
       >
-        <p className="text-sm text-muted mb-4">Registra el resultado de la inspección de calidad de la orden <strong>{orden.numero_orden}</strong>.</p>
+        <p className="text-sm text-muted mb-2">Registra el resultado de la inspección de calidad de la orden <strong>{orden.numero_orden}</strong>.</p>
         <div className="form-group">
           <label className="form-label">Resultado <span className="text-danger">*</span></label>
-          <div className="flex flex-col gap-2">
+          <div className="pd-vstack" role="radiogroup" aria-label="Resultado de calidad">
             {[
-              { val: 'Aprobado', desc: 'El producto cumple con las especificaciones.', cls: 'border-success text-success' },
-              { val: 'Observado', desc: 'Cumple con observaciones. Se generará una incidencia.', cls: 'border-warning text-warning' },
-              { val: 'Rechazado', desc: 'No cumple. Se generará una incidencia.', cls: 'border-danger text-danger' }
-            ].map(op => (
-              <button
-                key={op.val}
-                type="button"
-                className={`text-left p-3 rounded-lg border-2 transition-colors ${resultadoCalidad === op.val ? op.cls + ' bg-gray-50' : 'border-gray-200 hover:bg-gray-50'}`}
-                onClick={() => setResultadoCalidad(op.val)}
-              >
-                <div className="font-semibold">{op.val}</div>
-                <div className="text-xs text-muted">{op.desc}</div>
-              </button>
-            ))}
+              { val: 'Aprobado', desc: 'El producto cumple con las especificaciones.', tono: 'is-success', icon: CheckCircle },
+              { val: 'Observado', desc: 'Cumple con observaciones. Se generará una incidencia.', tono: 'is-warning', icon: AlertTriangle },
+              { val: 'Rechazado', desc: 'No cumple. Se generará una incidencia.', tono: 'is-danger', icon: XCircle }
+            ].map(op => {
+              const Icono = op.icon;
+              return (
+                <button
+                  key={op.val}
+                  type="button"
+                  role="radio"
+                  aria-checked={resultadoCalidad === op.val}
+                  className={`pd-option ${op.tono} ${resultadoCalidad === op.val ? 'on' : ''}`}
+                  onClick={() => setResultadoCalidad(op.val)}
+                >
+                  <Icono size={18} />
+                  <span>
+                    <strong>{op.val}</strong>
+                    <small>{op.desc}</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
-        <div className="form-group mt-3">
+        <div className="form-group">
           <label className="form-label">Observación {(resultadoCalidad === 'Rechazado' || resultadoCalidad === 'Observado') && <span className="text-muted">(se incluirá en la incidencia)</span>}</label>
-          <textarea className="form-input" rows={3} value={observacionCalidad} onChange={(e) => setObservacionCalidad(e.target.value)} placeholder="Detalle de la inspección..." />
+          <textarea className="form-textarea" rows={3} value={observacionCalidad} onChange={(e) => setObservacionCalidad(e.target.value)} placeholder="Detalle de la inspección..." />
         </div>
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex justify-end gap-2 mt-2">
           <button className="btn btn-outline" onClick={() => setModalCalidad(false)} disabled={procesando}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleVerificarCalidad} disabled={procesando}>
+          <button className="btn btn-primary" onClick={handleVerificarCalidad} disabled={procesando || !resultadoCalidad}>
             {procesando ? 'Registrando...' : 'Registrar verificación'}
           </button>
         </div>
       </Modal>
 
-      {desdeOrdenVenta && (
-        <div className="card border-l-4 border-info bg-blue-50 mb-4">
-          <div className="card-body py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ShoppingCart size={24} className="text-info" />
-                <div>
-                  <p className="font-medium text-blue-900 flex items-center gap-2">
-                    Orden de Venta: {orden.numero_orden_venta || 'N/A'}
-                  </p>
-                  <p className="text-sm text-blue-700">
-                    Cliente a la espera de producción
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-4 text-sm">
-                  {orden.prioridad_venta && (
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs text-blue-600 uppercase font-semibold">Prioridad</span>
-                      <span className={`badge ${
-                        orden.prioridad_venta === 'Alta' ? 'badge-error' : 
-                        orden.prioridad_venta === 'Media' ? 'badge-warning' : 'badge-success'
-                      }`}>
-                        {orden.prioridad_venta}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {orden.fecha_estimada_venta && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-xs text-blue-600 uppercase font-semibold">Fecha Prometida</span>
-                      <span className="font-bold text-blue-900">
-                        {formatearFecha(orden.fecha_estimada_venta)}
-                      </span>
-                    </div>
-                  )}
-              </div>
+      <div className="pg-stack">
+        {desdeOrdenVenta && (
+          <section className="pd-ov-strip">
+            <span className="pd-ov-icon"><ShoppingCart size={18} /></span>
+            <div className="pd-ov-main">
+              <span className="pg-field-label">Orden de venta</span>
+              <strong>{orden.numero_orden_venta || 'N/A'}</strong>
+              <small>Cliente a la espera de producción</small>
             </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
-        <div>
-          <h1 className="card-title text-xl sm:text-2xl font-bold">O.P.: {orden.numero_orden}</h1>
-          <div className="flex flex-wrap gap-2 items-center mt-2">
-            <span className={`badge ${getBadgeEstado(orden.estado)}`}>{orden.estado}</span>
-            {desdeOrdenVenta ? (
-              <span className="badge badge-info flex items-center gap-1">
-                <ShoppingCart size={14} /> Desde O.V.
-              </span>
-            ) : (
-              <span className="badge badge-secondary flex items-center gap-1">
-                <UserCog size={14} /> Supervisor
-              </span>
+            {orden.prioridad_venta && (
+              <div className="pd-ov-item">
+                <span className="pg-field-label">Prioridad</span>
+                <BadgePrioridad prioridad={orden.prioridad_venta} />
+              </div>
             )}
-            {orden.es_manual === 1 && (
-              <span className="badge badge-warning flex items-center gap-1">
-                <Zap size={14} /> Manual
-              </span>
+            {orden.fecha_estimada_venta && (
+              <div className="pd-ov-item">
+                <span className="pg-field-label">Fecha prometida</span>
+                <strong>{formatearFecha(orden.fecha_estimada_venta)}</strong>
+                {!ordenTerminada && (
+                  <small className={diasParaEntrega < 0 ? 'text-danger' : diasParaEntrega <= 2 ? 'text-warning' : ''}>{textoDiasEntrega}</small>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        <div className="pg-kpis">
+          <div className={`pg-kpi ${avanceUnd >= 100 ? 'is-success' : 'is-accent'}`}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Avance en {unidadProduccion.toLowerCase()}</span>
+              <span className="pg-kpi-icon"><Package size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{fmtUnid(realUnd)}<small style={{ marginLeft: '0.35rem' }}>/ {metaUnd > 0 ? fmtUnid(metaUnd) : '—'}</small></span>
+            <span className="pg-kpi-foot">{metaUnd > 0 ? <><b>{avanceUnd.toFixed(1)}%</b> de la meta</> : 'Sin meta en unidades'}</span>
+            {metaUnd > 0 && (
+              <div className="pg-meter" style={{ '--meter-c': avanceUnd > 100 ? 'var(--warning)' : 'var(--info)' }}>
+                <span style={{ width: `${Math.min(avanceUnd, 100)}%` }} />
+              </div>
             )}
           </div>
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={handleDescargarPDF}
-            disabled={procesando}
-            title="Descargar Orden de Producción en PDF"
-          >
-            <FileText size={16} className="mr-1" /> Orden PDF
-          </button>
+          <div className={`pg-kpi ${avanceKg >= 100 ? 'is-success' : 'is-accent'}`}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Avance en kilos</span>
+              <span className="pg-kpi-icon"><Scale size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{realKg.toFixed(2)}<small style={{ marginLeft: '0.35rem' }}>/ {metaKg.toFixed(2)} kg</small></span>
+            <span className="pg-kpi-foot">{metaKg > 0 ? <><b>{avanceKg.toFixed(1)}%</b> de la meta</> : 'Sin meta en kilos'}</span>
+            {metaKg > 0 && (
+              <div className="pg-meter" style={{ '--meter-c': avanceKg > 100 ? 'var(--warning)' : 'var(--success)' }}>
+                <span style={{ width: `${Math.min(avanceKg, 100)}%` }} />
+              </div>
+            )}
+          </div>
 
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={handleDescargarHojaRuta}
-            disabled={procesando}
-            title="Descargar Hoja de Ruta para Operario"
-          >
-            <Clipboard size={16} className="mr-1" /> Hoja de Ruta
-          </button>
+          <div className="pg-kpi is-info">
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Tiempo total</span>
+              <span className="pg-kpi-icon"><Clock size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{formatearTiempo(orden.tiempo_total_minutos)}</span>
+            <span className="pg-kpi-foot">{orden.fecha_inicio ? <>Inicio <b>{formatearFecha(orden.fecha_inicio)}</b></> : 'Aún no inicia'}</span>
+          </div>
 
-          {puedeEditar && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={inicializarEdicion}
-              disabled={procesando}
-            >
-              <Edit size={16} className="mr-1" /> Editar
-            </button>
-          )}
-
-          {puedeAsignar && (
-            <button
-              className="btn btn-warning btn-sm"
-              onClick={() => { cargarSupervisores(); setModalAsignar(true); }}
-              disabled={procesando}
-            >
-              <AlertCircle size={16} className="mr-1" />
-              {esPendienteAsignacionDesdeVenta ? 'Configurar' : 'Asignar Personal'}
-            </button>
-          )}
-          {puedeIniciar && (
-            <button className="btn btn-success btn-sm" onClick={handleIniciar} disabled={procesando}>
-              <Play size={16} className="mr-1" /> Iniciar
-            </button>
-          )}
-          {puedePausar && (
-            <button className="btn btn-warning btn-sm" onClick={handlePausar} disabled={procesando}>
-              <Pause size={16} className="mr-1" /> Pausar
-            </button>
-          )}
-          {puedeReanudar && (
-            <button className="btn btn-primary btn-sm" onClick={handleReanudar} disabled={procesando}>
-              <Play size={16} className="mr-1" /> Reanudar
-            </button>
-          )}
-          {puedeRegistrarParcial && (
-            <button
-              className="btn btn-info btn-sm"
-              onClick={() => {
-                setCantidadUnidadesParcial('');
-                setObservacionesParcial('');
-                setMermas([]);
-                setMostrarMermas(false);
-                inicializarInsumosParaParcial();
-                cargarProductosMerma();
-                setModalParcial(true);
-              }}
-              disabled={procesando}
-            >
-              <Layers size={16} className="mr-1" /> Parcial
-            </button>
-          )}
-          {puedeFinalizar && (
-            <button
-              className="btn btn-success btn-sm"
-              onClick={() => {
-                setCantidadUnidadesFinal('');
-                setObservacionesFinal('');
-                setMermas([]);
-                setMostrarMermas(false);
-                setFinalizarVieneDeParcial(false);
-                inicializarInsumosParaFinal();
-                cargarProductosMerma();
-                setModalFinalizar(true);
-              }}
-              disabled={procesando}
-            >
-              <CheckCircle size={16} className="mr-1" /> Finalizar
-            </button>
-          )}
-
-          {orden.estado === 'Finalizada' &&
-           (user?.rol === 'Calidad' || user?.rol === 'Administrador') &&
-           !orden.resultado_calidad && (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => { setResultadoCalidad(''); setObservacionCalidad(''); setModalCalidad(true); }}
-              disabled={procesando}
-            >
-              <ShieldCheck size={16} className="mr-1" /> Verificar Calidad
-            </button>
-          )}
-
-          {orden.estado === 'Finalizada' && orden.resultado_calidad && (
-            <span className={`badge ${orden.resultado_calidad === 'Aprobado' ? 'badge-success' : orden.resultado_calidad === 'Observado' ? 'badge-warning' : 'badge-danger'} flex items-center gap-1`}>
-              <ShieldCheck size={14} /> Calidad: {orden.resultado_calidad}
+          <div className={`pg-kpi ${diferenciaCosto > 0 ? 'is-warning' : 'is-success'}`}>
+            <div className="pg-kpi-top">
+              <span className="pg-kpi-label">Costo de materiales</span>
+              <span className="pg-kpi-icon"><BarChart size={16} /></span>
+            </div>
+            <span className="pg-kpi-value">{formatearMoneda(costoMostrado)}</span>
+            <span className="pg-kpi-foot">
+              {diferenciaCosto > 0 && <><TrendingUp size={12} className="text-warning" /> Sobrecosto <b>{formatearMoneda(diferenciaCosto)}</b></>}
+              {diferenciaCosto < 0 && <><TrendingDown size={12} className="text-success" /> Ahorro <b>{formatearMoneda(Math.abs(diferenciaCosto))}</b></>}
+              {diferenciaCosto === 0 && `${consumoMateriales.length} insumos registrados`}
             </span>
-          )}
-
-          {!['Cancelada', 'Anulada'].includes(orden.estado) && !esComercial && (
-            <button
-              className="btn btn-danger btn-sm"
-              onClick={() => setModalAnular(true)}
-              disabled={procesando}
-              title="Revertir toda la producción e inventario"
-            >
-              <Trash2 size={16} className="mr-1" /> Anular
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div className="card">
-          <div className="card-header flex items-center gap-2">
-            <ClipboardList size={18} className="text-gray-500" />
-            <h2 className="card-title">Información General</h2>
           </div>
-          <div className="p-4 grid gap-3">
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Producto</p>
-              <p className="font-bold">{orden.producto}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Código</p>
-              <p>{orden.codigo_producto}</p>
-            </div>
-            
-            {(orden.medida || orden.peso_producto || orden.gramaje) && (
-                <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded border border-gray-100 mt-1">
-                    {orden.medida && (
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Ruler size={10}/> Medida</p>
-                            <p className="text-xs font-bold">{orden.medida}</p>
-                        </div>
-                    )}
-                    {orden.peso_producto && (
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Scale size={10}/> Peso</p>
-                            <p className="text-xs font-bold">{orden.peso_producto}</p>
-                        </div>
-                    )}
-                    {orden.gramaje && (
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Info size={10}/> Gramaje</p>
-                            <p className="text-xs font-bold">{orden.gramaje}</p>
-                        </div>
-                    )}
-                </div>
-            )}
+        </div>
 
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Supervisor</p>
-              <p>{orden.supervisor || '-'}</p>
+        <div className="pd-grid-3">
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><ClipboardList size={16} /> Producto</h2>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Turno</p>
-                    <p>{orden.turno || '-'}</p>
-                </div>
-                
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div className="wide"><span>Producto</span><strong>{orden.producto}</strong></div>
+                <div><span>Código</span><strong>{orden.codigo_producto}</strong></div>
+                <div><span>Unidad</span><strong>{unidadProduccion}</strong></div>
+                {orden.medida && <div><span><Ruler size={10} /> Medida</span><strong>{orden.medida}</strong></div>}
+                {orden.peso_producto && <div><span><Scale size={10} /> Peso</span><strong>{orden.peso_producto}</strong></div>}
+                {orden.gramaje && <div><span><Info size={10} /> Gramaje</span><strong>{orden.gramaje}</strong></div>}
+              </div>
+            </div>
+          </section>
+
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><Users size={16} /> Equipo</h2>
+            </div>
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div className="wide"><span>Supervisor</span><strong>{orden.supervisor || 'Sin asignar'}</strong></div>
+                <div><span>Turno</span><strong>{orden.turno || '—'}</strong></div>
                 {esLamina ? (
-                    <>
-                        <div className="col-span-2 grid grid-cols-2 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
-                            <div>
-                                <p className="text-xs text-blue-800 uppercase font-semibold">Corte</p>
-                                <p className="text-sm font-medium">{orden.operario_corte || '-'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-blue-800 uppercase font-semibold">Embalaje</p>
-                                <p className="text-sm font-medium">{orden.operario_embalaje || '-'}</p>
-                            </div>
-                        </div>
-                    </>
+                  <>
+                    <div><span>Corte</span><strong>{orden.operario_corte || '—'}</strong></div>
+                    <div><span>Embalaje</span><strong>{orden.operario_embalaje || '—'}</strong></div>
+                  </>
                 ) : (
-                    <>
-                        <div>
-                            <p className="text-xs text-muted uppercase font-semibold">Maquinista</p>
-                            <p>{orden.maquinista || '-'}</p>
-                        </div>
-                        {orden.ayudante && (
-                            <div className="col-span-2">
-                                <p className="text-xs text-muted uppercase font-semibold">Ayudante</p>
-                                <p>{orden.ayudante}</p>
-                            </div>
-                        )}
-                    </>
+                  <>
+                    <div><span>Maquinista</span><strong>{orden.maquinista || '—'}</strong></div>
+                    {orden.ayudante && <div><span>Ayudante</span><strong>{orden.ayudante}</strong></div>}
+                  </>
                 )}
-            </div>
-
-            {desdeOrdenVenta && orden.numero_orden_venta && (
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold">Orden de Venta</p>
-                <p className="font-mono text-info">{orden.numero_orden_venta}</p>
               </div>
-            )}
-          </div>
+            </div>
+          </section>
+
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><CalendarIcon size={16} /> Fechas</h2>
+            </div>
+            <div className="pg-panel-body">
+              <div className="pg-kv">
+                <div className="wide">
+                  <span>Programación</span>
+                  <strong>
+                    {orden.fecha_programada
+                      ? <>{formatearFecha(orden.fecha_programada)}{orden.fecha_programada_fin && orden.fecha_programada_fin !== orden.fecha_programada && <> al {formatearFecha(orden.fecha_programada_fin)}</>}</>
+                      : <span className="pg-muted">No programada</span>}
+                  </strong>
+                </div>
+                <div><span>Inicio</span><strong>{formatearFecha(orden.fecha_inicio)}</strong></div>
+                <div><span>Fin</span><strong>{formatearFecha(orden.fecha_fin)}</strong></div>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className="card">
-          <div className="card-header flex items-center gap-2">
-            <BarChart size={18} className="text-gray-500" />
-            <h2 className="card-title">Producción</h2>
-          </div>
-          <div className="p-4 grid gap-3">
-            <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-100">
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Meta {unidadProduccion}</p>
-                    <p className="font-bold text-lg text-blue-600">
-                        {orden.cantidad_unidades ? fmtUnid(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
-                    </p>
-                </div>
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Meta Kilos</p>
-                    <p className="font-bold text-lg">
-                        {parseFloat(orden.cantidad_planificada).toFixed(2)} <span className="text-xs font-normal text-muted">Kg</span>
-                    </p>
-                </div>
+        {tieneRegistrosParciales && (
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><Layers size={16} /> Registros parciales <span className="pg-count">{registrosParciales.length}</span></h2>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Real {unidadProduccion}</p>
-                    <p className={`font-bold text-lg ${orden.cantidad_unidades_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {orden.cantidad_unidades_producida ? fmtUnid(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
-                    </p>
-                </div>
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Real Kilos</p>
-                    <p className={`font-bold text-lg ${orden.cantidad_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {parseFloat(orden.cantidad_producida || 0).toFixed(2)} <span className="text-xs font-normal text-muted">Kg</span>
-                    </p>
-                </div>
-            </div>
-            {parseFloat(orden.cantidad_unidades || 0) > 0 && (
-              <div className="pt-1">
-                <p className="text-xs text-muted uppercase font-semibold">Cumplimiento ({unidadProduccion})</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-blue-600 h-2.5 rounded-full"
-                         style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_unidades_producida || 0) / parseFloat(orden.cantidad_unidades)) * 100)}%` }}></div>
-                  </div>
-                  <span className="text-xs font-bold">
-                    {`${((parseFloat(orden.cantidad_unidades_producida || 0) / parseFloat(orden.cantidad_unidades)) * 100).toFixed(1)}%`}
-                  </span>
-                </div>
-              </div>
-            )}
-            {parseFloat(orden.cantidad_planificada || 0) > 0 && (
-              <div className="pt-1">
-                <p className="text-xs text-muted uppercase font-semibold">Cumplimiento (Kilos)</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-blue-600 h-2.5 rounded-full"
-                         style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100)}%` }}></div>
-                  </div>
-                  <span className="text-xs font-bold">
-                    {`${((parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100).toFixed(1)}%`}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header flex items-center gap-2">
-            <Clock size={18} className="text-gray-500" />
-            <h2 className="card-title">Tiempos y Costos</h2>
-          </div>
-          <div className="p-4 grid gap-3">
-            <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                <p className="text-xs text-blue-700 uppercase font-semibold flex items-center gap-1">
-                    <CalendarIcon size={12}/> Programación
-                </p>
-                {orden.fecha_programada ? (
-                    <div>
-                        <p className="text-sm font-medium text-blue-900">
-                            {formatearFecha(orden.fecha_programada)}
-                            {orden.fecha_programada_fin && orden.fecha_programada_fin !== orden.fecha_programada && (
-                                <> al {formatearFecha(orden.fecha_programada_fin)}</>
-                            )}
-                        </p>
-                    </div>
-                ) : (
-                    <p className="text-sm text-gray-500 italic">No programada</p>
-                )}
-            </div>
-
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Ejecución (Inicio / Fin)</p>
-              <p className="text-sm">{formatearFecha(orden.fecha_inicio)}</p>
-              <p className="text-sm">{formatearFecha(orden.fecha_fin)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Tiempo Total</p>
-              <p className="font-bold flex items-center gap-1">
-                <Clock size={14} /> {formatearTiempo(orden.tiempo_total_minutos)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Costo de Materiales</p>
-              <p className="font-bold text-lg text-primary flex items-center gap-1">
-                {formatearMoneda(orden.costo_materiales)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {registrosParciales.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header flex items-center gap-2">
-            <Layers size={18} className="text-info" />
-            <h2 className="card-title">Historial de Registros Parciales ({registrosParciales.length})</h2>
-          </div>
-          <div className="table-container p-0">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Fecha y Hora</th>
-                  <th className="text-center">Cant. {unidadProduccion}</th>
-                  <th className="text-right">Peso (Kg)</th>
-                  <th>Detalle Insumos</th>
-                  <th>Registrado Por</th>
-                  <th>Observaciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registrosParciales.map(registro => (
-                  <tr key={registro.id_registro}>
-                    <td>{formatearFecha(registro.fecha_registro)}</td>
-                    <td className="text-center font-bold text-blue-600">
-                        {registro.cantidad_unidades_registrada ? fmtUnid(registro.cantidad_unidades_registrada) : '-'}
-                    </td>
-                    <td className="text-right font-bold">
-                      {parseFloat(registro.cantidad_registrada).toFixed(2)} Kg
-                    </td>
-                    <td className="text-xs text-gray-600 max-w-xs break-words">
-                      {registro.detalle_insumos || '-'}
-                    </td>
-                    <td>{registro.registrado_por || '-'}</td>
-                    <td className="text-sm text-muted">{registro.observaciones || '-'}</td>
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>Fecha y hora</th>
+                    <th className="num">{unidadProduccion}</th>
+                    <th className="num">Peso</th>
+                    <th>Insumos</th>
+                    <th>Registrado por</th>
+                    <th>Observaciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {registrosParciales.map(registro => (
+                    <tr key={registro.id_registro}>
+                      <td className="nowrap">{formatearFecha(registro.fecha_registro)}</td>
+                      <td className="num"><b>{registro.cantidad_unidades_registrada ? fmtUnid(registro.cantidad_unidades_registrada) : '—'}</b></td>
+                      <td className="num">{parseFloat(registro.cantidad_registrada).toFixed(2)} kg</td>
+                      <td><span className="pg-cell-sub" style={{ maxWidth: 320 }}>{registro.detalle_insumos || '—'}</span></td>
+                      <td className="nowrap">{registro.registrado_por || '—'}</td>
+                      <td className="pg-muted">{registro.observaciones || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
-      {orden.observaciones && (
-        <div className="card mb-4">
-          <div className="card-header flex items-center gap-2">
-            <FileText size={18} className="text-gray-500" />
-            <h2 className="card-title">Observaciones</h2>
-          </div>
-          <div className="p-4">
-            <p className="text-sm text-gray-700" style={{ whiteSpace: 'pre-line' }}>{orden.observaciones}</p>
-          </div>
-        </div>
-      )}
+        {tieneConsumoMateriales && (
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><Package size={16} /> Materiales consumidos <span className="pg-count">{consumoMateriales.length}</span></h2>
+              {analisisConsumo && diferenciaCosto !== 0 && (
+                <span className={`badge ${diferenciaCosto > 0 ? 'badge-warning' : 'badge-success'}`}>
+                  {diferenciaCosto > 0
+                    ? <><TrendingUp size={12} /> Sobrecosto {formatearMoneda(diferenciaCosto)}</>
+                    : <><TrendingDown size={12} /> Ahorro {formatearMoneda(Math.abs(diferenciaCosto))}</>}
+                </span>
+              )}
+            </div>
+            <div className="pg-table-wrap">
+              <table className="pg-table">
+                <thead>
+                  <tr>
+                    <th>Insumo</th>
+                    <th className="num">Plan</th>
+                    <th className="num">Real</th>
+                    <th>Avance</th>
+                    <th className="num">% mezcla</th>
+                    {analisisConsumo && <th className="num">Diferencia</th>}
+                    <th className="num">Costo unit.</th>
+                    <th className="num">Costo total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consumoMateriales.map((item) => {
+                    const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
+                    const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
+                    const plan = parseFloat(item.cantidad_requerida);
+                    const real = parseFloat(item.cantidad_real_consumida || 0);
+                    const porcentajeAvance = plan > 0 ? (real / plan) * 100 : 0;
+                    const porcentajeMezcla = totalMasaRealConsumida > 0 ? (real / totalMasaRealConsumida) * 100 : 0;
+                    const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                    const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                    const decimales = esRollo ? 0 : 4;
 
-      {consumoMateriales.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header flex items-center gap-2">
-            <Package size={18} className="text-gray-500" />
-            <h2 className="card-title">Materiales Consumidos ({consumoMateriales.length})</h2>
-            {analisisConsumo && analisisConsumo.resumen.diferencia !== 0 && (
-              <span className={`badge ml-auto ${analisisConsumo.resumen.diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
-                {analisisConsumo.resumen.diferencia > 0 ? (
-                  <><TrendingUp size={14} /> Sobrecosto: {formatearMoneda(analisisConsumo.resumen.diferencia)}</>
-                ) : (
-                  <><TrendingDown size={14} /> Ahorro: {formatearMoneda(Math.abs(analisisConsumo.resumen.diferencia))}</>
-                )}
-              </span>
+                    return (
+                      <tr key={item.id_consumo}>
+                        <td>
+                          <span className="pg-cell-main">{item.insumo}</span>
+                          <span className="pg-cell-sub">{item.codigo_insumo}</span>
+                        </td>
+                        <td className="num pg-muted">{plan.toFixed(decimales)} <small>{unidadMostrar}</small></td>
+                        <td className="num"><b>{real.toFixed(decimales)}</b> <small className="pg-muted">{unidadMostrar}</small></td>
+                        <td style={{ minWidth: 120 }}>
+                          <span className="pg-cell-sub">{porcentajeAvance.toFixed(0)}%</span>
+                          <div className="pg-meter" style={{ marginTop: 4, '--meter-c': porcentajeAvance > 100 ? 'var(--warning)' : 'var(--success)' }}>
+                            <span style={{ width: `${Math.min(porcentajeAvance, 100)}%` }} />
+                          </div>
+                        </td>
+                        <td className="num">{porcentajeMezcla.toFixed(2)}%</td>
+                        {analisisConsumo && (
+                          <td className="num">
+                            {diferencia !== 0
+                              ? <span className={`badge ${diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>{diferencia > 0 ? '+' : ''}{diferencia.toFixed(4)}</span>
+                              : <span className="pg-muted">—</span>}
+                          </td>
+                        )}
+                        <td className="num">{formatearMoneda(item.costo_unitario)}</td>
+                        <td className="num"><b>{formatearMoneda(analisisItem ? analisisItem.costo_real : (real * parseFloat(item.costo_unitario)))}</b></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="pd-total-row">
+                    <td colSpan={analisisConsumo ? 7 : 6} className="num">Total materiales</td>
+                    <td className="num">{formatearMoneda(costoMostrado)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {orden.observaciones && (
+          <section className="pg-panel">
+            <div className="pg-panel-head">
+              <h2 className="pg-panel-title"><FileText size={16} /> Observaciones</h2>
+            </div>
+            <div className="pg-panel-body">
+              <p className="pd-observaciones">{orden.observaciones}</p>
+            </div>
+          </section>
+        )}
+
+        <section className="pg-panel">
+          <div className="pg-panel-head">
+            <h2 className="pg-panel-title"><Paperclip size={16} /> Fotos y adjuntos <span className="pg-count">{adjuntos.length}</span></h2>
+            {puedeSubirAdjunto && (
+              <div className="pg-actions" aria-busy={subiendoAdjunto} style={subiendoAdjunto ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
+                <label className="btn btn-primary btn-sm">
+                  <Image size={14} /> {subiendoAdjunto ? 'Subiendo…' : 'Tomar foto'}
+                  <input type="file" accept="image/*" capture="environment" hidden onChange={handleSubirAdjunto} disabled={subiendoAdjunto} />
+                </label>
+                <label className="btn btn-outline btn-sm">
+                  <Paperclip size={14} /> Adjuntar archivo
+                  <input type="file" accept="image/*,application/pdf,.doc,.docx" hidden onChange={handleSubirAdjunto} disabled={subiendoAdjunto} />
+                </label>
+              </div>
             )}
           </div>
-
-          <div className="table-container p-0">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Insumo</th>
-                  <th className="text-right">Estimado (Plan)</th>
-                  <th className="text-right">Real Consumido</th>
-                  <th className="text-center">Avance</th>
-                  <th className="text-center">% Mezcla Real</th>
-                  {analisisConsumo && <th className="text-right">Diferencia</th>}
-                  <th className="text-right">Costo Unit.</th>
-                  <th className="text-right">Costo Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {consumoMateriales.map((item) => {
-                  const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
-                  const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
-                  const plan = parseFloat(item.cantidad_requerida);
-                  const real = parseFloat(item.cantidad_real_consumida || 0);
-                  const porcentajeAvance = plan > 0 ? Math.min(100, (real / plan) * 100) : 0;
-                  const porcentajeMezcla = totalMasaRealConsumida > 0 ? (real / totalMasaRealConsumida) * 100 : 0;
-                  
-                  const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
-                  const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
-                    
-                  return (
-                    <tr key={item.id_consumo}>
-                      <td className="font-mono text-xs">{item.codigo_insumo}</td>
-                      <td className="font-medium">{item.insumo}</td>
-                      <td className="text-right text-muted">
-                        {plan.toFixed(esRollo ? 0 : 4)} <span className="text-xs">{unidadMostrar}</span>
-                      </td>
-                      <td className="text-right font-bold">
-                          {real.toFixed(esRollo ? 0 : 4)} <span className="text-xs text-muted">{unidadMostrar}</span>
-                      </td>
-                      <td className="text-center" style={{ width: '120px' }}>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                             <div className={`h-1.5 rounded-full ${porcentajeAvance > 100 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, porcentajeAvance)}%` }}></div>
-                          </div>
-                          <span className="text-xs text-muted">{porcentajeAvance.toFixed(0)}%</span>
-                      </td>
-                      <td className="text-center text-xs font-medium text-blue-600">
-                          {porcentajeMezcla.toFixed(2)}%
-                      </td>
-                      {analisisConsumo && (
-                        <td className="text-right">
-                          {diferencia !== 0 ? (
-                            <span className={`badge ${diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
-                              {diferencia > 0 ? '+' : ''}{diferencia.toFixed(4)}
-                            </span>
-                          ) : (
-                            <span className="text-muted">-</span>
-                          )}
-                        </td>
-                      )}
-                      <td className="text-right">{formatearMoneda(item.costo_unitario)}</td>
-                      <td className="text-right font-bold">
-                        {formatearMoneda(analisisItem ? analisisItem.costo_real : (real * parseFloat(item.costo_unitario)))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 font-bold">
-                  <td colSpan={analisisConsumo ? 8 : 7} className="text-right">
-                    TOTAL MATERIALES:
-                  </td>
-                  <td className="text-right text-lg text-primary">
-                    {analisisConsumo ? formatearMoneda(analisisConsumo.resumen.costo_real) : formatearMoneda(orden.costo_materiales)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <div className="card mt-4">
-        <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Paperclip size={18} className="text-primary" />
-            <h2 className="card-title">Fotos y Adjuntos ({adjuntos.length})</h2>
-          </div>
-          {puedeSubirAdjunto && (
-            <div className={`flex gap-2 ${subiendoAdjunto ? 'opacity-50 pointer-events-none' : ''}`}>
-              <label className="btn btn-primary btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
-                <Image size={14} /> {subiendoAdjunto ? 'Subiendo...' : 'Tomar foto'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleSubirAdjunto}
-                  disabled={subiendoAdjunto}
-                />
-              </label>
-              <label className="btn btn-outline btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
-                <Paperclip size={14} /> Adjuntar archivo
-                <input
-                  type="file"
-                  accept="image/*,application/pdf,.doc,.docx"
-                  className="hidden"
-                  onChange={handleSubirAdjunto}
-                  disabled={subiendoAdjunto}
-                />
-              </label>
-            </div>
-          )}
-        </div>
-        <div className="p-4">
-          {adjuntos.length === 0 ? (
-            <p className="text-muted text-sm text-center py-6">No hay fotos ni archivos adjuntos.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {adjuntos.map(adj => (
-                <div key={adj.id_adjunto} className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col">
-                  {adj.tipo_archivo === 'imagen' ? (
-                    <button
-                      className="block w-full aspect-square"
-                      onClick={() => setAdjuntoVisor(adj)}
-                    >
-                      <img
-                        src={adj.url}
-                        alt={adj.nombre_archivo}
-                        className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                      />
-                    </button>
-                  ) : (
-                    <a
-                      href={adj.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex flex-col items-center justify-center aspect-square gap-2 hover:bg-gray-100 transition-colors px-2"
-                    >
-                      <FileText size={28} className="text-gray-400 shrink-0" />
-                      <span className="text-xs text-center text-gray-600 truncate w-full">{adj.nombre_archivo}</span>
-                    </a>
-                  )}
-                  <div className="p-2 border-t border-gray-100 flex items-start justify-between gap-1 bg-white">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-gray-700 truncate">{adj.nombre_archivo}</p>
-                      <p className="text-xs text-muted truncate">{adj.subido_por || 'Desconocido'}</p>
-                    </div>
-                    {puedeSubirAdjunto && (
-                      <button
-                        className="btn btn-sm btn-danger p-1 shrink-0"
-                        onClick={() => handleEliminarAdjunto(adj.id_adjunto)}
-                        title="Eliminar"
-                      >
-                        <Trash2 size={14} />
+          <div className="pg-panel-body">
+            {adjuntos.length === 0 ? (
+              <div className="pg-empty">
+                <Image size={26} />
+                <strong>Sin fotos ni archivos</strong>
+                {puedeSubirAdjunto && <span>Toma una foto del lote o adjunta un documento de la producción.</span>}
+              </div>
+            ) : (
+              <div className="pd-gallery">
+                {adjuntos.map(adj => (
+                  <figure key={adj.id_adjunto} className="pd-gallery-item">
+                    {adj.tipo_archivo === 'imagen' ? (
+                      <button type="button" className="pd-gallery-media" onClick={() => setAdjuntoVisor(adj)} aria-label={`Ver ${adj.nombre_archivo}`}>
+                        <img src={adj.url} alt={adj.nombre_archivo} loading="lazy" />
                       </button>
+                    ) : (
+                      <a href={adj.url} target="_blank" rel="noopener noreferrer" className="pd-gallery-media is-file">
+                        <FileText size={28} />
+                        <span>{adj.nombre_archivo}</span>
+                      </a>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                    <figcaption>
+                      <span>
+                        <b title={adj.nombre_archivo}>{adj.nombre_archivo}</b>
+                        <small>{adj.subido_por || 'Desconocido'}</small>
+                      </span>
+                      {puedeSubirAdjunto && (
+                        <button type="button" className="pg-iconbtn" onClick={() => handleEliminarAdjunto(adj.id_adjunto)} title="Eliminar" aria-label={`Eliminar ${adj.nombre_archivo}`}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
       {adjuntoVisor && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setAdjuntoVisor(null)}
-        >
-          <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
-            <button
-              className="modal-close absolute top-2 right-2 bg-black/40 hover:bg-black/60 text-white z-10"
-              onClick={() => setAdjuntoVisor(null)}
-            >
-              <X size={20} />
+        <div className="pd-lightbox" onClick={() => setAdjuntoVisor(null)} role="dialog" aria-modal="true" aria-label={adjuntoVisor.nombre_archivo}>
+          <div className="pd-lightbox-inner" onClick={e => e.stopPropagation()}>
+            <button type="button" className="pg-iconbtn pd-lightbox-close" onClick={() => setAdjuntoVisor(null)} aria-label="Cerrar" autoFocus>
+              <X size={18} />
             </button>
-            <img
-              src={adjuntoVisor.url}
-              alt={adjuntoVisor.nombre_archivo}
-              className="w-full max-h-[85vh] object-contain rounded"
-            />
-            <p className="text-white text-sm mt-2 text-center">{adjuntoVisor.nombre_archivo}</p>
+            <img src={adjuntoVisor.url} alt={adjuntoVisor.nombre_archivo} />
+            <p>{adjuntoVisor.nombre_archivo}</p>
           </div>
         </div>
       )}
@@ -1859,9 +1688,9 @@ function OrdenDetalle() {
       >
         <form onSubmit={handleRegistroParcial}>
           {alcanzaMetaEnParcial ? (
-            <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-4 flex gap-3">
-              <CheckCircle className="text-green-500 shrink-0 mt-0.5" size={20} />
-              <div className="text-sm text-green-800">
+            <div className="pd-callout is-success">
+              <CheckCircle className="text-success shrink-0" size={20} />
+              <div className="pd-callout-text">
                 <p className="font-bold">Esta cantidad completa la producción planificada</p>
                 <p className="mt-1">
                   Acumulado: <strong>{yaKgAcumulado.toFixed(2)} Kg</strong>
@@ -1870,25 +1699,25 @@ function OrdenDetalle() {
                   {kilosParcialCalculados > 0 && <><strong>{kilosParcialCalculados.toFixed(2)} Kg</strong>&nbsp;</>}
                   {undNuevasParcial > 0 && <strong>{undNuevasParcial} {unidadProduccion}</strong>}
                   &nbsp;=&nbsp;
-                  <strong className="text-green-700">
+                  <strong className="text-success">
                     {(yaKgAcumulado + kilosParcialCalculados).toFixed(2)} Kg
                     {metaUndOrden > 0 && ` · ${yaUndAcumulado + undNuevasParcial} ${unidadProduccion}`}
                   </strong>
                 </p>
-                <p className="text-xs mt-1 text-green-600">Al confirmar, pasarás directamente al cierre de la orden con estos mismos datos.</p>
+                <p className="pd-callout-note">Al confirmar, pasarás directamente al cierre de la orden con estos mismos datos.</p>
               </div>
             </div>
           ) : (
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-              <Info className="text-blue-500 shrink-0" size={20} />
-              <div className="text-sm text-blue-700">
+            <div className="pd-callout is-info">
+              <Info className="text-info shrink-0" size={20} />
+              <div className="pd-callout-text">
                 <p><strong>Registro Parcial:</strong> Registre la cantidad de unidades fabricadas y los insumos consumidos. El peso total se calculará automáticamente.</p>
                 <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> Kg</p>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="pd-form-grid pd-cols-2">
             <div className="form-group">
                 <label className="form-label">Cantidad {unidadProduccion} *</label>
                 <div className="relative input-with-icon">
@@ -1897,7 +1726,7 @@ function OrdenDetalle() {
                         type="number"
                         step="0.01"
                         min="0"
-                        className="form-input pl-8"
+                        className="form-input"
                         value={cantidadUnidadesParcial}
                         onChange={(e) => setCantidadUnidadesParcial(e.target.value)}
                         placeholder="0"
@@ -1908,9 +1737,9 @@ function OrdenDetalle() {
 
             <div className="form-group">
               <label className="form-label text-muted">Peso Calculado (Estimado)</label>
-              <div className="form-input bg-gray-100 flex items-center justify-between text-gray-700 font-bold">
+              <div className="form-input pd-readout">
                  <span>{kilosParcialCalculados.toFixed(2)}</span>
-                 <span className="text-xs font-normal">Kg</span>
+                 <span className="text-xs text-muted">Kg</span>
               </div>
               <small className="text-muted block mt-1">
                 Suma automática de los insumos ingresados abajo.
@@ -1929,11 +1758,11 @@ function OrdenDetalle() {
             />
           </div>
 
-          <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="pd-section">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Package size={18} className="text-primary" />
-                <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados' : 'Consumo de Insumos'} *</h3>
+                <h3 className="pd-section-title">{esLamina ? 'Rollos Utilizados' : 'Consumo de Insumos'} *</h3>
               </div>
               <button
                 type="button"
@@ -1944,8 +1773,8 @@ function OrdenDetalle() {
               </button>
             </div>
 
-            <div className="space-y-2 max-h-80 overflow-y-auto table-container">
-              <table className="table table-sm">
+            <div className="table-container pd-scroll-md">
+              <table className="table pd-table-compact">
                  <thead>
                     <tr>
                         <th>Insumo</th>
@@ -1965,7 +1794,7 @@ function OrdenDetalle() {
                               <div className="font-medium text-sm">{item.insumo}</div>
                               <div className="text-xs text-muted">{item.codigo_insumo}</div>
                               {item.cantidad_ya_consumida > 0 && (
-                                <div className="text-xs text-blue-600 mt-1">
+                                <div className="text-xs text-info">
                                   Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
                                 </div>
                               )}
@@ -2007,11 +1836,11 @@ function OrdenDetalle() {
             </div>
           </div>
 
-          <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="pd-section">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={18} className="text-warning" />
-                <h3 className="font-semibold">Registro de Mermas (Opcional)</h3>
+                <h3 className="pd-section-title">Registro de Mermas (Opcional)</h3>
               </div>
               <button
                 type="button"
@@ -2023,11 +1852,11 @@ function OrdenDetalle() {
             </div>
 
             {mostrarMermas && (
-              <div className="space-y-3">
+              <div className="pd-vstack">
                 {mermas.map((merma) => (
-                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
-                    <div className="grid grid-cols-12 gap-2 items-start">
-                      <div className="col-span-5">
+                  <div key={merma.id_temp} className="pd-subcard">
+                    <div className="pd-merma-row">
+                      <div>
                         <label className="form-label text-xs">Tipo de Merma</label>
                         <select
                           className="form-select form-select-sm"
@@ -2044,7 +1873,7 @@ function OrdenDetalle() {
                         </select>
                       </div>
 
-                      <div className="col-span-3">
+                      <div>
                         <label className="form-label text-xs">Cantidad (Kg)</label>
                         <input
                           type="number"
@@ -2063,7 +1892,7 @@ function OrdenDetalle() {
                         )}
                       </div>
 
-                      <div className="col-span-3">
+                      <div>
                           <label className="form-label text-xs">Observación</label>
                           <input
                           type="text"
@@ -2073,7 +1902,7 @@ function OrdenDetalle() {
                         />
                       </div>
 
-                      <div className="col-span-1 flex items-end">
+                      <div>
                         <button
                           type="button"
                           className="btn btn-sm btn-danger w-full"
@@ -2099,7 +1928,7 @@ function OrdenDetalle() {
 
           <div className="mt-6">
             {alcanzaMetaEnParcial && (
-              <p className="text-xs text-green-700 text-right mb-2">
+              <p className="pd-callout-note text-right mb-1">
                 Los insumos y mermas ingresados se trasladarán al cierre final de la orden.
               </p>
             )}
@@ -2193,25 +2022,25 @@ function OrdenDetalle() {
       >
         <form onSubmit={handleFinalizar}>
           {finalizarVieneDeParcial ? (
-            <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-4 flex gap-3">
-              <CheckCircle className="text-green-500 shrink-0 mt-0.5" size={20} />
-              <div className="text-sm text-green-800">
+            <div className="pd-callout is-success">
+              <CheckCircle className="text-success shrink-0" size={20} />
+              <div className="pd-callout-text">
                 <p className="font-bold">Datos trasladados desde el registro parcial</p>
                 <p className="mt-1">Las cantidades, insumos y mermas ya están cargados. Revísalos antes de confirmar el cierre.</p>
-                <p className="mt-1 text-xs text-green-600">Ya producidas (parciales anteriores): <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{fmtUnid(orden.cantidad_unidades_producida)} {unidadProduccion}</strong></p>
+                <p className="pd-callout-note">Ya producidas (parciales anteriores): <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{fmtUnid(orden.cantidad_unidades_producida)} {unidadProduccion}</strong></p>
               </div>
             </div>
           ) : (
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-              <Info className="text-blue-500 shrink-0" size={20} />
-              <div className="text-sm text-blue-700">
+            <div className="pd-callout is-info">
+              <Info className="text-info shrink-0" size={20} />
+              <div className="pd-callout-text">
                 <p><strong>Cierre de Orden:</strong> Ingrese las cantidades <strong>ADICIONALES</strong> producidas en este cierre (no el total acumulado).</p>
                 <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{fmtUnid(orden.cantidad_unidades_producida)} {unidadProduccion}</strong></p>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="pd-form-grid pd-cols-2">
               <div className="form-group">
                 <label className="form-label">Cant. {unidadProduccion} (Adicional)</label>
                 <div className="relative input-with-icon">
@@ -2233,7 +2062,7 @@ function OrdenDetalle() {
                 <label className="form-label text-muted">Peso Adicional Calculado</label>
                 <div className="relative input-with-icon">
                     <Scale className="icon" size={16} />
-                    <div className="form-input bg-gray-100 flex items-center text-gray-700 font-bold" style={{ paddingLeft: '2.5rem' }}>
+                    <div className="form-input pd-readout" style={{ paddingLeft: '2.5rem' }}>
                         {kilosAdicionalesCierre.toFixed(2)} Kg
                     </div>
                 </div>
@@ -2242,17 +2071,17 @@ function OrdenDetalle() {
           </div>
 
           {!esLamina && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
+            <div className="pd-callout is-accent pd-callout-block">
               <div className="flex items-center gap-2 mb-2">
-                <Scale size={16} className="text-indigo-600" />
-                <h4 className="font-semibold text-sm text-indigo-800">Repartir por porcentaje de receta</h4>
+                <Scale size={16} className="text-primary" />
+                <h4 className="pd-callout-title">Repartir por porcentaje de receta</h4>
               </div>
-              <p className="text-xs text-indigo-700 mb-3">
+              <p className="pd-callout-text mb-1">
                 Ingrese el <strong>total real de insumos</strong> y se distribuirá automáticamente
                 entre los insumos según el porcentaje original de la orden. Revise el resultado antes de confirmar.
               </p>
               <div className="flex flex-wrap items-end gap-2">
-                <div className="form-group mb-0 flex-1 min-w-[160px]">
+                <div className="form-group m-0 flex-1" style={{ minWidth: 160 }}>
                   <label className="form-label text-xs">Total insumos reales (Kg)</label>
                   <input
                     type="number"
@@ -2275,11 +2104,11 @@ function OrdenDetalle() {
             </div>
           )}
 
-          <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="pd-section">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Package size={18} className="text-primary" />
-                    <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados (Cierre)' : 'Consumo Insumos (Cierre)'}</h3>
+                    <h3 className="pd-section-title">{esLamina ? 'Rollos Utilizados (Cierre)' : 'Consumo Insumos (Cierre)'}</h3>
                 </div>
                 <button 
                     type="button" 
@@ -2290,8 +2119,8 @@ function OrdenDetalle() {
                 </button>
             </div>
 
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-4 table-container">
-              <table className="table table-sm">
+            <div className="table-container pd-scroll-sm">
+              <table className="table pd-table-compact">
                 <thead>
                     <tr>
                         <th>Insumo</th>
@@ -2321,7 +2150,7 @@ function OrdenDetalle() {
                                 <div className="font-medium text-sm">
                                     {item.insumo}
                                     {!esLamina && porcentajeReceta > 0 && (
-                                        <span className="ml-2 text-xs font-bold text-indigo-600">{porcentajeReceta.toFixed(1)}%</span>
+                                        <span className="ml-2 text-xs font-bold text-primary">{porcentajeReceta.toFixed(1)}%</span>
                                     )}
                                 </div>
                                 <div className="text-xs text-muted">{item.codigo_insumo}</div>
@@ -2343,7 +2172,7 @@ function OrdenDetalle() {
                                     />
                                 </div>
                             </td>
-                            <td className="text-right font-bold text-blue-700">
+                            <td className="text-right font-bold">
                                 {total.toFixed(2)} {unidadMostrar}
                             </td>
                             <td className="text-center">
@@ -2366,23 +2195,23 @@ function OrdenDetalle() {
             </div>
           </div>
 
-          <div className="border-t border-gray-200 pt-4 mt-4 bg-gray-50 p-4 rounded mb-4">
-            <h3 className="font-semibold text-sm mb-3">Balance de Masas</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
-                <div className="p-2 bg-white rounded border">
+          <div className="pd-subcard pd-section">
+            <h3 className="pd-section-title">Balance de Masas</h3>
+            <div className="pd-balance">
+                <div className="pd-balance-item">
                     <div className="text-muted text-xs">Total Insumos</div>
                     <div className="font-bold">{totalInsumosReales.toFixed(2)} Kg</div>
                 </div>
-                <div className="p-2 bg-white rounded border border-blue-200">
-                    <div className="text-blue-600 text-xs">(-) Prod. Terminado</div>
+                <div className="pd-balance-item is-info">
+                    <div className="text-muted text-xs">(−) Prod. terminado</div>
                     <div className="font-bold">{totalKilosProd.toFixed(2)} Kg</div>
                 </div>
-                <div className="p-2 bg-white rounded border border-red-200">
-                    <div className="text-red-600 text-xs">(-) Mermas</div>
+                <div className="pd-balance-item is-danger">
+                    <div className="text-muted text-xs">(−) Mermas</div>
                     <div className="font-bold">{totalMerma.toFixed(2)} Kg</div>
                 </div>
-                <div className={`p-2 rounded border ${Math.abs(diferenciaMasa) < 0.1 ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'}`}>
-                    <div className="text-xs font-bold">Diferencia</div>
+                <div className={`pd-balance-item ${Math.abs(diferenciaMasa) < 0.1 ? 'is-success' : 'is-warning'}`}>
+                    <div className="text-muted text-xs">Diferencia</div>
                     <div className="font-bold">{diferenciaMasa.toFixed(2)} Kg</div>
                 </div>
             </div>
@@ -2393,11 +2222,11 @@ function OrdenDetalle() {
             )}
           </div>
 
-          <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="pd-section">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={18} className="text-warning" />
-                <h3 className="font-semibold">Registro de Mermas</h3>
+                <h3 className="pd-section-title">Registro de Mermas</h3>
               </div>
               <button
                 type="button"
@@ -2409,11 +2238,11 @@ function OrdenDetalle() {
             </div>
 
             {mostrarMermas && (
-              <div className="space-y-3">
+              <div className="pd-vstack">
                 {mermas.map((merma) => (
-                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
-                    <div className="grid grid-cols-12 gap-2 items-start">
-                      <div className="col-span-5">
+                  <div key={merma.id_temp} className="pd-subcard">
+                    <div className="pd-merma-row">
+                      <div>
                         <label className="form-label text-xs">Tipo de Merma</label>
                         <select
                           className="form-select form-select-sm"
@@ -2430,7 +2259,7 @@ function OrdenDetalle() {
                         </select>
                       </div>
 
-                      <div className="col-span-3">
+                      <div>
                         <label className="form-label text-xs">Cantidad (Kg)</label>
                         <input
                           type="number"
@@ -2449,7 +2278,7 @@ function OrdenDetalle() {
                         )}
                       </div>
 
-                      <div className="col-span-3">
+                      <div>
                           <label className="form-label text-xs">Observación</label>
                           <input
                           type="text"
@@ -2459,7 +2288,7 @@ function OrdenDetalle() {
                         />
                       </div>
 
-                      <div className="col-span-1 flex items-end">
+                      <div>
                         <button
                           type="button"
                           className="btn btn-sm btn-danger w-full"
@@ -2560,14 +2389,14 @@ function OrdenDetalle() {
         onClose={() => setModalEditar(false)}
         title={
           <span className="flex items-center gap-2">
-            <Edit className="text-secondary" /> Editar Orden de Producción
+            <Edit className="text-muted" /> Editar Orden de Producción
           </span>
         }
         size="xl"
       >
           <form onSubmit={handleGuardarEdicion}>
-             <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div className="pd-vstack">
+                <div className="pd-form-grid pd-cols-2">
                     <div className="form-group">
                         <label className="form-label">Producto Terminado *</label>
                         <select className="form-select" value={datosEdicion.id_producto_terminado} onChange={(e) => setDatosEdicion({...datosEdicion, id_producto_terminado: e.target.value})} required>
@@ -2584,7 +2413,7 @@ function OrdenDetalle() {
                     </div>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="pd-form-grid pd-cols-3">
                     <div className="form-group">
                         <label className="form-label">Cantidad Kilos *</label>
                         <input type="number" step="0.01" className="form-input" value={datosEdicion.cantidad_planificada} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_planificada: e.target.value})} required />
@@ -2603,7 +2432,7 @@ function OrdenDetalle() {
                 </div>
 
                 {esLaminaEdicion ? (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="pd-form-grid pd-cols-2">
                         <div className="form-group">
                             <label className="form-label">Operario de Corte</label>
                             <input className="form-input" value={datosEdicion.operario_corte} onChange={(e) => setDatosEdicion({...datosEdicion, operario_corte: e.target.value})} />
@@ -2614,7 +2443,7 @@ function OrdenDetalle() {
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="pd-form-grid pd-cols-2">
                         <div className="form-group">
                             <label className="form-label">Maquinista</label>
                             <input className="form-input" value={datosEdicion.maquinista} onChange={(e) => setDatosEdicion({...datosEdicion, maquinista: e.target.value})} />
@@ -2626,7 +2455,7 @@ function OrdenDetalle() {
                     </div>
                 )}
                 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="pd-form-grid pd-cols-3">
                     <div className="form-group">
                         <label className="form-label">Medida</label>
                         <input className="form-input" value={datosEdicion.medida} onChange={(e) => setDatosEdicion({...datosEdicion, medida: e.target.value})} />
@@ -2641,7 +2470,7 @@ function OrdenDetalle() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="pd-form-grid pd-cols-2">
                     <div className="form-group">
                         <label className="form-label">Fecha Programada</label>
                         <input type="date" className="form-input" value={datosEdicion.fecha_programada} onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada: e.target.value})} />
@@ -2658,8 +2487,8 @@ function OrdenDetalle() {
                 </div>
                 
                 {!esLaminaEdicion && (
-                    <div className="border-t border-gray-200 pt-4 mt-4">
-                        <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
+                    <div className="pd-section">
+                        <h3 className="pd-section-title">Configuración de Materiales</h3>
                         <div className="flex gap-2 mb-4">
                             <button type="button" className={`btn flex-1 text-left ${modoRecetaEdicion === 'porcentaje' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setModoRecetaEdicion('porcentaje')}>
                                 <Star size={18} className="mr-2" />
@@ -2677,13 +2506,13 @@ function OrdenDetalle() {
                                 </div>
                                 {insumosEdicion.length > 0 ? (
                                     <div className="table-container">
-                                        <table className="table table-sm">
+                                        <table className="table pd-table-compact">
                                             <thead><tr><th>Insumo</th><th className="text-center">Porcentaje</th><th className="text-right">Calculado (Kg)</th><th className="text-center"></th></tr></thead>
                                             <tbody>
                                                 {insumosEdicion.map(item => (
                                                     <tr key={item.id_insumo}>
                                                         <td><div className="font-medium text-sm">{item.codigo_insumo}</div><div className="text-xs text-muted">{item.insumo}</div></td>
-                                                        <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
+                                                        <td className="text-center font-bold text-primary">{item.porcentaje}%</td>
                                                         <td className="text-right font-mono">{calcularCantidadInsumoEdicion(item.porcentaje).toFixed(2)} Kg</td>
                                                         <td className="text-center"><button type="button" className="btn btn-sm btn-danger p-1" onClick={() => eliminarInsumoEdicion(item.id_insumo)}><Trash2 size={14} /></button></td>
                                                     </tr>
@@ -2692,7 +2521,7 @@ function OrdenDetalle() {
                                         </table>
                                     </div>
                                 ) : (
-                                    <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200"><p className="text-sm">No hay insumos agregados.</p></div>
+                                    <div className="pd-col-empty"><p className="text-sm">No hay insumos agregados.</p></div>
                                 )}
                              </>
                         )}
@@ -2719,7 +2548,7 @@ function OrdenDetalle() {
         size={orden.estado === 'Pendiente Asignación' && orden.origen_tipo === 'Orden de Venta' ? "xl" : "md"}
       >
           <form onSubmit={handleAsignarSupervisor}>
-              <div className="space-y-4">
+              <div className="pd-vstack">
                   <div className="form-group">
                       <label className="form-label">Supervisor *</label>
                       <select className="form-select" value={asignacionData.id_supervisor} onChange={(e) => setAsignacionData({...asignacionData, id_supervisor: e.target.value})} required>
@@ -2798,23 +2627,23 @@ function OrdenDetalle() {
         title="ANULAR ORDEN DE PRODUCCIÓN"
         size="lg"
       >
-         <div className="space-y-4">
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded flex items-start gap-3">
-                <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={24} />
-                <div className="text-sm text-red-800">
-                    <p className="font-bold text-lg mb-1">¡ACCIÓN IRREVERSIBLE!</p>
+         <div className="pd-vstack">
+            <div className="pd-callout is-danger">
+                <AlertTriangle className="text-danger shrink-0" size={24} />
+                <div className="pd-callout-text">
+                    <p className="pd-callout-title">¡ACCIÓN IRREVERSIBLE!</p>
                     <p>Al confirmar esta acción, se realizarán los siguientes movimientos automáticos:</p>
                 </div>
             </div>
 
-            <ul className="text-sm space-y-2 pl-2">
+            <ul className="pd-vstack pd-list-plain">
                 <li className="flex items-start gap-2">
-                    <span className="text-red-500 font-bold mt-0.5">•</span>
+                    <span className="text-danger font-bold">•</span>
                     <span>El estado de la orden pasará a <strong>Anulada</strong> y no podrá modificarse.</span>
                 </li>
                 {parseFloat(orden?.cantidad_producida || 0) > 0 && (
                     <li className="flex items-start gap-2">
-                        <span className="text-red-500 font-bold mt-0.5">•</span>
+                        <span className="text-danger font-bold">•</span>
                         <span>
                             Se <strong>retirará del inventario</strong> el producto terminado producido hasta ahora
                             (<strong>{parseFloat(orden.cantidad_producida).toFixed(2)} Kg</strong>
@@ -2824,7 +2653,7 @@ function OrdenDetalle() {
                 )}
                 {consumoMateriales.length > 0 && (
                     <li className="flex items-start gap-2">
-                        <span className="text-red-500 font-bold mt-0.5">•</span>
+                        <span className="text-danger font-bold">•</span>
                         <span>
                             Los <strong>{consumoMateriales.length} insumos</strong> consumidos durante la producción serán
                             <strong> devueltos a inventario</strong>.
@@ -2833,15 +2662,15 @@ function OrdenDetalle() {
                 )}
                 {mermas.length > 0 && (
                     <li className="flex items-start gap-2">
-                        <span className="text-orange-500 font-bold mt-0.5">•</span>
+                        <span className="text-warning font-bold">•</span>
                         <span>Los registros de mermas quedarán eliminados junto con la orden.</span>
                     </li>
                 )}
             </ul>
 
-            <div className="flex gap-3 justify-end pt-4 border-t mt-2">
+            <div className="pd-modal-actions">
                 <button className="btn btn-outline" onClick={() => setModalAnular(false)} disabled={procesando}>Cancelar</button>
-                <button className="btn btn-danger font-bold px-6" onClick={handleAnular} disabled={procesando}>{procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}</button>
+                <button className="btn btn-danger font-bold" onClick={handleAnular} disabled={procesando}>{procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}</button>
             </div>
          </div>
       </Modal>

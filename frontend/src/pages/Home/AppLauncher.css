@@ -63,6 +63,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .launcher-atmosphere::before { animation: none; opacity: 0.8; }
+  .background-shapes li { animation: none; opacity: 0; }
+  .launcher-header { animation: none; }
 }
 
 .launcher-container::after {
@@ -222,6 +224,7 @@
 }
 
 .launcher-card {
+  --card-color: var(--accent);
   flex: 1;
   width: 100%;
   display: flex;
@@ -239,23 +242,48 @@
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+[data-theme="light"] .launcher-card {
+  --card-color: var(--primary-dark);
+}
+
 .launcher-card::before {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: 3px;
-  background: var(--card-color, var(--accent));
+  background: var(--card-color);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s ease;
 }
 
-.launcher-card:hover {
+@media (hover: hover) {
+  .launcher-card:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--white);
+  }
+
+  .launcher-card:hover::before { transform: scaleX(1); }
+
+  .launcher-card:hover .launcher-icon-wrapper {
+    background-color: var(--accent-dim);
+    border-color: var(--accent-border);
+  }
+}
+
+.launcher-card:focus-visible {
+  outline: 2px solid var(--card-color);
+  outline-offset: -2px;
   background-color: var(--bg-tertiary);
   color: var(--white);
 }
 
-.launcher-card:hover::before { transform: scaleX(1); }
+.launcher-card:focus-visible::before { transform: scaleX(1); }
+
+.launcher-card:focus-visible .launcher-icon-wrapper {
+  background-color: var(--accent-dim);
+  border-color: var(--accent-border);
+}
 
 .launcher-icon-wrapper {
   width: clamp(48px, 6.5vh, 64px);
@@ -264,10 +292,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(255,255,255,0.04);
+  background-color: var(--bg-tertiary);
   border: 1px solid var(--border);
-  transition: all 0.25s ease;
-  color: var(--card-color, var(--accent));
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+  color: var(--card-color);
   position: relative;
   z-index: 1;
   flex-shrink: 0;
@@ -278,11 +306,12 @@
   height: 58%;
 }
 
-.launcher-card:hover .launcher-icon-wrapper {
-  background-color: var(--card-color, var(--accent));
-  color: #0f0f0f;
-  border-color: var(--card-color, var(--accent));
-  box-shadow: 0 0 18px color-mix(in srgb, var(--card-color, var(--accent)) 30%, transparent);
+.launcher-icon-wrapper svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+.launcher-icon-fallback {
+  display: none;
 }
 
 .launcher-icon-img {
@@ -303,17 +332,6 @@
   z-index: 1;
   transition: color 0.2s ease;
 }
-
-.launcher-card-shine {
-  position: absolute;
-  top: 0; left: -100%;
-  width: 60%; height: 100%;
-  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.04) 50%, transparent 60%);
-  transition: left 0.5s ease;
-  pointer-events: none;
-}
-
-.launcher-card:hover .launcher-card-shine { left: 150%; }
 
 .launcher-card-index {
   position: absolute;

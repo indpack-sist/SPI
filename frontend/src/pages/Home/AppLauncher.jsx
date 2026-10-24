@@ -98,21 +98,17 @@ const AppLauncher = () => {
                           <Link
                             to={targetPath}
                             className="launcher-card"
-                            style={{ '--card-color': app.color || 'var(--accent)' }}
                           >
-                            <span className="launcher-card-index">
+                            <span className="launcher-card-index" aria-hidden="true">
                               {String(numeroAtomico).padStart(2, '0')}
                             </span>
 
                             <div className="launcher-icon-wrapper">
-                              {app.iconImg
-                                ? <img src={app.iconImg} alt="" className="launcher-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                                : <Icon size={40} strokeWidth={1.5} />}
+                              {app.iconImg && <img src={app.iconImg} alt="" className="launcher-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'block'; }} />}
+                              <Icon size={40} strokeWidth={2} className={app.iconImg ? 'launcher-icon-fallback' : undefined} />
                             </div>
 
                             <span className="launcher-label">{app.label}</span>
-
-                            <div className="launcher-card-shine"></div>
                           </Link>
                         </m.div>
                       );

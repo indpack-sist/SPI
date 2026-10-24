@@ -35,7 +35,7 @@ function Sidebar({ onToggle }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <button className="sidebar-close-btn" onClick={onToggle}>
+        <button className="sidebar-close-btn" onClick={onToggle} aria-label="Cerrar menú">
           <X size={16} />
         </button>
         <div className="sidebar-brand">
@@ -70,7 +70,7 @@ function Sidebar({ onToggle }) {
                 className={`sidebar-link sidebar-link-apps ${location.pathname === '/' ? 'active' : ''}`}
               >
                 <div className="sidebar-icon-container">
-                  <LayoutGrid size={17} />
+                  <LayoutGrid size={16} strokeWidth={2} absoluteStrokeWidth />
                 </div>
                 <span>Menú Principal</span>
               </Link>
@@ -101,15 +101,15 @@ function Sidebar({ onToggle }) {
                       <li key={item.label}>
                         <button
                           onClick={() => toggleSubmenu(item.label)}
+                          aria-expanded={Boolean(isOpen)}
                           className={`sidebar-link sidebar-dropdown-toggle ${isOpen ? 'open' : ''}`}
                         >
                           <div className="sidebar-icon-container">
-                            {item.iconImg
-                              ? <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                              : <Icon size={17} />}
+                            {item.iconImg && <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'block'; }} />}
+                            <Icon size={16} strokeWidth={2} absoluteStrokeWidth className={item.iconImg ? 'sidebar-icon-fallback' : undefined} />
                           </div>
                           <span>{item.label}</span>
-                          <ChevronDown size={13} className={`sidebar-chevron ${isOpen ? 'rotate' : ''}`} />
+                          <ChevronDown size={14} strokeWidth={2} absoluteStrokeWidth className={`sidebar-chevron ${isOpen ? 'rotate' : ''}`} />
                         </button>
                         <ul className={`sidebar-submenu ${isOpen ? 'expanded' : ''}`}>
                           {item.subItems.filter(sub => tienePermiso(sub.modulo)).map((sub) => (
@@ -117,6 +117,7 @@ function Sidebar({ onToggle }) {
                               <Link
                                 to={sub.path}
                                 className={`sidebar-sublink ${isActive(sub.path) ? 'active' : ''}`}
+                                aria-current={isActive(sub.path) ? 'page' : undefined}
                               >
                                 <span className="sidebar-sub-dot"></span>
                                 <span>{sub.label}</span>
@@ -133,11 +134,11 @@ function Sidebar({ onToggle }) {
                       <Link
                         to={item.path}
                         className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
+                        aria-current={isActive(item.path) ? 'page' : undefined}
                       >
                         <div className="sidebar-icon-container">
-                          {item.iconImg
-                            ? <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                            : <Icon size={17} />}
+                          {item.iconImg && <img src={item.iconImg} alt="" className="sidebar-icon-img" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'block'; }} />}
+                          <Icon size={16} strokeWidth={2} absoluteStrokeWidth className={item.iconImg ? 'sidebar-icon-fallback' : undefined} />
                         </div>
                         <span>{item.label}</span>
                       </Link>

@@ -1,10 +1,10 @@
-import { 
-  Home, Users, Truck, Building2, UserCircle2, 
-  Package, Search, Factory, Calendar, FileText, 
-  Tags, ShoppingCart, FileCheck, ShoppingBag, 
-  CreditCard, Banknote, FileInput, ArrowDownToLine,
-  ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
-  TrendingUp,
+import {
+  Gauge, Users, Truck, Building2, Store,
+  Package, Warehouse, Factory, Calendar, FileText,
+  Tags, BadgeDollarSign, ClipboardList, ShoppingCart,
+  Wallet, Banknote, FileSignature, ArrowDownToLine,
+  ArrowUpFromLine, ArrowLeftRight, Calculator,
+  BarChart3, Route,
   ShieldAlert, PackageSearch,
   Radar,
   Receipt, Activity
@@ -14,57 +14,56 @@ export const menuConfig = [
   {
     title: 'Principal',
     items: [
-      { path: '/dashboard', icon: Home, label: 'Dashboard', modulo: 'dashboard', color: '#714B67' }
+      { path: '/dashboard', icon: Gauge, label: 'Dashboard', modulo: 'dashboard' }
     ]
   },
   {
     title: 'Módulos Maestros',
     items: [
-      { path: '/empleados', icon: Users, label: 'Empleados', modulo: 'empleados', color: '#00A09D' },
-      { path: '/flota', icon: Truck, label: 'Flota', modulo: 'flota', color: '#D35400' },
-      { path: '/proveedores', icon: Building2, label: 'Proveedores', modulo: 'proveedores', color: '#2E86C1' },
-      { path: '/clientes', icon: UserCircle2, label: 'Clientes', modulo: 'clientes', color: '#8E44AD' }
+      { path: '/empleados', icon: Users, label: 'Empleados', modulo: 'empleados' },
+      { path: '/flota', icon: Truck, label: 'Flota', modulo: 'flota' },
+      { path: '/proveedores', icon: Building2, label: 'Proveedores', modulo: 'proveedores' },
+      { path: '/clientes', icon: Store, label: 'Clientes', modulo: 'clientes' }
     ]
   },
   {
     title: 'Productos',
     items: [
-      { path: '/productos', icon: Package, label: 'Catálogo', modulo: 'productos', color: '#F39C12' },
-      { path: '/productos/consulta-stock', icon: Search, label: 'Stock', modulo: 'consultarStock', color: '#E67E22' }
+      { path: '/productos', icon: Package, label: 'Catálogo', modulo: 'productos' },
+      { path: '/productos/consulta-stock', icon: Warehouse, label: 'Stock', modulo: 'consultarStock' }
     ]
   },
   {
     title: 'Producción',
     items: [
-      { path: '/produccion/tablero', icon: Factory, label: 'Control Planta', modulo: 'ordenesProduccion', color: '#8E44AD', rolesExcluidos: ['calidad', 'Comercial'] },
-      { path: '/produccion/ordenes', icon: FileCheck, label: 'Producción', modulo: 'ordenesProduccion', color: '#C0392B' },
-      { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion', color: '#27AE60' } 
+      { path: '/produccion/tablero', icon: Factory, label: 'Control Planta', modulo: 'ordenesProduccion', rolesIncluidos: ['Administrador', 'Supervisor'] },
+      { path: '/produccion/ordenes', icon: ClipboardList, label: 'Producción', modulo: 'ordenesProduccion' },
+      { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion' }
     ]
   },
   {
     title: 'Calidad',
     items: [
-      { path: '/calidad/incidencias', icon: ShieldAlert, label: 'Incidencias', modulo: 'incidencias', color: '#C0392B' },
-      { path: '/calidad/incidencias-por-producto', icon: PackageSearch, label: 'Por Producto', modulo: 'incidencias', color: '#8E44AD' }
+      { path: '/calidad/incidencias', icon: ShieldAlert, label: 'Incidencias', modulo: 'incidencias' },
+      { path: '/calidad/incidencias-por-producto', icon: PackageSearch, label: 'Por Producto', modulo: 'incidencias' }
     ]
   },
   {
     title: 'Ventas',
     items: [
-      { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', color: '#E8B84B', rolesIncluidos: ['Administrador', 'Comercial'] },
-      { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
-      { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
-      { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
-      { path: '/ventas/seguimiento', icon: Truck, label: 'Seguimiento', modulo: 'seguimientoVentas', color: '#2980B9' },
-      { 
-        label: 'Reportes', 
-        icon: TrendingUp, 
-        modulo: 'reportes', 
-        color: '#884EA0',
+      { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', rolesIncluidos: ['Administrador', 'Comercial'] },
+      { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones' },
+      { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones' },
+      { path: '/ventas/ordenes', icon: BadgeDollarSign, label: 'Ventas', modulo: 'ordenesVenta' },
+      { path: '/ventas/seguimiento', icon: Route, label: 'Seguimiento', modulo: 'seguimientoVentas' },
+      {
+        label: 'Reportes',
+        icon: BarChart3,
+        modulo: 'reportes',
         subItems: [
           { path: '/ventas/reportes', label: 'Reporte de Ventas', modulo: 'reportes' },
-          { path: '/ventas/reporte-despachos', label: 'Despachos por Prod', modulo: 'reportes' },
-          { path: '/ventas/reporte-deudas', label: 'Cuentas x Cobrar', modulo: 'reportes' },
+          { path: '/ventas/reporte-despachos', label: 'Despachos por Producto', modulo: 'reportes' },
+          { path: '/ventas/reporte-deudas', label: 'Cuentas por Cobrar', modulo: 'reportes' },
         ]
       },
     ]
@@ -72,31 +71,31 @@ export const menuConfig = [
   {
     title: 'Compras',
     items: [
-      { path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras', color: '#D35400', rolesExcluidos: ['calidad'] }
+      { path: '/compras', icon: ShoppingCart, label: 'Compras', modulo: 'compras' }
     ]
   },
   {
     title: 'Facturación Electrónica',
     items: [
-      { path: '/facturacion/trazabilidad', icon: Receipt, iconImg: '/logo-sunat.png', label: 'Trazabilidad SEE', modulo: 'facturacion', color: '#6366F1' },
-      { path: '/reportes/monitor-sunat', icon: Activity, iconImg: '/logo-sunat.png', label: 'Monitor SUNAT', modulo: 'facturacion', color: '#16A085' }
+      { path: '/facturacion/trazabilidad', icon: Receipt, iconImg: '/logo-sunat.png', label: 'Trazabilidad SEE', modulo: 'facturacion' },
+      { path: '/reportes/monitor-sunat', icon: Activity, iconImg: '/logo-sunat.png', label: 'Monitor SUNAT', modulo: 'facturacion' }
     ]
   },
   {
     title: 'Finanzas',
     items: [
-      { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Pagos', modulo: 'cuentasPago', color: '#2C3E50' },
-      { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Cobranzas', modulo: 'pagosCobranzas', color: '#27AE60' },
-      { path: '/finanzas/historial-tc', icon: Calendar, label: 'Historial TC', modulo: 'pagosCobranzas', color: '#8E44AD' },
-      { path: '/solicitudes-credito', icon: FileInput, label: 'Créditos', modulo: 'solicitudesCredito', color: '#5D6D7E' }
+      { path: '/finanzas/cuentas-pago', icon: Wallet, label: 'Pagos', modulo: 'cuentasPago' },
+      { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Cobranzas', modulo: 'pagosCobranzas' },
+      { path: '/finanzas/historial-tc', icon: ArrowLeftRight, label: 'Historial TC', modulo: 'pagosCobranzas' },
+      { path: '/solicitudes-credito', icon: FileSignature, label: 'Créditos', modulo: 'solicitudesCredito' }
     ]
   },
   {
     title: 'Inventario',
     items: [
-      { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', color: '#C0392B', rolesIncluidos: ['Administrador', 'Calidad'] },
-      { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9', rolesIncluidos: ['Administrador'] },
-      { path: '/inventario/stock', icon: FileSpreadsheet, label: 'Valorización y Reportes', modulo: 'salidas', color: '#16A085', rolesIncluidos: ['Administrador'] }
+      { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', rolesIncluidos: ['Administrador', 'Calidad'] },
+      { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', rolesIncluidos: ['Administrador'] },
+      { path: '/inventario/stock', icon: Calculator, label: 'Valorización y Reportes', modulo: 'salidas', rolesIncluidos: ['Administrador'] }
     ]
   }
 ];

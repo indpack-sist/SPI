@@ -172,9 +172,7 @@ button.pg-kpi.on {
   line-height: 1.1;
   letter-spacing: 0.01em;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .pg-kpi-value small {
   margin-right: 0.3rem;
@@ -433,7 +431,7 @@ button.pg-kpi.on {
   color: var(--text-secondary);
 }
 .pg-pager b { color: var(--text-primary); }
-.pg-pager-nav { display: flex; align-items: center; gap: 0.35rem; }
+.pg-pager-nav { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.35rem; max-width: 100%; }
 
 .pg-drawer-scrim {
   position: fixed;
@@ -628,12 +626,25 @@ button.pg-kpi.on {
 @media (max-width: 1023px) {
   .pg-table-wrap:has(> table.responsive-table-cards) { overflow: visible; padding: 0.75rem; }
   .pg-table.responsive-table-cards td.is-focus { background-color: transparent; }
+  .pg-truncate { max-width: 100%; overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
+  .pg-segmented { flex-wrap: wrap; height: auto; max-width: 100%; }
+  .pg-segmented button { min-height: 30px; flex: 1 1 auto; justify-content: center; }
+  .pg-field { max-width: 100%; }
+  .pg-pager { justify-content: center; }
+}
+@media (max-width: 1023px), (pointer: coarse) {
+  .pg-iconbtn { width: 44px; height: 44px; }
+  .pg-chip { min-height: 44px; height: auto; }
+  .pg-segmented button { min-height: 38px; }
+  .pg-drawer .btn { min-height: 44px; }
 }
 @media (max-width: 640px) {
   .pg-page { padding: 1rem 1rem 2.5rem; }
   .pg-header { align-items: flex-start; }
-  .pg-kpis { grid-template-columns: minmax(0, 1fr); }
+  .pg-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 0.75rem; }
   .pg-kpi-value { font-size: 1.5rem; }
+  .pg-pager-nav { width: 100%; }
+  .pg-pager-nav > .pagination-nav-btn { order: 1; flex: 1 1 40%; justify-content: center; }
   .pg-drawer-body { padding-inline: 1rem; }
   .pg-form-grid { grid-template-columns: minmax(0, 1fr); }
 }

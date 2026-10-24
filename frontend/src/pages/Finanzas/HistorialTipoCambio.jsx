@@ -254,6 +254,7 @@ const HistorialTipoCambio = () => {
             {esFinde && <span className="calendar-day-dow">{diaSemana === 0 ? 'Dom' : 'Sáb'}</span>}
             {esHoy && <span className="calendar-day-today">Hoy</span>}
             {IconoOrigen && <span className="calendar-day-origen" title={origen.label}><IconoOrigen size={11} aria-hidden="true" /></span>}
+            {origen && <span className="calendar-day-origen-label" aria-hidden="true">{origen.label}</span>}
             <Edit3 size={12} className="edit-icon" aria-hidden="true" />
           </span>
           {data ? (

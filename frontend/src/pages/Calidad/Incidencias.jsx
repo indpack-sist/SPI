@@ -317,7 +317,7 @@ function Incidencias() {
         >
           <h3 className="card-title text-lg flex items-center gap-2"><ShieldAlert size={18} /> Resumen</h3>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted hidden sm:inline">
+            <span className="text-sm text-muted">
               Total {stats.total} · Abiertas {stats.abiertas} · Críticas {stats.criticas} · Cerradas {stats.cerradas}
             </span>
             {mostrarResumen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}

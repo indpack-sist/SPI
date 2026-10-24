@@ -19,12 +19,18 @@ export default function AtencionesBadge({ atenciones = 0, totalOrdenes = 0, desg
   ].filter(l => l !== null).join('\n');
 
   return (
-    <span
-      className={`badge ${n > 0 ? 'badge-success' : 'badge-secondary'}`}
-      title={tooltip}
-      style={{ cursor: 'help' }}
-    >
-      {n} atenci{n === 1 ? 'ón' : 'ones'}
-    </span>
+    <>
+      <span
+        className={`badge ${n > 0 ? 'badge-success' : 'badge-secondary'}`}
+        title={tooltip}
+        style={{ cursor: 'help' }}
+      >
+        {n} atenci{n === 1 ? 'ón' : 'ones'}
+      </span>
+      <span className="atenciones-desglose">
+        <span>Total de ordenes: {total}</span>
+        {lineas.map((linea) => <span key={linea}>{linea.trim()}</span>)}
+      </span>
+    </>
   );
 }

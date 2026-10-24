@@ -40,8 +40,10 @@
   transition: background-color 0.2s;
 }
 
-.table tbody tr:hover {
-  background-color: var(--bg-secondary);
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background-color: var(--bg-secondary);
+  }
 }
 
 .table tbody tr:last-child td {
@@ -144,11 +146,14 @@
     justify-content: flex-end;
   }
 
-  .table-mobile tbody td .font-mono,
   .table-mobile tbody td .badge {
     white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: keep-all;
+    max-width: 100%;
+  }
+
+  .table-mobile tbody td .font-mono {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .table-mobile tbody td::before {
@@ -161,7 +166,7 @@
     text-align: left;
     flex-shrink: 0;
     min-width: 84px;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .table-mobile tbody td[data-label="Acciones"],

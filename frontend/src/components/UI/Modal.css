@@ -21,6 +21,7 @@
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
   animation: modalSlideIn var(--dur-base) var(--ease-out);
@@ -69,6 +70,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
   border-radius: 0.25rem;
   transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
@@ -84,6 +88,30 @@
   padding: 1.5rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.modal-header {
+  gap: 0.75rem;
+}
+
+.modal-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modal-body > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+.modal-body > :only-child > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+.modal-body > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+.modal-body > :only-child > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child {
+  position: sticky;
+  bottom: -1.5rem;
+  z-index: 2;
+  margin-bottom: -1.5rem;
+  padding-top: 0.75rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  background-color: var(--bg-primary);
+  border-top: 1px solid var(--border);
 }
 
 @keyframes modalSlideIn {
@@ -112,6 +140,7 @@
     max-width: 100%;
     margin: 0;
     max-height: 95vh;
+    max-height: 95dvh;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
@@ -123,6 +152,41 @@
   .modal-body {
     padding: 1rem;
   }
+
+  .modal-body > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+  .modal-body > :only-child > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+  .modal-body > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child,
+  .modal-body > :only-child > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child {
+    bottom: -1rem;
+    margin-bottom: -1rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .modal-body > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child > *,
+  .modal-body > :only-child > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child > *,
+  .modal-body > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child > *,
+  .modal-body > :only-child > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child > * {
+    flex: 1 1 auto;
+  }
+
+  .modal-body > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .flex,
+  .modal-body > :only-child > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .flex,
+  .modal-body > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .flex,
+  .modal-body > :only-child > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .flex {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .modal-body > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .btn,
+  .modal-body > :only-child > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .btn,
+  .modal-body > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .btn,
+  .modal-body > :only-child > form > :is(.flex.justify-end, .flex.justify-between, .pg-modal-actions):last-child .btn {
+    width: auto;
+    flex: 1 1 auto;
+  }
 }
 
 @media (max-width: 480px) {
@@ -133,6 +197,7 @@
 
   .modal-content {
     max-height: 96vh;
+    max-height: 96dvh;
     border-radius: 1rem 1rem 0 0;
   }
 }

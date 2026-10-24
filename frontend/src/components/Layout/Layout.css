@@ -3,7 +3,7 @@
   min-height: 100dvh;
   background-color: var(--bg-secondary);
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .layout-sidebar-wrapper {
@@ -88,7 +88,7 @@
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0);
-    z-index: 40;
+    z-index: 105;
     opacity: 0;
     pointer-events: none;
     transition: background-color 0.3s ease, opacity 0.3s ease;
@@ -102,11 +102,13 @@
 
   .layout-sidebar-wrapper {
     width: min(260px, 88vw);
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6);
+    z-index: 110;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .layout-sidebar-wrapper.closed { transform: translateX(-100%); }
-  .layout-sidebar-wrapper.open   { transform: translateX(0); }
+  .layout-sidebar-wrapper.closed { transform: translateX(-100%); visibility: hidden; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.3s; }
+  .layout-sidebar-wrapper.open   { transform: translateX(0); visibility: visible; box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 
   .layout-main.sidebar-open,
   .layout-main.sidebar-closed {

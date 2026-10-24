@@ -21,6 +21,7 @@
   --danger: #c0392b;
 
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 1fr 480px;
   background: var(--carbon);
@@ -286,7 +287,7 @@
   border: 1px solid var(--steel);
   border-radius: 2px;
   outline: none;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   letter-spacing: 0.02em;
 }
 
@@ -318,10 +319,18 @@
   color: var(--steel-light);
   transition: color 0.2s;
   line-height: 0;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  right: 0.25rem;
 }
 
-.login-password-toggle:hover {
-  color: var(--mist);
+@media (hover: hover) {
+  .login-password-toggle:hover {
+    color: var(--mist);
+  }
 }
 
 .login-submit-btn {
@@ -338,7 +347,7 @@
   border: none;
   border-radius: 2px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   position: relative;
   overflow: hidden;
 }
@@ -352,13 +361,17 @@
   transition: transform 0.4s ease;
 }
 
-.login-submit-btn:hover:not(:disabled)::before {
-  transform: translateX(150%) skewX(-15deg);
+@media (hover: hover) {
+  .login-submit-btn:hover:not(:disabled)::before {
+    transform: translateX(150%) skewX(-15deg);
+  }
 }
 
-.login-submit-btn:hover:not(:disabled) {
-  background: #f0c55a;
-  box-shadow: 0 4px 20px rgba(232, 184, 75, 0.35);
+@media (hover: hover) {
+  .login-submit-btn:hover:not(:disabled) {
+    background: #f0c55a;
+    box-shadow: 0 4px 20px rgba(232, 184, 75, 0.35);
+  }
 }
 
 .login-submit-btn:active:not(:disabled) {
@@ -415,6 +428,7 @@
   .login-wrapper {
     padding: 2.5rem 2rem;
     min-height: 100vh;
+  min-height: 100dvh;
     border-left: none;
   }
 
@@ -431,4 +445,8 @@
   .login-card-title {
     font-size: 2rem;
   }
+}
+
+.login-input-wrapper:has(.login-password-toggle) .login-input {
+  padding-right: 3.25rem;
 }

@@ -415,5 +415,12 @@
 }
 
 @media (max-width: 1023px) {
-  .sidebar-close-btn { display: flex; }
+  .sidebar-close-btn { display: flex; width: 44px; height: 44px; }
+}
+
+@media (pointer: coarse) {
+  .sidebar-link,
+  .sidebar-sublink {
+    min-height: 44px;
+  }
 }

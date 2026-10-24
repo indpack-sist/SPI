@@ -73,7 +73,7 @@ function Pagination({ currentPage, totalPages, totalItems, itemsPerPage = 20, se
           SIGUIENTE <ChevronRight size={20} />
         </button>
       </div>
-      <div className="flex items-center gap-4 px-6 py-2.5 border rounded-sm shadow-inner"
+      <div className="pagination-jump flex items-center gap-4 px-6 py-2.5 border rounded-sm shadow-inner"
         style={{ backgroundColor: 'var(--carbon)', borderColor: 'var(--steel)' }}>
         <span className="text-[0.6rem] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--wire)' }}>Página</span>
         <input

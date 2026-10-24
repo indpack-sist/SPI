@@ -152,5 +152,6 @@
 
 @media (max-width: 640px) {
   .fn-compare-grid { grid-template-columns: minmax(0, 1fr); }
-  .fn-monthnav .pg-panel-meta { display: none; }
+  .fn-monthnav { flex-wrap: wrap; }
+  .fn-monthnav .pg-panel-meta { flex: 1 1 100%; }
 }

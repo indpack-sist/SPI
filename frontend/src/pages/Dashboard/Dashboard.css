@@ -27,12 +27,14 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.filter-btn:hover {
-  border-color: var(--steel-light);
-  color: var(--mist);
+@media (hover: hover) {
+  .filter-btn:hover {
+    border-color: var(--steel-light);
+    color: var(--mist);
+  }
 }
 
 .filter-btn.active {
@@ -96,7 +98,7 @@
 
 .analytics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -214,12 +216,14 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
-.btn-currency:hover {
-  background-color: #2ecc71;
-  color: #0f0f0f;
+@media (hover: hover) {
+  .btn-currency:hover {
+    background-color: #2ecc71;
+    color: #0f0f0f;
+  }
 }
 
 .currency-label {
@@ -307,7 +311,7 @@
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -335,9 +339,11 @@
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.inventario-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+@media (hover: hover) {
+  .inventario-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
 }
 
 .inventario-header {
@@ -446,7 +452,7 @@
   border: 1px solid var(--border);
   border-radius: 2px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   color: var(--mist);
   text-decoration: none;
   background-color: var(--bg-primary);
@@ -466,14 +472,18 @@
   transition: transform 0.2s;
 }
 
-.action-btn:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--white);
-  transform: translateX(4px);
-  border-color: var(--action-color, var(--accent));
+@media (hover: hover) {
+  .action-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--white);
+    transform: translateX(4px);
+    border-color: var(--action-color, var(--accent));
+  }
 }
 
-.action-btn:hover::before { transform: scaleY(1); }
+@media (hover: hover) {
+  .action-btn:hover::before { transform: scaleY(1); }
+}
 
 .action-icon {
   width: 36px;
@@ -486,13 +496,15 @@
   background-color: rgba(255,255,255,0.04);
   border: 1px solid var(--steel);
   color: var(--action-color, var(--accent));
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
-.action-btn:hover .action-icon {
-  background-color: var(--action-color, var(--accent));
-  color: #0f0f0f;
-  border-color: var(--action-color, var(--accent));
+@media (hover: hover) {
+  .action-btn:hover .action-icon {
+    background-color: var(--action-color, var(--accent));
+    color: #0f0f0f;
+    border-color: var(--action-color, var(--accent));
+  }
 }
 
 .action-content { flex: 1; text-align: left; }
@@ -554,7 +566,6 @@
 
   .inventario-grid { grid-template-columns: 1fr; }
   .analytics-grid { grid-template-columns: 1fr; }
-  .analytics-card .card-body { overflow-x: auto; }
 
   .dashboard-header {
     flex-direction: column;
@@ -571,4 +582,60 @@
   }
 
   .charts-grid { grid-template-columns: 1fr; }
+}
+
+.kpi-dual-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  min-width: 0;
+}
+
+.kpi-dual-values > span {
+  overflow-wrap: anywhere;
+}
+
+.kpi-dual-values .val-divider {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1023px) {
+  .date-filters > .flex {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .custom-date-picker {
+    flex-wrap: wrap;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .custom-date-picker .date-input {
+    flex: 1 1 9rem;
+    min-width: 0;
+  }
+
+  .custom-date-picker .btn {
+    width: auto;
+    flex: 1 1 100%;
+  }
+
+  .chart-card .recharts-responsive-container {
+    height: 460px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .chart-card .recharts-responsive-container {
+    height: 560px !important;
+  }
+}
+
+@media (max-width: 1023px), (pointer: coarse) {
+  .filter-btn {
+    min-height: 44px;
+    padding-inline: 0.9rem;
+  }
 }

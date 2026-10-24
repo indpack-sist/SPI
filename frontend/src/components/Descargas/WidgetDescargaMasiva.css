@@ -25,7 +25,9 @@
   background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
   transition: background .14s, color .14s;
 }
-.dm-widget-x:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+@media (hover: hover) {
+  .dm-widget-x:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+}
 
 .dm-bar { position: relative; height: 9px; border-radius: 6px; background: var(--bg-tertiary); overflow: hidden; }
 .dm-bar span {
@@ -65,7 +67,9 @@
   background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);
   transition: background .14s;
 }
-.dm-vercompleto:hover { background: var(--border); }
+@media (hover: hover) {
+  .dm-vercompleto:hover { background: var(--border); }
+}
 
 .dm-detalle-scrim {
   position: fixed; inset: 0; z-index: 4100;
@@ -98,7 +102,9 @@
   background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);
   transition: background .14s;
 }
-.dm-btn-copiar:hover { background: var(--border); }
+@media (hover: hover) {
+  .dm-btn-copiar:hover { background: var(--border); }
+}
 
 @media (max-width: 520px) {
   .dm-widget { left: 12px; right: 12px; width: auto; }

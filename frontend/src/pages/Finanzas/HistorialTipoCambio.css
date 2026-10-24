@@ -117,6 +117,10 @@
   color: var(--text-primary);
 }
 
+.historial-tc-page .calendar-day-origen-label {
+  display: none;
+}
+
 .historial-tc-page .calendar-day-origen {
   display: inline-flex;
   margin-left: auto;
@@ -212,55 +216,56 @@
 }
 
 @media (max-width: 600px) {
-  .historial-tc-page .calendar-grid-header,
-  .historial-tc-page .calendar-grid {
-    gap: 2px;
-  }
-
-  .historial-tc-page .calendar-grid-header div {
-    padding: 4px 0;
-    font-size: 0.58rem;
-    letter-spacing: 0.04em;
-    overflow: hidden;
-  }
-
-  .historial-tc-page .calendar-cell {
-    min-height: 56px;
-    gap: 2px;
-    padding: 3px 2px;
-  }
-
-  .historial-tc-page .calendar-day-header {
-    gap: 2px;
-    font-size: 0.72rem;
-  }
-
-  .historial-tc-page .calendar-day-dow,
-  .historial-tc-page .calendar-day-origen,
-  .historial-tc-page .calendar-cell .edit-icon,
-  .historial-tc-page .calendar-day-empty-data span {
+  .historial-tc-page .calendar-grid-header {
     display: none;
   }
 
-  .historial-tc-page .calendar-day-today {
-    padding: 0 2px;
-    font-size: 0.5rem;
-    letter-spacing: 0;
+  .historial-tc-page .calendar-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
-  .historial-tc-page .tc-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    padding: 1px 2px;
-    font-size: 0.56rem;
-    line-height: 1.15;
+  .historial-tc-page .calendar-cell.empty {
+    display: none;
   }
 
-  .historial-tc-page .tc-label,
-  .historial-tc-page .tc-value {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .historial-tc-page .calendar-cell {
+    min-height: 48px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .historial-tc-page .calendar-day-header {
+    flex: 1 1 auto;
+    gap: 0.4rem;
+  }
+
+  .historial-tc-page .calendar-day-origen {
+    margin-left: 0;
+  }
+
+  .historial-tc-page .calendar-day-origen-label {
+    display: inline;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .historial-tc-page .calendar-cell .edit-icon {
+    opacity: 1;
+  }
+
+  .historial-tc-page .calendar-day-data {
+    flex-direction: row;
+    gap: 0.4rem;
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  .historial-tc-page .calendar-day-empty-data {
+    margin: 0 0 0 auto;
   }
 }

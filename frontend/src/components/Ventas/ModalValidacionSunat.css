@@ -154,7 +154,7 @@
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
@@ -164,10 +164,12 @@
     border: 1px solid var(--steel);
 }
 
-.sunat-form-actions .btn-secondary:hover:not(:disabled) {
-    background-color: var(--bg-tertiary);
-    border-color: var(--steel);
-    transform: translateY(-1px);
+@media (hover: hover) {
+  .sunat-form-actions .btn-secondary:hover:not(:disabled) {
+      background-color: var(--bg-tertiary);
+      border-color: var(--steel);
+      transform: translateY(-1px);
+  }
 }
 
 .sunat-form-actions .btn-primary {
@@ -175,10 +177,12 @@
     color: white;
 }
 
-.sunat-form-actions .btn-primary:hover:not(:disabled) {
-    background-color: #0b5ed7;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+@media (hover: hover) {
+  .sunat-form-actions .btn-primary:hover:not(:disabled) {
+      background-color: #0b5ed7;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+  }
 }
 
 .sunat-form-actions .btn:active {

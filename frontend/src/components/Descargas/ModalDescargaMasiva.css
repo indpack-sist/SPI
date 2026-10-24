@@ -25,7 +25,9 @@
   background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer;
   transition: background .14s, color .14s, border-color .14s;
 }
-.dmm-x:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+@media (hover: hover) {
+  .dmm-x:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+}
 .dmm-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 10px 0 18px; }
 
 .dmm-opts { display: flex; flex-direction: column; gap: 10px; }
@@ -34,7 +36,9 @@
   border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
   transition: border-color .16s, background .16s, transform .1s;
 }
-.dmm-opt:hover { border-color: var(--text-secondary); }
+@media (hover: hover) {
+  .dmm-opt:hover { border-color: var(--text-secondary); }
+}
 .dmm-opt:active { transform: scale(.99); }
 .dmm-opt.on {
   border-color: #22c55e;
@@ -54,7 +58,11 @@
 }
 .dmm-btn:active { transform: translateY(1px); }
 .dmm-ghost { background: var(--bg-secondary); color: var(--text-secondary); border-color: var(--border); }
-.dmm-ghost:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+@media (hover: hover) {
+  .dmm-ghost:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+}
 .dmm-primary { background: #16a34a; color: #fff; }
-.dmm-primary:hover:not(:disabled) { background: #15803d; }
+@media (hover: hover) {
+  .dmm-primary:hover:not(:disabled) { background: #15803d; }
+}
 .dmm-primary:disabled { opacity: .45; cursor: not-allowed; }

@@ -79,10 +79,13 @@
   border: none; background: none; outline: none; color: var(--text-primary);
   font-size: .84rem; font-weight: 500; cursor: pointer;
 }
-.tz-field select { padding-right: .2rem; }
+.tz-field select { padding-right: .2rem; color-scheme: dark; }
+.tz-field select option { background-color: var(--bg-primary); color: var(--text-primary); }
 .tz-field-date input { cursor: text; color-scheme: dark; }
 :root:not([data-theme="dark"]) .tz-field-date input,
-[data-theme="light"] .tz-field-date input { color-scheme: light; }
+[data-theme="light"] .tz-field-date input,
+:root:not([data-theme="dark"]) .tz-field select,
+[data-theme="light"] .tz-field select { color-scheme: light; }
 .tz-date-sep { color: var(--text-secondary); font-weight: 600; }
 
 .tz-btn {

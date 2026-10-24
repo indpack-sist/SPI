@@ -719,6 +719,11 @@ const TIPO_CP = {
   '12': 'Ticket', '14': 'Serv. públicos', '53': 'Imp. DUA/DSI',
 };
 const tipoCpLabel = (c) => TIPO_CP[c] || (c ? `Cód. ${c}` : '—');
+const FILTROS_COMPRAS_VACIOS = { tipo: 'all', moneda: 'all', desde: '', hasta: '', q: '' };
+const fechaSireISO = (v) => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(v || '').trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
 
 function PanelComprasSunat() {
   const { estado: estadoDescarga, iniciarDescargaCompras } = useDescargaMasiva();
@@ -730,44 +735,87 @@ function PanelComprasSunat() {
   const [error, setError] = useState(null);
   const [consultado, setConsultado] = useState(false);
   const [aviso, setAviso] = useState(null);
+  const [filtros, setFiltros] = useState(FILTROS_COMPRAS_VACIOS);
+  const [periodoConsultado, setPeriodoConsultado] = useState(periodo);
 
   const periodoSunat = periodo.replace('-', '');
+  const periodoConsultadoSunat = periodoConsultado.replace('-', '');
+  const limitesPeriodo = useMemo(() => {
+    const [anio, mes] = periodoConsultado.split('-').map(Number);
+    const ultimo = new Date(anio, mes, 0).getDate();
+    return { min: `${periodoConsultado}-01`, max: `${periodoConsultado}-${String(ultimo).padStart(2, '0')}` };
+  }, [periodoConsultado]);
 
   const consultar = useCallback(async () => {
     setLoading(true); setError(null); setAviso(null);
+    setFiltros(FILTROS_COMPRAS_VACIOS);
     try {
       const res = await sunatAPI.listarComprasSunat(periodoSunat);
       setRows(res.data?.data || []);
+      setPeriodoConsultado(periodo);
       setConsultado(true);
     } catch (e) {
       setError(e?.response?.data?.error || e.message || 'No se pudo consultar.');
       setRows([]);
     } finally { setLoading(false); }
-  }, [periodoSunat]);
+  }, [periodo, periodoSunat]);
+
+  const opcionesTipo = useMemo(() => [...new Set(rows.map((r) => r.tipoCP).filter(Boolean))].sort(), [rows]);
+  const opcionesMoneda = useMemo(() => [...new Set(rows.map((r) => r.moneda).filter(Boolean))].sort(), [rows]);
+
+  const sinTipo = useMemo(() => {
+    const q = filtros.q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filtros.moneda !== 'all' && r.moneda !== filtros.moneda) return false;
+      const fecha = fechaSireISO(r.fechaEmision);
+      if (filtros.desde && (!fecha || fecha < filtros.desde)) return false;
+      if (filtros.hasta && (!fecha || fecha > filtros.hasta)) return false;
+      if (q && ![r.documento, r.razonSocial, r.rucProveedor].some((v) => String(v || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [rows, filtros.q, filtros.moneda, filtros.desde, filtros.hasta]);
+
+  const visibles = useMemo(
+    () => filtros.tipo === 'all' ? sinTipo : sinTipo.filter((r) => r.tipoCP === filtros.tipo),
+    [sinTipo, filtros.tipo]
+  );
+
+  const chipsTipo = useMemo(() => {
+    const conteo = {};
+    sinTipo.forEach((r) => { conteo[r.tipoCP] = (conteo[r.tipoCP] || 0) + 1; });
+    return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+  }, [sinTipo]);
+
+  const hayFiltros = filtros.tipo !== 'all' || filtros.moneda !== 'all' || filtros.desde || filtros.hasta || filtros.q;
+  const clavesVisibles = useMemo(
+    () => visibles.map((r) => `${r.rucProveedor}-${r.tipoCP}-${r.serie}-${r.numero}`),
+    [visibles]
+  );
 
   const exportar = useCallback(async () => {
     setExportando(true); setAviso(null);
-    try { await sunatAPI.descargarComprasExcel(periodoSunat); }
+    try { await sunatAPI.descargarComprasExcel(periodoConsultadoSunat, clavesVisibles); }
     catch (e) { setAviso(e?.message || 'No se pudo exportar el Excel.'); }
     finally { setExportando(false); }
-  }, [periodoSunat]);
+  }, [periodoConsultadoSunat, clavesVisibles]);
 
   const descargarTodo = useCallback(async () => {
     if (!soportaDescargaCarpetas()) { setAviso('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.'); return; }
     setAviso(null);
-    try { await iniciarDescargaCompras(rows, periodoSunat); }
+    try { await iniciarDescargaCompras(visibles, periodoConsultadoSunat); }
     catch (e) { setAviso(e?.message || 'No se pudo iniciar la descarga.'); }
-  }, [rows, periodoSunat, iniciarDescargaCompras]);
+  }, [visibles, periodoConsultadoSunat, iniciarDescargaCompras]);
 
   const totalPEN = useMemo(
-    () => rows.filter((r) => r.moneda === 'PEN').reduce((s, r) => s + (Number(r.total) || 0), 0),
-    [rows]
+    () => visibles.filter((r) => r.moneda === 'PEN').reduce((s, r) => s + (Number(r.total) || 0), 0),
+    [visibles]
   );
   const totalUSD = useMemo(
-    () => rows.filter((r) => r.moneda === 'USD').reduce((s, r) => s + (Number(r.total) || 0), 0),
-    [rows]
+    () => visibles.filter((r) => r.moneda === 'USD').reduce((s, r) => s + (Number(r.total) || 0), 0),
+    [visibles]
   );
   const hayResultados = consultado && !loading && !error && rows.length > 0;
+  const setFiltro = (campo, valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
 
   return (
     <div className="tz-descarga">
@@ -795,10 +843,62 @@ function PanelComprasSunat() {
         </div>
       )}
 
-      {hayResultados && (
+      {hayResultados && (<>
+        <section className="tz-toolbar">
+          <div className="tz-search">
+            <Search size={15} />
+            <input value={filtros.q} onChange={(e) => setFiltro('q', e.target.value)}
+              placeholder="Buscar comprobante, proveedor o RUC…" />
+            {filtros.q && <button className="tz-search-clear" onClick={() => setFiltro('q', '')} aria-label="Limpiar búsqueda"><X size={13} /></button>}
+          </div>
+          <div className="tz-filters">
+            <label className="tz-field">
+              <Layers size={13} />
+              <select value={filtros.tipo} onChange={(e) => setFiltro('tipo', e.target.value)}>
+                <option value="all">Todo tipo</option>
+                {opcionesTipo.map((t) => <option key={t} value={t}>{tipoCpLabel(t)}</option>)}
+              </select>
+            </label>
+            <label className="tz-field">
+              <Filter size={13} />
+              <select value={filtros.moneda} onChange={(e) => setFiltro('moneda', e.target.value)}>
+                <option value="all">Toda moneda</option>
+                {opcionesMoneda.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            <label className="tz-field tz-field-date">
+              <CalendarDays size={13} />
+              <input type="date" value={filtros.desde} min={limitesPeriodo.min} max={limitesPeriodo.max}
+                onChange={(e) => setFiltro('desde', e.target.value)} title="Desde" />
+            </label>
+            <label className="tz-field tz-field-date">
+              <span className="tz-date-sep">→</span>
+              <input type="date" value={filtros.hasta} min={limitesPeriodo.min} max={limitesPeriodo.max}
+                onChange={(e) => setFiltro('hasta', e.target.value)} title="Hasta" />
+            </label>
+            <button className="tz-btn tz-btn-ghost" onClick={() => setFiltros(FILTROS_COMPRAS_VACIOS)} disabled={!hayFiltros}>
+              <RotateCcw size={14} /> Limpiar
+            </button>
+          </div>
+        </section>
+
+        <section className="tz-chips">
+          <span className={`tz-chip total ${filtros.tipo === 'all' ? 'on' : ''}`} onClick={() => setFiltro('tipo', 'all')}>
+            <b>{sinTipo.length}</b> comprobantes
+          </span>
+          {chipsTipo.map(([tipo, n]) => (
+            <span key={tipo} className={`tz-chip ${filtros.tipo === tipo ? 'on' : ''}`} style={{ '--c': 'var(--accent)' }}
+              onClick={() => setFiltro('tipo', filtros.tipo === tipo ? 'all' : tipo)}>
+              <i /> {tipoCpLabel(tipo)} <b>{n}</b>
+            </span>
+          ))}
+        </section>
+      </>)}
+
+      {hayResultados && visibles.length > 0 && (
         <div className="tz-dm-actionbar has-sel">
           <div className="tz-dm-count">
-            <b>{rows.length}</b> comprobante(s)
+            <b>{visibles.length}</b>{hayFiltros && <> de {rows.length}</>} comprobante(s)
             {totalPEN > 0 && <> · Total {fmtMoneda(totalPEN, 'PEN')}</>}
             {totalUSD > 0 && <> · {fmtMoneda(totalUSD, 'USD')}</>}
           </div>
@@ -819,6 +919,8 @@ function PanelComprasSunat() {
         <div className="tz-state"><CalendarDays size={26} /><strong>Elige un periodo</strong><span>Selecciona el mes y pulsa Consultar.</span></div>
       ) : !rows.length ? (
         <div className="tz-state"><FileCheck2 size={26} /><strong>Sin comprobantes</strong><span>SUNAT no reporta compras en ese periodo, o el mes en curso aún se consolida.</span></div>
+      ) : !visibles.length ? (
+        <div className="tz-state"><FileCheck2 size={26} /><strong>Sin resultados</strong><span>Ajusta los filtros para ver más comprobantes.</span></div>
       ) : (
         <div className="tz-table-wrap">
           <table className="tz-table tz-table-descarga">
@@ -832,7 +934,7 @@ function PanelComprasSunat() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
+              {visibles.map((r, i) => (
                 <tr key={`${r.rucProveedor}-${r.tipoCP}-${r.documento}-${i}`} className="tz-dm-row" style={{ '--i': Math.min(i, 24) }}>
                   <td className="tz-nowrap">{r.fechaEmision || '—'}</td>
                   <td>

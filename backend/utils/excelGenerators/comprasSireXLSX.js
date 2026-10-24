@@ -1,8 +1,5 @@
 import ExcelJS from 'exceljs';
-import { EXPORT_COLUMNS, COL } from '../../services/sunat/sire-compras.parser.js';
-
-const claveComprobante = (cols) =>
-  `${(cols[COL.nroDocId] || '').trim()}-${(cols[COL.tipoCP] || '').trim()}-${(cols[COL.serie] || '').trim()}-${(cols[COL.nroCP] || '').trim()}`;
+import { EXPORT_COLUMNS, claveComprobante } from '../../services/sunat/sire-compras.parser.js';
 
 const EMPRESA = {
   ruc: '20550932297',

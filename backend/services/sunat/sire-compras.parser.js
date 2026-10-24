@@ -56,6 +56,15 @@ export const EXPORT_COLUMNS = [
   { label: 'Detracción', idx: COL.detraccion, type: 'text' }
 ];
 
+export const claveComprobante = (cols) =>
+  `${(cols[COL.nroDocId] || '').trim()}-${(cols[COL.tipoCP] || '').trim()}-${(cols[COL.serie] || '').trim()}-${(cols[COL.nroCP] || '').trim()}`;
+
+export function filtrarPorClaves(filas, claves) {
+  if (!Array.isArray(claves)) return filas;
+  const set = new Set(claves.map(String));
+  return filas.filter((cols) => set.has(claveComprobante(cols)));
+}
+
 export function parseComprasPropuesta(texto) {
   if (!texto || typeof texto !== 'string') return [];
   return texto.split(/\r?\n/)

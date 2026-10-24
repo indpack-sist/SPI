@@ -125,6 +125,7 @@ export function DescargaMasivaProvider({ children }) {
     const fallidos = [];
     const omitidos = [];
     const glosas = {};
+    const claves = comprobantes.map((c) => `${c.rucProveedor}-${c.tipoCP}-${c.serie}-${c.numero}`);
 
     for (let i = 0; i < comprobantes.length; i++) {
       if (cancelarRef.current) break;
@@ -160,7 +161,7 @@ export function DescargaMasivaProvider({ children }) {
     if (!cancelarRef.current) {
       try {
         setEstado((e) => ({ ...e, actual: 'Generando Excel con glosa…' }));
-        const blob = await sunatAPI.obtenerBlobExcelCompras(periodo, glosas);
+        const blob = await sunatAPI.obtenerBlobExcelCompras(periodo, glosas, claves);
         await escribir(padre, `compras-sunat-${periodo}.xlsx`, blob);
       } catch (err) {
         fallidos.push({ documento: `compras-sunat-${periodo}.xlsx`, archivo: 'Excel', error: err?.message || 'error' });

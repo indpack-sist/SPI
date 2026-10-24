@@ -1369,11 +1369,12 @@ export const sunatAPI = {
   },
 
   listarComprasSunat: (periodo) => api.get(`/sunat/compras/periodo?periodo=${encodeURIComponent(periodo)}`),
-  descargarComprasExcel: async (periodo) => {
-    const response = await fetch(`${API_URL}/sunat/compras/periodo/excel?periodo=${encodeURIComponent(periodo)}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      cache: 'no-store'
+  descargarComprasExcel: async (periodo, claves) => {
+    const response = await fetch(`${API_URL}/sunat/compras/periodo/excel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ periodo, claves })
     });
     if (!response.ok) {
       let msg = 'No se pudo generar el Excel';
@@ -1394,12 +1395,12 @@ export const sunatAPI = {
     const qs = new URLSearchParams({ ruc, tipo, serie, numero }).toString();
     return api.get(`/sunat/compras/comprobante?${qs}`);
   },
-  obtenerBlobExcelCompras: async (periodo, glosas) => {
+  obtenerBlobExcelCompras: async (periodo, glosas, claves) => {
     const response = await fetch(`${API_URL}/sunat/compras/periodo/excel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
       cache: 'no-store',
-      body: JSON.stringify({ periodo, glosas })
+      body: JSON.stringify({ periodo, glosas, claves })
     });
     if (!response.ok) {
       let msg = 'No se pudo generar el Excel';

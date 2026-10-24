@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { parseComprasPropuesta, filaATabla, EXPORT_COLUMNS } from '../services/sunat/sire-compras.parser.js';
+import { parseComprasPropuesta, filaATabla, EXPORT_COLUMNS, claveComprobante, filtrarPorClaves } from '../services/sunat/sire-compras.parser.js';
 
 const header = 'RUC|Apellidos y Nombres o Razón social|Periodo|CAR SUNAT|Fecha de emisión|Fecha Vcto/Pago|Tipo CP/Doc.|Serie del CDP|Año|Nro CP o Doc. Nro Inicial (Rango)|Nro Final (Rango)|Tipo Doc Identidad|Nro Doc Identidad|Apellidos Nombres/ Razón  Social|BI Gravado DG|IGV / IPM DG|BI Gravado DGNG|IGV / IPM DGNG|BI Gravado DNG|IGV / IPM DNG|Valor Adq. NG|ISC|ICBPER|Otros Trib/ Cargos|Total CP|Moneda|Tipo de Cambio|Fecha Emisión Doc Modificado|Tipo CP Modificado|Serie CP Modificado|COD. DAM O DSI|Nro CP Modificado|Clasif de Bss y Sss|ID Proyecto Operadores|PorcPart|IMB|CAR Orig/ Ind E o I|Detracción|Tipo de Nota|Est. Comp.';
 const r1 = '20550932297|INDPACK S.A.C.|202609|2061033441601E0010000000001|04/09/2026||01|E001||1||6|20610334416|INVERSIONES GRN E.I.R.L.|3955.70|712.03|0.00|0.00|0.00|0.00|0.00|0.00|0.00|0.00|4667.73|PEN|1.000|||||||||0.00||||1|0';
@@ -29,4 +29,9 @@ assert.strictEqual(filas[0][EXPORT_COLUMNS[18].idx], '4667.73', 'Total CP por in
 assert.strictEqual(EXPORT_COLUMNS[25].label, 'Detracción');
 assert.strictEqual(EXPORT_COLUMNS[25].idx, 37, 'Detracción en indice 37');
 
-console.log('OK parser propuesta RCE: 12/12');
+assert.strictEqual(claveComprobante(filas[1]), '20603404492-01-E001-1051', 'clave comprobante');
+assert.strictEqual(filtrarPorClaves(filas, undefined).length, 2, 'sin claves no filtra');
+assert.deepStrictEqual(filtrarPorClaves(filas, ['20603404492-01-E001-1051']).map(filaATabla).map((t) => t.documento), ['E001-1051'], 'filtra por clave');
+assert.strictEqual(filtrarPorClaves(filas, []).length, 0, 'claves vacias = nada');
+
+console.log('OK parser propuesta RCE: 16/16');

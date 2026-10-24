@@ -550,7 +550,7 @@ function NuevaCompra() {
                 ) : (
                   <button 
                     type="button" 
-                    className="w-full py-8 border-2 border-dashed border-gray-200 rounded text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" 
+                    className="w-full py-8 bg-transparent border-2 border-dashed border-gray-200 rounded text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" 
                     onClick={() => setModalProveedorOpen(true)}
                   >
                     <Search size={32} />

@@ -395,5 +395,9 @@
 
 @media (max-width: 1023px), (pointer: coarse) {
   .tz-iconbtn { width: 44px; height: 44px; }
+  .tz-link { min-height: 44px; display: inline-flex; align-items: center; }
+  .tz-field { min-height: 44px; padding-block: 0; }
+  .tz-field select, .tz-field input { min-height: 42px; }
+  .tz-refresh, .tz-btn { min-height: 44px; }
   .tz-drawer-close { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
 }

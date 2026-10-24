@@ -898,6 +898,11 @@ a:focus-visible,
 .bg-carbon-mid   { background-color: var(--carbon-mid); }
 .bg-carbon-light { background-color: var(--carbon-light); }
 .bg-transparent  { background-color: transparent; }
+.bg-primary { background-color: var(--accent); }
+.bg-danger { background-color: var(--danger); }
+.bg-red-600 { background-color: var(--danger); }
+.bg-info { background-color: var(--info); }
+.bg-danger\/20 { background-color: color-mix(in srgb, var(--danger) 20%, transparent); }
 .bg-steel-light  { background-color: var(--steel-light); }
 .text-mist       { color: var(--mist); }
 .text-wire       { color: var(--wire); }
@@ -1595,6 +1600,9 @@ a:focus-visible,
    ===================================================== */
 
 html { scroll-behavior: smooth; }
+:where(button) { background-color: transparent; color: inherit; }
+.ui-pagination { flex-wrap: wrap; }
+.ui-pagination .pagination-nav { flex-wrap: wrap; justify-content: center; }
 *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
 /* =====================================================
@@ -1679,7 +1687,7 @@ html { scroll-behavior: smooth; }
   .table .btn-xs { width: auto; min-height: 32px; }
 
   .card-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
-  .card-title  { width: 100%; justify-content: space-between; }
+  .card-title  { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
 
   .modal-overlay { align-items: flex-end; }
 
@@ -2172,7 +2180,7 @@ input.bg-blue-50 {
     text-transform: uppercase;
     overflow-wrap: break-word;
     grid-column: 1;
-    grid-row: 1 / span 12;
+    grid-row: 1 / span 8;
     align-self: center;
   }
 
@@ -2351,8 +2359,52 @@ input.bg-blue-50 {
   }
 
   .pagination-page-btn,
-  .btn.btn-icon {
+  .btn.btn-icon,
+  .btn-sm,
+  .btn-xs {
     min-width: 44px;
+  }
+
+  .form-select-sm,
+  .pg-field .form-input,
+  .pg-field .form-select {
+    height: auto;
+    min-height: 44px;
+  }
+
+  table.responsive-table-cards td button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  :where(.layout-content, .pg-drawer, .modal-content) :where(button) {
+    min-height: 44px;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    min-height: 44px;
+  }
+
+  .ov-pager__btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .section-toggle,
+  button.badge,
+  .pg-segmented.vt-tabs button {
+    min-height: 44px;
+  }
+
+  .pg-iconbtn {
+    flex-shrink: 0;
+  }
+
+  .pg-iconbtn.pd-iconbtn-lg {
+    width: 44px;
+    height: 44px;
   }
 
   .table .btn,
@@ -2398,7 +2450,7 @@ input.bg-blue-50 {
 
   table.responsive-table-cards > :where(tbody, tfoot) > tr > td {
     grid-template-columns: minmax(5.5rem, 0.72fr) minmax(0, 1.28fr);
-    gap: 0.625rem;
+    column-gap: 0.625rem;
   }
 
   .ui-pagination .pagination-nav {

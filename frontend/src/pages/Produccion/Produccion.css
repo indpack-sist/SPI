@@ -527,3 +527,9 @@ input.form-input.pd-readonly-code { font-family: ui-monospace, SFMono-Regular, M
 @media (max-width: 480px) {
   .pd-date { width: 100%; }
 }
+@media (max-width: 1023px), (pointer: coarse) {
+  .pd-event { min-height: 44px; }
+}
+@media (max-width: 1023px) {
+  .pd-progress-top span { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+}

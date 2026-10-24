@@ -424,3 +424,6 @@
   .rv-status-row { grid-template-columns: 6.5rem minmax(0, 1fr) auto; }
   .rv-date { width: 100%; }
 }
+@media (max-width: 1023px), (pointer: coarse) {
+  .rv-files .pg-iconbtn { width: 44px; height: 44px; }
+}

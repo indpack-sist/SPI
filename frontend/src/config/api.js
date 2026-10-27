@@ -60,7 +60,7 @@ api.interceptors.response.use(
     }
 
     const esTokenExpirado = status === 401 && data?.code === 'TOKEN_EXPIRED';
-    const esUsuarioInactivo = status === 401 && data?.code === 'USER_INACTIVE';
+    const esUsuarioInactivo = status === 401 && ['USER_INACTIVE', 'ACCOUNT_DISABLED'].includes(data?.code);
     const esSesionInvalida = esTokenExpirado || esUsuarioInactivo;
 
     if (esSesionInvalida) {

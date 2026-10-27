@@ -247,7 +247,7 @@ const PERMISOS_POR_ROL = {
       productos: true,
       consultarStock: true,
       entradas: true,
-      outputs: true,
+      salidas: true,
       transferencias: true,
       ordenesProduccion: true,
       incidencias: true,

@@ -6,7 +6,7 @@ import {
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import UbigeoSelector from '../../common/UbigeoSelector';
-import { guiasRemisionAPI, ordenesVentaAPI } from '../../../config/api';
+import { guiasRemisionAPI, ordenesVentaAPI, sunatAPI } from '../../../config/api';
 import '../../../pages/Ventas/Ventas.css';
 
 const MODO_LABEL = {
@@ -15,14 +15,19 @@ const MODO_LABEL = {
   flota: 'Flota propia',
 };
 
-function Dato({ etiqueta, valor, mono = false }) {
+function Dato({ etiqueta, valor, mono = false, alerta = null }) {
   return (
     <div>
-      <label className="text-xs text-muted uppercase font-semibold">{etiqueta}</label>
-      <p className={`${mono ? 'font-mono' : 'font-medium'}`}>{valor || valor === 0 ? valor : '—'}</p>
+      <label className={`text-xs uppercase font-semibold ${alerta ? 'text-danger' : 'text-muted'}`}>{etiqueta}</label>
+      <p className={`${mono ? 'font-mono' : 'font-medium'} ${alerta ? 'text-danger' : ''}`}>{valor || valor === 0 ? valor : '—'}</p>
+      {alerta && <small className="text-danger">{alerta}</small>}
     </div>
   );
 }
+
+const hoyIsoLima = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(new Date());
 
 function modoDeGuia(guia) {
   if (guia?.id_transportista) return 'tercero';
@@ -47,15 +52,38 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
 
   const [form, setForm] = useState(null);
   const [topes, setTopes] = useState({});
+  const [validacion, setValidacion] = useState(null);
 
   const modo = modoDeGuia(guia);
   const esComex = Number(guia?.es_comercio_exterior) === 1;
   const registrar = guia?.transporte_registrar !== 0;
 
-  const despachada = ['En Tránsito', 'Entregada'].includes(guia?.estado);
-  const bloqueada = ['ACEPTADO', 'ENVIADO'].includes(guia?.sunat_estado) || guia?.estado === 'Anulada' || despachada;
+  const enTransito = guia?.estado === 'En Tránsito';
+  const entregada = guia?.estado === 'Entregada';
+  const bloqueada = ['ACEPTADO', 'ENVIADO'].includes(guia?.sunat_estado) || guia?.estado === 'Anulada' || entregada;
   const puedeEditar = !soloLectura && !bloqueada && guia?.tipo_origen !== 'Compra';
-  const editarLineas = puedeEditar && !esComex;
+  const editarLineas = puedeEditar && !esComex && !enTransito;
+
+  useEffect(() => {
+    if (!puedeEditar || !guia?.id_guia) { setValidacion(null); return; }
+    let activo = true;
+    sunatAPI.validarGuia(guia.id_guia)
+      .then((r) => { if (activo) setValidacion(r.data || null); })
+      .catch(() => { if (activo) setValidacion(null); });
+    return () => { activo = false; };
+  }, [guia, puedeEditar]);
+
+  const esMotivoOtros = String(guia?.motivo_traslado_cod) === '13';
+  const erroresSunat = validacion?.errores || [];
+  const alertaDe = (...campos) => erroresSunat.find((e) => campos.includes(e.campo))?.mensaje || null;
+  const fechaEntregaForm = form?.transporte_fecha_entrega || '';
+  const alertaFechaEntregaForm = form?.modo !== 'tercero'
+    ? null
+    : !fechaEntregaForm
+      ? 'Obligatoria en transporte público: sin ella SUNAT rechaza la guía (error 3617).'
+      : fechaEntregaForm < hoyIsoLima()
+        ? 'Es anterior a hoy: SUNAT la rechaza si es anterior a la fecha de emisión.'
+        : null;
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -116,6 +144,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
       ubigeo_llegada: guia.ubigeo_llegada || '', ciudad_llegada: guia.ciudad_llegada || '',
       destinatario_ruc: guia.destinatario_ruc || '', destinatario_razon: guia.destinatario_razon || '',
       observaciones: guia.observaciones || '',
+      motivo_descripcion: guia.motivo_descripcion || '',
       fecha_traslado: guia.fecha_traslado ? String(guia.fecha_traslado).slice(0, 10) : '',
       lineas: (guia.detalle || []).map((d) => ({
         id_detalle: d.id_detalle,
@@ -162,6 +191,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
         observaciones: form.observaciones,
         fecha_traslado: form.fecha_traslado,
       };
+      if (esMotivoOtros) payload.motivo_descripcion = String(form.motivo_descripcion || '').replace(/\s+/g, ' ').trim();
       if (esComex) {
         payload.destinatario_ruc = form.destinatario_ruc;
         payload.destinatario_razon = form.destinatario_razon;
@@ -180,9 +210,9 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
             transporte_ind_transbordo: Number(form.transporte_ind_transbordo) ? 1 : 0,
             transporte_ind_m1l: Number(form.transporte_ind_m1l) ? 1 : 0,
             transporte_ind_retorno_vacio: Number(form.transporte_ind_retorno_vacio) ? 1 : 0,
-            transporte_fecha_entrega: form.transporte_fecha_entrega || null,
           });
         }
+        payload.transporte_fecha_entrega = form.transporte_fecha_entrega || null;
       } else if (form.modo === 'particular') {
         Object.assign(payload, {
           transporte_placa: form.transporte_placa, transporte_conductor: form.transporte_conductor,
@@ -201,7 +231,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
           cantidad: parseFloat(l.cantidad) || 0,
           peso_unitario_kg: parseFloat(l.peso_unitario_kg) || 0,
         }));
-        payload.peso_bruto_kg = pesoBrutoDe(form.lineas);
+        if (!(parseFloat(form.peso_bruto_kg) > 0)) payload.peso_bruto_kg = pesoBrutoDe(form.lineas);
       }
       const resp = await guiasRemisionAPI.update(guia.id_guia, payload);
       if (resp.data?.success) {
@@ -264,10 +294,33 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                 ? 'La GRE fue aceptada por SUNAT: los datos quedan en solo lectura.'
                 : guia?.estado === 'Anulada'
                   ? 'La guía está anulada: solo lectura.'
-                  : despachada
-                    ? 'La guía ya fue despachada (en tránsito/entregada): solo lectura.'
+                  : entregada
+                    ? 'La guía ya fue entregada: solo lectura.'
                     : 'Hay un envío en curso: espera el resultado para poder editar.'}
             </span>
+          </div>
+        )}
+
+        {puedeEditar && enTransito && (
+          <div className="flex items-start gap-2 text-sm text-muted">
+            <AlertCircle size={16} className="vt-mt-05 flex-shrink-0" />
+            <span>La guía ya está en tránsito: puedes corregir los datos de traslado (fechas, peso, transporte, llegada), pero no los productos.</span>
+          </div>
+        )}
+
+        {erroresSunat.length > 0 && (
+          <div className="border border-red-300 bg-red-50 rounded-lg p-3 vt-sy-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="flex items-center gap-2 font-semibold text-danger">
+                <AlertCircle size={16} /> Corrige esto antes de emitir (SUNAT rechazaría la guía)
+              </span>
+              <button className="btn btn-outline btn-sm" onClick={abrirEdicion}>
+                <Edit size={14} /> Corregir
+              </button>
+            </div>
+            <ul className="text-sm text-danger list-disc pl-5">
+              {erroresSunat.map((e) => <li key={`${e.codigo}-${e.mensaje}`}>{e.mensaje}</li>)}
+            </ul>
           </div>
         )}
 
@@ -339,9 +392,9 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
 
         <div className="grid grid-cols-4 gap-4 border-t pt-4">
           <Dato etiqueta="Fecha de traslado" valor={estadoFecha(guia.fecha_traslado)} />
-          <Dato etiqueta="Peso bruto (kg)" valor={guia.peso_bruto_kg != null ? Number(guia.peso_bruto_kg).toFixed(2) : null} mono />
+          <Dato etiqueta="Peso bruto (kg)" valor={guia.peso_bruto_kg != null ? Number(guia.peso_bruto_kg).toFixed(2) : null} mono alerta={alertaDe('guia.peso_bruto_kg')} />
           <Dato etiqueta="Bultos" valor={guia.numero_bultos} mono />
-          {modo === 'tercero' && registrar && <Dato etiqueta="Entrega al transportista" valor={estadoFecha(guia.transporte_fecha_entrega)} />}
+          {modo === 'tercero' && <Dato etiqueta="Entrega al transportista" valor={estadoFecha(guia.transporte_fecha_entrega)} alerta={alertaDe('transporte.fecha_entrega')} />}
         </div>
       </div>
 
@@ -424,12 +477,14 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Number(form.transporte_ind_m1l) === 1} onChange={(e) => set('transporte_ind_m1l', e.target.checked ? 1 : 0)} /> Vehículo M1/L</label>
                       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Number(form.transporte_ind_retorno_vacio) === 1} onChange={(e) => set('transporte_ind_retorno_vacio', e.target.checked ? 1 : 0)} /> Retorno vacío</label>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Fecha de entrega al transportista</label>
-                      <input type="date" className="form-input" value={form.transporte_fecha_entrega || ''} onChange={(e) => set('transporte_fecha_entrega', e.target.value)} />
-                    </div>
                   </div>
                 )}
+
+                <div className="form-group">
+                  <label className="form-label">Fecha de entrega de bienes al transportista *</label>
+                  <input type="date" className={`form-input ${alertaFechaEntregaForm ? 'border-danger' : ''}`} value={form.transporte_fecha_entrega || ''} onChange={(e) => set('transporte_fecha_entrega', e.target.value)} />
+                  {alertaFechaEntregaForm && <small className="text-danger">{alertaFechaEntregaForm}</small>}
+                </div>
               </div>
             )}
 
@@ -491,13 +546,15 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="form-group">
                   <label className="form-label">Peso bruto (kg)</label>
-                  {editarLineas ? (
-                    <>
-                      <input type="number" className="form-input text-right" value={pesoBrutoDerivado.toFixed(2)} readOnly aria-readonly="true" />
-                      <small className="text-gray-500">Se calcula desde las líneas.</small>
-                    </>
-                  ) : (
-                    <input type="number" step="0.01" className="form-input" value={form.peso_bruto_kg} onChange={(e) => set('peso_bruto_kg', e.target.value)} />
+                  <input type="number" step="0.01" min="0" className={`form-input ${parseFloat(form.peso_bruto_kg) > 0 || (editarLineas && pesoBrutoDerivado > 0) ? '' : 'border-danger'}`} value={form.peso_bruto_kg} onChange={(e) => set('peso_bruto_kg', e.target.value)} />
+                  {editarLineas && (
+                    <small className="text-gray-500">
+                      Suma de las líneas: {pesoBrutoDerivado.toFixed(2)} kg{' '}
+                      <button type="button" className="btn vt-btn-link btn-sm" onClick={() => set('peso_bruto_kg', pesoBrutoDerivado.toFixed(2))}>usar</button>
+                    </small>
+                  )}
+                  {!(parseFloat(form.peso_bruto_kg) > 0) && !(editarLineas && pesoBrutoDerivado > 0) && (
+                    <small className="text-danger block">El peso bruto debe ser mayor a 0.</small>
                   )}
                 </div>
                 <div className="form-group"><label className="form-label">Bultos</label><input type="number" className="form-input" value={form.numero_bultos} onChange={(e) => set('numero_bultos', e.target.value)} /></div>
@@ -560,7 +617,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan="6" className="text-right font-bold">Peso bruto:</td>
+                        <td colSpan="6" className="text-right font-bold">Suma de líneas:</td>
                         <td className="text-right font-bold text-primary">{pesoBrutoDerivado.toFixed(2)} kg</td>
                         <td></td>
                       </tr>
@@ -574,6 +631,14 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
               <div className="grid grid-cols-2 gap-3 border rounded-lg p-4">
                 <div className="form-group"><label className="form-label">Destinatario · RUC</label><input className="form-input" value={form.destinatario_ruc} onChange={(e) => set('destinatario_ruc', e.target.value)} maxLength={11} /></div>
                 <div className="form-group"><label className="form-label">Destinatario · Razón social</label><input className="form-input" value={form.destinatario_razon} onChange={(e) => set('destinatario_razon', e.target.value)} /></div>
+              </div>
+            )}
+
+            {esMotivoOtros && (
+              <div className="form-group">
+                <label className="form-label">Descripción del motivo de traslado (Otros) *</label>
+                <input className={`form-input ${String(form.motivo_descripcion || '').trim().length < 3 ? 'border-danger' : ''}`} maxLength={100} placeholder="Ej: MUESTRAS" value={form.motivo_descripcion} onChange={(e) => set('motivo_descripcion', e.target.value)} />
+                <small className="text-gray-500">Es lo que SUNAT muestra como "Descripción de motivo". Indica qué se traslada.</small>
               </div>
             )}
 

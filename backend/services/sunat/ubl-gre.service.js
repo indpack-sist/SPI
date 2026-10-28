@@ -1,4 +1,5 @@
 import { cdata, trunc } from './ubl.service.js';
+import { limpiarDescripcionMotivo } from './util.service.js';
 
 const MOTIVOS_TRASLADO = {
   '01': 'VENTA',
@@ -74,7 +75,9 @@ export function construirDespatchAdviceXML(d) {
   const modalidad = d.modalidad || '02';
   const idComprobante = `${d.serie}-${d.numero}`;
   const motivoCod = String(g.motivo_traslado_cod);
-  const motivoDesc = MOTIVOS_TRASLADO[motivoCod] || String(g.motivo_traslado || 'TRASLADO').toUpperCase();
+  const motivoDesc = (motivoCod === '13' && limpiarDescripcionMotivo(g.motivo_descripcion))
+    ? limpiarDescripcionMotivo(g.motivo_descripcion)
+    : (MOTIVOS_TRASLADO[motivoCod] || String(g.motivo_traslado || 'TRASLADO').toUpperCase());
   const cliScheme = String(cli.tipo_documento || '').toUpperCase() === 'RUC' ? '6' : '1';
 
   const carrierXml = d.transportista?.ruc

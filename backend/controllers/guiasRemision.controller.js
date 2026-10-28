@@ -742,9 +742,10 @@ export async function updateGuiaRemision(req, res) {
     if (g.sunat_estado === 'ENVIADO') {
       return res.status(409).json({ success: false, error: 'La guía tiene un envío en curso; espera el resultado antes de editar.' });
     }
-    if (g.estado === 'En Tránsito' || g.estado === 'Entregada') {
-      return res.status(409).json({ success: false, error: 'La guía ya fue despachada; no se puede editar.' });
+    if (g.estado === 'Entregada') {
+      return res.status(409).json({ success: false, error: 'La guía ya fue entregada; no se puede editar.' });
     }
+    const enTransito = g.estado === 'En Tránsito';
     if (g.estado === 'Anulada') {
       return res.status(409).json({ success: false, error: 'La guía está anulada; no se puede editar.' });
     }
@@ -783,6 +784,9 @@ export async function updateGuiaRemision(req, res) {
     }
 
     let planLineas = null;
+    if (enTransito && Array.isArray(b.detalle) && b.detalle.length > 0) {
+      return res.status(409).json({ success: false, error: 'La guía ya está en tránsito: no se pueden modificar los productos, solo los datos de traslado.' });
+    }
     if (Array.isArray(b.detalle) && b.detalle.length > 0 && !esComex && g.tipo_origen !== 'Compra') {
       const lineasRes = await executeQuery(
         `SELECT dgr.id_detalle, dgr.id_detalle_orden, dgr.id_producto, dgr.descripcion,
@@ -824,7 +828,10 @@ export async function updateGuiaRemision(req, res) {
       }
     }
 
-    const pesoFinal = planLineas ? planLineas.pesoBruto : (parseFloat(peso) || 0);
+    const pesoManual = b.peso_bruto_kg !== undefined ? (parseFloat(b.peso_bruto_kg) || 0) : 0;
+    const pesoFinal = planLineas
+      ? (pesoManual > 0 ? pesoManual : planLineas.pesoBruto)
+      : (parseFloat(peso) || 0);
     if (!(Number(pesoFinal) > 0)) {
       return res.status(422).json({ success: false, error: 'El peso bruto debe ser mayor a 0' });
     }
@@ -860,6 +867,9 @@ export async function updateGuiaRemision(req, res) {
       indM = pick(b.transporte_ind_m1l, g.transporte_ind_m1l) ? 1 : 0;
       indR = pick(b.transporte_ind_retorno_vacio, g.transporte_ind_retorno_vacio) ? 1 : 0;
       fEntrega = pick(b.transporte_fecha_entrega, fechasActuales.fe) || null;
+      if (fEntrega && !/^\d{4}-\d{2}-\d{2}$/.test(String(fEntrega))) {
+        return res.status(422).json({ success: false, error: 'Fecha de entrega al transportista inválida' });
+      }
 
       if (tReg === 1) {
         tDni = pick(b.transporte_dni, g.transporte_dni) || null;

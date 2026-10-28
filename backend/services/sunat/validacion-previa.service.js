@@ -1,4 +1,4 @@
-import { rucValido, ubigeoValido, dniValido, placaValida, codigoBienValido } from './util.service.js';
+import { rucValido, ubigeoValido, dniValido, placaValida, codigoBienValido, problemaDescripcionMotivo } from './util.service.js';
 
 const MONEDAS_VALIDAS = ['PEN', 'USD'];
 
@@ -132,7 +132,8 @@ export function validarComprobantePrevio({ tipo, ov, cliente, empresa, calc, ord
 
 export function validarGuiaPrevia({
   empresa, guia, destinatario, detalle, esComex, declararVC,
-  conductores = [], vehiculos = [], carrier = null, docsComex = [], mode = 'BETA'
+  conductores = [], vehiculos = [], carrier = null, docsComex = [], mode = 'BETA',
+  esTercero = false, fechaEntregaTransportista = null, fechaEmision = null
 }) {
   const col = nuevaColeccion();
   const g = guia || {};
@@ -154,6 +155,9 @@ export function validarGuiaPrevia({
   }
   if (!String(g.motivo_traslado_cod || '').trim()) {
     col.error('GRE_MOTIVO', 'guia.motivo_traslado_cod', 'Falta el motivo de traslado (catálogo 20).');
+  } else if (String(g.motivo_traslado_cod) === '13') {
+    const problemaMotivo = problemaDescripcionMotivo(g.motivo_descripcion);
+    if (problemaMotivo) col.error('GRE_MOTIVO_DESC', 'guia.motivo_descripcion', problemaMotivo);
   }
 
   if (!destinatario) {
@@ -188,6 +192,16 @@ export function validarGuiaPrevia({
   if (carrier) {
     if (!rucValido(carrier.ruc) || !String(carrier.razon || '').trim()) {
       col.error('GRE_CARRIER', 'transportista', 'El transportista requiere RUC de 11 dígitos y razón social.');
+    }
+  }
+
+  if (esTercero) {
+    if (!fechaEntregaTransportista) {
+      col.error('GRE_FECHA_ENTREGA', 'transporte.fecha_entrega',
+        'Falta la fecha de entrega de bienes al transportista (obligatoria en transporte público, SUNAT 3617).');
+    } else if (fechaEmision && fechaEntregaTransportista < fechaEmision) {
+      col.error('GRE_FECHA_ENTREGA_PASADA', 'transporte.fecha_entrega',
+        `La fecha de entrega al transportista (${fechaEntregaTransportista}) no puede ser anterior a la fecha de emisión (${fechaEmision}).`);
     }
   }
 

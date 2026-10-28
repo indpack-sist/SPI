@@ -9,7 +9,7 @@ import { parsearCdr } from './cdr.service.js';
 import { registrarSunatLog } from './log.service.js';
 import { subirRaw } from '../cloudinary.service.js';
 import { fechaLima } from './fecha.service.js';
-import { sleep, copiaLocal, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, armarDireccionEmpresa } from './util.service.js';
+import { sleep, copiaLocal, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, armarDireccionEmpresa, problemaDescripcionMotivo } from './util.service.js';
 import { validarGuiaPrevia } from './validacion-previa.service.js';
 import { resolverTransporteGuia } from './transporte-guia.service.js';
 import AppError from '../../utils/AppError.js';
@@ -206,6 +206,10 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     if (!g.ubigeo_partida || !g.ubigeo_llegada) throw new AppError('Faltan ubigeos de partida/llegada (6 dígitos)', 422);
     if (!(Number(g.peso_bruto_kg) > 0)) throw new AppError('peso_bruto_kg debe ser > 0', 422);
     if (!g.motivo_traslado_cod) throw new AppError('Falta motivo_traslado_cod (catálogo 20)', 422);
+    if (String(g.motivo_traslado_cod) === '13') {
+      const problemaMotivo = problemaDescripcionMotivo(g.motivo_descripcion);
+      if (problemaMotivo) throw new AppError(problemaMotivo, 422);
+    }
 
     const esComex = Number(g.es_comercio_exterior) === 1;
     let destinatario, proveedor = null, docRelacionado = undefined, docsRelacionadosVenta = [];
@@ -335,6 +339,12 @@ export async function emitirGuiaGre(idGuia, idEmpleado = null, observacionOverri
     }
 
     const fechaEntregaTransportista = (esTercero && ft?.fe) ? ft.fe : null;
+    if (esTercero && !fechaEntregaTransportista) {
+      throw new AppError('Falta la fecha de entrega de bienes al transportista (obligatoria en transporte público). Complétala en "Editar datos" antes de emitir.', 422);
+    }
+    if (fechaEntregaTransportista && fechaEntregaTransportista < emision) {
+      throw new AppError(`La fecha de entrega al transportista (${fechaEntregaTransportista}) no puede ser anterior a hoy (${emision}). Actualízala antes de emitir.`, 422);
+    }
 
     const observacion = observacionOverride !== undefined
   ? String(observacionOverride).replace(/\r\n/g, '\n').trim().slice(0, 250)
@@ -539,8 +549,12 @@ export async function validarGuiaRemisionPrevia(idGuia) {
     docsComex = docs;
   }
 
+  const [[fechas]] = await pool.query(
+    "SELECT DATE_FORMAT(transporte_fecha_entrega, '%Y-%m-%d') AS fe FROM guias_remision WHERE id_guia = ?", [idGuia]);
+
   return validarGuiaPrevia({
     empresa, guia: gView, destinatario, detalle: detalleEmision,
-    esComex, declararVC, conductores, vehiculos, carrier, docsComex, mode: sunatConfig.mode
+    esComex, declararVC, conductores, vehiculos, carrier, docsComex, mode: sunatConfig.mode,
+    esTercero, fechaEntregaTransportista: fechas?.fe || null, fechaEmision: fechaLima().emision
   });
 }

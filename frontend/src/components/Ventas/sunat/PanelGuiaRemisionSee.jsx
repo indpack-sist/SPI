@@ -13,6 +13,22 @@ const placaOk = (p) => /^[A-Z0-9]{6,8}$/.test(normPlaca(p));
 const dniOk = (d) => /^\d{8}$/.test(String(d || '').trim());
 const ubigeoOk = (u) => /^\d{6}$/.test(String(u || '').trim());
 const codigoBienOk = (v) => !v || /^\d{13}$/.test(String(v).trim());
+const PALABRAS_GENERICAS_MOTIVO = [
+  'otro', 'otros', 'traslado', 'traslados', 'transp', 'transporte', 'transportes', 'varios',
+  'venta', 'ventas', 'vta', 'vta.', 'compra', 'compras', 'consignacion', 'devolucion',
+  'importacion', 'exportacion',
+];
+const problemaDescripcionMotivo = (texto) => {
+  const t = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (!t) return 'Obligatoria con motivo "Otros": sin ella SUNAT rechaza la guía (error 3457).';
+  if (t.length < 3) return 'Debe tener al menos 3 caracteres.';
+  if (t.length > 100) return 'Máximo 100 caracteres.';
+  if ((t.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g) || []).length < 3) return 'Debe tener al menos 3 letras.';
+  const palabras = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .split(/[\s,;:()\-/]+/).filter(Boolean);
+  if (palabras.every((p) => PALABRAS_GENERICAS_MOTIVO.includes(p))) return 'Es genérica: indica qué se traslada (ej. "MUESTRAS").';
+  return null;
+};
 
 const MOTIVOS_DOMESTICO = [
   { cod: '01', label: 'Venta' },
@@ -139,6 +155,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
         setEmitForm({
       es_comercio_exterior: comex,
       motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : (esCompra ? '02' : '01')),
+      motivo_descripcion: guia?.motivo_descripcion || '',
       peso_bruto_kg: guia?.peso_bruto_kg ?? '',
       direccion_llegada: direccionLlegada,
       ubigeo_llegada: ubigeoGuardado || ubicacion?.codigo || '',
@@ -263,6 +280,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
       ciudad_llegada: f.ciudad_llegada,
       peso_bruto_kg: f.peso_bruto_kg,
       motivo_traslado_cod: f.motivo_traslado_cod,
+      ...(f.motivo_traslado_cod === '13' ? { motivo_descripcion: String(f.motivo_descripcion || '').replace(/\s+/g, ' ').trim() } : {}),
       es_comercio_exterior: f.es_comercio_exterior,
       transporte,
       codigos_bien: Object.entries(f.codigosBien || {})
@@ -374,12 +392,15 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   );
 
   const codigosBienOk = !f ? true : Object.values(f.codigosBien || {}).every(codigoBienOk);
-  const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod && codigosBienOk;
+  const problemaMotivo = f?.motivo_traslado_cod === '13' ? problemaDescripcionMotivo(f.motivo_descripcion) : null;
+  const vGeneral = !!f && Number(f.peso_bruto_kg) > 0 && !!f.motivo_traslado_cod && !problemaMotivo && codigosBienOk;
   const vLlegada = !!f && !!String(f.direccion_llegada).trim() && ubigeoOk(f.ubigeo_llegada);
+  const fechaEntregaOk = !!f?.tFechaEntrega && f.tFechaEntrega >= hoyIsoLima;
   const vTransporte = !f ? false : (
     f.transporteModo === 'tercero'
       ? (
-          (f.nuevoTransportista
+          fechaEntregaOk
+          && (f.nuevoTransportista
             ? (/^\d{11}$/.test(String(f.transportistaRuc).trim()) && !!String(f.transportistaRazon).trim())
             : !!(f.id_transportista || guia?.id_transportista))
           && (!f.registrar || (
@@ -549,6 +570,13 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   <select className="form-input w-full text-sm" value={f.motivo_traslado_cod} onChange={(e) => setF('motivo_traslado_cod', e.target.value)}>
                     {MOTIVOS_ACTUALES.map((m) => <option key={m.cod} value={m.cod}>{m.label} ({m.cod})</option>)}
                   </select>
+                  {f.motivo_traslado_cod === '13' && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-semibold text-muted mb-1">Descripción del motivo *</label>
+                      <input className={`form-input w-full text-sm ${problemaMotivo ? 'border-danger' : ''}`} maxLength={100} placeholder="Ej: MUESTRAS" value={f.motivo_descripcion} onChange={(e) => setF('motivo_descripcion', e.target.value)} />
+                      {problemaMotivo && <p className="vt-fs-11 text-danger mt-1">{problemaMotivo}</p>}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -781,10 +809,19 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                           <div><label className="block vt-fs-11 text-muted mb-1">Licencia 2</label><input className="form-input w-full text-sm" value={f.tLicencia2} onChange={(e) => setF('tLicencia2', e.target.value)} /></div>
                         </div>
                       </details>
-                      <div><label className="block vt-fs-11 text-muted mb-1">Fecha de entrega al transportista (opcional)</label><input type="date" className="form-input w-full text-sm" value={f.tFechaEntrega} onChange={(e) => setF('tFechaEntrega', e.target.value)} /></div>
                       <p className="vt-fs-11 text-muted">Precargado con lo registrado en la guía. Si no cambias nada, se emite tal cual.</p>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block vt-fs-11 text-muted mb-1">Fecha de entrega de bienes al transportista *</label>
+                    <input type="date" min={hoyIsoLima} className={`form-input w-full text-sm ${fechaEntregaOk ? '' : 'border-danger'}`} value={f.tFechaEntrega} onChange={(e) => setF('tFechaEntrega', e.target.value)} />
+                    {!fechaEntregaOk && (
+                      <p className="vt-fs-11 text-danger mt-1">
+                        {f.tFechaEntrega ? 'No puede ser anterior a hoy (SUNAT la rechaza).' : 'Obligatoria en transporte público: sin ella SUNAT rechaza la guía (error 3617).'}
+                      </p>
+                    )}
+                  </div>
 
                   <div className="border border-gray-200 rounded p-2 text-xs vt-sy-1">
                     <div className="vt-fs-10 text-muted uppercase">Indicadores (opcional)</div>
@@ -926,7 +963,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                 <div className="vt-fs-10 text-muted uppercase mb-1">Traslado</div>
                 <div className="grid grid-cols-1 vt-md-cols-2 vt-gapx-4 vt-gapy-1">
                   <div className="flex justify-between gap-2"><span className="text-muted">Comercio exterior:</span><span>{f.es_comercio_exterior ? 'Sí' : 'No'}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{labelMotivo(f.motivo_traslado_cod)} ({f.motivo_traslado_cod})</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-muted">Motivo:</span><span className="text-right">{labelMotivo(f.motivo_traslado_cod)} ({f.motivo_traslado_cod}){f.motivo_traslado_cod === '13' && f.motivo_descripcion ? ` — ${f.motivo_descripcion}` : ''}</span></div>
                   <div className="flex justify-between gap-2"><span className="text-muted">Modalidad:</span><span className="text-right">{resTransporte?.modalidad}</span></div>
                   <div className="flex justify-between gap-2"><span className="text-muted">Peso bruto:</span><span>{fmtPeso(f.peso_bruto_kg)}</span></div>
                 </div>

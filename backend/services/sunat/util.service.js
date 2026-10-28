@@ -66,3 +66,26 @@ export function armarDireccionEmpresa(cfg = {}) {
   const ubicacion = [cfg.departamento, cfg.provincia, cfg.distrito].filter(valorReal).join(' - ');
   return [partes, ubicacion].filter(Boolean).join(' ').trim();
 }
+
+const PALABRAS_GENERICAS_MOTIVO = [
+  'otro', 'otros', 'traslado', 'traslados', 'transp', 'transporte', 'transportes', 'varios',
+  'venta', 'ventas', 'vta', 'vta.', 'compra', 'compras', 'consignacion', 'devolucion',
+  'importacion', 'exportacion',
+];
+
+export function limpiarDescripcionMotivo(texto) {
+  return String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+export function problemaDescripcionMotivo(texto) {
+  const t = limpiarDescripcionMotivo(texto);
+  if (!t) return 'Falta la descripción del motivo de traslado (obligatoria con motivo "Otros", SUNAT 3457).';
+  if (t.length < 3) return 'La descripción del motivo debe tener al menos 3 caracteres.';
+  if ((t.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g) || []).length < 3) return 'La descripción del motivo debe tener al menos 3 letras.';
+  const palabras = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .split(/[\s,;:()\-/]+/).filter(Boolean);
+  if (palabras.every((p) => PALABRAS_GENERICAS_MOTIVO.includes(p))) {
+    return `La descripción del motivo "${t}" es genérica: indica qué se traslada (ej. "MUESTRAS").`;
+  }
+  return null;
+}

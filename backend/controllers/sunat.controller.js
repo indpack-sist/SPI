@@ -12,7 +12,7 @@ import { anularGuiaRemision } from '../services/sunat/gre-anulacion.service.js';
 import { emitirGuiaGre, cerrarTicketGre, validarGuiaRemisionPrevia } from '../services/sunat/gre-emision.service.js';
 import { upsertTransportista } from '../services/sunat/transportista.service.js';
 import { fechaLima } from '../services/sunat/fecha.service.js';
-import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido } from '../services/sunat/util.service.js';import { firmarXml } from '../services/sunat/firma.service.js';
+import { sleep, copiaLocal, extraerUrl, normalizarPlaca, componerObservacion, componerObservacionGuia, placaValida, dniValido, ubigeoValido, codigoBienValido, problemaDescripcionMotivo, limpiarDescripcionMotivo } from '../services/sunat/util.service.js';import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
@@ -1196,6 +1196,15 @@ export async function emitirGuiaRemision(req, res, next) {
       const cod = String(b.motivo_traslado_cod).trim();
       if (!MOTIVOS_GRE_VALIDOS.includes(cod)) throw new AppError(`Motivo de traslado inválido: "${cod}"`, 400);
       sets.push('motivo_traslado_cod = ?'); vals.push(cod);
+      if (cod === '13') {
+        if (b.motivo_descripcion !== undefined) {
+          const problemaMotivo = problemaDescripcionMotivo(b.motivo_descripcion);
+          if (problemaMotivo) throw new AppError(problemaMotivo, 400);
+          sets.push('motivo_descripcion = ?'); vals.push(limpiarDescripcionMotivo(b.motivo_descripcion));
+        }
+      } else {
+        sets.push('motivo_descripcion = NULL');
+      }
     }
     if (b.es_comercio_exterior !== undefined) {
       sets.push('es_comercio_exterior = ?'); vals.push(b.es_comercio_exterior ? 1 : 0);
@@ -1231,6 +1240,14 @@ export async function emitirGuiaRemision(req, res, next) {
         vals.push('tercero');
         const registrar = t.registrar ? 1 : 0;
         sets.push('transporte_registrar = ?'); vals.push(registrar);
+        const fechaEntrega = String(t.fecha_entrega || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega)) {
+          throw new AppError('Falta la fecha de entrega de bienes al transportista (obligatoria en transporte público)', 400);
+        }
+        if (fechaEntrega < fechaLima().emision) {
+          throw new AppError(`La fecha de entrega al transportista (${fechaEntrega}) no puede ser anterior a hoy`, 400);
+        }
+        sets.push('transporte_fecha_entrega = ?'); vals.push(fechaEntrega);
         if (registrar) {
           const placaN = normalizarPlaca(t.placa);
           if (!placaValida(placaN)) throw new AppError(`Placa inválida: "${t.placa}" (6 a 8 caracteres alfanuméricos)`, 400);
@@ -1243,13 +1260,11 @@ export async function emitirGuiaRemision(req, res, next) {
           sets.push('transporte_placa = ?', 'transporte_tuc = ?', 'transporte_autorizacion = ?',
             'transporte_placa2 = ?', 'transporte_tuc2 = ?', 'transporte_autorizacion2 = ?',
             'transporte_dni = ?', 'transporte_conductor = ?', 'transporte_licencia = ?',
-            'transporte_dni2 = ?', 'transporte_conductor2 = ?', 'transporte_licencia2 = ?',
-            'transporte_fecha_entrega = ?');
+            'transporte_dni2 = ?', 'transporte_conductor2 = ?', 'transporte_licencia2 = ?');
           vals.push(placaN, t.tuc || null, t.autorizacion || null,
             placa2N || null, t.tuc2 || null, t.autorizacion2 || null,
             String(t.dni).trim(), String(t.conductor).trim().slice(0, 250), String(t.licencia).trim().slice(0, 30),
-            t.dni2 ? String(t.dni2).trim() : null, t.conductor2 ? String(t.conductor2).trim().slice(0, 250) : null, t.licencia2 ? String(t.licencia2).trim().slice(0, 30) : null,
-            t.fecha_entrega || null);
+            t.dni2 ? String(t.dni2).trim() : null, t.conductor2 ? String(t.conductor2).trim().slice(0, 250) : null, t.licencia2 ? String(t.licencia2).trim().slice(0, 30) : null);
         } else {
           sets.push('transporte_placa = NULL', 'transporte_dni = NULL', 'transporte_conductor = NULL', 'transporte_licencia = NULL',
             'transporte_placa2 = NULL', 'transporte_dni2 = NULL', 'transporte_conductor2 = NULL', 'transporte_licencia2 = NULL');

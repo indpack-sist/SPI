@@ -170,9 +170,9 @@ function Flota() {
             <div><span>Marca / modelo</span><strong>{v.marca_modelo || '—'}</strong></div>
             <div><span>Capacidad de carga</span><strong>{v.capacidad_kg ? `${fmtNumero(v.capacidad_kg, 2)} kg` : '—'}</strong></div>
             <div><span>Volumen</span><strong>{v.capacidad_m3 ? `${fmtNumero(v.capacidad_m3, 2)} m³` : '—'}</strong></div>
-          </div>
-        </section>
-
+           <div><span>Fecha de registro</span><strong>{v.fecha_registro ? fmtFecha(v.fecha_registro) : '—'}</strong></div>
+         </div>
+       </section>
         <section>
           <h3 className="pg-section-title"><Activity size={14} /> Uso operativo</h3>
           <div className="pg-kv">
@@ -291,6 +291,7 @@ function Flota() {
                   <th>Capacidad</th>
                   <th>Último conductor</th>
                   <th>Uso</th>
+                  <th>Fecha de registro</th>
                   <th>Última actividad</th>
                   <th className="center">Estado</th>
                   <th className="center">Acciones</th>
@@ -315,6 +316,18 @@ function Flota() {
                         {v.ultimo_conductor
                           ? <span className="pg-cell-main"><User size={13} className="pg-muted" />{v.ultimo_conductor}</span>
                           : <span className="pg-muted">Sin registro</span>}
+                      </td>
+                      <td className="nowrap">
+                        {v.fecha_registro ? (
+                          <>
+                            <span className="pg-cell-main">
+                              <CalendarDays size={12} className="pg-muted" /> {fmtFecha(v.fecha_registro)}
+                            </span>
+                            <span className="pg-cell-sub">{haceTexto(v.fecha_registro)}</span>
+                          </>
+                        ) : (
+                          <span className="pg-muted">—</span>
+                        )}
                       </td>
                       <td className="nowrap">
                         {sinUso(v) ? (
@@ -350,7 +363,7 @@ function Flota() {
                   );
                 }) : (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="pg-empty">
                         <Truck size={28} />
                         <strong>{hayFiltros ? 'Ningún vehículo coincide con los filtros' : 'Aún no hay vehículos registrados'}</strong>

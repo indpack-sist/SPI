@@ -145,12 +145,16 @@
 .sidebar-section-title {
   padding: 0.2rem 1.25rem 0.35rem 1.25rem;
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 0.575rem;
+  font-size: 0.9rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.22em;
-  color: var(--wire);
+  letter-spacing: 0.18em;
+  color: #0ea5e9;
   margin-bottom: 0.15rem;
+  align-items: center;
+  position: relative;
+  text-transform: uppercase;
+  
 }
 
 .sidebar-menu {

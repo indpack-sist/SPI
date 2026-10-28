@@ -290,8 +290,8 @@ function Flota() {
                   <th>Vehículo</th>
                   <th>Capacidad</th>
                   <th>Último conductor</th>
+                  <th>Fecha de Registro</th>
                   <th>Uso</th>
-                  <th>Fecha de registro</th>
                   <th>Última actividad</th>
                   <th className="center">Estado</th>
                   <th className="center">Acciones</th>

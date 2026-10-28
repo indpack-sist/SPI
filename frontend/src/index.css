@@ -2321,7 +2321,8 @@ input.bg-blue-50 {
 
   .pd-card-note p {
     display: block !important;
-    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    -webkit-box-orient: unset !important;
     overflow: visible !important;
   }
 }

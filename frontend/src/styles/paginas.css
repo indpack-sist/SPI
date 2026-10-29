@@ -389,7 +389,7 @@ button.pg-kpi.on {
   text-transform: uppercase;
   color: var(--text-secondary);
   background-color: var(--carbon);
-  border-bottom: 3px solid var(--border);
+  border-bottom: 2px solid var(--border);
 }
 
 .pg-table thead th.is-focus { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }

@@ -84,7 +84,46 @@ export async function listarComprobantes(req, res) {
       ORDER BY fv.fecha_emision DESC, fv.id_factura DESC
       LIMIT 1000`;
 
-    const [rows] = await pool.query(sql, params);
+    // Totales por moneda sobre todo el filtro (no solo las 1000 filas listadas).
+    // Criterio de registro de ventas: cada documento cuenta en su mes de emisión; la factura
+    // anulada por NC sigue sumando y la NC resta. Solo se excluyen las dadas de baja y las
+    // no aceptadas por SUNAT.
+    const sqlTotales = `
+      SELECT
+        fv.moneda,
+        SUM(CASE WHEN fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01' THEN fv.total ELSE 0 END) AS facturas,
+        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN fv.total ELSE 0 END) AS notas_credito,
+        SUM(CASE WHEN fv.codigo_tipo_sunat = '08' THEN fv.total ELSE 0 END) AS notas_debito,
+        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN -fv.subtotal ELSE fv.subtotal END) AS subtotal_neto,
+        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN -fv.igv ELSE fv.igv END) AS igv_neto,
+        COUNT(*) AS cantidad
+      FROM facturas_venta fv
+      LEFT JOIN ordenes_venta ov  ON ov.id_orden_venta = fv.id_orden_venta
+      LEFT JOIN clientes cl        ON cl.id_cliente = ov.id_cliente
+      WHERE ${where.join(' AND ')}
+        AND (UPPER(fv.sunat_estado) IN ('ACEPTADO', 'OBSERVADO')
+             OR (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL
+                 AND ov.facturado_sunat = 1 AND fv.estado <> 'Anulada'))
+      GROUP BY fv.moneda`;
+
+    const [[rows], [totales]] = await Promise.all([
+      pool.query(sql, params),
+      pool.query(sqlTotales, params),
+    ]);
+    const montos = totales.map((t) => {
+      const facturas = Number(t.facturas) || 0;
+      const notas_credito = Number(t.notas_credito) || 0;
+      const notas_debito = Number(t.notas_debito) || 0;
+      return {
+        moneda: (t.moneda || 'PEN').toUpperCase(),
+        facturas, notas_credito, notas_debito,
+        neto: facturas - notas_credito + notas_debito,
+        subtotal_neto: Number(t.subtotal_neto) || 0,
+        igv_neto: Number(t.igv_neto) || 0,
+        cantidad: Number(t.cantidad) || 0,
+      };
+    });
+
     const data = rows.map((r) => {
       const anulada_por_nc = !!Number(r.anulada_por_nc);
       const row = { ...r, anulada_por_nc };
@@ -97,7 +136,7 @@ export async function listarComprobantes(req, res) {
       return row;
     });
 
-    res.json({ success: true, data, resumen: construirResumen(data) });
+    res.json({ success: true, data, resumen: { ...construirResumen(data), montos } });
   } catch (error) {
     console.error('Error en trazabilidad de comprobantes:', error);
     res.status(500).json({ success: false, error: error.message });

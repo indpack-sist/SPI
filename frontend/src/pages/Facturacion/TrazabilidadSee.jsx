@@ -198,6 +198,18 @@ const TABS = [
   { id: 'descarga', label: 'Descarga masiva', icon: DownloadCloud },
   { id: 'compras', label: 'Compras (SUNAT)', icon: Package },
 ];
+// Rango [primer día, último día] de un periodo YYYY-MM.
+const rangoMes = (periodo) => {
+  const [y, m] = periodo.split('-').map(Number);
+  const ultimo = new Date(y, m, 0).getDate();
+  return { desde: `${periodo}-01`, hasta: `${periodo}-${String(ultimo).padStart(2, '0')}` };
+};
+const mesDeRango = (desde, hasta) => {
+  if (!desde || !hasta || desde.slice(0, 7) !== hasta.slice(0, 7)) return '';
+  const r = rangoMes(desde.slice(0, 7));
+  return r.desde === desde && r.hasta === hasta ? desde.slice(0, 7) : '';
+};
+
 const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE'];
 
 export default function TrazabilidadSee() {
@@ -205,7 +217,7 @@ export default function TrazabilidadSee() {
   const [filtros, setFiltros] = useState({ tipo: 'all', estado: 'all', desde: '', hasta: '', q: '' });
   const [busqueda, setBusqueda] = useState('');
   const [data, setData] = useState([]);
-  const [resumen, setResumen] = useState({ total: 0, porEstado: {}, porClase: {} });
+  const [resumen, setResumen] = useState({ total: 0, porEstado: {}, porClase: {}, montos: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandido, setExpandido] = useState(null);
@@ -230,11 +242,11 @@ export default function TrazabilidadSee() {
         : await sunatAPI.trazabilidadGuias(payload);
       if (id !== reqId.current) return;
       setData(res.data?.data || []);
-      setResumen(res.data?.resumen || { total: 0, porEstado: {}, porClase: {} });
+      setResumen(res.data?.resumen || { total: 0, porEstado: {}, porClase: {}, montos: [] });
     } catch (e) {
       if (id !== reqId.current) return;
       setError(e?.response?.data?.error || e.message || 'No se pudo cargar la trazabilidad.');
-      setData([]); setResumen({ total: 0, porEstado: {}, porClase: {} });
+      setData([]); setResumen({ total: 0, porEstado: {}, porClase: {}, montos: [] });
     } finally {
       if (id === reqId.current) setLoading(false);
     }
@@ -318,6 +330,10 @@ export default function TrazabilidadSee() {
           </label>
           <label className="tz-field tz-field-date">
             <CalendarDays size={13} />
+            <input type="month" value={mesDeRango(filtros.desde, filtros.hasta)} title="Mes"
+              onChange={(e) => setFiltros((f) => ({ ...f, ...(e.target.value ? rangoMes(e.target.value) : { desde: '', hasta: '' }) }))} />
+          </label>
+          <label className="tz-field tz-field-date">
             <input type="date" value={filtros.desde} onChange={(e) => setFiltros((f) => ({ ...f, desde: e.target.value }))} title="Desde" />
           </label>
           <label className="tz-field tz-field-date">
@@ -345,6 +361,30 @@ export default function TrazabilidadSee() {
           );
         })}
       </section>
+
+      {tab === 'comprobantes' && !error && (
+        <section className="tz-totales">
+          {(resumen.montos || []).length === 0 ? (
+            <div className="tz-total-card tz-total-vacio">
+              <span className="tz-total-label">Total facturado</span>
+              <strong>{loading ? '…' : fmtMoneda(0, 'PEN')}</strong>
+              <small>Sin comprobantes aceptados en el filtro</small>
+            </div>
+          ) : resumen.montos.map((m) => (
+            <div key={m.moneda} className="tz-total-card">
+              <span className="tz-total-label">Total facturado neto · {m.moneda}</span>
+              <strong>{fmtMoneda(m.neto, m.moneda)}</strong>
+              <div className="tz-total-desglose">
+                <span>Facturas <b>{fmtMoneda(m.facturas, m.moneda)}</b></span>
+                <span>Notas de crédito <b>−{fmtMoneda(m.notas_credito, m.moneda)}</b></span>
+                {m.notas_debito > 0 && <span>Notas de débito <b>+{fmtMoneda(m.notas_debito, m.moneda)}</b></span>}
+                <span>Valor venta <b>{fmtMoneda(m.subtotal_neto, m.moneda)}</b> · IGV <b>{fmtMoneda(m.igv_neto, m.moneda)}</b></span>
+              </div>
+              <small>{m.cantidad} comprobantes aceptados por SUNAT (excluye bajas, rechazados y pendientes)</small>
+            </div>
+          ))}
+        </section>
+      )}
 
       {aviso && <div className="tz-toast" onClick={() => setAviso(null)}><XCircle size={15} /> {aviso}</div>}
 

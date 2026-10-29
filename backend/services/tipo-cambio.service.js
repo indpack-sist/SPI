@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { executeQuery } from '../config/database.js';
+import { executeQuery, pool } from '../config/database.js';
 
 const DECOLECTA_API_URL = 'https://api.decolecta.com/v1';
 const DECOLECTA_API_KEY = process.env.API_DECOLECTA_TOKEN || process.env.DECOLECTA_API_KEY;
@@ -192,13 +192,11 @@ export async function obtenerTiposCambioPorFechas(fechas, { maxApi = 62 } = {}) 
   const mapa = new Map();
   if (!unicas.length) return mapa;
 
-  const local = await executeQuery(
+  const [local] = await pool.query(
     `SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, venta FROM tipo_cambio_historico WHERE fecha IN (?)`,
     [unicas]
   );
-  if (local.success) {
-    for (const r of local.data) mapa.set(r.fecha, parseFloat(r.venta));
-  }
+  for (const r of local) mapa.set(r.fecha, parseFloat(r.venta));
 
   const faltantes = unicas.filter((f) => !mapa.has(f)).slice(0, maxApi);
   for (const fecha of faltantes) {

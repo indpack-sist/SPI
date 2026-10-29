@@ -187,6 +187,44 @@ export async function actualizarTipoCambio(date = null) {
   }
 }
 
+export async function obtenerTiposCambioPorFechas(fechas, { maxApi = 62 } = {}) {
+  const unicas = [...new Set(fechas.filter(Boolean))];
+  const mapa = new Map();
+  if (!unicas.length) return mapa;
+
+  const local = await executeQuery(
+    `SELECT DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, venta FROM tipo_cambio_historico WHERE fecha IN (?)`,
+    [unicas]
+  );
+  if (local.success) {
+    for (const r of local.data) mapa.set(r.fecha, parseFloat(r.venta));
+  }
+
+  const faltantes = unicas.filter((f) => !mapa.has(f)).slice(0, maxApi);
+  for (const fecha of faltantes) {
+    try {
+      const { data } = await axios.get(`${DECOLECTA_API_URL}/tipo-cambio/sunat`, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DECOLECTA_API_KEY}` },
+        params: { date: fecha },
+        timeout: API_TIMEOUT
+      });
+      const compra = parseFloat(data?.buy_price);
+      const venta = parseFloat(data?.sell_price);
+      if (!Number.isFinite(venta)) continue;
+      mapa.set(fecha, venta);
+      await executeQuery(
+        `INSERT INTO tipo_cambio_historico (fecha, compra, venta, promedio, origen)
+         VALUES (?, ?, ?, ?, 'SUNAT_API')
+         ON DUPLICATE KEY UPDATE compra = VALUES(compra), venta = VALUES(venta), promedio = VALUES(promedio)`,
+        [fecha, compra, venta, (compra + venta) / 2]
+      );
+    } catch (error) {
+      console.error(`No se pudo obtener TC SUNAT para ${fecha}:`, error.message);
+    }
+  }
+  return mapa;
+}
+
 export function convertirPENaUSD(montoPEN, tipoCambio) {
   const tc = tipoCambio?.promedio || tipoCambio?.venta || 3.765;
   return montoPEN / tc;

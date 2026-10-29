@@ -405,7 +405,6 @@
   .tz-drawer-close { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
 }
 
-/* Totales facturados del filtro */
 .tz-totales { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
 .tz-total-card {
   display: flex; flex-direction: column; gap: .35rem; padding: .85rem 1rem; border-radius: 4px;
@@ -417,3 +416,5 @@
 .tz-total-desglose b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tz-total-card small { font-size: .74rem; color: var(--text-secondary); }
 .tz-total-vacio > strong { color: var(--text-secondary); }
+.tz-total-principal { border-color: var(--accent); }
+.tz-total-alerta { color: var(--warning) !important; font-weight: 600; }

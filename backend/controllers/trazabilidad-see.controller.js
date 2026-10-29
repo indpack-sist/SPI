@@ -1,5 +1,6 @@
 import { pool } from '../config/database.js';
 import { extraerUrl } from '../services/sunat/util.service.js';
+import { obtenerTiposCambioPorFechas } from '../services/tipo-cambio.service.js';
 
 const NC_ANULACION = `EXISTS (
   SELECT 1 FROM facturas_venta nc
@@ -30,6 +31,54 @@ function construirResumen(filas) {
     if (f.clase) porClase[f.clase] = (porClase[f.clase] || 0) + 1;
   }
   return { total: filas.length, porEstado, porClase };
+}
+
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+function acumular(acc, clase, total, subtotal, igv) {
+  const signo = clase === '07' ? -1 : 1;
+  if (clase === '07') acc.notas_credito += total;
+  else if (clase === '08') acc.notas_debito += total;
+  else acc.facturas += total;
+  acc.subtotal_neto += signo * subtotal;
+  acc.igv_neto += signo * igv;
+  acc.neto += signo * total;
+}
+
+const nuevoAcc = (moneda) => ({
+  moneda, facturas: 0, notas_credito: 0, notas_debito: 0, neto: 0, subtotal_neto: 0, igv_neto: 0, cantidad: 0,
+});
+
+const redondearAcc = (acc) => {
+  for (const k of ['facturas', 'notas_credito', 'notas_debito', 'neto', 'subtotal_neto', 'igv_neto']) acc[k] = r2(acc[k]);
+  return acc;
+};
+
+async function construirMontos(docs) {
+  const porMoneda = new Map();
+  const pen = { ...nuevoAcc('PEN'), sin_tc: [] };
+  const extranjeras = docs.filter((d) => (d.moneda || 'PEN').toUpperCase() !== 'PEN');
+  const tcs = await obtenerTiposCambioPorFechas(extranjeras.map((d) => d.fecha));
+  const sinTc = new Set();
+
+  for (const d of docs) {
+    const moneda = (d.moneda || 'PEN').toUpperCase();
+    if (!porMoneda.has(moneda)) porMoneda.set(moneda, nuevoAcc(moneda));
+    const acc = porMoneda.get(moneda);
+    acc.cantidad += 1;
+    acumular(acc, d.codigo_tipo_sunat, Number(d.total) || 0, Number(d.subtotal) || 0, Number(d.igv) || 0);
+
+    const tc = moneda === 'PEN' ? 1 : tcs.get(d.fecha);
+    if (!tc) { sinTc.add(d.fecha); continue; }
+    pen.cantidad += 1;
+    acumular(pen, d.codigo_tipo_sunat, r2(d.total * tc), r2(d.subtotal * tc), r2(d.igv * tc));
+  }
+
+  pen.sin_tc = [...sinTc].sort();
+  return {
+    porMoneda: [...porMoneda.values()].map(redondearAcc),
+    pen: redondearAcc(pen),
+  };
 }
 
 export async function listarComprobantes(req, res) {
@@ -84,45 +133,22 @@ export async function listarComprobantes(req, res) {
       ORDER BY fv.fecha_emision DESC, fv.id_factura DESC
       LIMIT 1000`;
 
-    // Totales por moneda sobre todo el filtro (no solo las 1000 filas listadas).
-    // Criterio de registro de ventas: cada documento cuenta en su mes de emisión; la factura
-    // anulada por NC sigue sumando y la NC resta. Solo se excluyen las dadas de baja y las
-    // no aceptadas por SUNAT.
     const sqlTotales = `
-      SELECT
-        fv.moneda,
-        SUM(CASE WHEN fv.codigo_tipo_sunat IS NULL OR fv.codigo_tipo_sunat = '01' THEN fv.total ELSE 0 END) AS facturas,
-        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN fv.total ELSE 0 END) AS notas_credito,
-        SUM(CASE WHEN fv.codigo_tipo_sunat = '08' THEN fv.total ELSE 0 END) AS notas_debito,
-        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN -fv.subtotal ELSE fv.subtotal END) AS subtotal_neto,
-        SUM(CASE WHEN fv.codigo_tipo_sunat = '07' THEN -fv.igv ELSE fv.igv END) AS igv_neto,
-        COUNT(*) AS cantidad
+      SELECT fv.codigo_tipo_sunat, fv.moneda, fv.total, fv.subtotal, fv.igv,
+             DATE_FORMAT(fv.fecha_emision, '%Y-%m-%d') AS fecha
       FROM facturas_venta fv
       LEFT JOIN ordenes_venta ov  ON ov.id_orden_venta = fv.id_orden_venta
       LEFT JOIN clientes cl        ON cl.id_cliente = ov.id_cliente
       WHERE ${where.join(' AND ')}
         AND (UPPER(fv.sunat_estado) IN ('ACEPTADO', 'OBSERVADO')
              OR (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL
-                 AND ov.facturado_sunat = 1 AND fv.estado <> 'Anulada'))
-      GROUP BY fv.moneda`;
+                 AND ov.facturado_sunat = 1 AND fv.estado <> 'Anulada'))`;
 
-    const [[rows], [totales]] = await Promise.all([
+    const [[rows], [docsTotales]] = await Promise.all([
       pool.query(sql, params),
       pool.query(sqlTotales, params),
     ]);
-    const montos = totales.map((t) => {
-      const facturas = Number(t.facturas) || 0;
-      const notas_credito = Number(t.notas_credito) || 0;
-      const notas_debito = Number(t.notas_debito) || 0;
-      return {
-        moneda: (t.moneda || 'PEN').toUpperCase(),
-        facturas, notas_credito, notas_debito,
-        neto: facturas - notas_credito + notas_debito,
-        subtotal_neto: Number(t.subtotal_neto) || 0,
-        igv_neto: Number(t.igv_neto) || 0,
-        cantidad: Number(t.cantidad) || 0,
-      };
-    });
+    const montos = await construirMontos(docsTotales);
 
     const data = rows.map((r) => {
       const anulada_por_nc = !!Number(r.anulada_por_nc);

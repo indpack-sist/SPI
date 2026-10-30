@@ -8,7 +8,7 @@ import {
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../config/api';
 import { useDescargaMasiva, soportaDescargaCarpetas } from '../../context/DescargaMasivaContext';
 import ModalDescargaMasiva from '../../components/Descargas/ModalDescargaMasiva';
-import { coincideFiltros, filaDesdeSire, periodoDeRango, resumirVentas } from '../../utils/sireVentas';
+import { coincideFiltros, esRangoMesActual, filaDesdeSire, periodoDeRango, rangoMesActual, resumirVentas } from '../../utils/sireVentas';
 import './TrazabilidadSee.css';
 
 const ESTADOS_META = {
@@ -210,13 +210,15 @@ const mesDeRango = (desde, hasta) => {
   const r = rangoMes(desde.slice(0, 7));
   return r.desde === desde && r.hasta === hasta ? desde.slice(0, 7) : '';
 };
+const esPeriodoCompleto = (desde, hasta) => !!mesDeRango(desde, hasta) || esRangoMesActual(desde, hasta);
+const filtrosIniciales = () => ({ tipo: 'all', estado: 'all', ...rangoMesActual(), q: '' });
 
 const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE', 'SOLO_SUNAT'];
 const SIRE_VACIO = { periodo: '', loading: false, error: null, data: null };
 
 export default function TrazabilidadSee() {
   const [tab, setTab] = useState('comprobantes');
-  const [filtros, setFiltros] = useState({ tipo: 'all', estado: 'all', desde: '', hasta: '', q: '' });
+  const [filtros, setFiltros] = useState(filtrosIniciales);
   const [busqueda, setBusqueda] = useState('');
   const [data, setData] = useState([]);
   const [resumen, setResumen] = useState({ total: 0, porEstado: {}, porClase: {}, montos: null });
@@ -284,7 +286,7 @@ export default function TrazabilidadSee() {
     const porFactura = new Map(filasSire.filter((f) => f.id_factura).map((f) => [f.id_factura, f]));
     const soloSistema = new Set((sire.data.conciliacion?.solo_spi || []).map((d) => d.id_factura));
     const enTabla = new Set(data.map((r) => r.id_factura));
-    const mesCompleto = !!mesDeRango(filtros.desde, filtros.hasta);
+    const mesCompleto = esPeriodoCompleto(filtros.desde, filtros.hasta);
     const externas = filasSire
       .filter((f) => !enTabla.has(f.id_factura) && coincideFiltros(f, filtros, { mesCompleto }))
       .map(filaDesdeSire);
@@ -314,8 +316,8 @@ export default function TrazabilidadSee() {
     setFiltros((f) => ({ ...f, tipo: 'all', estado: 'all' }));
     setExpandido(null);
   };
-  const limpiar = () => { setBusqueda(''); setFiltros({ tipo: 'all', estado: 'all', desde: '', hasta: '', q: '' }); };
-  const hayFiltros = filtros.tipo !== 'all' || filtros.estado !== 'all' || filtros.desde || filtros.hasta || filtros.q;
+  const limpiar = () => { setBusqueda(''); setFiltros(filtrosIniciales()); };
+  const hayFiltros = filtros.tipo !== 'all' || filtros.estado !== 'all' || filtros.q || !esRangoMesActual(filtros.desde, filtros.hasta);
 
   const descargar = useCallback(async (accion, etiqueta) => {
     try { setAviso(null); await accion(); }
@@ -381,7 +383,7 @@ export default function TrazabilidadSee() {
           </label>
           <label className="tz-field tz-field-date">
             <CalendarDays size={13} />
-            <input type="month" value={mesDeRango(filtros.desde, filtros.hasta)} title="Mes"
+            <input type="month" value={periodoDeRango(filtros.desde, filtros.hasta).replace(/^(\d{4})(\d{2})$/, '$1-$2')} title="Mes"
               onChange={(e) => setFiltros((f) => ({ ...f, ...(e.target.value ? rangoMes(e.target.value) : { desde: '', hasta: '' }) }))} />
           </label>
           <label className="tz-field tz-field-date">
@@ -461,7 +463,7 @@ export default function TrazabilidadSee() {
   );
 }
 
-const hayFiltrosVista = (f) => f.tipo !== 'all' || f.estado !== 'all' || !!f.q || !mesDeRango(f.desde, f.hasta);
+const hayFiltrosVista = (f) => f.tipo !== 'all' || f.estado !== 'all' || !!f.q || !esPeriodoCompleto(f.desde, f.hasta);
 
 function CardsSistema({ montos, loading, sire, periodo, onReintentar }) {
   const porMoneda = montos?.porMoneda || [];

@@ -4,7 +4,7 @@ import {
   CABECERAS_VENTAS, parseVentasPropuesta, normalizarVentas, filtrarVentasPorClaves, conciliarVentas, claveVenta
 } from '../services/sunat/sire-ventas.parser.js';
 import { generarVentasSireXLSX } from '../utils/excelGenerators/ventasSireXLSX.js';
-import { resumirVentas, coincideFiltros, filaDesdeSire, periodoDeRango } from '../../frontend/src/utils/sireVentas.js';
+import { resumirVentas, coincideFiltros, filaDesdeSire, periodoDeRango, rangoMesActual, esRangoMesActual, hoyLima } from '../../frontend/src/utils/sireVentas.js';
 
 const fila = (doc, fecha, tipo, ruc, cliente, bi, dsctoBi, igv, dsctoIgv, total, moneda, tc, mod = '|||') => {
   const [serie, numero] = doc.split('-');
@@ -67,6 +67,11 @@ assert.match(rechazado.diferencias[0].diferencia, /RECHAZADO/, 'vigente en SUNAT
 
 assert.strictEqual(periodoDeRango('2026-10-01', '2026-10-31'), '202610', 'periodo');
 assert.strictEqual(periodoDeRango('2026-09-01', '2026-10-31'), '', 'rango multi mes');
+assert.deepStrictEqual(rangoMesActual('2026-10-30'), { desde: '2026-10-01', hasta: '2026-10-30' }, 'rango al 30 de octubre');
+assert.deepStrictEqual(rangoMesActual('2026-11-05'), { desde: '2026-11-01', hasta: '2026-11-05' }, 'rango al 5 de noviembre');
+assert.strictEqual(esRangoMesActual('2026-11-01', '2026-11-05', '2026-11-05'), true, 'rango por defecto');
+assert.strictEqual(esRangoMesActual('2026-11-02', '2026-11-05', '2026-11-05'), false, 'rango editado');
+assert.match(hoyLima(), /^\d{4}-\d{2}-\d{2}$/, 'hoy en formato ISO');
 assert.strictEqual(coincideFiltros(nota, { tipo: 'NOTA_CREDITO', q: 'ulloa' }), true, 'filtro tipo y texto');
 assert.strictEqual(coincideFiltros(nota, { tipo: 'FACTURA' }), false, 'filtro tipo');
 assert.strictEqual(coincideFiltros(nota, { desde: '2026-10-11' }), false, 'filtro fecha');

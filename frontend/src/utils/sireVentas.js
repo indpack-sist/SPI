@@ -3,6 +3,15 @@ export const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const CLASE_POR_TIPO = { '07': 'NOTA_CREDITO', '08': 'NOTA_DEBITO' };
 const TIPO_POR_FILTRO = { FACTURA: '01', NOTA_CREDITO: '07', NOTA_DEBITO: '08' };
 
+export const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+
+export const rangoMesActual = (hoy = hoyLima()) => ({ desde: `${hoy.slice(0, 7)}-01`, hasta: hoy });
+
+export const esRangoMesActual = (desde, hasta, hoy = hoyLima()) => {
+  const rango = rangoMesActual(hoy);
+  return desde === rango.desde && hasta === rango.hasta;
+};
+
 export const periodoDeRango = (desde, hasta) => {
   if (!desde || !hasta || desde.slice(0, 7) !== hasta.slice(0, 7)) return '';
   return desde.slice(0, 7).replace('-', '');

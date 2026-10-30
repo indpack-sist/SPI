@@ -10,7 +10,11 @@ const NC_ANULACION = `EXISTS (
      AND nc.sunat_estado = 'ACEPTADO'
 )`;
 
-function estadoFinalComprobante(r) {
+export const CONDICION_ACEPTADO = `(UPPER(fv.sunat_estado) IN ('ACEPTADO', 'OBSERVADO')
+             OR (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL
+                 AND ov.facturado_sunat = 1 AND fv.estado <> 'Anulada'))`;
+
+export function estadoFinalComprobante(r) {
   if (r.estado === 'Anulada' || r.anulada_por_nc) return 'ANULADA';
   if (r.sunat_estado) return String(r.sunat_estado).toUpperCase();
   if (r.codigo_tipo_sunat == null && Number(r.facturado_sunat) === 1) return 'ACEPTADO';
@@ -54,11 +58,11 @@ const redondearAcc = (acc) => {
   return acc;
 };
 
-async function construirMontos(docs) {
+export async function construirMontos(docs) {
   const porMoneda = new Map();
   const pen = { ...nuevoAcc('PEN'), sin_tc: [] };
   const extranjeras = docs.filter((d) => (d.moneda || 'PEN').toUpperCase() !== 'PEN');
-  const tcs = await obtenerTiposCambioPorFechas(extranjeras.map((d) => d.fecha));
+  const tcs = await obtenerTiposCambioPorFechas(extranjeras.map((d) => d.fecha_tc));
   const sinTc = new Set();
 
   for (const d of docs) {
@@ -68,8 +72,8 @@ async function construirMontos(docs) {
     acc.cantidad += 1;
     acumular(acc, d.codigo_tipo_sunat, Number(d.total) || 0, Number(d.subtotal) || 0, Number(d.igv) || 0);
 
-    const tc = moneda === 'PEN' ? 1 : tcs.get(d.fecha);
-    if (!tc) { sinTc.add(d.fecha); continue; }
+    const tc = moneda === 'PEN' ? 1 : tcs.get(d.fecha_tc);
+    if (!tc) { sinTc.add(d.fecha_tc); continue; }
     pen.cantidad += 1;
     acumular(pen, d.codigo_tipo_sunat, r2(d.total * tc), r2(d.subtotal * tc), r2(d.igv * tc));
   }
@@ -135,14 +139,13 @@ export async function listarComprobantes(req, res) {
 
     const sqlTotales = `
       SELECT fv.codigo_tipo_sunat, fv.moneda, fv.total, fv.subtotal, fv.igv,
-             DATE_FORMAT(fv.fecha_emision, '%Y-%m-%d') AS fecha
+             DATE_FORMAT(COALESCE(ref.fecha_emision, fv.fecha_emision), '%Y-%m-%d') AS fecha_tc
       FROM facturas_venta fv
       LEFT JOIN ordenes_venta ov  ON ov.id_orden_venta = fv.id_orden_venta
       LEFT JOIN clientes cl        ON cl.id_cliente = ov.id_cliente
+      LEFT JOIN facturas_venta ref ON ref.id_factura = fv.id_factura_ref
       WHERE ${where.join(' AND ')}
-        AND (UPPER(fv.sunat_estado) IN ('ACEPTADO', 'OBSERVADO')
-             OR (fv.codigo_tipo_sunat IS NULL AND fv.sunat_estado IS NULL
-                 AND ov.facturado_sunat = 1 AND fv.estado <> 'Anulada'))`;
+        AND ${CONDICION_ACEPTADO}`;
 
     const [[rows], [docsTotales]] = await Promise.all([
       pool.query(sql, params),

@@ -1368,6 +1368,33 @@ export const sunatAPI = {
     return api.get(`/sunat/trazabilidad/guias?${params.toString()}`);
   },
 
+  consultarVentasSire: (periodo, refrescar = false) => api.get(
+    `/sunat/ventas/sire?periodo=${encodeURIComponent(periodo)}${refrescar ? '&refrescar=1' : ''}`,
+    { timeout: 180000 }
+  ),
+  descargarVentasSireExcel: async (periodo, claves) => {
+    const response = await fetch(`${API_URL}/sunat/ventas/sire/excel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ periodo, claves })
+    });
+    if (!response.ok) {
+      let msg = 'No se pudo generar el Excel';
+      try { msg = (await response.json())?.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ventas-sire-${periodo}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
+    return { success: true };
+  },
+
   listarComprasSunat: (periodo) => api.get(`/sunat/compras/periodo?periodo=${encodeURIComponent(periodo)}`),
   descargarComprasExcel: async (periodo, claves) => {
     const response = await fetch(`${API_URL}/sunat/compras/periodo/excel`, {

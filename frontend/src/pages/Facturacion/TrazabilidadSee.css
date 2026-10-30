@@ -418,3 +418,19 @@
 .tz-total-vacio > strong { color: var(--text-secondary); }
 .tz-total-principal { border-color: var(--accent); }
 .tz-total-alerta { color: var(--warning) !important; font-weight: 600; }
+
+.tz-total-sire-estado { justify-content: center; }
+.tz-total-sire-estado .tz-btn { align-self: flex-start; }
+.tz-total-conc.ok { border-color: var(--success, #16a34a); }
+.tz-total-conc.ok > strong { color: var(--success, #16a34a); }
+.tz-total-conc.alerta { border-color: var(--warning); }
+.tz-total-conc.alerta > strong { color: var(--warning); }
+.tz-conc-grupo { display: flex; flex-direction: column; gap: .25rem; }
+.tz-conc-titulo { align-self: flex-start; padding: 0; border: 0; background: none; font-size: .74rem; font-weight: 600; color: var(--text-primary); }
+button.tz-conc-titulo { cursor: pointer; text-decoration: underline; }
+.tz-conc-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .2rem; }
+.tz-conc-lista li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: baseline; font-size: .76rem; color: var(--text-secondary); }
+.tz-conc-lista b { color: var(--text-primary); font-weight: 600; }
+.tz-conc-lista span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tz-conc-lista em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.tz-total-soles { display: block; font-size: .72rem; color: var(--text-secondary); }

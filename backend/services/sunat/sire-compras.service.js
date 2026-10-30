@@ -96,7 +96,7 @@ export async function descargarComprobanteCpe({ rucEmisor, tipo, serie, numero, 
   };
 }
 
-async function tokenSire() {
+export async function tokenSire() {
   const [[t]] = await pool.query(
     'SELECT access_token FROM sunat_gre_token WHERE id = 2 AND expira_en > DATE_ADD(NOW(), INTERVAL 2 MINUTE)');
   if (t) return t.access_token;
@@ -135,7 +135,7 @@ async function tokenSire() {
   return data.access_token;
 }
 
-const base = () => sunatConfig.urls.SIRE_API;
+export const base = () => sunatConfig.urls.SIRE_API;
 
 async function solicitarPropuesta(periodo, token) {
   const { data } = await axios.get(
@@ -149,7 +149,7 @@ async function solicitarPropuesta(periodo, token) {
   return data.numTicket;
 }
 
-async function esperarArchivo(numTicket, periodo, token) {
+export async function esperarArchivo(numTicket, periodo, token) {
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 4000));
     const { data } = await axios.get(
@@ -164,7 +164,7 @@ async function esperarArchivo(numTicket, periodo, token) {
         const e = new Error('SUNAT terminó el ticket pero no entregó el nombre del archivo.');
         e.statusCode = 502; throw e;
       }
-      return { nomArchivoReporte: entrada.nomArchivoReporte, codTipo: entrada.codTipoAchivoReporte || '00' };
+      return { nomArchivoReporte: entrada.nomArchivoReporte, codTipo: entrada.codTipoAchivoReporte || '00', codProceso: reg.codProceso };
     }
     if (estado === '07' || estado === '09') {
       const e = new Error('SUNAT reportó el proceso de la propuesta como fallido.');
@@ -175,20 +175,25 @@ async function esperarArchivo(numTicket, periodo, token) {
   e.statusCode = 504; e.isOperational = true; throw e;
 }
 
-async function descargarArchivo({ nomArchivoReporte, codTipo }, numTicket, periodo, token) {
+function decodificarTexto(buffer) {
+  const texto = buffer.toString('utf8');
+  return texto.includes('\uFFFD') ? buffer.toString('latin1') : texto;
+}
+
+export async function descargarArchivo({ nomArchivoReporte, codTipo }, numTicket, periodo, token, { codLibro = '080000', codProceso = '10' } = {}) {
   const { data } = await axios.get(
     `${base()}/libros/rvierce/gestionprocesosmasivos/web/masivo/archivoreporte`,
     { params: {
-        nomArchivoReporte, codTipoArchivoReporte: codTipo, codLibro: '080000',
-        perTributario: periodo, codProceso: '10', numTicket
+        nomArchivoReporte, codTipoArchivoReporte: codTipo, codLibro,
+        perTributario: periodo, codProceso, numTicket
       },
       headers: { Authorization: `Bearer ${token}` }, responseType: 'arraybuffer', timeout: 120000 });
   const buffer = Buffer.from(data);
   try {
     const zip = new AdmZip(buffer);
-    return zip.getEntries().map((en) => en.getData().toString('utf8')).join('\n');
+    return zip.getEntries().map((en) => decodificarTexto(en.getData())).join('\n');
   } catch {
-    return buffer.toString('utf8');
+    return decodificarTexto(buffer);
   }
 }
 

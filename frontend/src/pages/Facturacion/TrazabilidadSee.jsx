@@ -8,6 +8,7 @@ import {
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../config/api';
 import { useDescargaMasiva, soportaDescargaCarpetas } from '../../context/DescargaMasivaContext';
 import ModalDescargaMasiva from '../../components/Descargas/ModalDescargaMasiva';
+import { coincideFiltros, filaDesdeSire, periodoDeRango, resumirVentas } from '../../utils/sireVentas';
 import './TrazabilidadSee.css';
 
 const ESTADOS_META = {
@@ -19,6 +20,7 @@ const ESTADOS_META = {
   ERROR:     { label: 'Error',     color: '#dc2626' },
   ANULADA:   { label: 'Anulada',   color: '#a855f7' },
   BAJA:      { label: 'Baja',      color: '#64748b' },
+  SOLO_SUNAT: { label: 'Solo en SUNAT', color: '#f97316' },
   GENERADO:  { label: 'Generado',  color: '#94a3b8' },
 };
 const estadoMeta = (e) => ESTADOS_META[String(e || '').toUpperCase()] || { label: e || '—', color: '#94a3b8' };
@@ -209,7 +211,8 @@ const mesDeRango = (desde, hasta) => {
   return r.desde === desde && r.hasta === hasta ? desde.slice(0, 7) : '';
 };
 
-const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE'];
+const ESTADO_OPCIONES = ['all', 'ACEPTADO', 'ENVIADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'ANULADA', 'PENDIENTE', 'SOLO_SUNAT'];
+const SIRE_VACIO = { periodo: '', loading: false, error: null, data: null };
 
 export default function TrazabilidadSee() {
   const [tab, setTab] = useState('comprobantes');
@@ -222,7 +225,10 @@ export default function TrazabilidadSee() {
   const [expandido, setExpandido] = useState(null);
   const [drawerOrden, setDrawerOrden] = useState(null);
   const [aviso, setAviso] = useState(null);
+  const [sire, setSire] = useState(SIRE_VACIO);
+  const [exportando, setExportando] = useState(false);
   const reqId = useRef(0);
+  const sireReq = useRef(0);
 
   useEffect(() => {
     const t = setTimeout(() => setFiltros((f) => ({ ...f, q: busqueda.trim() })), 350);
@@ -252,12 +258,55 @@ export default function TrazabilidadSee() {
   }, [tab, filtros.tipo, filtros.desde, filtros.hasta, filtros.q]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  const periodoSire = periodoDeRango(filtros.desde, filtros.hasta);
+
+  const cargarSire = useCallback(async (refrescar = false) => {
+    const id = ++sireReq.current;
+    if (!periodoSire) { setSire(SIRE_VACIO); return; }
+    setSire((s) => ({ periodo: periodoSire, loading: true, error: null, data: s.periodo === periodoSire ? s.data : null }));
+    try {
+      const res = await sunatAPI.consultarVentasSire(periodoSire, refrescar);
+      if (id !== sireReq.current) return;
+      setSire({ periodo: periodoSire, loading: false, error: null, data: res.data });
+    } catch (e) {
+      if (id !== sireReq.current) return;
+      setSire({ periodo: periodoSire, loading: false, error: e?.response?.data?.error || e.message || 'No se pudo consultar SUNAT.', data: null });
+    }
+  }, [periodoSire]);
+
+  useEffect(() => { if (tab === 'comprobantes') cargarSire(); }, [tab, cargarSire]);
   useEffect(() => { setExpandido(null); }, [tab, filtros]);
 
+  const tabla = useMemo(() => {
+    if (tab !== 'comprobantes' || !sire.data) return data;
+    const filasSire = sire.data.data || [];
+    const porFactura = new Map(filasSire.filter((f) => f.id_factura).map((f) => [f.id_factura, f]));
+    const soloSistema = new Set((sire.data.conciliacion?.solo_spi || []).map((d) => d.id_factura));
+    const enTabla = new Set(data.map((r) => r.id_factura));
+    const mesCompleto = !!mesDeRango(filtros.desde, filtros.hasta);
+    const externas = filasSire
+      .filter((f) => !enTabla.has(f.id_factura) && coincideFiltros(f, filtros, { mesCompleto }))
+      .map(filaDesdeSire);
+    const propias = data.map((r) => ({ ...r, sire: porFactura.get(r.id_factura), no_en_sire: soloSistema.has(r.id_factura) }));
+    return [...externas, ...propias].sort((a, b) => new Date(b.fecha_emision) - new Date(a.fecha_emision));
+  }, [tab, sire.data, data, filtros]);
+
   const visibles = useMemo(
-    () => filtros.estado === 'all' ? data : data.filter((r) => r.estado_final === filtros.estado),
-    [data, filtros.estado]
+    () => filtros.estado === 'all' ? tabla : tabla.filter((r) => r.estado_final === filtros.estado),
+    [tabla, filtros.estado]
   );
+
+  const filasSireVisibles = useMemo(() => visibles.map((r) => r.sire).filter(Boolean), [visibles]);
+
+  const soloSunatEnTabla = useMemo(() => tabla.filter((r) => r.solo_sunat).length, [tabla]);
+
+  const exportarSire = useCallback(async () => {
+    setExportando(true); setAviso(null);
+    try { await sunatAPI.descargarVentasSireExcel(sire.periodo, filasSireVisibles.map((f) => f.clave)); }
+    catch (e) { setAviso(e?.message || 'No se pudo exportar el Excel.'); }
+    finally { setExportando(false); }
+  }, [sire.periodo, filasSireVisibles]);
 
   const cambiarTab = (id) => {
     if (id === tab) return;
@@ -273,8 +322,10 @@ export default function TrazabilidadSee() {
     catch (e) { setAviso(`No se pudo descargar ${etiqueta}: ${e?.response?.data?.error || e.message || 'error'}`); }
   }, []);
 
-  const chips = useMemo(() => Object.entries(resumen.porEstado || {})
-    .sort((a, b) => b[1] - a[1]), [resumen]);
+  const chips = useMemo(() => Object.entries({
+    ...(resumen.porEstado || {}),
+    ...(soloSunatEnTabla ? { SOLO_SUNAT: soloSunatEnTabla } : {}),
+  }).sort((a, b) => b[1] - a[1]), [resumen, soloSunatEnTabla]);
 
   return (
     <main className="tz-page">
@@ -284,7 +335,8 @@ export default function TrazabilidadSee() {
           <h1>Trazabilidad SEE</h1>
           <p>Historial detallado y auditable de comprobantes y guías: emisión, aceptación, rechazo, anulación y bajas ante SUNAT.</p>
         </div>
-        <button className="tz-refresh" onClick={cargar} disabled={loading} title="Actualizar">
+        <button className="tz-refresh" disabled={loading} title="Actualizar"
+          onClick={() => { cargar(); if (tab === 'comprobantes') cargarSire(true); }}>
           <RefreshCw className={loading ? 'tz-spin' : ''} size={16} /> Actualizar
         </button>
       </header>
@@ -348,7 +400,7 @@ export default function TrazabilidadSee() {
       <section className="tz-chips">
         <span className={`tz-chip total ${filtros.estado === 'all' ? 'on' : ''}`}
           onClick={() => setFiltros((f) => ({ ...f, estado: 'all' }))}>
-          <b>{resumen.total}</b> {tab === 'comprobantes' ? 'comprobantes' : 'guías'}
+          <b>{resumen.total + soloSunatEnTabla}</b> {tab === 'comprobantes' ? 'comprobantes' : 'guías'}
         </span>
         {chips.map(([est, n]) => {
           const meta = estadoMeta(est);
@@ -361,53 +413,23 @@ export default function TrazabilidadSee() {
         })}
       </section>
 
-      {tab === 'comprobantes' && !error && (() => {
-        const porMoneda = resumen.montos?.porMoneda || [];
-        const pen = resumen.montos?.pen;
-        const hayExtranjera = porMoneda.some((m) => m.moneda !== 'PEN');
-        if (!porMoneda.length) return (
-          <section className="tz-totales">
-            <div className="tz-total-card tz-total-vacio">
-              <span className="tz-total-label">Total facturado</span>
-              <strong>{loading ? '…' : fmtMoneda(0, 'PEN')}</strong>
-              <small>Sin comprobantes aceptados en el filtro</small>
-            </div>
-          </section>
-        );
-        return (
-          <section className="tz-totales">
-            {hayExtranjera && pen && (
-              <div className="tz-total-card tz-total-principal">
-                <span className="tz-total-label">Total facturado neto en soles (SIRE)</span>
-                <strong>{fmtMoneda(pen.neto, 'PEN')}</strong>
-                <div className="tz-total-desglose">
-                  <span>Valor venta <b>{fmtMoneda(pen.subtotal_neto, 'PEN')}</b></span>
-                  <span>IGV <b>{fmtMoneda(pen.igv_neto, 'PEN')}</b></span>
-                </div>
-                <small>Moneda extranjera convertida al TC venta SUNAT del día de emisión de cada comprobante</small>
-                {pen.sin_tc?.length > 0 && (
-                  <small className="tz-total-alerta">
-                    Sin TC para {pen.sin_tc.join(', ')}: esos comprobantes no están incluidos en este total.
-                  </small>
-                )}
-              </div>
-            )}
-            {porMoneda.map((m) => (
-              <div key={m.moneda} className="tz-total-card">
-                <span className="tz-total-label">Total facturado neto · {m.moneda}</span>
-                <strong>{fmtMoneda(m.neto, m.moneda)}</strong>
-                <div className="tz-total-desglose">
-                  <span>Facturas <b>{fmtMoneda(m.facturas, m.moneda)}</b></span>
-                  <span>Notas de crédito <b>−{fmtMoneda(m.notas_credito, m.moneda)}</b></span>
-                  {m.notas_debito > 0 && <span>Notas de débito <b>+{fmtMoneda(m.notas_debito, m.moneda)}</b></span>}
-                  <span>Valor venta <b>{fmtMoneda(m.subtotal_neto, m.moneda)}</b> · IGV <b>{fmtMoneda(m.igv_neto, m.moneda)}</b></span>
-                </div>
-                <small>{m.cantidad} comprobantes aceptados por SUNAT (excluye bajas, rechazados y pendientes)</small>
-              </div>
-            ))}
-          </section>
-        );
-      })()}
+      {tab === 'comprobantes' && !error && (sire.data ? (
+        <CardsSire sire={sire} filas={filasSireVisibles} filtrado={hayFiltrosVista(filtros)}
+          onEstado={(estado) => setFiltros((f) => ({ ...f, estado }))} />
+      ) : (
+        <CardsSistema montos={resumen.montos} loading={loading} sire={sire} periodo={periodoSire} onReintentar={() => cargarSire(true)} />
+      ))}
+
+      {tab === 'comprobantes' && !error && sire.data && (
+        <div className="tz-dm-actionbar has-sel">
+          <div className="tz-dm-count">
+            <b>{filasSireVisibles.length}</b> comprobante(s) de SIRE con estos filtros
+          </div>
+          <button className="tz-btn tz-btn-download" onClick={exportarSire} disabled={exportando || !filasSireVisibles.length}>
+            {exportando ? <Loader2 className="tz-spin" size={15} /> : <Download size={15} />} Exportar Excel SIRE
+          </button>
+        </div>
+      )}
 
       {aviso && <div className="tz-toast" onClick={() => setAviso(null)}><XCircle size={15} /> {aviso}</div>}
 
@@ -436,6 +458,159 @@ export default function TrazabilidadSee() {
 
       {drawerOrden && <OrdenDrawer idOrden={drawerOrden} onClose={() => setDrawerOrden(null)} />}
     </main>
+  );
+}
+
+const hayFiltrosVista = (f) => f.tipo !== 'all' || f.estado !== 'all' || !!f.q || !mesDeRango(f.desde, f.hasta);
+
+function CardsSistema({ montos, loading, sire, periodo, onReintentar }) {
+  const porMoneda = montos?.porMoneda || [];
+  const pen = montos?.pen;
+  const hayExtranjera = porMoneda.some((m) => m.moneda !== 'PEN');
+  return (
+    <section className="tz-totales">
+      <div className="tz-total-card tz-total-sire-estado">
+        <span className="tz-total-label">Totales oficiales SUNAT</span>
+        {sire.loading ? (
+          <small><Loader2 className="tz-spin" size={13} /> Consultando la propuesta SIRE {periodo}; SUNAT la genera por ticket y puede tardar un momento.</small>
+        ) : sire.error ? (<>
+          <small className="tz-total-alerta">{sire.error}</small>
+          <button className="tz-btn tz-btn-ghost" onClick={onReintentar}><RefreshCw size={14} /> Reintentar</button>
+        </>) : (
+          <small>Elige un mes en el filtro para traer la propuesta SIRE y conciliarla con el sistema.</small>
+        )}
+      </div>
+      {!porMoneda.length ? (
+        <div className="tz-total-card tz-total-vacio">
+          <span className="tz-total-label">Total facturado · sistema</span>
+          <strong>{loading ? '…' : fmtMoneda(0, 'PEN')}</strong>
+          <small>Sin comprobantes aceptados en el filtro</small>
+        </div>
+      ) : (<>
+        {hayExtranjera && pen && (
+          <div className="tz-total-card">
+            <span className="tz-total-label">Total facturado neto en soles · sistema</span>
+            <strong>{fmtMoneda(pen.neto, 'PEN')}</strong>
+            <div className="tz-total-desglose">
+              <span>Valor venta <b>{fmtMoneda(pen.subtotal_neto, 'PEN')}</b></span>
+              <span>IGV <b>{fmtMoneda(pen.igv_neto, 'PEN')}</b></span>
+            </div>
+            <small>Moneda extranjera convertida al TC venta SUNAT del día de emisión de cada comprobante; las notas usan el TC del comprobante que modifican</small>
+            {pen.sin_tc?.length > 0 && (
+              <small className="tz-total-alerta">
+                Sin TC para {pen.sin_tc.join(', ')}: esos comprobantes no están incluidos en este total.
+              </small>
+            )}
+          </div>
+        )}
+        {porMoneda.map((m) => (
+          <div key={m.moneda} className="tz-total-card">
+            <span className="tz-total-label">Total facturado neto · {m.moneda} · sistema</span>
+            <strong>{fmtMoneda(m.neto, m.moneda)}</strong>
+            <div className="tz-total-desglose">
+              <span>Facturas <b>{fmtMoneda(m.facturas, m.moneda)}</b></span>
+              <span>Notas de crédito <b>−{fmtMoneda(m.notas_credito, m.moneda)}</b></span>
+              {m.notas_debito > 0 && <span>Notas de débito <b>+{fmtMoneda(m.notas_debito, m.moneda)}</b></span>}
+              <span>Valor venta <b>{fmtMoneda(m.subtotal_neto, m.moneda)}</b> · IGV <b>{fmtMoneda(m.igv_neto, m.moneda)}</b></span>
+            </div>
+            <small>{m.cantidad} comprobantes aceptados por SUNAT según el sistema</small>
+          </div>
+        ))}
+      </>)}
+    </section>
+  );
+}
+
+const OTROS_CONCEPTOS = [
+  ['exportacion', 'Exportación'], ['exonerado', 'Exonerado'], ['inafecto', 'Inafecto'],
+  ['isc', 'ISC'], ['ivap', 'IVAP'], ['icbper', 'ICBPER'], ['otros', 'Otros tributos'],
+];
+
+function DesgloseSire({ grupo, moneda }) {
+  return (
+    <div className="tz-total-desglose">
+      <span>Facturas ({grupo.n_facturas}) <b>{fmtMoneda(grupo.facturas, moneda)}</b></span>
+      <span>Notas de crédito ({grupo.n_notas_credito}) <b>−{fmtMoneda(grupo.notas_credito, moneda)}</b></span>
+      {grupo.n_notas_debito > 0 && <span>Notas de débito ({grupo.n_notas_debito}) <b>+{fmtMoneda(grupo.notas_debito, moneda)}</b></span>}
+      <span>Valor venta <b>{fmtMoneda(grupo.valor_venta, moneda)}</b></span>
+      <span>IGV <b>{fmtMoneda(grupo.igv, moneda)}</b></span>
+      {OTROS_CONCEPTOS.filter(([campo]) => grupo[campo] !== 0).map(([campo, label]) => (
+        <span key={campo}>{label} <b>{fmtMoneda(grupo[campo], moneda)}</b></span>
+      ))}
+    </div>
+  );
+}
+
+function ListaConciliacion({ titulo, items, onClick }) {
+  if (!items.length) return null;
+  return (
+    <div className="tz-conc-grupo">
+      {onClick
+        ? <button type="button" className="tz-conc-titulo" onClick={onClick}>{titulo} ({items.length})</button>
+        : <span className="tz-conc-titulo">{titulo} ({items.length})</span>}
+      <ul className="tz-conc-lista">
+        {items.map((it) => (
+          <li key={it.key}>
+            <b>{it.documento}</b>
+            <span>{it.detalle}</span>
+            <em>{it.monto}</em>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CardsSire({ sire, filas, filtrado, onEstado }) {
+  const { soles, porMoneda } = useMemo(() => resumirVentas(filas), [filas]);
+  const { conciliacion: c, periodo, consultado_en } = sire.data;
+  const cuadra = c.diferencia === 0 && !c.solo_sunat.length && !c.solo_spi.length && !c.diferencias.length && !c.sistema.sin_tc?.length;
+  const periodoTexto = `${periodo.slice(4, 6)}/${periodo.slice(0, 4)}`;
+
+  return (
+    <section className="tz-totales">
+      <div className="tz-total-card tz-total-principal">
+        <span className="tz-total-label">Total facturado neto · SUNAT (SIRE)</span>
+        <strong>{fmtMoneda(soles.neto, 'PEN')}</strong>
+        <DesgloseSire grupo={soles} moneda="PEN" />
+        <small>
+          Suma de la columna Total CP de {soles.cantidad} comprobante(s) de la propuesta SIRE {periodoTexto}
+          {filtrado && ` (con filtros; el periodo completo tiene ${c.sunat.cantidad})`}.
+          {' '}Consultada {fmtFecha(consultado_en, { hour: '2-digit', minute: '2-digit' })}.
+        </small>
+        {sire.loading && <small><Loader2 className="tz-spin" size={12} /> Actualizando desde SUNAT…</small>}
+      </div>
+
+      {porMoneda.map((m) => (
+        <div key={m.moneda} className="tz-total-card">
+          <span className="tz-total-label">Comprobantes en {m.moneda === 'PEN' ? 'soles' : m.moneda} · SUNAT</span>
+          <strong>{fmtMoneda(m.neto, m.moneda)}</strong>
+          <DesgloseSire grupo={m} moneda={m.moneda} />
+          <small>
+            {m.cantidad} comprobante(s)
+            {m.moneda !== 'PEN' && ` · equivalen a ${fmtMoneda(m.soles, 'PEN')} con el TC que SUNAT registra en cada uno`}
+          </small>
+        </div>
+      ))}
+
+      <div className={`tz-total-card tz-total-conc ${cuadra ? 'ok' : 'alerta'}`}>
+        <span className="tz-total-label">Conciliación sistema vs SUNAT · periodo {periodoTexto}</span>
+        <strong>{cuadra ? 'Cuadra al centavo' : `Diferencia ${fmtMoneda(c.diferencia, 'PEN')}`}</strong>
+        <div className="tz-total-desglose">
+          <span>Sistema ({c.sistema.cantidad}) <b>{fmtMoneda(c.sistema.neto, 'PEN')}</b></span>
+          <span>SUNAT ({c.sunat.cantidad}) <b>{fmtMoneda(c.sunat.neto, 'PEN')}</b></span>
+        </div>
+        <ListaConciliacion titulo="Solo en SUNAT" onClick={() => onEstado('SOLO_SUNAT')}
+          items={c.solo_sunat.map((f) => ({ key: f.clave, documento: f.documento, detalle: f.cliente, monto: fmtMoneda(f.total, 'PEN') }))} />
+        <ListaConciliacion titulo="Solo en el sistema"
+          items={c.solo_spi.map((d) => ({ key: d.id_factura, documento: d.documento, detalle: d.cliente, monto: fmtMoneda(d.total, d.moneda) }))} />
+        <ListaConciliacion titulo="Con diferencias"
+          items={c.diferencias.map((f) => ({ key: f.clave, documento: f.documento, detalle: f.diferencia, monto: fmtMoneda(f.total, 'PEN') }))} />
+        {c.sistema.sin_tc?.length > 0 && (
+          <small className="tz-total-alerta">Sin TC para {c.sistema.sin_tc.join(', ')}: esos comprobantes no suman en el total del sistema.</small>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -470,6 +645,8 @@ function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar
                   <div className="tz-doc"><TipoTag clase={r.clase} /><b>{r.documento}</b></div>
                   {r.es_manual && <span className="tz-tag-manual">registro manual</span>}
                   {r.es_exportacion === 1 && <span className="tz-tag-exp">exportación</span>}
+                  {r.no_en_sire && <span className="tz-tag-manual">no está en SIRE</span>}
+                  {r.sire?.diferencia && <span className="tz-tag-manual" title={r.sire.diferencia}>difiere de SIRE</span>}
                 </td>
                 <td className="tz-nowrap">{fmtDia(r.fecha_emision)}</td>
                 <td><div className="tz-cli"><b>{r.cliente || '—'}</b><small>{r.ruc_cliente || ''}</small></div></td>
@@ -480,7 +657,10 @@ function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar
                       </button>
                     : <span className="tz-muted">—</span>}
                 </td>
-                <td className="tz-num tz-nowrap">{fmtMoneda(r.total, r.moneda)}</td>
+                <td className="tz-num tz-nowrap">
+                  {fmtMoneda(r.total, r.moneda)}
+                  {r.sire && r.moneda !== 'PEN' && <small className="tz-total-soles">{fmtMoneda(r.sire.total, 'PEN')} · TC {r.sire.tipoCambio}</small>}
+                </td>
                 <td><Badge estado={r.estado_final} /></td>
                 <td className="tz-motivo">
                   {motivo && <span className="tz-motivo-cod">{r.motivo_nota_codigo} · {motivo}</span>}
@@ -490,7 +670,7 @@ function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar
                 </td>
                 <td className="tz-col-acc" onClick={(e) => e.stopPropagation()}>
                   <div className="tz-acc">
-                    <IconBtn icon={FileText} label="PDF" onClick={() => onDescargar(() => sunatAPI.verPdfComprobante(r.id_factura), 'el PDF')} />
+                    <IconBtn icon={FileText} label="PDF" disabled={r.solo_sunat} onClick={() => onDescargar(() => sunatAPI.verPdfComprobante(r.id_factura), 'el PDF')} />
                     <IconBtn icon={Download} label="XML" disabled={!r.xml_url}
                       onClick={() => onDescargar(() => sunatAPI.descargarArchivoUrl(r.xml_url, `${r.documento}.xml`), 'el XML')} />
                     <IconBtn icon={FileCheck2} label="CDR" disabled={!r.cdr_url}
@@ -508,6 +688,12 @@ function TablaComprobantes({ data, expandido, setExpandido, onOrden, onDescargar
                       <DetItem label="Subtotal" value={fmtMoneda(r.subtotal, r.moneda)} />
                       <DetItem label="IGV" value={fmtMoneda(r.igv, r.moneda)} />
                       <DetItem label="Total" value={fmtMoneda(r.total, r.moneda)} />
+                      {r.sire && <>
+                        <DetItem label="SIRE · Valor venta S/" value={fmtMoneda(r.sire.baseImponible, 'PEN')} />
+                        <DetItem label="SIRE · IGV S/" value={fmtMoneda(r.sire.igv, 'PEN')} />
+                        <DetItem label="SIRE · Total CP S/" value={fmtMoneda(r.sire.total, 'PEN')} />
+                        <DetItem label="SIRE · Tipo de cambio" value={r.sire.tipoCambio} />
+                      </>}
                       <DetItem label="Código SUNAT" value={r.sunat_response_code || '—'} />
                       <DetItem label="Ticket" value={r.sunat_ticket || '—'} />
                       <DetItem label="Enviado" value={r.sunat_fecha_envio ? fmtFecha(r.sunat_fecha_envio, { hour: '2-digit', minute: '2-digit' }) : '—'} />

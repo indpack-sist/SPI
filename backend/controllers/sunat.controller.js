@@ -21,7 +21,7 @@ import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSu
 import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
 import { subirRaw } from '../services/cloudinary.service.js';
-import { marcarOrdenFacturada, liberarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr } from '../services/sunat/cierre.service.js';
+import { marcarOrdenFacturada, liberarOrdenFacturada, cerrarBajaDesdeStatus, cerrarFacturaDesdeStatusCdr, BAJA_EN_PROCESO_SQL } from '../services/sunat/cierre.service.js';
 import { ejecutarReintentosSunat } from '../jobs/sunat-reintentos.job.js';
 import AppError from '../utils/AppError.js';
 import fetch from 'node-fetch';
@@ -1009,6 +1009,14 @@ export async function darDeBajaFactura(req, res, next) {
       if (f.id_baja || f.estado === 'Anulada') throw new AppError('El comprobante ya está anulado/dado de baja', 409);
       if (!f.fecha_emision) throw new AppError('El comprobante no tiene fecha de emisión registrada', 422);
 
+      const [[enProceso]] = await conn.query(
+        `SELECT b.identificador
+           FROM sunat_bajas_detalle d
+           JOIN sunat_bajas b ON b.id_baja = d.id_baja
+          WHERE d.id_factura = ? AND ${BAJA_EN_PROCESO_SQL}
+          LIMIT 1 FOR UPDATE`, [id_factura, comunicacionDateTime]);
+      if (enProceso) throw new AppError(`Ya hay una baja en proceso para este comprobante (${enProceso.identificador}). Espere la respuesta de SUNAT.`, 409);
+
       const fechaReferencia = f.fecha_emision;
       const dias = diffDiasISO(fechaReferencia, fechaComunicacion);
       if (dias > 7) throw new AppError('Plazo de 7 días vencido: la anulación debe hacerse por Nota de Crédito (motivo 01)', 422);
@@ -1033,20 +1041,18 @@ export async function darDeBajaFactura(req, res, next) {
     });
 
     const { idBaja, identificador, fechaReferencia, corr5, ymd, factura } = prep;
-    const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
-
-    const ra = {
-      identificador, fechaReferencia, fechaComunicacion, empresa,
-      lineas: [{ lineId: 1, tipoDoc: factura.codigo_tipo_sunat, serie: factura.serie, numero: factura.numero, motivo }]
-    };
-    const xml = construirVoidedDocumentsXML(ra);
-    const { xmlFirmado } = firmarXml(xml);
     const nombre = `${sunatConfig.ruc}-RA-${ymd}-${corr5}`;
-    await copiaLocal(`${nombre}.xml`, xmlFirmado);
-
     const t0 = Date.now();
+    let xmlFirmado;
     let ticket;
     try {
+      const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+      const ra = {
+        identificador, fechaReferencia, fechaComunicacion, empresa,
+        lineas: [{ lineId: 1, tipoDoc: factura.codigo_tipo_sunat, serie: factura.serie, numero: factura.numero, motivo }]
+      };
+      ({ xmlFirmado } = firmarXml(construirVoidedDocumentsXML(ra)));
+      await copiaLocal(`${nombre}.xml`, xmlFirmado);
       ticket = await sendSummary(`${nombre}.zip`, zipXml(`${nombre}.xml`, xmlFirmado));
     } catch (e) {
       await pool.query(

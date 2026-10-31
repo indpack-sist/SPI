@@ -111,6 +111,9 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
     .filter((f) => f.sunat_estado)
     .sort((a, b) => (Number(a.id_factura) || 0) - (Number(b.id_factura) || 0));
   const refDe = (f) => comprobantes.find((x) => x.id_factura === f.id_factura_ref);
+  const diasDesdeEmision = (f) => (f.fecha_emision_iso
+    ? Math.round((new Date(`${hoyISO}T00:00:00`) - new Date(`${f.fecha_emision_iso}T00:00:00`)) / 86400000)
+    : null);
   const notaQueAnula = (f) => comprobantes.find((x) => x.id_factura_ref === f.id_factura
     && x.codigo_tipo_sunat === '07' && x.motivo_nota_codigo === '01'
     && x.sunat_estado === 'ACEPTADO');
@@ -259,7 +262,16 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
 
   const handleBaja = async () => {
     if (!bajaMotivo.trim()) { setAlerta({ type: 'error', message: 'Indique el motivo de la baja.' }); return; }
-    await tras(() => sunatAPI.darDeBaja(modalBaja.factura.id_factura, bajaMotivo.trim()), 'Comunicación de baja enviada.');
+    const numero = modalBaja.factura.numero_factura;
+    const r = await tras(() => sunatAPI.darDeBaja(modalBaja.factura.id_factura, bajaMotivo.trim()), null);
+    const d = r?.data;
+    if (d?.ok === true) {
+      setAlerta({ type: 'success', message: `SUNAT aceptó la baja de ${numero}. La orden quedó libre para volver a facturar. Stock y pagos no se ajustan automáticamente.` });
+    } else if (d?.ok === false) {
+      setAlerta({ type: 'error', message: `SUNAT rechazó la baja de ${numero}: la factura sigue vigente. ${d.descripcion || ''}`.trim() });
+    } else if (d) {
+      setAlerta({ type: 'warning', message: `Baja de ${numero} enviada y en proceso en SUNAT. La factura sigue vigente hasta que SUNAT responda; recargue la página más tarde para ver el resultado.` });
+    }
     setModalBaja(null); setBajaMotivo('');
   };
 
@@ -348,14 +360,22 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
             const esFactura = f.codigo_tipo_sunat === '01';
             const esNC = f.codigo_tipo_sunat === '07';
             const esND = f.codigo_tipo_sunat === '08';
-            const anulada = f.estado === 'Anulada';
+            const dadaDeBaja = f.sunat_estado === 'BAJA';
+            const anulada = f.estado === 'Anulada' || dadaDeBaja;
+            const ncAnulacion = notaQueAnula(f);
             const aceptado = f.sunat_estado === 'ACEPTADO' && !anulada;
             const esRechazo = f.sunat_estado === 'RECHAZADO' || f.sunat_estado === 'ERROR';
+            const diasEmitida = diasDesdeEmision(f);
+            const bajaVencida = diasEmitida !== null && diasEmitida > 7;
+            const bajaEnProceso = Number(f.baja_en_proceso) === 1;
             let rol = null;
-            if (anulada) rol = { clase: 'badge-danger', txt: `Anulada por NC ${notaQueAnula(f)?.numero_factura || ''}`.trim() };
+            if (dadaDeBaja) rol = { clase: 'badge-danger', txt: 'Dada de baja' };
+            else if (anulada) rol = { clase: 'badge-danger', txt: ncAnulacion ? `Anulada por NC ${ncAnulacion.numero_factura}` : 'Anulada' };
             else if (esNC) rol = { clase: 'badge-info', txt: `Nota de Crédito${f.motivo_nota_codigo === '09' ? ' · Disminución' : ''} → ${refDe(f)?.numero_factura || 'factura'}` };
             else if (esND) rol = { clase: 'badge-info', txt: `Nota de Débito → ${refDe(f)?.numero_factura || 'factura'}` };
-            else if (esFactura && aceptado) rol = { clase: 'badge-success', txt: 'Factura vigente' };
+            else if (esFactura && aceptado) rol = bajaEnProceso
+              ? { clase: 'badge-warning', txt: 'Baja en proceso' }
+              : { clase: 'badge-success', txt: 'Factura vigente' };
             else if (esRechazo) rol = { clase: 'badge-danger', txt: 'Rechazada — sin validez' };
             return (
               <div key={f.id_factura} className={`border rounded p-2 flex flex-wrap items-center gap-2 ${anulada || esRechazo ? 'border-red-200 bg-red-50' : (esNC || esND ? 'border-blue-200 bg-blue-50' : 'border-gray-200')}`}>
@@ -367,7 +387,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                 <div className="flex flex-wrap items-center gap-1 ml-auto">
                   {(aceptado || anulada || f.sunat_estado === 'BAJA' || f.sunat_estado === 'RECHAZADO') && (
                     <button className="btn btn-xs btn-outline" onClick={() => handlePdf(f)} disabled={procesando}
-                      title={f.sunat_estado === 'RECHAZADO' ? 'Ver PDF (rechazado, con marca y motivo)' : (anulada ? 'Ver PDF (anulado por NC, con marca de agua)' : 'Ver PDF SEE')}>
+                      title={f.sunat_estado === 'RECHAZADO' ? 'Ver PDF (rechazado, con marca y motivo)' : (dadaDeBaja ? 'Ver PDF (dado de baja, con marca de agua)' : (anulada ? 'Ver PDF (anulado, con marca de agua)' : 'Ver PDF SEE'))}>
                       <FileText size={13} className="mr-1" /> PDF
                     </button>
                   )}
@@ -396,7 +416,7 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
                       <button className="btn btn-xs btn-outline" onClick={() => abrirNota(f)} disabled={procesando} title="Emitir Nota de Crédito/Débito">
                         <FileMinus size={13} className="mr-1" /> NC/ND
                       </button>
-                      <button className="btn btn-xs btn-danger" onClick={() => { setBajaMotivo(''); setModalBaja({ factura: f }); }} disabled={procesando} title="Comunicación de baja (≤7 días)">
+                      <button className="btn btn-xs btn-danger" onClick={() => { setBajaMotivo(''); setModalBaja({ factura: f, diasRestantes: diasEmitida === null ? null : 7 - diasEmitida }); }} disabled={procesando || bajaVencida || bajaEnProceso} title={bajaEnProceso ? 'Baja en proceso: esperando la respuesta de SUNAT' : bajaVencida ? 'Plazo de baja vencido (más de 7 días): anule con Nota de Crédito motivo 01' : 'Anular ante SUNAT sin Nota de Crédito (hasta 7 días desde la emisión)'}>
                         <Ban size={13} className="mr-1" /> Baja
                       </button>
                     </>
@@ -1159,14 +1179,28 @@ export default function PanelFacturacionSee({ orden, facturas = [], onRefresh, s
 
       <Modal isOpen={!!modalBaja} onClose={() => !procesando && setModalBaja(null)} title="Comunicación de baja (RA)" size="sm">
         <div className="vt-sy-3 text-sm">
-          <p className="text-muted">Se dará de baja la factura <strong className="font-mono">{modalBaja?.factura?.numero_factura}</strong> ante SUNAT (solo dentro de los 7 días de emitida).</p>
+          <p>
+            Se anulará ante SUNAT la factura <strong className="font-mono">{modalBaja?.factura?.numero_factura}</strong> por {fmt(modalBaja?.factura?.total)}, sin emitir Nota de Crédito.
+            {modalBaja?.diasRestantes != null && (
+              <span className="text-muted"> {modalBaja.diasRestantes === 0 ? 'Hoy es el último día para hacerlo.' : `Quedan ${modalBaja.diasRestantes} día(s) del plazo de 7.`}</span>
+            )}
+          </p>
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded px-2 py-1">
+            <p className="font-semibold">Qué pasará si SUNAT la acepta:</p>
+            <ul className="list-disc vt-pl-4">
+              <li>Es definitivo: la factura no se puede recuperar.</li>
+              <li>En SUNAT figurará como anulada, con monto 0.</li>
+              <li>La orden quedará sin factura y lista para volver a facturar.</li>
+              <li>Stock y pagos no cambian: cualquier devolución se registra aparte.</li>
+            </ul>
+          </div>
           <div>
-            <label className="block text-xs text-muted mb-1">Motivo de la baja</label>
+            <label className="block text-xs text-muted mb-1">Motivo de la baja (se envía a SUNAT y aparecerá en el PDF y en el historial)</label>
             <textarea className="form-input w-full" rows={3} value={bajaMotivo} onChange={(e) => setBajaMotivo(e.target.value)} placeholder="Ej: Error en los datos del cliente" />
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn btn-sm btn-outline" onClick={() => setModalBaja(null)} disabled={procesando}>Cancelar</button>
-            <button className="btn btn-sm btn-danger" onClick={handleBaja} disabled={procesando}>{procesando ? 'Enviando…' : 'Dar de baja'}</button>
+            <button className="btn btn-sm btn-danger" onClick={handleBaja} disabled={procesando || !bajaMotivo.trim()}>{procesando ? 'Enviando… (hasta 1 min)' : `Dar de baja ${modalBaja?.factura?.numero_factura || ''}`.trim()}</button>
           </div>
         </div>
       </Modal>

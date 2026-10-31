@@ -6,6 +6,8 @@ import { copiaLocal } from './util.service.js';
 import { ahoraLima } from './fecha.service.js';
 import { sunatConfig } from '../../config/sunat.js';
 
+export const BAJA_EN_PROCESO_SQL = `(b.estado = 'ENVIADO' OR (b.estado = 'GENERADO' AND TIMESTAMPDIFF(MINUTE, b.fecha_registro, ?) < 10))`;
+
 async function ordenTotalmenteFacturada(conn, idOrdenVenta) {
   const [rows] = await conn.query(
     `SELECT d.cantidad,

@@ -1,4 +1,6 @@
 import pool, { executeQuery, executeTransaction } from '../config/database.js';
+import { BAJA_EN_PROCESO_SQL } from '../services/sunat/cierre.service.js';
+import { ahoraLima } from '../services/sunat/fecha.service.js';
 import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
@@ -4714,13 +4716,15 @@ export async function getHistorialFacturasAnuladas(req, res) {
         fv.id_factura                              AS id_anulacion,
         fv.numero_factura                          AS numero_comprobante_sunat,
         fv.url_pdf                                 AS comprobante_sunat_url,
-        fv.motivo_anulacion,
-        COALESCE(fv.fecha_anulacion, fv.fecha_emision) AS fecha_anulacion,
+        COALESCE(fv.motivo_anulacion, bd.motivo)   AS motivo_anulacion,
+        COALESCE(fv.fecha_anulacion, b.fecha_registro, fv.fecha_emision) AS fecha_anulacion,
         e.nombre_completo                          AS usuario_anulacion
       FROM facturas_venta fv
-      LEFT JOIN empleados e ON fv.id_anulado_por = e.id_empleado
+      LEFT JOIN sunat_bajas b ON b.id_baja = fv.id_baja
+      LEFT JOIN sunat_bajas_detalle bd ON bd.id_baja = fv.id_baja AND bd.id_factura = fv.id_factura
+      LEFT JOIN empleados e ON e.id_empleado = COALESCE(fv.id_anulado_por, b.id_registrado_por)
       WHERE fv.id_orden_venta = ? AND fv.estado = 'Anulada'
-      ORDER BY COALESCE(fv.fecha_anulacion, fv.fecha_emision) DESC, fv.id_factura DESC
+      ORDER BY COALESCE(fv.fecha_anulacion, b.fecha_registro, fv.fecha_emision) DESC, fv.id_factura DESC
     `, [id]);
 
     if (!result.success) {
@@ -5090,18 +5094,24 @@ export async function getFacturasOrden(req, res) {
       SELECT
         fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
         fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
+        DATE_FORMAT(COALESCE(fv.fecha_emision, fv.sunat_fecha_envio), '%Y-%m-%d') AS fecha_emision_iso,
         fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion, fv.id_salida,
         fv.sunat_estado, fv.codigo_tipo_sunat, fv.sunat_ticket,
         fv.sunat_response_code, fv.sunat_response_desc,
         fv.xml_url, fv.cdr_url, fv.id_factura_ref, fv.motivo_nota_codigo,
         e.nombre_completo  AS registrado_por,
-        e2.nombre_completo AS anulado_por
+        e2.nombre_completo AS anulado_por,
+        EXISTS (
+          SELECT 1 FROM sunat_bajas_detalle d
+            JOIN sunat_bajas b ON b.id_baja = d.id_baja
+           WHERE d.id_factura = fv.id_factura AND ${BAJA_EN_PROCESO_SQL}
+        ) AS baja_en_proceso
       FROM facturas_venta fv
       LEFT JOIN empleados e  ON fv.id_registrado_por = e.id_empleado
       LEFT JOIN empleados e2 ON fv.id_anulado_por = e2.id_empleado
       WHERE fv.id_orden_venta = ? AND fv.estado != 'Eliminada'
       ORDER BY (fv.estado = 'Anulada'), fv.fecha_emision ASC, fv.id_factura ASC
-    `, [id]);
+    `, [ahoraLima(), id]);
 
     if (!facturasRes.success) {
       return res.status(500).json({ success: false, error: facturasRes.error });

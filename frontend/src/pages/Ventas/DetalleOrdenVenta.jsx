@@ -60,6 +60,7 @@ function DetalleOrdenVenta() {
   
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
+  const [transportistas, setTransportistas] = useState([]);
   const [guiasRemision, setGuiasRemision] = useState([]);
   const [guiasDetalleSee, setGuiasDetalleSee] = useState([]);
   const [emisionesHistorial, setEmisionesHistorial] = useState({});
@@ -859,7 +860,27 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const cargarTransportistas = async () => {
+    try {
+      const response = await guiasRemisionAPI.getTransportistas();
+      if (response.data.success) setTransportistas(response.data.data || []);
+    } catch (error) {
+      console.error("Error cargando transportistas", error);
+    }
+  };
+
+  const handleSeleccionarTransportista = (idTransportista) => {
+    const sel = transportistas.find(t => String(t.id_transportista) === String(idTransportista));
+    setTransporteForm({
+      ...transporteForm,
+      transporte_ruc: sel?.ruc || '',
+      transporte_nombre: sel?.razon_social || '',
+      transporte_mtc: sel?.numero_mtc || '',
+    });
+  };
+
   const handleAbrirTransporte = () => {
+    cargarTransportistas();
     setTransporteForm({
       tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
       id_vehiculo: orden.id_vehiculo || '',
@@ -4957,6 +4978,20 @@ function DetalleOrdenVenta() {
                     value={transporteForm.transporte_fecha_entrega}
                     onChange={(e) => setTransporteForm({ ...transporteForm, transporte_fecha_entrega: e.target.value })}
                   />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Transportista registrado</label>
+                  <select
+                    className="form-select"
+                    value={transportistas.find(t => t.ruc === transporteForm.transporte_ruc)?.id_transportista || ''}
+                    onChange={(e) => handleSeleccionarTransportista(e.target.value)}
+                  >
+                    <option value="">— Seleccionar transportista —</option>
+                    {transportistas.map(t => (
+                      <option key={t.id_transportista} value={t.id_transportista}>{t.razon_social} (RUC {t.ruc})</option>
+                    ))}
+                  </select>
+                  <small className="text-gray-500">Llena RUC, razón social y MTC. Si es uno nuevo, escríbelo abajo.</small>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="form-group">

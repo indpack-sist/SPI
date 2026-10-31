@@ -5003,7 +5003,7 @@ function DetalleOrdenVenta() {
                 <div className="rounded-md bg-blue-50 border border-blue-200 p-2 text-xs text-blue-800">
                   Transporte público / tercero (SUNAT modalidad 01): otra empresa realiza el traslado.
                   Obligatorios: <b>RUC y razón social</b> del transportista, <b>fecha de entrega al transportista</b>, datos del conductor y al menos una <b>placa</b>.
-                  El <b>MTC de la empresa</b> (formato …CNG) es opcional. Por vehículo puedes indicar su <b>TUCE/Certificado</b> y su <b>Nº de autorización especial</b> (formato 15M…E). El 2º vehículo (carreta) es opcional.
+                  El <b>MTC de la empresa</b> (formato …CNG) es opcional. Por vehículo puedes indicar su <b>TUCE/Certificado</b> (formato 15M…E) y su <b>Nº de autorización especial</b>. El 2º vehículo (carreta) es opcional.
                 </div>
                 <div className="form-group">
                   <label className="form-label">Fecha de entrega al transportista *</label>
@@ -5103,7 +5103,7 @@ function DetalleOrdenVenta() {
                       className="form-input"
                       value={transporteForm.transporte_tuc}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_tuc: e.target.value })}
-                      placeholder="Ej. 151716963"
+                      placeholder="Formato 15M…E"
                       maxLength={20}
                     />
                   </div>
@@ -5114,7 +5114,7 @@ function DetalleOrdenVenta() {
                       className="form-input"
                       value={transporteForm.transporte_autorizacion}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_autorizacion: e.target.value })}
-                      placeholder="Formato 15M…E"
+                      placeholder="Ej. 151716963"
                       maxLength={20}
                     />
                   </div>
@@ -5137,7 +5137,7 @@ function DetalleOrdenVenta() {
                       className="form-input"
                       value={transporteForm.transporte_tuc2}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_tuc2: e.target.value })}
-                      placeholder="Ej. 152108547"
+                      placeholder="Formato 15M…E"
                       maxLength={20}
                     />
                   </div>
@@ -5148,7 +5148,7 @@ function DetalleOrdenVenta() {
                       className="form-input"
                       value={transporteForm.transporte_autorizacion2}
                       onChange={(e) => setTransporteForm({ ...transporteForm, transporte_autorizacion2: e.target.value })}
-                      placeholder="Formato 15M…E"
+                      placeholder="Ej. 152108547"
                       maxLength={20}
                     />
                   </div>

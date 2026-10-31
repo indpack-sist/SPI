@@ -3101,26 +3101,30 @@ function DetalleOrdenVenta() {
                                                     <Eye size={14} className="mr-1" /> Ampliar
                                                 </button>
                                             )}
-                                            <button
-                                                className="btn btn-xs btn-danger"
-                                                onClick={() => {
-                                                    setFacturaAAnular(facturas[facturaTabActiva]);
-                                                    setModalAnularFactura(true);
-                                                }}
-                                                title="Anular: se anuló formalmente en el portal de SUNAT"
-                                            >
-                                                Anular
-                                            </button>
-                                            <button
-                                                className="btn btn-xs btn-outline border-gray-300 text-gray-600 hover:bg-gray-100"
-                                                onClick={() => {
-                                                    setFacturaAEliminar(facturas[facturaTabActiva]);
-                                                    setModalEliminarFactura(true);
-                                                }}
-                                                title="Eliminar: se registró por error/confusión (documento equivocado, mal vinculada)"
-                                            >
-                                                <Trash2 size={12} className="mr-1"/> Eliminar
-                                            </button>
+                                            {!facturas[facturaTabActiva].sunat_estado && (
+                                                <>
+                                                    <button
+                                                        className="btn btn-xs btn-danger"
+                                                        onClick={() => {
+                                                            setFacturaAAnular(facturas[facturaTabActiva]);
+                                                            setModalAnularFactura(true);
+                                                        }}
+                                                        title="Anular: se anuló formalmente en el portal de SUNAT"
+                                                    >
+                                                        Anular
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-xs btn-outline border-gray-300 text-gray-600 hover:bg-gray-100"
+                                                        onClick={() => {
+                                                            setFacturaAEliminar(facturas[facturaTabActiva]);
+                                                            setModalEliminarFactura(true);
+                                                        }}
+                                                        title="Eliminar: se registró por error/confusión (documento equivocado, mal vinculada)"
+                                                    >
+                                                        <Trash2 size={12} className="mr-1"/> Eliminar
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 vt-gapx-2 vt-gapy-1 text-xs">

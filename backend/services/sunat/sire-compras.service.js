@@ -137,6 +137,9 @@ export async function tokenSire() {
 
 export const base = () => sunatConfig.urls.SIRE_API;
 
+const CACHE_PROPUESTA_MS = 15 * 60 * 1000;
+const cachePropuestas = new Map();
+
 async function solicitarPropuesta(periodo, token) {
   const { data } = await axios.get(
     `${base()}/libros/rce/propuesta/web/propuesta/${periodo}/exportacioncomprobantepropuesta`,
@@ -197,14 +200,34 @@ export async function descargarArchivo({ nomArchivoReporte, codTipo }, numTicket
   }
 }
 
-export async function listarComprasPeriodo(periodo) {
+async function descargarPropuestaCompras(periodo) {
+  try {
+    const token = await tokenSire();
+    const numTicket = await solicitarPropuesta(periodo, token);
+    const archivo = await esperarArchivo(numTicket, periodo, token);
+    const texto = await descargarArchivo(archivo, numTicket, periodo, token);
+    return parseComprasPropuesta(texto);
+  } catch (e) {
+    if (!e.response) throw e;
+    const cuerpo = Buffer.isBuffer(e.response.data) ? e.response.data.toString('utf8') : e.response.data;
+    const detalle = typeof cuerpo === 'object' ? JSON.stringify(cuerpo) : String(cuerpo ?? e.message);
+    const err = new Error(`SUNAT rechazó la consulta de la propuesta de compras (HTTP ${e.response.status}): ${detalle.slice(0, 300)}`);
+    err.statusCode = 502; throw err;
+  }
+}
+
+export async function listarComprasPeriodo(periodo, { refrescar = false } = {}) {
   if (!/^\d{6}$/.test(String(periodo || ''))) {
     const e = new Error('Periodo inválido, usa el formato YYYYMM.');
     e.statusCode = 400; e.isOperational = true; throw e;
   }
-  const token = await tokenSire();
-  const numTicket = await solicitarPropuesta(periodo, token);
-  const archivo = await esperarArchivo(numTicket, periodo, token);
-  const texto = await descargarArchivo(archivo, numTicket, periodo, token);
-  return parseComprasPropuesta(texto);
+  const previa = cachePropuestas.get(periodo);
+  if (previa && (previa.pendiente || (!refrescar && previa.expira > Date.now()))) return previa.promesa;
+
+  const entrada = { pendiente: true, expira: 0, promesa: null };
+  entrada.promesa = descargarPropuestaCompras(periodo)
+    .then((filas) => { entrada.pendiente = false; entrada.expira = Date.now() + CACHE_PROPUESTA_MS; return filas; })
+    .catch((e) => { cachePropuestas.delete(periodo); throw e; });
+  cachePropuestas.set(periodo, entrada);
+  return entrada.promesa;
 }

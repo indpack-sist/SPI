@@ -4,10 +4,11 @@ import { generarComprasSireXLSX } from '../utils/excelGenerators/comprasSireXLSX
 
 export const listar = async (req, res) => {
   try {
-    const filas = await listarComprasPeriodo(req.query.periodo);
+    const filas = await listarComprasPeriodo(req.query.periodo, { refrescar: true });
     const data = filas.map(filaATabla);
     res.json({ success: true, data, resumen: { total: data.length } });
   } catch (e) {
+    console.error('Error consultando compras SIRE:', e.message);
     res.status(e.statusCode || 500).json({ success: false, error: e.message });
   }
 };
@@ -32,6 +33,7 @@ export const exportarExcel = async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="compras-sunat-${periodo}.xlsx"`);
     res.send(buffer);
   } catch (e) {
+    console.error('Error exportando compras SIRE:', e.message);
     res.status(e.statusCode || 500).json({ success: false, error: e.message });
   }
 };

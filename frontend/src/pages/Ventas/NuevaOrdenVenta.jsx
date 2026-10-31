@@ -1638,7 +1638,7 @@ useEffect(() => {
                                   const dni = e.target.value.replace(/\D/g, '').slice(0, 8);
                                   setFormCabecera({...formCabecera, transporte_dni: dni});
                                   consultaDocumento.dni('transporte_dni', dni, (datos) => {
-                                    setFormCabecera(prev => ({...prev, transporte_conductor: datos.nombre_completo}));
+                                    setFormCabecera(prev => ({...prev, transporte_conductor: datos.nombre_completo, transporte_licencia: datos.licencia || ''}));
                                   });
                                 }}
                             />

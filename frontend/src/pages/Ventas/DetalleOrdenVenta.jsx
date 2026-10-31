@@ -898,11 +898,11 @@ function DetalleOrdenVenta() {
     consultaDocumento.ruc('ruc', ruc, aplicarTransportistaSunat);
   };
 
-  const handleDniChofer = (valor, campoDni, campoNombre) => {
+  const handleDniChofer = (valor, campoDni, campoNombre, campoLicencia) => {
     const dni = valor.replace(/\D/g, '').slice(0, 8);
     setTransporteForm({ ...transporteForm, [campoDni]: dni });
     consultaDocumento.dni(campoDni, dni, (datos) => {
-      setTransporteForm(prev => ({ ...prev, [campoNombre]: datos.nombre_completo }));
+      setTransporteForm(prev => ({ ...prev, [campoNombre]: datos.nombre_completo, [campoLicencia]: datos.licencia || '' }));
     });
   };
 
@@ -4947,7 +4947,7 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni}
-                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor')}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor', 'transporte_licencia')}
                       placeholder="8 dígitos"
                       maxLength={8}
                     />
@@ -5154,7 +5154,7 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni}
-                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor')}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor', 'transporte_licencia')}
                       placeholder="8 dígitos"
                       maxLength={8}
                     />
@@ -5189,7 +5189,7 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni2}
-                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni2', 'transporte_conductor2')}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni2', 'transporte_conductor2', 'transporte_licencia2')}
                       placeholder="8 dígitos"
                       maxLength={8}
                     />

@@ -3,7 +3,7 @@ import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat
 import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa, normalizarPlaca, rucValido, dniValido, placaValida } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
 import { mapearTransporteDesdeOrden, nombreConductorDesdeDni } from '../services/sunat/transporte-guia.service.js';
-import { upsertTransportista } from '../services/sunat/transportista.service.js';
+import { upsertTransportista, historialConductor } from '../services/sunat/transportista.service.js';
 import { validarRUC, validarDNI } from '../services/documento-cache.service.js';
 import { armarEdicionLineasGuia } from '../services/sunat/edicion-guia.service.js';
 
@@ -1764,12 +1764,16 @@ export async function consultarDniConductor(req, res) {
     if (!consulta.valido) {
       return res.status(404).json({ success: false, error: consulta.error || 'DNI no encontrado en RENIEC' });
     }
-    const nombreCompleto = nombreConductorDesdeDni(consulta.datos || {});
+    const historial = await historialConductor(dni).catch((error) => {
+      console.error('Error al leer historial del conductor:', error);
+      return null;
+    });
+    const nombreCompleto = nombreConductorDesdeDni(consulta.datos || {}) || historial?.nombre || '';
     if (!nombreCompleto) {
       return res.status(503).json({ success: false, error: 'No se pudo consultar RENIEC en este momento. Escribe el nombre a mano.' });
     }
 
-    res.json({ success: true, data: { dni, nombre_completo: nombreCompleto } });
+    res.json({ success: true, data: { dni, nombre_completo: nombreCompleto, licencia: historial?.licencia || null } });
   } catch (error) {
     console.error('Error al consultar DNI del conductor:', error);
     res.status(500).json({ success: false, error: error.message });

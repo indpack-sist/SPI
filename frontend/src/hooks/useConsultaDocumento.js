@@ -46,7 +46,10 @@ export default function useConsultaDocumento() {
 
   const dni = (campo, valor, aplicar) => {
     if (valor.length !== 8) return limpiar(campo);
-    return consultar(campo, valor, guiasRemisionAPI.consultarDni, aplicar, () => ({ tipo: 'ok', mensaje: 'Apellidos y nombres según RENIEC' }));
+    return consultar(campo, valor, guiasRemisionAPI.consultarDni, aplicar, (datos) => ({
+      tipo: 'ok',
+      mensaje: datos.licencia ? 'Nombre encontrado. Licencia tomada de una guía anterior: verifícala.' : 'Nombre encontrado. Sin licencia en guías anteriores.',
+    }));
   };
 
   return { estados, ruc, dni, limpiar };

@@ -180,7 +180,9 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
   const handleDniChofer = (valor) => {
     const dni = valor.replace(/\D/g, '').slice(0, 8);
     set('transporte_dni', dni);
-    consultaDocumento.dni('transporte_dni', dni, (datos) => set('transporte_conductor', datos.nombre_completo));
+    consultaDocumento.dni('transporte_dni', dni, (datos) => {
+      setForm((prev) => ({ ...prev, transporte_conductor: datos.nombre_completo, transporte_licencia: datos.licencia || '' }));
+    });
   };
 
   const setLinea = (index, campo, valor) =>

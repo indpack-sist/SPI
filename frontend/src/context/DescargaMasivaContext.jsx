@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { sunatAPI } from '../config/api';
+import { zipSync } from 'fflate';
+import { sunatAPI, dispararDescarga } from '../config/api';
 
 const DescargaMasivaContext = createContext(null);
 export const useDescargaMasiva = () => useContext(DescargaMasivaContext);
@@ -19,6 +20,7 @@ const ESTADO_INICIAL = {
   terminada: false,
   cancelada: false,
   carpeta: '',
+  archivoZip: '',
 };
 
 export function DescargaMasivaProvider({ children }) {
@@ -29,18 +31,13 @@ export function DescargaMasivaProvider({ children }) {
   const cerrar = useCallback(() => setEstado(ESTADO_INICIAL), []);
 
   const iniciarDescarga = useCallback(async (comprobantes, opciones, rango) => {
-    if (!soportaDescargaCarpetas()) {
-      throw new Error('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.');
-    }
     if (!comprobantes?.length) throw new Error('No hay comprobantes seleccionados.');
     if (!opciones.pdf && !opciones.xml && !opciones.cdr) throw new Error('Elige al menos un tipo de archivo.');
-
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
 
     const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
     const rangoTxt = (rango?.desde && rango?.hasta) ? `${rango.desde}_${rango.hasta}` : hoy;
     const carpetaPadre = sanear(`Comprobantes ${rangoTxt} (descarga ${hoy})`);
-    const padre = await dirHandle.getDirectoryHandle(carpetaPadre, { create: true });
+    const destino = await crearDestino(carpetaPadre);
 
     cancelarRef.current = false;
     setEstado({ ...ESTADO_INICIAL, activa: true, total: comprobantes.length, carpeta: carpetaPadre });
@@ -57,7 +54,7 @@ export function DescargaMasivaProvider({ children }) {
 
       let sub;
       try {
-        sub = await padre.getDirectoryHandle(doc, { create: true });
+        sub = await destino.subcarpeta(doc);
       } catch (err) {
         console.error(`[descarga] carpeta ${doc}:`, err);
         fallidos.push({ documento: doc, archivo: 'carpeta', error: err?.message || 'no se pudo crear la carpeta' });
@@ -81,7 +78,7 @@ export function DescargaMasivaProvider({ children }) {
         if (cancelarRef.current) break;
         try {
           const blob = await conReintento(t.get);
-          await escribir(sub, t.nombre, blob);
+          await sub(t.nombre, blob);
           okArchivos += 1;
         } catch (err) {
           falloArchivos += 1;
@@ -94,6 +91,14 @@ export function DescargaMasivaProvider({ children }) {
       await new Promise((r) => setTimeout(r, 150));
     }
 
+    let archivoZip = '';
+    try {
+      archivoZip = await destino.cerrar();
+    } catch (err) {
+      ok = 0;
+      fallidos.push({ documento: carpetaPadre, archivo: 'ZIP', error: err?.message || 'no se pudo generar el ZIP' });
+    }
+
     setEstado((e) => ({
       ...e,
       activa: false,
@@ -104,19 +109,16 @@ export function DescargaMasivaProvider({ children }) {
       ok,
       fallidos,
       omitidos,
+      archivoZip,
     }));
   }, []);
 
   const iniciarDescargaCompras = useCallback(async (comprobantes, periodo) => {
-    if (!soportaDescargaCarpetas()) {
-      throw new Error('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.');
-    }
     if (!comprobantes?.length) throw new Error('No hay comprobantes para descargar.');
 
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
     const carpetaPadre = sanear(`Compras ${periodo} (descarga ${hoy})`);
-    const padre = await dirHandle.getDirectoryHandle(carpetaPadre, { create: true });
+    const destino = await crearDestino(carpetaPadre);
 
     cancelarRef.current = false;
     setEstado({ ...ESTADO_INICIAL, activa: true, total: comprobantes.length, carpeta: carpetaPadre });
@@ -145,10 +147,10 @@ export function DescargaMasivaProvider({ children }) {
           omitidos.push({ documento: doc, archivo: 'XML/PDF' });
           continue;
         }
-        const sub = await padre.getDirectoryHandle(doc, { create: true });
-        if (data.xml) await escribir(sub, data.xml.nombre, base64ABlob(data.xml.base64, 'application/xml'));
+        const sub = await destino.subcarpeta(doc);
+        if (data.xml) await sub(data.xml.nombre, base64ABlob(data.xml.base64, 'application/xml'));
         else omitidos.push({ documento: doc, archivo: 'XML' });
-        if (data.pdf) await escribir(sub, data.pdf.nombre, base64ABlob(data.pdf.base64, 'application/pdf'));
+        if (data.pdf) await sub(data.pdf.nombre, base64ABlob(data.pdf.base64, 'application/pdf'));
         else omitidos.push({ documento: doc, archivo: 'PDF' });
         ok += 1;
       } catch (err) {
@@ -162,15 +164,23 @@ export function DescargaMasivaProvider({ children }) {
       try {
         setEstado((e) => ({ ...e, actual: 'Generando Excel con glosa…' }));
         const blob = await sunatAPI.obtenerBlobExcelCompras(periodo, glosas, claves);
-        await escribir(padre, `compras-sunat-${periodo}.xlsx`, blob);
+        await destino.escribir(`compras-sunat-${periodo}.xlsx`, blob);
       } catch (err) {
         fallidos.push({ documento: `compras-sunat-${periodo}.xlsx`, archivo: 'Excel', error: err?.message || 'error' });
       }
     }
 
+    let archivoZip = '';
+    try {
+      archivoZip = await destino.cerrar();
+    } catch (err) {
+      ok = 0;
+      fallidos.push({ documento: carpetaPadre, archivo: 'ZIP', error: err?.message || 'no se pudo generar el ZIP' });
+    }
+
     setEstado((e) => ({
       ...e, activa: false, terminada: true, cancelada: cancelarRef.current,
-      hechos: comprobantes.length, actual: '', ok, fallidos, omitidos
+      hechos: comprobantes.length, actual: '', ok, fallidos, omitidos, archivoZip
     }));
   }, []);
 
@@ -195,6 +205,40 @@ async function conReintento(fn, intentos = 2, esperaMs = 500) {
     catch (e) { ultimo = e; if (k < intentos - 1) await new Promise((r) => setTimeout(r, esperaMs)); }
   }
   throw ultimo;
+}
+
+function crearDestino(nombre) {
+  return soportaDescargaCarpetas() ? crearDestinoCarpeta(nombre) : crearDestinoZip(nombre);
+}
+
+async function crearDestinoCarpeta(nombre) {
+  const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  const padre = await dirHandle.getDirectoryHandle(nombre, { create: true });
+  return {
+    subcarpeta: async (sub) => {
+      const dir = await padre.getDirectoryHandle(sub, { create: true });
+      return (archivo, blob) => escribir(dir, archivo, blob);
+    },
+    escribir: (archivo, blob) => escribir(padre, archivo, blob),
+    cerrar: async () => '',
+  };
+}
+
+function crearDestinoZip(nombre) {
+  const archivos = {};
+  const agregar = async (ruta, blob) => {
+    archivos[`${nombre}/${ruta}`] = new Uint8Array(await blob.arrayBuffer());
+  };
+  return {
+    subcarpeta: async (sub) => (archivo, blob) => agregar(`${sub}/${sanear(archivo)}`, blob),
+    escribir: (archivo, blob) => agregar(sanear(archivo), blob),
+    cerrar: async () => {
+      if (!Object.keys(archivos).length) return '';
+      const nombreZip = `${nombre}.zip`;
+      dispararDescarga(new Blob([zipSync(archivos, { level: 0 })], { type: 'application/zip' }), nombreZip);
+      return nombreZip;
+    },
+  };
 }
 
 async function escribir(dirHandle, nombre, blob) {

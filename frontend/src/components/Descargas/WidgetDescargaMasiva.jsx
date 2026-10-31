@@ -5,7 +5,7 @@ import './WidgetDescargaMasiva.css';
 
 export default function WidgetDescargaMasiva() {
   const { estado, cancelar, cerrar } = useDescargaMasiva();
-  const { activa, terminada, total, hechos, actual, ok, fallidos, omitidos, cancelada } = estado;
+  const { activa, terminada, total, hechos, actual, ok, fallidos, omitidos, cancelada, archivoZip } = estado;
   const [verDetalle, setVerDetalle] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -59,6 +59,7 @@ export default function WidgetDescargaMasiva() {
             </div>
             <ul className="dm-resumen">
               <li><Download size={13} /> {ok} comprobante(s) descargado(s)</li>
+              {archivoZip && <li><Download size={13} /> Guardado en tus Descargas: {archivoZip}</li>}
               {fallidos.length > 0 && (
                 <li className="dm-fail"><XCircle size={13} /> {fallidos.length} sin descargar (SUNAT no los entregó)
                   <small>

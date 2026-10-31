@@ -6,7 +6,7 @@ import {
   ShieldCheck, Truck, X, XCircle, DownloadCloud
 } from 'lucide-react';
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../config/api';
-import { useDescargaMasiva, soportaDescargaCarpetas } from '../../context/DescargaMasivaContext';
+import { useDescargaMasiva } from '../../context/DescargaMasivaContext';
 import ModalDescargaMasiva from '../../components/Descargas/ModalDescargaMasiva';
 import { coincideFiltros, esRangoMesActual, filaDesdeSire, periodoDeRango, rangoMesActual, resumirVentas } from '../../utils/sireVentas';
 import './TrazabilidadSee.css';
@@ -840,7 +840,6 @@ function PanelDescargaMasiva({ onDescargarUno }) {
   const toggleTodos = () => setSel(todos ? new Set() : new Set(rows.map((r) => r.id_factura)));
 
   const abrirModal = () => {
-    if (!soportaDescargaCarpetas()) { setAviso('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.'); return; }
     if (!sel.size) { setAviso('Selecciona al menos un comprobante.'); return; }
     setAviso(null); setModal(true);
   };
@@ -1051,7 +1050,6 @@ function PanelComprasSunat() {
   }, [periodoConsultadoSunat, clavesVisibles]);
 
   const descargarTodo = useCallback(async () => {
-    if (!soportaDescargaCarpetas()) { setAviso('Tu navegador no permite descargar carpetas. Usa Google Chrome o Microsoft Edge.'); return; }
     setAviso(null);
     try { await iniciarDescargaCompras(visibles, periodoConsultadoSunat); }
     catch (e) { setAviso(e?.message || 'No se pudo iniciar la descarga.'); }

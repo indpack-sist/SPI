@@ -1232,7 +1232,7 @@ export const archivosAPI = {
   }
 };
 
-const dispararDescarga = (blob, nombre) => {
+export const dispararDescarga = (blob, nombre) => {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -1386,14 +1386,7 @@ export const sunatAPI = {
       try { msg = (await response.json())?.error || msg; } catch {}
       throw new Error(msg);
     }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ventas-sire-${periodo}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
+    dispararDescarga(await response.blob(), `ventas-sire-${periodo}.xlsx`);
     return { success: true };
   },
 
@@ -1410,14 +1403,7 @@ export const sunatAPI = {
       try { msg = (await response.json())?.error || msg; } catch {}
       throw new Error(msg);
     }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `compras-sunat-${periodo}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => { document.body.removeChild(link); window.URL.revokeObjectURL(url); }, 100);
+    dispararDescarga(await response.blob(), `compras-sunat-${periodo}.xlsx`);
     return { success: true };
   },
   obtenerComprobanteCompra: ({ ruc, tipo, serie, numero }) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FileText, FileCode2, FileCheck2, X, Download } from 'lucide-react';
+import { soportaDescargaCarpetas } from '../../context/DescargaMasivaContext';
 import './ModalDescargaMasiva.css';
 
 export default function ModalDescargaMasiva({ abierto, cantidad, onCerrar, onConfirmar }) {
@@ -19,6 +20,8 @@ export default function ModalDescargaMasiva({ abierto, cantidad, onCerrar, onCon
 
   if (!abierto) return null;
 
+  const conCarpetas = soportaDescargaCarpetas();
+
   const toggle = (k) => setOpciones((o) => ({ ...o, [k]: !o[k] }));
 
   const items = [
@@ -34,7 +37,11 @@ export default function ModalDescargaMasiva({ abierto, cantidad, onCerrar, onCon
           <h3>Descargar {cantidad} comprobante(s)</h3>
           <button className="dmm-x" onClick={onCerrar} aria-label="Cerrar"><X size={18} /></button>
         </header>
-        <p className="dmm-sub">Elige qué archivos incluir. Se creará una carpeta por comprobante dentro de la carpeta que elijas.</p>
+        <p className="dmm-sub">
+          {conCarpetas
+            ? 'Elige qué archivos incluir. Se creará una carpeta por comprobante dentro de la carpeta que elijas.'
+            : 'Elige qué archivos incluir. Se generará un archivo ZIP con una carpeta por comprobante, que quedará en tus Descargas.'}
+        </p>
         <div className="dmm-opts">
           {items.map(({ k, icon: Icon, label, desc }) => (
             <label key={k} className={`dmm-opt ${opciones[k] ? 'on' : ''}`}>
@@ -47,7 +54,7 @@ export default function ModalDescargaMasiva({ abierto, cantidad, onCerrar, onCon
         <footer className="dmm-foot">
           <button className="dmm-btn dmm-ghost" onClick={onCerrar}>Cancelar</button>
           <button className="dmm-btn dmm-primary" disabled={ninguno} onClick={() => onConfirmar(opciones)}>
-            <Download size={15} /> Elegir carpeta y descargar
+            <Download size={15} /> {conCarpetas ? 'Elegir carpeta y descargar' : 'Descargar ZIP'}
           </button>
         </footer>
       </div>

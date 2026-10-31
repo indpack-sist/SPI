@@ -120,6 +120,8 @@ function Cotizaciones() {
         setTipoCambio(tcData);
         setSuccessMessage(`Tipo de cambio actualizado: S/ ${tcData.venta} (venta) — Fecha SBS: ${formatearFechaVisual(tcData.fecha)}`);
       } else {
+        localStorage.removeItem(TC_SESSION_KEY);
+        setTipoCambio(null);
         setError(response.data.error || 'No se pudo obtener el tipo de cambio');
       }
     } catch (err) {

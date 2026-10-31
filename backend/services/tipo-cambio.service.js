@@ -172,17 +172,14 @@ export async function actualizarTipoCambio(date = null) {
       };
     }
 
+    const mensaje = 'No se pudo obtener el tipo de cambio oficial. Reintente o ingréselo manualmente.';
+
     return {
-      valido: true,
-      compra: 3.75,
-      venta: 3.78,
-      promedio: 3.765,
-      fecha: new Date().toISOString().split('T')[0],
-      moneda_base: 'USD',
-      moneda_destino: 'PEN',
+      valido: false,
+      fecha: date || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }),
       error_api: true,
-      es_default: true,
-      advertencia: 'API no disponible. Usando valor predeterminado.'
+      error: mensaje,
+      advertencia: mensaje
     };
   }
 }

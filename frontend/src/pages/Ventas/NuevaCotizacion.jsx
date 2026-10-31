@@ -387,7 +387,6 @@ function NuevaCotizacion() {
     }
   } catch (err) {
     console.error(err);
-    setFormCabecera(prev => ({ ...prev, tipo_cambio: 3.80 }));
   } finally {
     setLoadingTC(false);
   }

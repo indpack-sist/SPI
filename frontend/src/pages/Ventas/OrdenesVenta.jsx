@@ -290,6 +290,8 @@ function OrdenesVenta() {
         setSuccess(`TC actualizado: S/ ${tcData.venta} (venta) — Fecha SBS: ${formatearFechaVisual(tcData.fecha)}`);
         setTimeout(() => setSuccess(null), 4000);
       } else {
+        localStorage.removeItem(TC_SESSION_KEY);
+        setTipoCambio(null);
         setError(response.data.error || 'No se pudo obtener el tipo de cambio');
       }
     } catch (err) {

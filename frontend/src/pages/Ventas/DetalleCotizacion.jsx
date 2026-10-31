@@ -90,6 +90,8 @@ function DetalleCotizacion() {
         setTipoCambio(tcData);
         setSuccess(`TC actualizado: S/ ${tcData.venta} (venta) — SUNAT: ${formatearFecha(tcData.fecha)}`);
       } else {
+        localStorage.removeItem(TC_SESSION_KEY);
+        setTipoCambio(null);
         setError(response.data.error || 'No se pudo obtener el tipo de cambio');
       }
     } catch (err) {

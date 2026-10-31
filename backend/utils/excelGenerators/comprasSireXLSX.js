@@ -94,7 +94,7 @@ export async function generarComprasSireXLSX(filas, periodo, glosas = {}) {
         const raw = (cols[c.idx] ?? '').toString().trim();
         if (c.type === 'number') {
           cell.value = toNumero(raw);
-          cell.numFmt = '#,##0.00';
+          cell.numFmt = c.formato || '#,##0.00';
           cell.alignment = { horizontal: 'right', vertical: 'top' };
         } else {
           cell.value = raw;

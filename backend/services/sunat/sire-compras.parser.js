@@ -48,7 +48,7 @@ export const EXPORT_COLUMNS = [
   { label: 'Otros Trib/ Cargos', idx: COL.otrosTrib, type: 'number' },
   { label: 'Total CP', idx: COL.totalCP, type: 'number' },
   { label: 'Moneda', idx: COL.moneda, type: 'text' },
-  { label: 'Tipo de Cambio', idx: COL.tipoCambio, type: 'number' },
+  { label: 'Tipo de Cambio', idx: COL.tipoCambio, type: 'number', formato: '0.000' },
   { label: 'Fecha Emisión Doc Modificado', idx: COL.fechaDocMod, type: 'text' },
   { label: 'Tipo CP Modificado', idx: COL.tipoCPMod, type: 'text' },
   { label: 'Serie CP Modificado', idx: COL.serieCPMod, type: 'text' },

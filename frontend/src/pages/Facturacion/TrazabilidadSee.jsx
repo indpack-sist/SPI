@@ -1055,13 +1055,25 @@ function PanelComprasSunat() {
     catch (e) { setAviso(e?.message || 'No se pudo iniciar la descarga.'); }
   }, [visibles, periodoConsultadoSunat, iniciarDescargaCompras]);
 
-  const totalPEN = useMemo(
-    () => visibles.filter((r) => r.moneda === 'PEN').reduce((s, r) => s + (Number(r.total) || 0), 0),
+  const totalSoles = useMemo(
+    () => visibles.reduce((s, r) => s + (Number(r.total) || 0), 0),
     [visibles]
   );
-  const totalUSD = useMemo(
-    () => visibles.filter((r) => r.moneda === 'USD').reduce((s, r) => s + (Number(r.total) || 0), 0),
-    [visibles]
+  const extranjeras = useMemo(() => visibles.filter((r) => r.moneda === 'USD' && r.tipoCambio > 0), [visibles]);
+  const solesEnUSD = useMemo(
+    () => extranjeras.reduce((s, r) => s + (Number(r.total) || 0), 0),
+    [extranjeras]
+  );
+  const equivalenteUSD = useMemo(
+    () => extranjeras.reduce((s, r) => s + (Number(r.total) || 0) / r.tipoCambio, 0),
+    [extranjeras]
+  );
+  const emitidosFueraDelPeriodo = useMemo(
+    () => rows.filter((r) => {
+      const fecha = fechaSireISO(r.fechaEmision);
+      return fecha && (fecha < limitesPeriodo.min || fecha > limitesPeriodo.max);
+    }).length,
+    [rows, limitesPeriodo]
   );
   const hayResultados = consultado && !loading && !error && rows.length > 0;
   const setFiltro = (campo, valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
@@ -1118,12 +1130,12 @@ function PanelComprasSunat() {
             <label className="tz-field tz-field-date">
               <CalendarDays size={13} />
               <input type="date" value={filtros.desde} min={limitesPeriodo.min} max={limitesPeriodo.max}
-                onChange={(e) => setFiltro('desde', e.target.value)} title="Desde" />
+                onChange={(e) => setFiltro('desde', e.target.value)} title="Opcional: fecha de emisión desde" />
             </label>
             <label className="tz-field tz-field-date">
               <span className="tz-date-sep">→</span>
               <input type="date" value={filtros.hasta} min={limitesPeriodo.min} max={limitesPeriodo.max}
-                onChange={(e) => setFiltro('hasta', e.target.value)} title="Hasta" />
+                onChange={(e) => setFiltro('hasta', e.target.value)} title="Opcional: fecha de emisión hasta" />
             </label>
             <button className="tz-btn tz-btn-ghost" onClick={() => setFiltros(FILTROS_COMPRAS_VACIOS)} disabled={!hayFiltros}>
               <RotateCcw size={14} /> Limpiar
@@ -1142,14 +1154,21 @@ function PanelComprasSunat() {
             </span>
           ))}
         </section>
+
+        {emitidosFueraDelPeriodo > 0 && (
+          <div className="tz-descarga-nota">
+            SUNAT incluye en el periodo {periodoConsultado} a {emitidosFueraDelPeriodo} comprobante(s) emitidos en otros meses.
+            Las fechas son opcionales y filtran por emisión: si las usas, esos comprobantes salen de la lista, de los totales y de lo que exportes.
+          </div>
+        )}
       </>)}
 
       {hayResultados && visibles.length > 0 && (
         <div className="tz-dm-actionbar has-sel">
           <div className="tz-dm-count">
             <b>{visibles.length}</b>{hayFiltros && <> de {rows.length}</>} comprobante(s)
-            {totalPEN > 0 && <> · Total {fmtMoneda(totalPEN, 'PEN')}</>}
-            {totalUSD > 0 && <> · {fmtMoneda(totalUSD, 'USD')}</>}
+            <> · Total {fmtMoneda(totalSoles, 'PEN')}</>
+            {extranjeras.length > 0 && <> · incluye {fmtMoneda(solesEnUSD, 'PEN')} de comprobantes en USD (≈ {fmtMoneda(equivalenteUSD, 'USD')})</>}
           </div>
           <button className="tz-btn tz-btn-ghost" onClick={exportar} disabled={exportando || estadoDescarga.activa}>
             {exportando ? <Loader2 className="tz-spin" size={15} /> : <FileText size={15} />} Solo Excel (sin glosa)
@@ -1190,8 +1209,13 @@ function PanelComprasSunat() {
                     <div className="tz-doc"><span className="tz-tipo" style={{ '--c': 'var(--accent)' }}>{tipoCpLabel(r.tipoCP)}</span><b>{r.documento}</b></div>
                   </td>
                   <td><div className="tz-cli"><b>{r.razonSocial || '—'}</b><small>{r.rucProveedor || ''}</small></div></td>
-                  <td className="tz-num tz-nowrap">{fmtMoneda(r.igv, r.moneda)}</td>
-                  <td className="tz-num tz-nowrap">{fmtMoneda(r.total, r.moneda)}</td>
+                  <td className="tz-num tz-nowrap">{fmtMoneda(r.igv, 'PEN')}</td>
+                  <td className="tz-num tz-nowrap">
+                    {fmtMoneda(r.total, 'PEN')}
+                    {r.moneda === 'USD' && r.tipoCambio > 0 && (
+                      <small className="tz-total-soles">≈ {fmtMoneda(r.total / r.tipoCambio, 'USD')} · TC {r.tipoCambio}</small>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

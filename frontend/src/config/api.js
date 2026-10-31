@@ -982,6 +982,8 @@ export const guiasRemisionAPI = {
 
   getTransportistas: () => api.get('/guias-remision/transportistas'),
   createTransportista: (data) => api.post('/guias-remision/transportistas', data),
+  consultarRuc: (ruc) => api.get(`/guias-remision/consulta-ruc/${ruc}`),
+  consultarDni: (dni) => api.get(`/guias-remision/consulta-dni/${dni}`),
 
   getDestinatariosComex: () => api.get('/guias-remision/destinatarios-comex'),
   createDestinatarioComex: (data) => api.post('/guias-remision/destinatarios-comex', data),

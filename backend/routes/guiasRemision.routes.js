@@ -13,6 +13,8 @@ import {
   descargarPDFGuiaRemision,
   getTransportistas,
   createTransportista,
+  consultarRucTransportista,
+  consultarDniConductor,
   getDestinatariosComex,
   createDestinatarioComex
 } from '../controllers/guiasRemision.controller.js';
@@ -23,6 +25,8 @@ router.get('/estadisticas', getEstadisticasGuiasRemision);
 
 router.get('/transportistas', getTransportistas);
 router.post('/transportistas', createTransportista);
+router.get('/consulta-ruc/:ruc', consultarRucTransportista);
+router.get('/consulta-dni/:dni', consultarDniConductor);
 
 router.get('/destinatarios-comex', getDestinatariosComex);
 router.post('/destinatarios-comex', createDestinatarioComex);

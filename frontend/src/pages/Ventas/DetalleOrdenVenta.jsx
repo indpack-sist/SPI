@@ -16,6 +16,8 @@ import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import PanelFacturacionSee from '../../components/Ventas/sunat/PanelFacturacionSee';
 import PanelGuiaRemisionSee from '../../components/Ventas/sunat/PanelGuiaRemisionSee';
+import EstadoConsulta from '../../components/common/EstadoConsulta';
+import useConsultaDocumento from '../../hooks/useConsultaDocumento';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI, guiasRemisionAPI, sunatAPI, tipoCambioAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -61,6 +63,7 @@ function DetalleOrdenVenta() {
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [transportistas, setTransportistas] = useState([]);
+  const consultaDocumento = useConsultaDocumento();
   const [guiasRemision, setGuiasRemision] = useState([]);
   const [guiasDetalleSee, setGuiasDetalleSee] = useState([]);
   const [emisionesHistorial, setEmisionesHistorial] = useState({});
@@ -869,6 +872,15 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const aplicarTransportistaSunat = (datos) => {
+    const registrado = transportistas.find(t => t.ruc === datos.ruc);
+    setTransporteForm(prev => ({
+      ...prev,
+      transporte_nombre: datos.razon_social,
+      transporte_mtc: registrado?.numero_mtc || '',
+    }));
+  };
+
   const handleSeleccionarTransportista = (idTransportista) => {
     const sel = transportistas.find(t => String(t.id_transportista) === String(idTransportista));
     setTransporteForm({
@@ -877,10 +889,26 @@ function DetalleOrdenVenta() {
       transporte_nombre: sel?.razon_social || '',
       transporte_mtc: sel?.numero_mtc || '',
     });
+    consultaDocumento.ruc('ruc', sel?.ruc || '', aplicarTransportistaSunat);
+  };
+
+  const handleRucTransportista = (valor) => {
+    const ruc = valor.replace(/\D/g, '').slice(0, 11);
+    setTransporteForm({ ...transporteForm, transporte_ruc: ruc });
+    consultaDocumento.ruc('ruc', ruc, aplicarTransportistaSunat);
+  };
+
+  const handleDniChofer = (valor, campoDni, campoNombre) => {
+    const dni = valor.replace(/\D/g, '').slice(0, 8);
+    setTransporteForm({ ...transporteForm, [campoDni]: dni });
+    consultaDocumento.dni(campoDni, dni, (datos) => {
+      setTransporteForm(prev => ({ ...prev, [campoNombre]: datos.nombre_completo }));
+    });
   };
 
   const handleAbrirTransporte = () => {
     cargarTransportistas();
+    consultaDocumento.limpiar();
     setTransporteForm({
       tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
       id_vehiculo: orden.id_vehiculo || '',
@@ -4919,10 +4947,11 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor')}
                       placeholder="8 dígitos"
                       maxLength={8}
                     />
+                    <EstadoConsulta estado={consultaDocumento.estados.transporte_dni} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Nombre Chofer *</label>
@@ -5000,10 +5029,11 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_ruc}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_ruc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                      onChange={(e) => handleRucTransportista(e.target.value)}
                       placeholder="11 dígitos"
                       maxLength={11}
                     />
+                    <EstadoConsulta estado={consultaDocumento.estados.ruc} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Nº Registro MTC (empresa)</label>
@@ -5124,8 +5154,11 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni', 'transporte_conductor')}
+                      placeholder="8 dígitos"
+                      maxLength={8}
                     />
+                    <EstadoConsulta estado={consultaDocumento.estados.transporte_dni} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Nombre Chofer *</label>
@@ -5156,10 +5189,11 @@ function DetalleOrdenVenta() {
                       type="text"
                       className="form-input"
                       value={transporteForm.transporte_dni2}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni2: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                      onChange={(e) => handleDniChofer(e.target.value, 'transporte_dni2', 'transporte_conductor2')}
                       placeholder="8 dígitos"
                       maxLength={8}
                     />
+                    <EstadoConsulta estado={consultaDocumento.estados.transporte_dni2} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Nombre Chofer</label>

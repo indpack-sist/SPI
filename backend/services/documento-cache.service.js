@@ -33,18 +33,22 @@ async function guardarCache(documento, tipo, datos) {
   } catch {}
 }
 
-export async function validarRUC(ruc) {
+export async function validarRUC(ruc, { fresco = false } = {}) {
   const doc = soloDigitos(ruc);
   if (!/^\d{11}$/.test(doc)) return apiValidarRUC(ruc);
 
   const hit = await leerCache(doc);
-  if (hit && hit.valido && hit.datos) {
+  const enCache = hit && hit.valido && hit.datos;
+  if (enCache && !fresco) {
     return { valido: true, datos: hit.datos, cache: true };
   }
 
   const res = await apiValidarRUC(ruc);
   if (res.valido && res.datos && !res.error_servicio) {
     await guardarCache(doc, 'RUC', res.datos);
+  }
+  if (res.error_servicio && enCache) {
+    return { valido: true, datos: hit.datos, cache: true };
   }
   return res;
 }

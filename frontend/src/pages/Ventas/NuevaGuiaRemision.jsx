@@ -7,8 +7,10 @@ import {
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
+import EstadoConsulta from '../../components/common/EstadoConsulta';
 import { resolverUbigeoDesdeDireccion } from '../../utils/ubigeo';
 import { guiasRemisionAPI, ordenesVentaAPI } from '../../config/api';
+import useConsultaDocumento from '../../hooks/useConsultaDocumento';
 import puertos from '../../data/puertos.json';
 
 const DOC_TIPOS_COMEX = [
@@ -42,6 +44,7 @@ function NuevaGuiaRemision() {
   const [showNuevoTransportista, setShowNuevoTransportista] = useState(false);
   const [nuevoTransportista, setNuevoTransportista] = useState({ ruc: '', razon_social: '', numero_mtc: '' });
   const [guardandoTransportista, setGuardandoTransportista] = useState(false);
+  const consultaDocumento = useConsultaDocumento();
   const [showNuevoDestinatario, setShowNuevoDestinatario] = useState(false);
   const [nuevoDestinatario, setNuevoDestinatario] = useState({ ruc: '', razon_social: '', codigo_establecimiento: '0' });
   const [guardandoDestinatario, setGuardandoDestinatario] = useState(false);
@@ -345,6 +348,15 @@ function NuevaGuiaRemision() {
   const addCont = () => setContenedores((prev) => [...prev, { numero_contenedor: '', numero_precinto: '' }]);
   const removeCont = (i) => setContenedores((prev) => prev.filter((_, j) => j !== i));
 
+  const handleRucTransportista = (valor) => {
+    const ruc = valor.replace(/\D/g, '').slice(0, 11);
+    setNuevoTransportista({ ...nuevoTransportista, ruc });
+    consultaDocumento.ruc('ruc', ruc, (datos) => {
+      const registrado = transportistas.find((t) => t.ruc === datos.ruc);
+      setNuevoTransportista((prev) => ({ ...prev, razon_social: datos.razon_social, numero_mtc: registrado?.numero_mtc || '' }));
+    });
+  };
+
   const guardarTransportista = async () => {
     setError(null);
     const { ruc, razon_social } = nuevoTransportista;
@@ -373,6 +385,7 @@ function NuevaGuiaRemision() {
       setFormData(prev => ({ ...prev, id_transportista: String(nuevo.id_transportista) }));
       setShowNuevoTransportista(false);
       setNuevoTransportista({ ruc: '', razon_social: '', numero_mtc: '' });
+      consultaDocumento.limpiar();
     } catch (err) {
       console.error('Error al registrar transportista:', err);
       setError(err.response?.data?.error || 'Error al registrar transportista');
@@ -1328,10 +1341,11 @@ function NuevaGuiaRemision() {
                   type="text"
                   className="form-input"
                   value={nuevoTransportista.ruc}
-                  onChange={(e) => setNuevoTransportista({ ...nuevoTransportista, ruc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  onChange={(e) => handleRucTransportista(e.target.value)}
                   placeholder="11 dígitos"
                   maxLength="11"
                 />
+                <EstadoConsulta estado={consultaDocumento.estados.ruc} />
               </div>
               <div className="form-group">
                 <label className="form-label">Razón Social *</label>
@@ -1359,7 +1373,7 @@ function NuevaGuiaRemision() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => { setShowNuevoTransportista(false); setNuevoTransportista({ ruc: '', razon_social: '', numero_mtc: '' }); }}
+                onClick={() => { setShowNuevoTransportista(false); setNuevoTransportista({ ruc: '', razon_social: '', numero_mtc: '' }); consultaDocumento.limpiar(); }}
                 disabled={guardandoTransportista}
               >
                 Cancelar

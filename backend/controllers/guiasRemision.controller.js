@@ -2,8 +2,9 @@ import { executeQuery, executeTransaction, withTransaction } from '../config/dat
 import { obtenerCorrelativoAtomico, obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
 import { componerObservacion, extraerUrl, codigoBienValido, armarDireccionEmpresa, normalizarPlaca, rucValido, dniValido, placaValida } from '../services/sunat/util.service.js';
 import { ingresarStockCompra } from '../services/compras/recepcion.service.js';
-import { mapearTransporteDesdeOrden } from '../services/sunat/transporte-guia.service.js';
+import { mapearTransporteDesdeOrden, nombreConductorDesdeDni } from '../services/sunat/transporte-guia.service.js';
 import { upsertTransportista } from '../services/sunat/transportista.service.js';
+import { validarRUC, validarDNI } from '../services/documento-cache.service.js';
 import { armarEdicionLineasGuia } from '../services/sunat/edicion-guia.service.js';
 
 function getFechaPeru() {
@@ -1724,6 +1725,53 @@ export async function createTransportista(req, res) {
     });
   } catch (error) {
     console.error('Error al crear transportista:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function consultarRucTransportista(req, res) {
+  try {
+    const { ruc } = req.params;
+    if (!rucValido(ruc)) {
+      return res.status(400).json({ success: false, error: 'El RUC debe tener 11 dígitos' });
+    }
+
+    const consulta = await validarRUC(ruc, { fresco: true });
+    if (!consulta.valido) {
+      return res.status(404).json({ success: false, error: consulta.error || 'RUC no encontrado en SUNAT' });
+    }
+    const razonSocial = String(consulta.datos?.razon_social || '').trim();
+    if (!razonSocial) {
+      return res.status(503).json({ success: false, error: 'No se pudo consultar SUNAT en este momento. Escribe la razón social a mano.' });
+    }
+
+    const { estado, condicion, es_activo, es_habido } = consulta.datos;
+    res.json({ success: true, data: { ruc, razon_social: razonSocial, estado, condicion, es_activo, es_habido } });
+  } catch (error) {
+    console.error('Error al consultar RUC del transportista:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function consultarDniConductor(req, res) {
+  try {
+    const { dni } = req.params;
+    if (!dniValido(dni)) {
+      return res.status(400).json({ success: false, error: 'El DNI debe tener 8 dígitos' });
+    }
+
+    const consulta = await validarDNI(dni);
+    if (!consulta.valido) {
+      return res.status(404).json({ success: false, error: consulta.error || 'DNI no encontrado en RENIEC' });
+    }
+    const nombreCompleto = nombreConductorDesdeDni(consulta.datos || {});
+    if (!nombreCompleto) {
+      return res.status(503).json({ success: false, error: 'No se pudo consultar RENIEC en este momento. Escribe el nombre a mano.' });
+    }
+
+    res.json({ success: true, data: { dni, nombre_completo: nombreCompleto } });
+  } catch (error) {
+    console.error('Error al consultar DNI del conductor:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

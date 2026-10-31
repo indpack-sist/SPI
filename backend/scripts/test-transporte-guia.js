@@ -1,4 +1,4 @@
-import { resolverTransporteGuia, mapearTransporteDesdeOrden } from '../services/sunat/transporte-guia.service.js';
+import { resolverTransporteGuia, mapearTransporteDesdeOrden, nombreConductorDesdeDni } from '../services/sunat/transporte-guia.service.js';
 
 let pass = 0, fail = 0;
 const check = (nombre, cond, detalle = '') => {
@@ -110,6 +110,14 @@ console.log('\n=== GRE · mapear transporte de la OV hacia columnas de la guía 
   const m = mapearTransporteDesdeOrden({ transporte_registrar: 0 });
   check('mapper: registrar=0 respetado', m.transporte_registrar === 0);
   check('mapper: campos vacíos → null', m.transporte_dni === null && m.transporte_placa === null);
+}
+
+{
+  const n = nombreConductorDesdeDni({ nombres: 'CHARLES JORGE', apellido_paterno: 'CHAVEZ', apellido_materno: 'GUERRA' });
+  check('conductor: apellidos primero y luego nombres', n === 'CHAVEZ GUERRA CHARLES JORGE', n);
+  const s = nombreConductorDesdeDni({ nombres: ' ANA  MARIA ', apellido_paterno: 'DE LA CRUZ', apellido_materno: '' });
+  check('conductor: sin apellido materno y espacios limpios', s === 'DE LA CRUZ ANA MARIA', s);
+  check('conductor: sin datos → vacío', nombreConductorDesdeDni() === '');
 }
 
 console.log(`\nResultado: ${pass} ✓  ${fail} ✗\n`);

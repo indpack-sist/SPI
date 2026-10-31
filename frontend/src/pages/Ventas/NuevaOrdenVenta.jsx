@@ -12,9 +12,11 @@ import Modal from '../../components/UI/Modal';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import ModalTipoCambio from '../../components/Ventas/ModalTipoCambio';
 import UbigeoSelector from '../../components/common/UbigeoSelector';
+import EstadoConsulta from '../../components/common/EstadoConsulta';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import useReordenarFilas from '../../hooks/useReordenarFilas';
+import useConsultaDocumento from '../../hooks/useConsultaDocumento';
 import './Ventas.css';
 
 const TIPOS_IMPUESTO = [
@@ -52,7 +54,8 @@ function NuevaOrdenVenta() {
   const [cotizacionesPendientes, setCotizacionesPendientes] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   const [conductores, setConductores] = useState([]);
-  
+  const consultaDocumento = useConsultaDocumento();
+
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
   
@@ -1631,8 +1634,15 @@ useEffect(() => {
                                 placeholder="DNI"
                                 maxLength={8}
                                 value={formCabecera.transporte_dni}
-                                onChange={(e) => setFormCabecera({...formCabecera, transporte_dni: e.target.value})}
+                                onChange={(e) => {
+                                  const dni = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                  setFormCabecera({...formCabecera, transporte_dni: dni});
+                                  consultaDocumento.dni('transporte_dni', dni, (datos) => {
+                                    setFormCabecera(prev => ({...prev, transporte_conductor: datos.nombre_completo}));
+                                  });
+                                }}
                             />
+                            <EstadoConsulta estado={consultaDocumento.estados.transporte_dni} />
                         </div>
                     </div>
                     <div>

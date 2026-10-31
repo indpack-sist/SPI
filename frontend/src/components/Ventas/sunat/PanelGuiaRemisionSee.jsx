@@ -4,8 +4,10 @@ import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import BadgeEstadoSunat from './BadgeEstadoSunat';
 import UbigeoSelector from '../../common/UbigeoSelector';
+import EstadoConsulta from '../../common/EstadoConsulta';
 import { resolverUbigeoDesdeDireccion } from '../../../utils/ubigeo';
 import { sunatAPI, ordenesVentaAPI, guiasRemisionAPI } from '../../../config/api';
+import useConsultaDocumento from '../../../hooks/useConsultaDocumento';
 import '../../../pages/Ventas/Ventas.css';
 
 const normPlaca = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -56,6 +58,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   const [transportistas, setTransportistas] = useState([]);
+  const consultaDocumento = useConsultaDocumento();
   const [empresaRemitente, setEmpresaRemitente] = useState(null);
   const [modalSinEfecto, setModalSinEfecto] = useState(false);
   const [modalDespachar, setModalDespachar] = useState(false);
@@ -152,6 +155,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
     const ubicacion = comex ? null : resolverUbigeoDesdeDireccion(direccionLlegada);
     const ubigeoGuardado = llegadaUbigeo;
     setUbigeoDetectado(!ubigeoGuardado ? ubicacion : null);
+    consultaDocumento.limpiar();
         setEmitForm({
       es_comercio_exterior: comex,
       motivo_traslado_cod: guia?.motivo_traslado_cod || (comex ? '09' : (esCompra ? '02' : '01')),
@@ -204,6 +208,19 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
   };
 
   const setF = (k, v) => setEmitForm((f) => ({ ...f, [k]: v }));
+  const handleRucTransportista = (valor) => {
+    const ruc = valor.replace(/\D/g, '').slice(0, 11);
+    setF('transportistaRuc', ruc);
+    consultaDocumento.ruc('transportistaRuc', ruc, (datos) => {
+      const registrado = transportistas.find((t) => t.ruc === datos.ruc);
+      setEmitForm((f) => ({ ...f, transportistaRazon: datos.razon_social, transportistaMtc: registrado?.numero_mtc || '' }));
+    });
+  };
+  const handleDniChofer = (valor, campoDni, campoNombre) => {
+    const dni = valor.replace(/\D/g, '').slice(0, 8);
+    setF(campoDni, dni);
+    consultaDocumento.dni(campoDni, dni, (datos) => setF(campoNombre, datos.nombre_completo));
+  };
   const toggleFacturaRel = (i, incluida) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).map((x, j) => j === i ? { ...x, incluida } : x) }));
   const quitarFacturaRel = (i) => setEmitForm((f) => ({ ...f, facturasRel: (f.facturasRel || []).filter((_, j) => j !== i) }));
   const agregarFacturaRel = () => {
@@ -731,8 +748,9 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">DNI del conductor *</label>
-                    <input className={`form-input w-full text-sm ${f.dni && !dniOk(f.dni) ? 'border-danger' : ''}`} value={f.dni} onChange={(e) => setF('dni', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 dígitos" />
+                    <input className={`form-input w-full text-sm ${f.dni && !dniOk(f.dni) ? 'border-danger' : ''}`} value={f.dni} onChange={(e) => handleDniChofer(e.target.value, 'dni', 'conductor')} placeholder="8 dígitos" />
                     {f.dni && !dniOk(f.dni) && <p className="vt-fs-11 text-danger mt-1">El DNI debe tener 8 dígitos.</p>}
+                    <EstadoConsulta estado={consultaDocumento.estados.dni} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">Licencia de conducir *</label>
@@ -764,7 +782,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                       </>
                     ) : (
                       <div className="grid grid-cols-1 vt-md-cols-3 gap-2">
-                        <div><label className="block vt-fs-11 text-muted mb-1">RUC *</label><input className="form-input w-full text-sm" maxLength={11} value={f.transportistaRuc} onChange={(e) => setF('transportistaRuc', e.target.value.replace(/\D/g, '').slice(0, 11))} /></div>
+                        <div><label className="block vt-fs-11 text-muted mb-1">RUC *</label><input className="form-input w-full text-sm" maxLength={11} value={f.transportistaRuc} onChange={(e) => handleRucTransportista(e.target.value)} /><EstadoConsulta estado={consultaDocumento.estados.transportistaRuc} /></div>
                         <div><label className="block vt-fs-11 text-muted mb-1">Razón social *</label><input className="form-input w-full text-sm" value={f.transportistaRazon} onChange={(e) => setF('transportistaRazon', e.target.value)} /></div>
                         <div><label className="block vt-fs-11 text-muted mb-1">MTC (opcional)</label><input className="form-input w-full text-sm" value={f.transportistaMtc} onChange={(e) => setF('transportistaMtc', e.target.value)} /></div>
                         <div className="vt-md-span-3"><button type="button" className="btn btn-xs btn-outline" onClick={() => setF('nuevoTransportista', false)}>Elegir uno existente</button></div>
@@ -794,7 +812,8 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                         <div><label className="block vt-fs-11 text-muted mb-1">Conductor *</label><input className="form-input w-full text-sm" value={f.tConductor} onChange={(e) => setF('tConductor', e.target.value)} /></div>
                         <div>
                           <label className="block vt-fs-11 text-muted mb-1">DNI *</label>
-                          <input className={`form-input w-full text-sm ${f.tDni && !dniOk(f.tDni) ? 'border-danger' : ''}`} maxLength={8} value={f.tDni} onChange={(e) => setF('tDni', e.target.value.replace(/\D/g, '').slice(0, 8))} />
+                          <input className={`form-input w-full text-sm ${f.tDni && !dniOk(f.tDni) ? 'border-danger' : ''}`} maxLength={8} value={f.tDni} onChange={(e) => handleDniChofer(e.target.value, 'tDni', 'tConductor')} />
+                          <EstadoConsulta estado={consultaDocumento.estados.tDni} />
                         </div>
                         <div><label className="block vt-fs-11 text-muted mb-1">Licencia *</label><input className="form-input w-full text-sm" value={f.tLicencia} onChange={(e) => setF('tLicencia', e.target.value)} /></div>
                       </div>
@@ -805,7 +824,7 @@ export default function PanelGuiaRemisionSee({ guia, onRefresh, soloLectura = fa
                           <div><label className="block vt-fs-11 text-muted mb-1">TUCE 2</label><input className="form-input w-full text-sm" value={f.tTuc2} onChange={(e) => setF('tTuc2', e.target.value)} /></div>
                           <div><label className="block vt-fs-11 text-muted mb-1">Autorización 2</label><input className="form-input w-full text-sm" value={f.tAut2} onChange={(e) => setF('tAut2', e.target.value)} /></div>
                           <div><label className="block vt-fs-11 text-muted mb-1">Conductor 2</label><input className="form-input w-full text-sm" value={f.tConductor2} onChange={(e) => setF('tConductor2', e.target.value)} /></div>
-                          <div><label className="block vt-fs-11 text-muted mb-1">DNI 2</label><input className="form-input w-full text-sm" maxLength={8} value={f.tDni2} onChange={(e) => setF('tDni2', e.target.value.replace(/\D/g, '').slice(0, 8))} /></div>
+                          <div><label className="block vt-fs-11 text-muted mb-1">DNI 2</label><input className="form-input w-full text-sm" maxLength={8} value={f.tDni2} onChange={(e) => handleDniChofer(e.target.value, 'tDni2', 'tConductor2')} /><EstadoConsulta estado={consultaDocumento.estados.tDni2} /></div>
                           <div><label className="block vt-fs-11 text-muted mb-1">Licencia 2</label><input className="form-input w-full text-sm" value={f.tLicencia2} onChange={(e) => setF('tLicencia2', e.target.value)} /></div>
                         </div>
                       </details>

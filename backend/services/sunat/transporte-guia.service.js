@@ -39,6 +39,11 @@ export function resolverTransporteGuia(g = {}, rel = {}) {
   return { esTercero, carrier, conductores, vehiculos, indicadores, registrar, modalidad, declararVC };
 }
 
+export function nombreConductorDesdeDni(datos = {}) {
+  const partes = [datos.apellido_paterno, datos.apellido_materno, datos.nombres];
+  return partes.map((p) => String(p || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' ');
+}
+
 export function mapearTransporteDesdeOrden(orden = {}) {
   return {
     transporte_registrar: orden.transporte_registrar === 0 ? 0 : 1,

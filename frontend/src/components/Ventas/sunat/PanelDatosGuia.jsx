@@ -6,7 +6,9 @@ import {
 import Modal from '../../UI/Modal';
 import Alert from '../../UI/Alert';
 import UbigeoSelector from '../../common/UbigeoSelector';
+import EstadoConsulta from '../../common/EstadoConsulta';
 import { guiasRemisionAPI, ordenesVentaAPI, sunatAPI } from '../../../config/api';
+import useConsultaDocumento from '../../../hooks/useConsultaDocumento';
 import '../../../pages/Ventas/Ventas.css';
 
 const MODO_LABEL = {
@@ -49,6 +51,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   const [transportistas, setTransportistas] = useState([]);
+  const consultaDocumento = useConsultaDocumento();
 
   const [form, setForm] = useState(null);
   const [topes, setTopes] = useState({});
@@ -123,6 +126,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
 
   const abrirEdicion = () => {
     setError(null);
+    consultaDocumento.limpiar();
     setForm({
       modo,
       id_transportista: guia.id_transportista || '',
@@ -163,6 +167,21 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
   };
 
   const set = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }));
+
+  const handleRucTransportista = (valor) => {
+    const ruc = valor.replace(/\D/g, '').slice(0, 11);
+    set('transportista_ruc', ruc);
+    consultaDocumento.ruc('transportista_ruc', ruc, (datos) => {
+      const registrado = transportistas.find((t) => t.ruc === datos.ruc);
+      setForm((prev) => ({ ...prev, transportista_razon: datos.razon_social, transportista_mtc: registrado?.numero_mtc || '' }));
+    });
+  };
+
+  const handleDniChofer = (valor) => {
+    const dni = valor.replace(/\D/g, '').slice(0, 8);
+    set('transporte_dni', dni);
+    consultaDocumento.dni('transporte_dni', dni, (datos) => set('transporte_conductor', datos.nombre_completo));
+  };
 
   const setLinea = (index, campo, valor) =>
     setForm((prev) => ({ ...prev, lineas: prev.lineas.map((l, i) => (i === index ? { ...l, [campo]: valor } : l)) }));
@@ -437,7 +456,8 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="form-group">
                       <label className="form-label">RUC</label>
-                      <input className="form-input" value={form.transportista_ruc} onChange={(e) => set('transportista_ruc', e.target.value)} maxLength={11} />
+                      <input className="form-input" value={form.transportista_ruc} onChange={(e) => handleRucTransportista(e.target.value)} maxLength={11} />
+                      <EstadoConsulta estado={consultaDocumento.estados.transportista_ruc} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Razón social</label>
@@ -469,7 +489,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="form-group"><label className="form-label">Conductor</label><input className="form-input" value={form.transporte_conductor} onChange={(e) => set('transporte_conductor', e.target.value)} /></div>
-                      <div className="form-group"><label className="form-label">DNI</label><input className="form-input" value={form.transporte_dni} onChange={(e) => set('transporte_dni', e.target.value)} maxLength={8} /></div>
+                      <div className="form-group"><label className="form-label">DNI</label><input className="form-input" value={form.transporte_dni} onChange={(e) => handleDniChofer(e.target.value)} maxLength={8} /><EstadoConsulta estado={consultaDocumento.estados.transporte_dni} /></div>
                       <div className="form-group"><label className="form-label">Licencia</label><input className="form-input" value={form.transporte_licencia} onChange={(e) => set('transporte_licencia', e.target.value)} /></div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 border-t pt-3">
@@ -492,7 +512,7 @@ function PanelDatosGuia({ guia, onRefresh, soloLectura = false }) {
               <div className="grid grid-cols-2 gap-3 border rounded-lg p-4">
                 <div className="form-group"><label className="form-label">Placa</label><input className="form-input" value={form.transporte_placa} onChange={(e) => set('transporte_placa', e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Conductor</label><input className="form-input" value={form.transporte_conductor} onChange={(e) => set('transporte_conductor', e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">DNI</label><input className="form-input" value={form.transporte_dni} onChange={(e) => set('transporte_dni', e.target.value)} maxLength={8} /></div>
+                <div className="form-group"><label className="form-label">DNI</label><input className="form-input" value={form.transporte_dni} onChange={(e) => handleDniChofer(e.target.value)} maxLength={8} /><EstadoConsulta estado={consultaDocumento.estados.transporte_dni} /></div>
                 <div className="form-group"><label className="form-label">Licencia</label><input className="form-input" value={form.transporte_licencia} onChange={(e) => set('transporte_licencia', e.target.value)} /></div>
               </div>
             )}

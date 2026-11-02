@@ -98,22 +98,6 @@ function validarUbicacionEntregaExportacion(empresa) {
   return u;
 }
 
-function validarFechaEmision(solicitada, hoyISO) {
-  const s = String(solicitada || '').trim();
-  if (!s) return hoyISO;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    throw new AppError('fecha_emision debe tener formato YYYY-MM-DD', 400);
-  }
-  const d = new Date(s + 'T00:00:00');
-  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
-    throw new AppError('fecha_emision no es una fecha válida', 400);
-  }
-  const dias = diffDiasISO(s, hoyISO);
-  if (dias < 0) throw new AppError('La fecha de emisión no puede ser futura', 422);
-  if (dias > 2) throw new AppError('La fecha de emisión solo puede retrocederse hasta 2 días anteriores', 422);
-  return s;
-}
-
 async function ultimaFechaEmitidaSerie(db, serie, tipo = '01') {
   const [[row]] = await db.query(
     "SELECT DATE_FORMAT(MAX(fecha_emision), '%Y-%m-%d') AS ultima FROM facturas_venta " +

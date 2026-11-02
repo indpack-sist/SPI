@@ -290,9 +290,23 @@ export async function emitirComprobante(req, res, next) {
     }
 
     const lima = fechaLima();
-    const { hora } = lima;
-    const emision = validarFechaEmision(req.body.fecha_emision, lima.emision);
-    const emisionDateTime = `${emision} ${hora}`;
+const { hora } = lima;
+
+// 1. Tomamos la fecha enviada desde el frontend o la de hoy en Lima por defecto
+let emision = req.body.fecha_emision || lima.emision;
+
+// 2. Validamos que no tenga más de 3 días de antigüedad
+const fechaElegida = new Date(emision + 'T00:00:00');
+const limiteTresDias = new Date();
+limiteTresDias.setDate(limiteTresDias.getDate() - 3);
+limiteTresDias.setHours(0, 0, 0, 0);
+
+if (fechaElegida < limiteTresDias) {
+  throw new AppError('La fecha de emisión no puede tener más de 3 días de antigüedad.', 400);
+}
+
+const emisionDateTime = `${emision} ${hora}`;
+
     const serie = 'FE01';
 
     const prep = await withTransaction(async (conn) => {
@@ -503,14 +517,18 @@ export async function reenviarComprobante(req, res, next) {
           WHERE id_orden_venta = ? AND sunat_estado = 'ACEPTADO'
             AND serie_sunat IS NOT NULL AND numero_sunat IS NOT NULL`, [f.id_orden_venta]);
 
-      const [[ft]] = await conn.query(
+ const [[ft]] = await conn.query(
         "SELECT DATE_FORMAT(fecha_emision, '%Y-%m-%d') AS emision, DATE_FORMAT(fecha_emision, '%H:%i:%s') AS hora FROM facturas_venta WHERE id_factura = ?",
         [idFactura]);
-      const emision = ft.emision;
+
+      // Mbyky: Jajesareko fecha de emisión oĩva estado-pe (ov.fecha_emision) téra base de datos-pe
+      const emision = ov.fecha_emision || ft.emision;
       const hora = ft.hora && ft.hora !== '00:00:00' ? ft.hora : fechaLima().hora;
       const emisionDateTime = `${emision} ${hora}`;
+      
       const fecha = {
-        emision, hora,
+        emision, 
+        hora,
         vencimiento: String(ov.tipo_venta || '').toLowerCase().startsWith('cr')
           ? addDiasISO(emision, ov.dias_credito) : null
       };

@@ -275,6 +275,23 @@ function seleccionarGuiasSistema(guiasAceptadas, seleccion) {
   return guiasAceptadas.filter((g) => !g.yaFacturada);
 }
 
+// ✅ Pega esto AFUERA de las demás funciones (por ejemplo, arriba de emitirComprobante)
+function validarFechaEmision(fechaReq, fechaLimaDefault) {
+  const fechaElegidaStr = fechaReq || fechaLimaDefault;
+  const fechaElegida = new Date(fechaElegidaStr + 'T00:00:00');
+  
+  // Límite de 3 días atrás según la norma de SUNAT
+  const limiteTresDias = new Date();
+  limiteTresDias.setDate(limiteTresDias.getDate() - 3);
+  limiteTresDias.setHours(0, 0, 0, 0);
+
+  if (fechaElegida < limiteTresDias) {
+    throw new AppError('La fecha de emisión no puede tener más de 3 días de antigüedad.', 400);
+  }
+
+  return fechaElegidaStr;
+}
+
 export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;
   const tipo = req.body.tipo || '01';
@@ -814,7 +831,23 @@ export async function previewNota(req, res, next) {
   } catch (e) { next(e); }
 }
 
+function validarFechaEmision(fechaReq, fechaLimaDefault) {
+  const fechaElegidaStr = fechaReq || fechaLimaDefault;
+  const fechaElegida = new Date(fechaElegidaStr + 'T00:00:00');
+
+  const limiteTresDias = new Date();
+  limiteTresDias.setDate(limiteTresDias.getDate() - 3);
+  limiteTresDias.setHours(0, 0, 0, 0);
+
+  if (fechaElegida < limiteTresDias) {
+    throw new AppError('La fecha de emisión no puede tener más de 3 días de antigüedad.', 400);
+  }
+
+  return fechaElegidaStr;
+}
+
 export async function emitirNota(req, res, next) {
+  
   const { id_factura_ref, motivo_codigo } = req.body;
   const tipo = String(req.body.tipo || '');
   const items = Array.isArray(req.body.items) ? req.body.items : null;
@@ -824,11 +857,13 @@ export async function emitirNota(req, res, next) {
     if (!id_factura_ref) throw new AppError('Falta id_factura_ref', 400);
     if (!SERIES_NOTA[tipo]) throw new AppError('tipo de nota inválido (07 NC | 08 ND)', 400);
     if (!motivo_codigo) throw new AppError('Falta motivo_codigo', 400);
+    
     const serie = SERIES_NOTA[tipo];
-    const lima = fechaLima();
-    const emision = validarFechaEmision(req.body.fecha_emision, lima.emision);
-    const hora = lima.hora;
-    const emisionDateTime = `${emision} ${hora}`;
+const lima = fechaLima();
+const emision = validarFechaEmision(req.body.fecha_emision, lima.emision);
+const hora = lima.hora;
+const emisionDateTime = `${emision} ${hora}`;
+
 
     const prep = await withTransaction(async (conn) => {
       const [[ref]] = await conn.query(

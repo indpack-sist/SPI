@@ -275,22 +275,6 @@ function seleccionarGuiasSistema(guiasAceptadas, seleccion) {
   return guiasAceptadas.filter((g) => !g.yaFacturada);
 }
 
-// ✅ Pega esto AFUERA de las demás funciones (por ejemplo, arriba de emitirComprobante)
-function validarFechaEmision(fechaReq, fechaLimaDefault) {
-  const fechaElegidaStr = fechaReq || fechaLimaDefault;
-  const fechaElegida = new Date(fechaElegidaStr + 'T00:00:00');
-  
-  // Límite de 3 días atrás según la norma de SUNAT
-  const limiteTresDias = new Date();
-  limiteTresDias.setDate(limiteTresDias.getDate() - 3);
-  limiteTresDias.setHours(0, 0, 0, 0);
-
-  if (fechaElegida < limiteTresDias) {
-    throw new AppError('La fecha de emisión no puede tener más de 3 días de antigüedad.', 400);
-  }
-
-  return fechaElegidaStr;
-}
 
 export async function emitirComprobante(req, res, next) {
   const { id_orden_venta } = req.body;

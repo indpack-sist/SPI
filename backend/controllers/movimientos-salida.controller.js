@@ -561,7 +561,7 @@ export const generarPDFSalidaController = async (req, res, next) => {
       INNER JOIN empleados emp ON s.id_registrado_por = emp.id_empleado
       LEFT JOIN flota v ON s.id_vehiculo = v.id_vehiculo
       -- BUSCAMOS LA ORDEN QUE TIENE ESTA SALIDA ASIGNADA
-      LEFT JOIN ordenes_venta ov ON ov.id_salida = s.id_salida
+      LEFT JOIN ordenes_venta ov ON s.id_orden_venta = ov.id_orden_venta
       -- Y LA COTIZACIÓN ASOCIADA A ESA ORDEN
       LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
       WHERE s.id_salida = ?

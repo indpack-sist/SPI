@@ -49,19 +49,11 @@ const MOTIVOS_TRASLADO = {
   '18': 'Traslado emisor itinerante CP', '19': 'Traslado a zona primaria',
 };
 
-// 1. Calculamos la fecha mínima permitida (3 días atrás desde hoy)
-const hoy = new Date();
-const haceTresDias = new Date(hoy);
-haceTresDias.setDate(hoy.getDate() - 3);
-const minFechaPermitida = haceTresDias.toISOString().split('T')[0];
+const fmtFecha = (v, opts = {}) => v == null ? '—'
+  : new Date(v).toLocaleString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric', ...opts });
+const fmtDia = (v) => fmtFecha(v, { hour: undefined, minute: undefined });
 
-// 2. Input editable en tu JSX
-<input
-  type="date"
-  min={minFechaPermitida}
-  value={fechaEmision} // Tu estado local con la fecha en formato YYYY-MM-DD
-  onChange={(e) => setFechaEmision(e.target.value)}
-/>
+
 const fmtMoneda = (valor, moneda) => {
   const n = Number(valor);
   if (!Number.isFinite(n)) return '—';

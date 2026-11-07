@@ -126,7 +126,6 @@ function Productos() {
         id_categoria: producto.id_categoria || '',
         id_tipo_inventario: producto.id_tipo_inventario,
         unidad_medida: producto.unidad_medida,
-      
         precio_venta: producto.precio_venta ?? '0',
         peso_unitario: pesoKg > 0 ? String(enGramos ? pesoKg * 1000 : pesoKg) : '',
         peso_unidad_display: enGramos ? 'g' : 'kg',
@@ -589,12 +588,20 @@ function Productos() {
               )}
             </div>
 
-            {mostrarPrecioVenta && (
+{mostrarPrecioVenta && (
               <div className="form-group">
                 <label className="form-label" htmlFor="pr-f-precio">Precio de venta (PEN)</label>
-                <input id="pr-f-precio" type="number" step="0.01" className="form-input" value={formData.precio_venta} placeholder="0.00"
-                  onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })} />
+                <input 
+                  id="pr-f-precio" 
+                  type="number" 
+                  step="0.01" 
+                  className="form-input" 
+                  value={formData.precio_venta} 
+                  placeholder="0.00"
+                  onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })} 
+                />
               </div>
+            )}
 
             <div className="form-group">
               <label className="form-label" htmlFor="pr-f-peso">Peso por unidad</label>

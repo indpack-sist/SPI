@@ -29,7 +29,6 @@ const FORM_VACIO = {
   id_categoria: '',
   id_tipo_inventario: '',
   unidad_medida: 'unidad',
- // <-- Moneda por defecto para productos nuevos ('S/' o '$')
   precio_venta: '0',
   peso_unitario: '',
   peso_unidad_display: 'kg',

@@ -611,6 +611,7 @@ setFormCabecera(prev => ({
       return;
     }
     const precioVenta = parseFloat(producto.precio_venta || 0);
+    const monedaProducto = producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN';
     const nuevoItem = {
       id_producto: producto.id_producto,
       codigo_producto: producto.codigo,
@@ -619,13 +620,20 @@ setFormCabecera(prev => ({
       cantidad: 1,
       precio_base: precioVenta,
       precio_venta: precioVenta,
-moneda: producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN',      descuento_porcentaje: 0,
+      moneda: monedaProducto,
+      descuento_porcentaje: 0,
       stock_actual: producto.stock_actual,
       peso_unitario: parseFloat(producto.peso_unitario || 0),
       es_producto_libre: false,
       codigo_producto_libre: null,
       nombre_producto_libre: null
     };
+    if (detalle.length === 0) {
+      setFormCabecera(prev => ({
+        ...prev,
+        moneda: monedaProducto
+      }));
+    }
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
     setBusquedaProducto('');
@@ -658,7 +666,7 @@ moneda: producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN',   
     setDetalle(newDetalle);
   };
 
-  const toggleProductoDesdeLista = (prod, monedaLista, idLista) => {
+ const toggleProductoDesdeLista = (prod, monedaLista, idLista) => {
     const existeIndex = detalle.findIndex(d => d.id_producto === prod.id_producto);
 
     if (existeIndex >= 0) {
@@ -667,6 +675,7 @@ moneda: producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN',   
     } else {
       const precioLista = parseFloat(prod.precio_especial);
       const productoCompleto = productos.find(p => p.id_producto === prod.id_producto);
+      const monedaItem = (monedaLista === '$' || monedaLista === 'USD' || productoCompleto?.moneda === '$' || productoCompleto?.moneda === 'USD') ? 'USD' : 'PEN';
       const nuevoItem = {
         id_producto: prod.id_producto,
         codigo_producto: prod.codigo,
@@ -675,6 +684,7 @@ moneda: producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN',   
         cantidad: 1,
         precio_base: precioLista,
         precio_venta: precioLista,
+        moneda: monedaItem,
         id_lista_origen: idLista || prod.id_lista || null,
         precio_lista_snapshot: precioLista,
         descuento_porcentaje: 0,
@@ -684,6 +694,12 @@ moneda: producto.moneda === '$' || producto.moneda === 'USD' ? 'USD' : 'PEN',   
         codigo_producto_libre: null,
         nombre_producto_libre: null
       };
+      if (detalle.length === 0) {
+        setFormCabecera(prev => ({
+          ...prev,
+          moneda: monedaItem
+        }));
+      }
       setDetalle([...detalle, nuevoItem]);
     }
   };

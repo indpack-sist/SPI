@@ -272,7 +272,7 @@ export async function createProducto(req, res) {
 
 
 export async function updateProducto(req, res) {
-  console.log('=== UPDATE PRODUCTO ===', req.params.id, 'MONEDA RECIBIDA:', req.body.moneda);
+ 
   try {
     const { id } = req.params;
     const {

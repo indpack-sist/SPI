@@ -225,10 +225,10 @@ function Cotizaciones() {
     }).format(valor);
   };
 
-  const formatearMoneda = (valor, moneda) => {
-    const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
-  };
+const formatearMoneda = (valor, moneda) => {
+  const simbolo = (moneda === 'USD' || moneda === '$') ? '$' : 'S/';
+  return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+};
 
   const formatearFechaVisual = (fechaStr) => {
     if (!fechaStr) return '-';

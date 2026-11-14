@@ -324,11 +324,20 @@ export async function createCotizacion(req, res) {
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
-let tipoCambioFinal = 1.0000;
-if (moneda !== 'PEN') {
-  const tc = obtenerTipoCambioCache();
-  tipoCambioFinal = tc.promedio || 3.765;
-}
+    // 1️⃣ Crear monedaFinal estandarizando '$'/'USD' o 'S/'/'PEN'
+    let monedaFinal = 'PEN';
+    if (moneda === '$' || moneda === 'USD') {
+      monedaFinal = 'USD';
+    } else if (moneda === 'S/' || moneda === 'PEN') {
+      monedaFinal = 'PEN';
+    }
+
+    // 2️⃣ Evaluar tipo de cambio con monedaFinal
+    let tipoCambioFinal = 1.0000;
+    if (monedaFinal !== 'PEN') {
+      const tc = obtenerTipoCambioCache();
+      tipoCambioFinal = tc.promedio || 3.765;
+    }
 
     const anioActual = getFechaPeru().getFullYear();
 
@@ -404,13 +413,13 @@ if (moneda !== 'PEN') {
           AND ov.estado_pago != 'Pagado'
         WHERE cl.id_cliente = ?
         GROUP BY cl.id_cliente`,
-        [moneda, id_cliente]
+        [monedaFinal, id_cliente] // 3️⃣ Se pasa monedaFinal a la consulta de crédito
       );
 
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
         if (cliente.usar_limite_credito == 1) {
-          const limite = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
+          const limite = monedaFinal === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(cliente.deuda_actual || 0);
           if ((deudaActual + total) > limite) {
             console.warn(`Cliente ${id_cliente} excede limite de credito.`);
@@ -431,13 +440,13 @@ if (moneda !== 'PEN') {
         plazo_entrega, lugar_entrega, subtotal, igv, total, estado, id_creado_por, es_muestra
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?, ?)
       `, [
-      numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
-      prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,
-      plazoPagoFinal, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
-      plazo_entrega || null, lugar_entrega || null,
-      subtotal, igv, total,
-      comercialFinal,
-      esMuestra
+        numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
+        prioridad || 'Media', monedaFinal, tipoImpuestoFinal, porcentaje, tipoCambioFinal, // 4️⃣ Guardar monedaFinal en la BD
+        plazoPagoFinal, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
+        plazo_entrega || null, lugar_entrega || null,
+        subtotal, igv, total,
+        comercialFinal,
+        esMuestra
       ]);
 
       idCotizacion = result.insertId;

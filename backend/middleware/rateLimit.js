@@ -5,6 +5,7 @@ export const limitadorGlobal = rateLimit({
   limit: Number(process.env.RATE_LIMIT_GLOBAL_MAX) || 2000,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS', // <-- Permite peticiones preflight de CORS
   message: { success: false, error: 'Demasiadas solicitudes. Intente de nuevo en unos minutos.' }
 });
 
@@ -14,5 +15,6 @@ export const limitadorLogin = rateLimit({
   skipSuccessfulRequests: true,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS', // <-- Permite peticiones preflight de CORS
   message: { success: false, error: 'Demasiados intentos de inicio de sesión. Intente de nuevo en unos minutos.' }
 });

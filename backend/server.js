@@ -53,23 +53,32 @@ import { registrarCronPreciosFueraDeLista } from './services/precios-lista-alert
 dotenv.config();
 
 const allowedOrigins = [
-  process.env.CORS_ORIGIN || 'http://localhost:5173',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.CORS_ORIGIN,
   'https://spi.indpackperu.com',
   'https://spi-rho.vercel.app',
   'http://localhost:3000'
-];
+].filter(Boolean);
 
 const app = express();
 app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   exposedHeaders: ['Content-Disposition'],
-  maxAge: 86400
+  maxAge: 86400,
+  optionsSuccessStatus: 200
 };
 
 const io = new Server(httpServer, {
@@ -127,14 +136,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api', limitadorGlobal);
 
 app.use((req, res, next) => {
-  const startedAt = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - startedAt;
-    const slowRequestMs = Number.parseInt(process.env.SLOW_REQUEST_MS || '1000', 10);
-    if (duration >= slowRequestMs) {
-      console.warn(`Solicitud lenta: ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
-    }
-  });
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(200);
+  }
   next();
 });
 

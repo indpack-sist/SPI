@@ -30,6 +30,7 @@ const FORM_VACIO = {
   id_tipo_inventario: '',
   unidad_medida: 'unidad',
   precio_venta: '0',
+  moneda: 'S/' ,
   peso_unitario: '',
   peso_unidad_display: 'kg',
   stock_minimo: '0',
@@ -127,6 +128,7 @@ function Productos() {
         id_tipo_inventario: producto.id_tipo_inventario,
         unidad_medida: producto.unidad_medida,
         precio_venta: producto.precio_venta ?? '0',
+        moneda : producto.moneda || 'S/' ,
         peso_unitario: pesoKg > 0 ? String(enGramos ? pesoKg * 1000 : pesoKg) : '',
         peso_unidad_display: enGramos ? 'g' : 'kg',
         stock_minimo: producto.stock_minimo,
@@ -241,7 +243,7 @@ function Productos() {
 
   const columnas = 9 + (verPrecios ? 1 : 0);
 
-  const renderDrawer = () => {
+const renderDrawer = () => {
     const p = detalle;
     return (
       <PgDrawer
@@ -269,6 +271,7 @@ function Productos() {
           </>
         )}
       >
+        {/* SECCIÓN 1: STOCK */}
         <section>
           <h3 className="pg-section-title"><Boxes size={14} /> Stock</h3>
           <div className="pr-stock-box">
@@ -276,7 +279,9 @@ function Productos() {
               <b>{fmtCantidad(p.stock_actual)}</b>
               <span>{p.unidad_medida}</span>
             </div>
+            
             <MedidorStock producto={p} />
+            
             <div className="pr-stock-scale">
               <span>Mínimo <b>{fmtCantidad(p.stock_minimo)}</b></span>
               <span>Máximo <b>{num(p.stock_maximo) > 0 ? fmtCantidad(p.stock_maximo) : '—'}</b></span>
@@ -284,6 +289,7 @@ function Productos() {
           </div>
         </section>
 
+        {/* SECCIÓN 2: DATOS DEL PRODUCTO */}
         <section>
           <h3 className="pg-section-title"><Info size={14} /> Datos del producto</h3>
           <div className="pg-kv">
@@ -293,16 +299,22 @@ function Productos() {
             <div><span>Unidad SUNAT</span><strong>{p.codigo_unidad_sunat || 'Sin código'}</strong></div>
             <div><span>Peso unitario</span><strong>{fmtPeso(p.peso_unitario)}</strong></div>
             <div><span>Receta (BOM)</span><strong>{p.requiere_receta ? 'Requiere receta' : 'No requiere'}</strong></div>
+            
+            {/* MONEDA DINÁMICA DE ACUERDO AL PRODUCTO */}
             {verPrecios && esTipoVendible(p.tipo_inventario) && (
-              <div><span>Precio de venta</span><strong>{fmtMonto(p.precio_venta)}</strong></div>
+              <div>
+                <span>Precio de venta</span>
+                <strong>{p.moneda || 'S/'} {Number(p.precio_venta || 0).toFixed(2)}</strong>
+              </div>
             )}
+            
             {p.descripcion && <div className="wide"><span>Descripción</span><strong>{p.descripcion}</strong></div>}
           </div>
         </section>
       </PgDrawer>
     );
   };
-
+  
   return (
     <div className="pg-page">
       <header className="pg-header">
@@ -491,9 +503,15 @@ function Productos() {
                     </td>
                     <td><BadgeEstadoStock producto={p} /></td>
                     <td className="num">{fmtPeso(p.peso_unitario)}</td>
-                    {verPrecios && (
-                      <td className="num">{esTipoVendible(p.tipo_inventario) ? fmtMonto(p.precio_venta) : <span className="pg-muted">—</span>}</td>
-                    )}
+{verPrecios && (
+  <td className="num">
+    {esTipoVendible(p.tipo_inventario) ? (
+      `${p.moneda || 'S/'} ${Number(p.precio_venta || 0).toFixed(2)}`
+    ) : (
+      <span className="pg-muted">—</span>
+    )}
+  </td>
+)}
                     <td>
                       {p.requiere_receta ? (
                         <span className={`pg-tag ${Number(p.total_recetas) > 0 ? 'is-accent' : 'is-warning'}`}>
@@ -589,18 +607,46 @@ function Productos() {
             </div>
 
 {mostrarPrecioVenta && (
-              <div className="form-group">
-                <label className="form-label" htmlFor="pr-f-precio">Precio de venta (PEN)</label>
-                <input 
-                  id="pr-f-precio" 
-                  type="number" 
-                  step="0.01" 
-                  className="form-input" 
-                  value={formData.precio_venta} 
-                  placeholder="0.00"
-                  onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })} 
-                />
-              </div>
+              <>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="pr-f-moneda">Moneda *</label>
+                  <select
+                    id="pr-f-moneda"
+                    className="form-select"
+                    value={formData.moneda || 'S/'}
+                    onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
+                  >
+                    <option value="S/">S/ (Soles)</option>
+                    <option value="$">$ (Dólares)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="pr-f-precio">Precio de venta</label>
+                  <div className="pr-inline">
+                    <span 
+                      style={{ 
+                        fontWeight: 'bold', 
+                        color: '#fbbf24', 
+                        fontSize: '1rem',
+                        minWidth: '24px',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {formData.moneda || 'S/'}
+                    </span>
+                    <input
+                      id="pr-f-precio"
+                      type="number"
+                      step="0.001"
+                      className="form-input"
+                      value={formData.precio_venta}
+                      placeholder="0.000"
+                      onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="form-group">

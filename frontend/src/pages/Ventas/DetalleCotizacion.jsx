@@ -360,10 +360,11 @@ function DetalleCotizacion() {
     }).format(valor);
   };
 
-  const formatearMoneda = (valor) => {
-    const simbolo = cotizacion?.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
-  };
+ const formatearMoneda = (monto, monedaInput) => {
+  const m = monedaInput || cotizacion?.moneda || 'PEN';
+  const simbolo = (m === 'USD' || m === '$') ? '$' : 'S/';
+  return `${simbolo} ${Number(monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
   const formatearNumeroPrecio = (valor) => {
     return new Intl.NumberFormat('en-US', {
@@ -422,7 +423,7 @@ function DetalleCotizacion() {
         </div>
       </div>
     );
-  }
+   }
 
   const calcularTotalesReales = () => {
     if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0, pesoTotal: 0 };
@@ -835,11 +836,15 @@ function DetalleCotizacion() {
                           </>
                         )}
                       </td>
-                      <td className="num pg-muted">{formatearMoneda(row.precio_base)}</td>
+                      <td className="num pg-muted">
+                        {formatearMoneda(row.precio_base, cotizacion.moneda)}
+                      </td>
                       <td className="num">
                         <span className="vt-lp-price">{formatearMonedaPrecio(row.precio_unitario)}</span>
                         {esUSD && tcVenta && (
-                          <span className="pg-cell-sub vt-text-accent">S/ {formatearNumeroPrecio(parseFloat(row.precio_unitario) * tcVenta)}</span>
+                          <span className="pg-cell-sub vt-text-accent">
+                            S/ {formatearNumeroPrecio(parseFloat(row.precio_unitario) * tcVenta)}
+                          </span>
                         )}
                       </td>
                       {esAdmin && (
@@ -850,10 +855,12 @@ function DetalleCotizacion() {
                         </td>
                       )}
                       <td className="num">
-                        <span className="vt-amount">{formatearMoneda(subtotalCalculado)}</span>
+                        <span className="vt-amount">{formatearMoneda(subtotalCalculado, cotizacion.moneda)}</span>
                         {esUSD && tcVenta && (
                           <span className="pg-tags">
-                            <span className="pg-tag is-accent"><ArrowRightLeft size={10} />S/ {formatearNumero(subtotalCalculado * tcVenta)}</span>
+                            <span className="pg-tag is-accent">
+                              <ArrowRightLeft size={10} />S/ {formatearNumero(subtotalCalculado * tcVenta)}
+                            </span>
                           </span>
                         )}
                       </td>
@@ -895,7 +902,7 @@ function DetalleCotizacion() {
           </div>
         </section>
 
-        <div className={`vt-detail-bottom ${cotizacion.observaciones ? '' : 'is-solo'}`}>
+<div className={`vt-detail-bottom ${cotizacion.observaciones ? '' : 'is-solo'}`}>
           {cotizacion.observaciones && (
             <section className="pg-panel">
               <div className="pg-panel-head">
@@ -921,7 +928,7 @@ function DetalleCotizacion() {
                 )}
                 <div>
                   <dt>Sub total</dt>
-                  <dd>{formatearMoneda(subtotalReal)}</dd>
+                  <dd>{formatearMoneda(subtotalReal, cotizacion.moneda)}</dd>
                 </div>
                 <div>
                   <dt>
@@ -929,11 +936,11 @@ function DetalleCotizacion() {
                       ? (String(cotizacion.tipo_impuesto).toUpperCase().startsWith('EXO') ? 'Exonerado (0%)' : 'Inafecto (0%)')
                       : `IGV (${parseFloat(cotizacion.porcentaje_impuesto || 18)}%)`}
                   </dt>
-                  <dd>{formatearMoneda(igvReal)}</dd>
+                  <dd>{formatearMoneda(igvReal, cotizacion.moneda)}</dd>
                 </div>
                 <div className="vt-sum-total">
                   <dt>Total</dt>
-                  <dd>{formatearMoneda(totalReal)}</dd>
+                  <dd>{formatearMoneda(totalReal, cotizacion.moneda)}</dd>
                 </div>
               </dl>
 

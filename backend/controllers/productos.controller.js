@@ -189,6 +189,7 @@ export async function getAllProductosConCosto(req, res) {
   }
 }
 
+JavaScript
 export async function createProducto(req, res) {
   try {
     const {
@@ -201,6 +202,7 @@ export async function createProducto(req, res) {
       costo_unitario_promedio,
       costo_unitario_promedio_usd,
       precio_venta,
+      moneda,
       peso_unitario,
       stock_actual,
       stock_minimo,
@@ -227,24 +229,25 @@ export async function createProducto(req, res) {
     const result = await executeQuery(
       `INSERT INTO productos (
         codigo, nombre, descripcion, id_categoria, id_tipo_inventario,
-        unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta,
+        unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta, moneda,
         peso_unitario, stock_actual, stock_minimo, stock_maximo, requiere_receta, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         codigo,
         nombre,
-        descripcion,
+        descripcion ?? null,
         id_categoria || null,
         id_tipo_inventario,
         unidad_medida,
         costo_unitario_promedio || 0,
         costo_unitario_promedio_usd || 0,
         precio_venta || 0,
+        moneda || 'S/', 
         peso_unitario || null,
         stock_actual || 0,
         stock_minimo || 0,
         stock_maximo || 0,
-        requiere_receta || false,
+        requiere_receta ? 1 : 0,
         estado || 'Activo'
       ]
     );
@@ -267,6 +270,7 @@ export async function createProducto(req, res) {
   }
 }
 
+
 export async function updateProducto(req, res) {
   try {
     const { id } = req.params;
@@ -278,6 +282,7 @@ export async function updateProducto(req, res) {
       id_tipo_inventario,
       unidad_medida,
       precio_venta,
+      moneda,
       peso_unitario,
       stock_minimo,
       stock_maximo,
@@ -308,7 +313,8 @@ export async function updateProducto(req, res) {
     const result = await executeQuery(
       `UPDATE productos SET 
         codigo = ?, nombre = ?, descripcion = ?, id_categoria = ?,
-        id_tipo_inventario = ?, unidad_medida = ?, precio_venta = ?, peso_unitario = ?,
+        id_tipo_inventario = ?, unidad_medida = ?, precio_venta = ?,moneda = ?,
+         peso_unitario = ?,
         stock_minimo = ?, stock_maximo = ?, requiere_receta = ?, estado = ?
       WHERE id_producto = ?`,
       [
@@ -319,6 +325,7 @@ export async function updateProducto(req, res) {
         id_tipo_inventario,
         unidad_medida,
         puedeVerCostos(req) && precio_venta !== undefined ? (precio_venta || 0) : checkResult.data[0].precio_venta,
+        moneda || 'S/',
         peso_unitario || null,
         stock_minimo,
         stock_maximo,

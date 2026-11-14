@@ -156,10 +156,12 @@ function NuevaCotizacion() {
     }).format(valor);
   };
 
-  const formatearMonedaGral = (valor) => {
-    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
-  };
+const formatearMonedaGral = (monto, monedaInput) => {
+  const m = monedaInput || formCabecera?.moneda || 'PEN';
+  const simbolo = (m === 'USD' || m === '$') ? '$' : 'S/';
+  return `${simbolo} ${formatearNumero(parseFloat(monto || 0))}`;
+};
+
   const formatearPeso = (pesoKg) => {
     if (!pesoKg || pesoKg === 0) return '—';
     if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
@@ -617,6 +619,7 @@ setFormCabecera(prev => ({
       cantidad: 1,
       precio_base: precioVenta,
       precio_venta: precioVenta,
+      moneda: productoSeleccionado.moneda || 'PEN',
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual,
       peso_unitario: parseFloat(producto.peso_unitario || 0),
@@ -1615,7 +1618,7 @@ setFormCabecera(prev => ({
 />
                           </td>
                           )}
-                          <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>
+                          <td className="text-right font-bold">{formatearMonedaGral(valorVenta, item.moneda )}</td>
                           <td>
                             <button
                               type="button"
@@ -1673,7 +1676,7 @@ setFormCabecera(prev => ({
           </div>
         </section>
 
-        {detalle.length > 0 && (
+       {detalle.length > 0 && (
           <section className="pg-panel">
             <div className="pg-panel-body">
               <dl className="vt-sum vt-sum-side">
@@ -1685,15 +1688,15 @@ setFormCabecera(prev => ({
                 )}
                 <div>
                   <dt>Sub total</dt>
-                  <dd>{formatearMonedaGral(totales.subtotal)}</dd>
+                  <dd>{formatearMonedaGral(totales.subtotal, formCabecera.moneda)}</dd>
                 </div>
                 <div>
                   <dt>{TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}</dt>
-                  <dd>{formatearMonedaGral(totales.impuesto)}</dd>
+                  <dd>{formatearMonedaGral(totales.impuesto, formCabecera.moneda)}</dd>
                 </div>
                 <div className="vt-sum-total">
                   <dt>Total</dt>
-                  <dd>{formatearMonedaGral(totales.total)}</dd>
+                  <dd>{formatearMonedaGral(totales.total, formCabecera.moneda)}</dd>
                 </div>
               </dl>
             </div>
@@ -1907,7 +1910,7 @@ setFormCabecera(prev => ({
                     <div className="text-sm text-muted font-mono">{producto.codigo}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-primary text-lg">{formatearMonedaGral(producto.precio_venta)}</div>
+                    <div className="font-bold text-primary text-lg">{formatearMonedaGral(producto.precio_venta, producto.moneda)}</div>
                     <div className="text-xs text-muted font-bold uppercase">{producto.unidad_medida}</div>
                     {parseFloat(producto.peso_unitario || 0) > 0 && (
                       <div className="text-xs text-muted mt-1">

@@ -24,7 +24,7 @@ export const pool = mysql.createPool({
 export async function testConnection() {
   try {
     const connection = await pool.getConnection();
-    const [rows] = await connection.execute("SELECT @@session.time_zone as tz");
+    const [rows] = await connection.query("SELECT @@session.time_zone as tz");
     console.log('✓ Conexión exitosa a la base de datos MySQL');
     console.log('✓ Zona horaria configurada:', rows[0].tz);
     connection.release();
@@ -38,7 +38,11 @@ export async function testConnection() {
 export async function executeQuery(sql, params = []) {
   const performQuery = async () => {
     const startedAt = Date.now();
-    const [rows] = await pool.execute(sql, params);
+    const sanitizedParams = Array.isArray(params)
+      ? params.map((p) => (p === undefined ? null : p))
+      : params;
+
+    const [rows] = await pool.query(sql, sanitizedParams);
     const duration = Date.now() - startedAt;
     const slowQueryMs = Number.parseInt(process.env.SLOW_QUERY_MS || '500', 10);
     if (duration >= slowQueryMs) {
@@ -51,7 +55,7 @@ export async function executeQuery(sql, params = []) {
     const rows = await performQuery();
     return { success: true, data: rows };
   } catch (error) {
-    const retryCodes = ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'CANNOT_CONNECT'];
+    const retryCodes = ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'CANNOT_CONNECT', 'ER_MALFORMED_PACKET'];
     
     if (retryCodes.includes(error.code)) {
       console.warn(`Error de conexión ${error.code}. Reintentando consulta.`);
@@ -92,7 +96,11 @@ export async function executeTransaction(queries) {
     const results = [];
     for (let i = 0; i < queries.length; i++) {
       const { sql, params } = queries[i];
-      const [rows] = await connection.execute(sql, params);
+      const sanitizedParams = Array.isArray(params)
+        ? params.map((p) => (p === undefined ? null : p))
+        : params;
+
+      const [rows] = await connection.query(sql, sanitizedParams);
       results.push(rows);
     }
     

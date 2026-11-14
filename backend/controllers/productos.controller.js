@@ -189,7 +189,7 @@ export async function getAllProductosConCosto(req, res) {
   }
 }
 
-JavaScript
+
 export async function createProducto(req, res) {
   try {
     const {

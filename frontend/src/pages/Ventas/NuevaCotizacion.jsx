@@ -415,6 +415,7 @@ const formatearMonedaGral = (monto, monedaInput) => {
     setDetalle(prev => prev.map(it => ({
       ...it,
       precio_base: convertir(it.precio_base),
+      moneda: destino,
       precio_venta: convertir(it.precio_venta),
       precio_lista_snapshot: it.precio_lista_snapshot != null ? convertir(it.precio_lista_snapshot) : it.precio_lista_snapshot
     })));
@@ -1633,7 +1634,7 @@ setFormCabecera(prev => ({
 />
                           </td>
                           )}
-                          <td className="text-right font-bold">{formatearMonedaGral(valorVenta, item.moneda )}</td>
+                         <td className="text-right font-bold">{formatearMonedaGral(valorVenta, formCabecera.moneda)}</td>
                           <td>
                             <button
                               type="button"

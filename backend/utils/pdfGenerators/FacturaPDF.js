@@ -105,6 +105,7 @@ function numeroALetras(numero, moneda) {
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }
 
+
 export async function generarFacturaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -247,18 +248,23 @@ export async function generarFacturaPDF(orden) {
       doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
       doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
       doc.text('DESCRIPCIÓN', 230, yPos + 6);
-      doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-      doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
+      doc.text('P. UNIT.', 440, yPos + 6, { align: 'right', width: 50 });
+      doc.text('TOTAL', 495, yPos + 6, { align: 'right', width: 60 });
 
       yPos += 20;
+
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
 
       const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
 
       orden.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(2);
-        const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
+        const cantidad = fmt(item.cantidad);
+        const precioUnitario = fmt(item.precio_unitario);
         const totalLinea = (item.cantidad * item.precio_unitario);
-        const valorVenta = parseFloat(totalLinea).toFixed(2);
+        const valorVenta = fmt(totalLinea);
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
@@ -271,28 +277,29 @@ export async function generarFacturaPDF(orden) {
           doc.text('CÓDIGO', 40, yPos + 6);
           doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
           doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
-          doc.text('DESCRIPCIÓN', 230, yPos + 6);
-          doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-          doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
+         doc.text('DESCRIPCIÓN', 230, yPos + 6);
+          doc.text('P. UNIT.', 440, yPos + 6, { align: 'right', width: 50 });
+          doc.text('TOTAL', 495, yPos + 6, { align: 'right', width: 60 });
           yPos += 20;
-        }
+        } 
 
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         doc.text(item.codigo_producto, 40, yPos + 5);
         doc.text(cantidad, 130, yPos + 5, { width: 50, align: 'center' });
         doc.text(item.unidad_medida || 'UND', 185, yPos + 5, { width: 40, align: 'center' });
-        doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
-        doc.text(precioUnitario, 450, yPos + 5, { align: 'right', width: 50 });
-        doc.text(`${simboloMoneda} ${valorVenta}`, 505, yPos + 5, { align: 'right', width: 50 });
+        doc.text(descripcion, 230, yPos + 5, { width: 205, lineGap: 2 });
+        doc.text(precioUnitario, 440, yPos + 5, { align: 'right', width: 50 });
+        doc.text(`${simboloMoneda} ${valorVenta}`, 495, yPos + 5, { align: 'right', width: 60 });
         yPos += alturaFila;
       });
 
       yPos += 10;
       const footerStartY = yPos;
 
-      const subtotal = parseFloat(orden.subtotal).toFixed(2);
-      const igv = parseFloat(orden.igv).toFixed(2);
-      const total = parseFloat(orden.total).toFixed(2);
+      const subtotal = fmt(orden.subtotal);
+      const igv = fmt(orden.igv);
+      const totalNumerico = parseFloat(orden.total || 0);
+      const total = fmt(totalNumerico);
       const tipoImpuesto = orden.tipo_impuesto || 'IGV';
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
       const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
@@ -352,7 +359,7 @@ export async function generarFacturaPDF(orden) {
       yPos = Math.max(footerLeftY, footerRightY) + 5;
 
       doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(parseFloat(total), orden.moneda);
+      const totalEnLetras = numeroALetras(totalNumerico, orden.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });

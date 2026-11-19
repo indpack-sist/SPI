@@ -369,6 +369,11 @@ const confirmarTipoCambioLista = (tc, convertir) => {
     if (tc && tc > 0) setTipoCambio(tc);
     setModalTCAbierto(false);
     setMonedaPendiente(null);
+
+  };
+  const cancelarTipoCambioLista = () => {
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
   };
 
   const handleToggleTodosEnLista = (checked) => {

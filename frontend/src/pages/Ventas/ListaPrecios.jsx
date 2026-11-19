@@ -333,14 +333,21 @@ function ListaPrecios() {
     setModalTCAbierto(true);
   };
 
-  const confirmarTipoCambioLista = (tc, convertir) => {
+ const confirmarTipoCambioLista = (arg1, arg2) => {
+    const tc = typeof arg1 === 'object' && arg1 !== null
+      ? parseFloat(arg1.tipoCambio || arg1.tc || tipoCambio)
+      : parseFloat(arg1 || tipoCambio);
+
+    const convertir = typeof arg1 === 'object' && arg1 !== null
+      ? Boolean(arg1.convertir ?? arg1.aplicarConversion ?? true)
+      : Boolean(arg2);
+
     const destino = monedaPendiente;
     if (!destino) return;
 
     setNuevaLista(prev => {
       const nuevosItems = { ...prev.items };
-      if (convertir && tc && tc > 0) {
-        // Solo recorre los IDs que tienen la casilla marcada
+      if (convertir && !isNaN(tc) && tc > 0) {
         Object.keys(nuevosItems).forEach(idProd => {
           const n = parseFloat(nuevosItems[idProd]);
           if (!isNaN(n) && n > 0) {
@@ -356,9 +363,8 @@ function ListaPrecios() {
       };
     });
 
-    if (destino === 'USD' && tc) {
+    if (!isNaN(tc) && tc > 0) {
       setTipoCambio(tc);
-      setTipoCambioFecha(null);
     }
     setModalTCAbierto(false);
     setMonedaPendiente(null);

@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, FileText, Plus, Package, Save, Edit, Trash2, Tag, Eye, EyeOff, History, Lock, User, AlertTriangle } from 'lucide-react';
-import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
+import { clientesAPI, listasPreciosAPI, productosAPI, tipoCambioAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 import './Ventas.css';
+import ModalTipoCambio from '../../components/Ventas/ModalTipoCambio';
+
+
 
 function ListaPrecios() {
   const navigate = useNavigate();
@@ -43,6 +46,14 @@ function ListaPrecios() {
     moneda: 'PEN',
     items: {} 
   });
+
+
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
+  const [modalTCAbierto, setModalTCAbierto] = useState(false);
+  const [monedaPendiente, setMonedaPendiente] = useState(null);
+  const [loadingTC, setLoadingTC] = useState(false);
+
 
   useEffect(() => {
     cargarDatosIniciales();
@@ -274,6 +285,109 @@ function ListaPrecios() {
           return { ...prev, items };
       });
   };
+
+
+  const obtenerTipoCambio = async () => {
+    try {
+      setLoadingTC(true);
+      const cached = sessionStorage.getItem('indpack_tipo_cambio');
+      if (cached) {
+        const tc = JSON.parse(cached);
+        setTipoCambio(tc.venta);
+        setTipoCambioFecha(tc.fecha);
+        return;
+      }
+      const response = await tipoCambioAPI.actualizar();
+      if (response.data.valido) {
+        const tcData = {
+          compra: response.data.compra,
+          venta: response.data.venta,
+          promedio: response.data.promedio,
+          fecha: response.data.fecha,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem('indpack_tipo_cambio', JSON.stringify(tcData));
+        setTipoCambio(tcData.venta);
+        setTipoCambioFecha(tcData.fecha);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingTC(false);
+    }
+  };
+
+  const handleCambioMonedaModal = (nuevaMoneda) => {
+    if (nuevaMoneda === nuevaLista.moneda) return;
+    const haySeleccionadosConPrecio = Object.values(nuevaLista.items).some(
+      precio => precio !== undefined && precio !== '' && parseFloat(precio) > 0
+    );
+
+    if (!haySeleccionadosConPrecio) {
+      setNuevaLista(prev => ({ ...prev, moneda: nuevaMoneda }));
+      return;
+    }
+
+    if (!tipoCambio) obtenerTipoCambio();
+    setMonedaPendiente(nuevaMoneda);
+    setModalTCAbierto(true);
+  };
+
+  const confirmarTipoCambioLista = (tc, convertir) => {
+    const destino = monedaPendiente;
+    if (!destino) return;
+
+    setNuevaLista(prev => {
+      const nuevosItems = { ...prev.items };
+      if (convertir && tc && tc > 0) {
+        // Solo recorre los IDs que tienen la casilla marcada
+        Object.keys(nuevosItems).forEach(idProd => {
+          const n = parseFloat(nuevosItems[idProd]);
+          if (!isNaN(n) && n > 0) {
+            const convertido = destino === 'USD' ? n / tc : n * tc;
+            nuevosItems[idProd] = convertido.toFixed(2);
+          }
+        });
+      }
+      return {
+        ...prev,
+        moneda: destino,
+        items: nuevosItems
+      };
+    });
+
+    if (destino === 'USD' && tc) {
+      setTipoCambio(tc);
+      setTipoCambioFecha(null);
+    }
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
+  };
+
+  const cancelarTipoCambioLista = () => {
+    setModalTCAbierto(false);
+    setMonedaPendiente(null);
+  };
+
+  const handleToggleTodosEnLista = (checked) => {
+    setNuevaLista(prev => {
+      const items = { ...prev.items };
+      productosFiltradosModal.forEach(p => {
+        if (checked) {
+          if (items[p.id_producto] === undefined) {
+            const precioRef = parseFloat(
+              (prev.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0
+            ).toFixed(2);
+            items[p.id_producto] = precioRef;
+          }
+        } else {
+          delete items[p.id_producto];
+        }
+      });
+      return { ...prev, items };
+    });
+  };
+
 
   const guardarLista = async () => {
     if (!nuevaLista.nombre_lista) {
@@ -586,13 +700,13 @@ function ListaPrecios() {
                 onChange={(e) => setNuevaLista({...nuevaLista, nombre_lista: e.target.value})}
               />
             </div>
-            <div className="form-group">
+          <div className="form-group">
               <label className="form-label" htmlFor="vt-lp-moneda">Moneda</label>
               <select
                 id="vt-lp-moneda"
                 className="form-select"
                 value={nuevaLista.moneda}
-                onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
+                onChange={(e) => handleCambioMonedaModal(e.target.value)}
               >
                 <option value="PEN">Soles (PEN)</option>
                 <option value="USD">Dólares (USD)</option>
@@ -631,7 +745,19 @@ function ListaPrecios() {
               <table className="pg-table">
                 <thead>
                   <tr>
-                    <th className="center">Incluir</th>
+                    <th className="center">
+                      <input
+                        type="checkbox"
+                        className="vt-lp-check"
+                        aria-label="Seleccionar todos los productos visibles"
+                        title="Seleccionar / deseleccionar todos"
+                        checked={
+                          productosFiltradosModal.length > 0 &&
+                          productosFiltradosModal.every(p => nuevaLista.items[p.id_producto] !== undefined)
+                        }
+                        onChange={(e) => handleToggleTodosEnLista(e.target.checked)}
+                      />
+                    </th>
                     <th>Producto</th>
                     <th className="num">Precio ref.</th>
                     <th className="num">Precio especial</th>
@@ -773,7 +899,36 @@ function ListaPrecios() {
             </div>
           </div>
         </div>
-      </Modal>
+    </Modal>
+      {modalTCAbierto && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999 }}>
+          {(() => {
+            const primerPrecioEjemplo =
+              Object.values(nuevaLista.items)
+                .map((v) => parseFloat(v))
+                .find((n) => !isNaN(n) && n > 0) || 0;
+
+            return (
+              <ModalTipoCambio
+                isOpen={modalTCAbierto}
+                onClose={cancelarTipoCambioLista}
+                onCancel={cancelarTipoCambioLista}
+                onCancelar={cancelarTipoCambioLista}
+                onConfirm={confirmarTipoCambioLista}
+                monedaOrigen={nuevaLista.moneda}
+                monedaDestino={monedaPendiente}
+                tipoCambioActual={tipoCambio}
+                tipoCambioFecha={tipoCambioFecha}
+                loadingTC={loadingTC}
+                onActualizarTC={obtenerTipoCambio}
+                montoEjemplo={primerPrecioEjemplo}
+                monto={primerPrecioEjemplo}
+                total={primerPrecioEjemplo}
+              />
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

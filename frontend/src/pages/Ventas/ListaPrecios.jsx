@@ -333,14 +333,20 @@ function ListaPrecios() {
     setModalTCAbierto(true);
   };
 
- const confirmarTipoCambioLista = (arg1, arg2) => {
-    const tc = typeof arg1 === 'object' && arg1 !== null
-      ? parseFloat(arg1.tipoCambio || arg1.tc || tipoCambio)
-      : parseFloat(arg1 || tipoCambio);
+const confirmarTipoCambioLista = (arg1, arg2) => {
+    let tc = parseFloat(tipoCambio);
+    let convertir = true;
 
-    const convertir = typeof arg1 === 'object' && arg1 !== null
-      ? Boolean(arg1.convertir ?? arg1.aplicarConversion ?? true)
-      : Boolean(arg2);
+    if (typeof arg1 === 'object' && arg1 !== null) {
+      tc = parseFloat(arg1.tipoCambio || arg1.tc || tipoCambio);
+      convertir = Boolean(arg1.convertir ?? arg1.aplicarConversion ?? true);
+    } else if (typeof arg1 === 'boolean') {
+      convertir = arg1;
+      if (arg2) tc = parseFloat(arg2);
+    } else if (arg1 !== undefined) {
+      tc = parseFloat(arg1);
+      convertir = arg2 !== undefined ? Boolean(arg2) : true;
+    }
 
     const destino = monedaPendiente;
     if (!destino) return;
@@ -915,12 +921,14 @@ function ListaPrecios() {
                 .find((n) => !isNaN(n) && n > 0) || 0;
 
             return (
-              <ModalTipoCambio
+            <ModalTipoCambio
                 isOpen={modalTCAbierto}
                 onClose={cancelarTipoCambioLista}
                 onCancel={cancelarTipoCambioLista}
                 onCancelar={cancelarTipoCambioLista}
                 onConfirm={confirmarTipoCambioLista}
+                onConfirmar={confirmarTipoCambioLista}
+                onSoloCambiarMoneda={() => confirmarTipoCambioLista(tipoCambio, false)}
                 monedaOrigen={nuevaLista.moneda}
                 monedaDestino={monedaPendiente}
                 tipoCambioActual={tipoCambio}

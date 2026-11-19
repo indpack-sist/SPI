@@ -912,37 +912,52 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
           </div>
         </div>
     </Modal>
-      {modalTCAbierto && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999 }}>
-          {(() => {
-            const primerPrecioEjemplo =
-              Object.values(nuevaLista.items)
-                .map((v) => parseFloat(v))
-                .find((n) => !isNaN(n) && n > 0) || 0;
+{(() => {
+        const primerPrecioReferencia =
+          Object.values(nuevaLista.items)
+            .map((v) => parseFloat(v))
+            .find((n) => !isNaN(n) && n > 0) || 0;
 
-            return (
-            <ModalTipoCambio
-                isOpen={modalTCAbierto}
-                onClose={cancelarTipoCambioLista}
-                onCancel={cancelarTipoCambioLista}
-                onCancelar={cancelarTipoCambioLista}
-                onConfirm={confirmarTipoCambioLista}
-                onConfirmar={confirmarTipoCambioLista}
-                onSoloCambiarMoneda={() => confirmarTipoCambioLista(tipoCambio, false)}
-                monedaOrigen={nuevaLista.moneda}
-                monedaDestino={monedaPendiente}
-                tipoCambioActual={tipoCambio}
-                tipoCambioFecha={tipoCambioFecha}
-                loadingTC={loadingTC}
-                onActualizarTC={obtenerTipoCambio}
-                montoEjemplo={primerPrecioEjemplo}
-                monto={primerPrecioEjemplo}
-                total={primerPrecioEjemplo}
-              />
-            );
-          })()}
-        </div>
-      )}
+        return (
+          <ModalTipoCambio
+            isOpen={modalTCAbierto}
+            monedaOrigen={nuevaLista.moneda}
+            monedaDestino={monedaPendiente}
+            montoReferencia={primerPrecioReferencia}
+            onConfirmar={(tc, convertir) => {
+              const destino = monedaPendiente;
+              if (!destino) return;
+
+              setNuevaLista(prev => {
+                const nuevosItems = { ...prev.items };
+                if (convertir && tc && tc > 0) {
+                  Object.keys(nuevosItems).forEach(idProd => {
+                    const valorActual = parseFloat(nuevosItems[idProd]);
+                    if (!isNaN(valorActual) && valorActual > 0) {
+                      const convertido = destino === 'USD' ? valorActual / tc : valorActual * tc;
+                      nuevosItems[idProd] = convertido.toFixed(2);
+                    }
+                  });
+                }
+                return {
+                  ...prev,
+                  moneda: destino,
+                  items: nuevosItems
+                };
+              });
+
+              if (tc && tc > 0) setTipoCambio(tc);
+              setModalTCAbierto(false);
+              setMonedaPendiente(null);
+            }}
+            onCancelar={() => {
+              setModalTCAbierto(false);
+              setMonedaPendiente(null);
+            }}
+          />
+        );
+      })()}
+    
     </div>
   );
 }

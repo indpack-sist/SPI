@@ -46,7 +46,7 @@ function ListaPrecios() {
     moneda: 'PEN',
     items: {} 
   });
-
+const [monedaItems, setMonedaItems] = useState({});
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
@@ -139,7 +139,7 @@ function ListaPrecios() {
     });
   };
 
-  const abrirModalNuevaLista = () => {
+const abrirModalNuevaLista = () => {
     if (!clienteSel) return;
     setModoEdicion(false);
     setIdListaEditar(null);
@@ -150,6 +150,7 @@ function ListaPrecios() {
       moneda: 'PEN',
       items: {}
     });
+    setMonedaItems({});
     setModalOpen(true);
   };
 
@@ -171,9 +172,11 @@ function ListaPrecios() {
         const res = await listasPreciosAPI.getDetalle(lista.id_lista);
         
         const itemsMap = {};
+        const monedasMap = {};
         if (res.data.success) {
             res.data.data.forEach(item => {
                 itemsMap[item.id_producto] = item.precio_especial;
+                monedasMap[item.id_producto] = lista.moneda;
             });
         }
 
@@ -182,6 +185,7 @@ function ListaPrecios() {
             moneda: lista.moneda,
             items: itemsMap
         });
+        setMonedaItems(monedasMap);
         
         setModalOpen(true);
     } catch (err) {
@@ -274,16 +278,18 @@ function ListaPrecios() {
     }));
   };
   
-  const handleToggleProductoEnLista = (idProducto, precioRef) => {
-      setNuevaLista(prev => {
-          const items = { ...prev.items };
-          if (items[idProducto] !== undefined) {
-              delete items[idProducto];
-          } else {
-              items[idProducto] = precioRef;
-          }
-          return { ...prev, items };
-      });
+const handleToggleProductoEnLista = (idProducto, precioRef) => {
+    setNuevaLista(prev => {
+      const items = { ...prev.items };
+      if (items[idProducto] !== undefined) {
+        delete items[idProducto];
+        setMonedaItems(m => { const copy = { ...m }; delete copy[idProducto]; return copy; });
+      } else {
+        items[idProducto] = precioRef;
+        setMonedaItems(m => ({ ...m, [idProducto]: prev.moneda }));
+      }
+      return { ...prev, items };
+    });
   };
 
 
@@ -333,35 +339,26 @@ function ListaPrecios() {
     setModalTCAbierto(true);
   };
 
-const confirmarTipoCambioLista = (arg1, arg2) => {
-    let tc = parseFloat(tipoCambio);
-    let convertir = true;
-
-    if (typeof arg1 === 'object' && arg1 !== null) {
-      tc = parseFloat(arg1.tipoCambio || arg1.tc || tipoCambio);
-      convertir = Boolean(arg1.convertir ?? arg1.aplicarConversion ?? true);
-    } else if (typeof arg1 === 'boolean') {
-      convertir = arg1;
-      if (arg2) tc = parseFloat(arg2);
-    } else if (arg1 !== undefined) {
-      tc = parseFloat(arg1);
-      convertir = arg2 !== undefined ? Boolean(arg2) : true;
-    }
-
+const confirmarTipoCambioLista = (tc, convertir) => {
     const destino = monedaPendiente;
     if (!destino) return;
 
     setNuevaLista(prev => {
       const nuevosItems = { ...prev.items };
-      if (convertir && !isNaN(tc) && tc > 0) {
-        Object.keys(nuevosItems).forEach(idProd => {
+      const nuevasMonedas = { ...monedaItems };
+
+      Object.keys(nuevosItems).forEach(idProd => {
+        nuevasMonedas[idProd] = destino;
+        if (convertir && tc && tc > 0) {
           const n = parseFloat(nuevosItems[idProd]);
           if (!isNaN(n) && n > 0) {
             const convertido = destino === 'USD' ? n / tc : n * tc;
             nuevosItems[idProd] = convertido.toFixed(2);
           }
-        });
-      }
+        }
+      });
+
+      setMonedaItems(nuevasMonedas);
       return {
         ...prev,
         moneda: destino,
@@ -369,14 +366,7 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
       };
     });
 
-    if (!isNaN(tc) && tc > 0) {
-      setTipoCambio(tc);
-    }
-    setModalTCAbierto(false);
-    setMonedaPendiente(null);
-  };
-
-  const cancelarTipoCambioLista = () => {
+    if (tc && tc > 0) setTipoCambio(tc);
     setModalTCAbierto(false);
     setMonedaPendiente(null);
   };
@@ -384,6 +374,7 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
   const handleToggleTodosEnLista = (checked) => {
     setNuevaLista(prev => {
       const items = { ...prev.items };
+      const monedas = { ...monedaItems };
       productosFiltradosModal.forEach(p => {
         if (checked) {
           if (items[p.id_producto] === undefined) {
@@ -391,15 +382,17 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
               (prev.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0
             ).toFixed(2);
             items[p.id_producto] = precioRef;
+            monedas[p.id_producto] = prev.moneda;
           }
         } else {
           delete items[p.id_producto];
+          delete monedas[p.id_producto];
         }
       });
+      setMonedaItems(monedas);
       return { ...prev, items };
     });
   };
-
 
   const guardarLista = async () => {
     if (!nuevaLista.nombre_lista) {
@@ -785,9 +778,11 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
                         </div>
                       </td>
                     </tr>
-                  ) : productosFiltradosModal.map(p => {
-                    const precioRef = parseFloat((nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
+) : productosFiltradosModal.map(p => {
                     const isSelected = nuevaLista.items[p.id_producto] !== undefined;
+                    const monedaFila = isSelected ? (monedaItems[p.id_producto] || nuevaLista.moneda) : 'PEN';
+                    const simboloFila = monedaFila === 'USD' ? '$' : 'S/';
+                    const precioRef = parseFloat((monedaFila === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
 
                     return (
                       <tr key={p.id_producto} className={isSelected ? 'is-selected' : ''}>
@@ -805,11 +800,11 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
                           <span className="pg-cell-sub">{p.codigo}</span>
                         </td>
                         <td className="num pg-muted">
-                          {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {precioRef}
+                          {simboloFila} {precioRef}
                         </td>
                         <td className="num">
                           <div className={`vt-money-input ${isSelected ? 'is-on' : ''}`}>
-                            <span>{nuevaLista.moneda === 'PEN' ? 'S/' : '$'}</span>
+                            <span>{simboloFila}</span>
                             <input
                               type="number"
                               className="form-input"
@@ -924,40 +919,11 @@ const confirmarTipoCambioLista = (arg1, arg2) => {
             monedaOrigen={nuevaLista.moneda}
             monedaDestino={monedaPendiente}
             montoReferencia={primerPrecioReferencia}
-            onConfirmar={(tc, convertir) => {
-              const destino = monedaPendiente;
-              if (!destino) return;
-
-              setNuevaLista(prev => {
-                const nuevosItems = { ...prev.items };
-                if (convertir && tc && tc > 0) {
-                  Object.keys(nuevosItems).forEach(idProd => {
-                    const valorActual = parseFloat(nuevosItems[idProd]);
-                    if (!isNaN(valorActual) && valorActual > 0) {
-                      const convertido = destino === 'USD' ? valorActual / tc : valorActual * tc;
-                      nuevosItems[idProd] = convertido.toFixed(2);
-                    }
-                  });
-                }
-                return {
-                  ...prev,
-                  moneda: destino,
-                  items: nuevosItems
-                };
-              });
-
-              if (tc && tc > 0) setTipoCambio(tc);
-              setModalTCAbierto(false);
-              setMonedaPendiente(null);
-            }}
-            onCancelar={() => {
-              setModalTCAbierto(false);
-              setMonedaPendiente(null);
-            }}
+            onConfirmar={confirmarTipoCambioLista}
+            onCancelar={cancelarTipoCambioLista}
           />
         );
       })()}
-    
     </div>
   );
 }

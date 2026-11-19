@@ -686,7 +686,7 @@ function ListaPrecios() {
         </div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="xl">
+<Modal isOpen={modalOpen && !modalTCAbierto} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="xl">
         <div className="vt-lp-modal">
           <div className="pg-form-grid">
             <div className="form-group">
